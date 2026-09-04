@@ -31,10 +31,19 @@ already cost something to learn.
 Run this before every push:
 
 ```sh
-git log --format='%B%n%an <%ae>' \
-  | grep -inE 'co-authored-by|generated with|claude|anthropic|copilot|chatgpt' \
-  && { echo "⛔ AI attribution in history — DO NOT PUSH"; false; } || echo "✅ clean"
+if git log --format='%B%n%an <%ae>' \
+  | grep -ivE 'CLAUDE\.md' \
+  | grep -inE 'co-authored-by|generated with|claude|anthropic|copilot|chatgpt'; then
+  echo "⛔ AI attribution in history — DO NOT PUSH"; false
+else
+  echo "✅ clean"
+fi
 ```
+
+The `CLAUDE.md` exclusion exists because this file's own commit necessarily names it. The
+first version of this check fired on that subject line and, worse, printed both verdicts,
+because of how its `&&`/`||` chain was composed. A check that can print "clean" after
+printing "blocked" is not a check.
 
 If it fires before the first push, `git commit --amend` or rebase it out. After a push it
 is permanent, so run it every time.
