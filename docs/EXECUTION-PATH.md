@@ -71,6 +71,32 @@ recipient credited 2.003660 USDC, seven transactions at status 1, none broadcast
 compatibility claim this document makes: tested against the deployed router on a fork, not yet
 live-fired. The live-fire is day 4.
 
+## The call path, as measured
+
+From `forge test --match-test test_SettlementDeliversToTheRegisteredRecipient -vvvv` on
+2026-09-04 night, against the deployed Universal Router runtime and hookmate's official
+PoolManager bytecode; the fork rehearsal (`make rehearse`) ran the same path against the real
+Sepolia contracts. This table is the trace, not the diagram.
+
+| Question | Answer from the trace |
+|---|---|
+| Transaction target | `SettlementExecutor.pay(orderId)` with the order's amount as value |
+| Universal Router involvement | the executor's one external call: `UniversalRouter.execute(0x10, [plan], deadline)` with the value forwarded |
+| PoolManager caller | the Universal Router: `PoolManager.unlock(plan)`, then from `unlockCallback` the router calls `swap`, `sync(native)`, `settle{value}`, and `take` |
+| Hook-observed `sender` | the Universal Router, in both `beforeSwap` and `afterSwap` |
+| The executor's address, as the hook learns it | `IMsgSender(sender).msgSender()` on the router, compared with the address the hook derived at construction |
+| Payer | `msg.sender` of `pay`, written to the order by the executor before the router is called; the hook reads it from the order |
+| Recipient | `order.recipient`, encoded by the executor into the router's `TAKE` action; the trace shows `take(USDC, merchant, amount)` |
+| Permit2 spender | none: the input is native ETH sent with the call; no Permit2 call appears in the trace |
+| `hookData` producer and decoder | produced by `SettlementExecutor._plan` as `abi.encode(orderId)`; decoded by `V4SettlementHook._inFlightOrder`, which refuses any other length |
+| Where order context is stored, consumed, cleared | stored in the executor's `_orders` mapping at `createOrder`; consumed by `pay` moving it to `Paying` before the external call and to `Settled` after; never deleted, the record stays readable |
+| Liquidity operations | not gated: the hook has no liquidity callbacks, so anyone may add or remove liquidity through any route. The gate is on swaps |
+
+The sentence the README uses follows this table: the hook admits a swap only when the
+PoolManager reports the Universal Router as the sender and the router reports the executor as
+its caller. It does not say the pool is usable only through the router, because liquidity is
+not gated and the hook cannot see what it is not called for.
+
 ## Which Universal Router
 
 Sepolia has two: `UniversalRouterV2` `0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b` (19,540-byte
