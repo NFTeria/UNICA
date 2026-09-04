@@ -28,7 +28,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.svm
-          key: solc-${{ runner.os }}-0.8.26-0.8.30
+          key: solc-${{ runner.os }}-0.8.30
 
       - name: Fetch the compilers, retrying on a network failure
         run: |
@@ -56,21 +56,26 @@ jobs:
       - name: forge build
         run: forge build
 
-      - name: Assert the hook is under the EIP-170 runtime limit
+      - name: Assert both contracts are under the EIP-170 runtime limit
         run: |
-          hex=$(forge inspect src/V4SettlementHook.sol:V4SettlementHook deployedBytecode)
-          bytes=$(( (${#hex} - 2) / 2 ))
-          echo "V4SettlementHook runtime bytes: $bytes"
-          test "$bytes" -le 24576
+          for c in src/V4SettlementHook.sol:V4SettlementHook src/SettlementExecutor.sol:SettlementExecutor; do
+            hex=$(forge inspect "$c" deployedBytecode)
+            bytes=$(( (${#hex} - 2) / 2 ))
+            echo "$c runtime bytes: $bytes"
+            test "$bytes" -le 24576
+          done
 
-      # A lane that ran zero tests is not a green lane. Require the total, not just the exit code.
+      # A lane that ran fewer tests than the tree declares is not a green lane. The expected count is
+      # read from the test sources, so a test that stops running (a typo in its name, a file that
+      # stops compiling into the suite) turns this red instead of vanishing.
       - name: forge test
         run: |
           set -o pipefail
           forge test -vvv 2>&1 | tee test.log
           total=$(grep -oE '\(([0-9]+) total tests\)' test.log | grep -oE '[0-9]+')
-          echo "tests run: ${total:-0}"
-          test "${total:-0}" -ge 7
+          expected=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | wc -l | tr -d ' ')
+          echo "tests run: ${total:-0}, declared in test/: $expected"
+          test "${total:-0}" -eq "$expected"
 
       - name: forge fmt --check
         run: forge fmt --check
@@ -89,15 +94,17 @@ jobs:
         run: |
           git clone --no-recurse-submodules https://github.com/${{ github.repository }}.git stranger
           cd stranger
-          git checkout --quiet ${{ github.sha }}
+          # On a pull_request event github.sha is a merge commit the public clone does not have.
+          git checkout --quiet ${{ github.event.pull_request.head.sha || github.sha }}
           make gate 2>&1 | tail -2 || true
           make deps
           make doctor
           set -o pipefail
           make gate 2>&1 | tee gate.log
           total=$(grep -oE '\(([0-9]+) total tests\)' gate.log | grep -oE '[0-9]+')
-          echo "tests run on the fresh clone: ${total:-0}"
-          test "${total:-0}" -ge 7
+          expected=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | wc -l | tr -d ' ')
+          echo "tests run on the fresh clone: ${total:-0}, declared: $expected"
+          test "${total:-0}" -eq "$expected"
 
   provenance:
     runs-on: ubuntu-latest
@@ -130,15 +137,18 @@ jobs:
       # locations. The step proves itself on a planted line before judging the tree.
       - name: No private material in the tree
         run: |
-          names='^(STATE|MVP-PATH|SLOT-DECISION|BATTLE-PLAN|PLAYBOOK|PREBUILD|BOOTSTRAP|SESSION-PROMPT|ANSWERS|HANDOFF|SPONSORS|SPONSOR-BRIEF|LAW|PRIZE|SHIP|WHOSE-PROJECT|HOOK-CRAFT|UNISWAP-GITHUB|FEEDBACK-PLAN|FEEDBACK-DISCIPLINE|QUESTIONS|REMINDERS|PURSUIT-KIT|IDENTITY-RULING|WINNERS-EVIDENCE|UNISWAP-NEEDS|UF-SKILL-REVIEW|CHAIN-ADVANTAGES|INSIDE-THE-STACK|CHAINS|DISCIPLINE)\.md$|^(unica-closet|prize-watch|sponsors|routines|critique|do-not-ship|pseudocode|day1|warroom|war-room)/|\.REFERENCE$|\.output$'
+          # Anchored to a path segment, not the repository root, so a private file in any directory is caught.
+          names='(^|/)(STATE|MVP-PATH|SLOT-DECISION|BATTLE-PLAN|PLAYBOOK|PREBUILD|BOOTSTRAP|SESSION-PROMPT|ANSWERS|HANDOFF|SPONSORS|SPONSOR-BRIEF|LAW|PRIZE|SHIP|WHOSE-PROJECT|HOOK-CRAFT|UNISWAP-GITHUB|FEEDBACK-PLAN|FEEDBACK-DISCIPLINE|QUESTIONS|REMINDERS|PURSUIT-KIT|IDENTITY-RULING|WINNERS-EVIDENCE|UNISWAP-NEEDS|UF-SKILL-REVIEW|CHAIN-ADVANTAGES|INSIDE-THE-STACK|CHAINS|DISCIPLINE|privatenotes)\.md$|(^|/)(unica-closet|prize-watch|sponsors|routines|critique|do-not-ship|pseudocode|day1|warroom|war-room)/|\.REFERENCE$|\.output$'
           # Locations, not words: the templates and the unedited spec use "war-room" in prose.
           marks='unica-closet|claude-toolkit|SESSION-PROMPT|prize-watch/|/Users/'
           printf 'see /Users/someone/notes\n' | grep -qE "$marks" || { echo "control failed: planted private path not caught"; exit 1; }
           printf 'STATE.md\n' | grep -qE "$names" || { echo "control failed: planted private name not caught"; exit 1; }
+          printf 'docs/notes/privatenotes.md\n' | grep -qE "$names" || { echo "control failed: planted private name in a subdirectory not caught"; exit 1; }
           echo "controls passed"
           if git ls-files | grep -E "$names"; then echo "a private runtime file is tracked"; exit 1; fi
-          # .gitignore names the tripwires on purpose; specs/ is published unedited.
-          if git grep -nE "$marks" -- . ':!lib' ':!.github/workflows/ci.yml' ':!.gitignore' ':!specs/'; then echo "a private location is mentioned"; exit 1; fi
+          # .gitignore names the tripwires on purpose. specs/ is scanned too: it was measured clean on
+          # 2026-09-04, and a leak into the published spec would be the worst place for one.
+          if git grep -nE "$marks" -- . ':!lib' ':!.github/workflows/ci.yml' ':!.gitignore'; then echo "a private location is mentioned"; exit 1; fi
           echo "no private material in the tree"
 
       - name: No secrets in the tree
