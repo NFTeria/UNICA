@@ -91,6 +91,9 @@ contract SettlementExecutor {
     error PoolNotGuarded(address hooks);
     /// @notice The hook did not receipt exactly one settlement for this payment.
     error NoReceipt(bytes32 orderId);
+    /// @notice The recipient's balance grew by less than the order's minimum: the pool credited enough,
+    ///         but the token did not deliver it (a fee on transfer, for one). Nothing is settled short.
+    error RecipientShort(bytes32 orderId, uint128 minOut, uint256 received);
     error ZeroAmount();
     error ZeroMinOut();
     error DeadlineInPast(uint64 deadline);
@@ -165,8 +168,13 @@ contract SettlementExecutor {
         IUniversalRouter(UNIVERSAL_ROUTER).execute{value: order.amountIn}(commands, inputs, order.deadline);
         // The hook receipted exactly one settlement inside that call, or this was not a settlement.
         if (ISettlementReceipts(HOOK).receiptCount() != receiptsBefore + 1) revert NoReceipt(orderId);
-        uint256 amountOut =
-            IERC20Minimal(Currency.unwrap(order.key.currency1)).balanceOf(order.recipient) - recipientBefore;
+        // What the recipient actually holds now, against what the order promised. The hook enforced
+        // the minimum on the pool's credit; this is the same floor at the recipient, so a token that
+        // delivers less than the pool credited cannot settle an order short (invariant I3 where it is
+        // felt). A balance that did not grow counts as nothing received; there is no underflow.
+        uint256 recipientAfter = IERC20Minimal(Currency.unwrap(order.key.currency1)).balanceOf(order.recipient);
+        uint256 amountOut = recipientAfter > recipientBefore ? recipientAfter - recipientBefore : 0;
+        if (amountOut < order.minOut) revert RecipientShort(orderId, order.minOut, amountOut);
 
         order.status = Status.Settled;
         emit Settled(orderId, msg.sender, order.recipient, order.amountIn, amountOut);
