@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Pinned on purpose. A toolchain is never changed mid-build; "stable" moves under you.
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - name: Record the toolchain
+        run: forge --version
+
+      # The submodule pin is load-bearing. A recursive update run before the pin was staged
+      # silently resets a tag checkout to whatever the superproject recorded. Fail here, loudly,
+      # rather than build against an unintended revision.
+      - name: Assert the uniswap-hooks pin
+        run: |
+          test "$(git -C lib/uniswap-hooks describe --tags)" = "v1.1.1"
+          test "$(git -C lib/uniswap-hooks rev-parse HEAD)" = "bd5287c4a9f5c22c2393f7587a9b357662916115"
+
+      - name: forge build
+        run: forge build --sizes
+
+      # A lane that ran zero tests is not a green lane. Require the total, not just the exit code.
+      - name: forge test
+        run: |
+          set -o pipefail
+          forge test -vvv 2>&1 | tee test.log
+          total=$(grep -oE '\(([0-9]+) total tests\)' test.log | grep -oE '[0-9]+')
+          echo "tests run: ${total:-0}"
+          test "${total:-0}" -ge 7
+
+      - name: forge fmt --check
+        run: forge fmt --check
+
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Every commit is authored under the project identity alone, and none carries an
+      # AI attribution trailer. Both are checked against the whole history on every push.
+      - name: Single author, no AI attribution
+        run: |
+          authors=$(git log --format='%an <%ae>' | sort -u)
+          echo "authors: $authors"
+          test "$authors" = "NFTeria <dev@nfteria.click>"
+          if git log --format='%B' | grep -ivE 'CLAUDE\.md' | grep -inE 'co-authored-by|generated with|claude|anthropic|copilot|chatgpt'; then
+            echo "AI attribution found in history"; exit 1
+          fi
+          echo "history clean"
+
+      - name: No secrets in the tree
+        run: |
+          if git grep -nE 'PRIVATE_KEY=|MNEMONIC=|0x[a-fA-F0-9]{64}' -- . ':!lib' ':!*.lock'; then
+            echo "possible secret in the tree"; exit 1
+          fi
+          echo "no secret-shaped strings outside lib/"
