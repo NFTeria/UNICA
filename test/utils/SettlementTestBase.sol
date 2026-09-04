@@ -53,8 +53,10 @@ abstract contract SettlementTestBase is Test {
     /// @dev Namespaced so an etched address never lands on a precompile or a reserved prefix.
     address internal constant HOOK_ADDR = address(uint160(DECLARED_MASK) ^ (0x4444 << 144));
 
-    bytes32 internal constant RECEIPT_TOPIC =
-        keccak256("SettlementReceipt(bytes32,bytes32,address,address,uint128,uint128,uint128)");
+    /// @dev Receipt schema v1, `docs/RECEIPT-SCHEMA.md`. A change to this string is a new version.
+    bytes32 internal constant RECEIPT_TOPIC = keccak256(
+        "SettlementReceipt(bytes32,bytes32,address,uint16,address,address,address,address,uint128,uint128,uint128,bytes32)"
+    );
     bytes32 internal constant HOOK_FEE_TOPIC = keccak256("HookFee(bytes32,address,uint128,uint128)");
 
     IPoolManager internal manager;
@@ -188,7 +190,9 @@ abstract contract SettlementTestBase is Test {
         for (uint256 i = 0; i < logs.length; i++) {
             if (logs[i].emitter == address(hook) && logs[i].topics[0] == RECEIPT_TOPIC) {
                 n++;
-                (,, lastAmountOut,) = abi.decode(logs[i].data, (address, uint128, uint128, uint128));
+                (,,,,,, lastAmountOut,,) = abi.decode(
+                    logs[i].data, (uint16, address, address, address, address, uint128, uint128, uint128, bytes32)
+                );
             }
         }
     }

@@ -7,6 +7,7 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
@@ -51,16 +52,28 @@ contract V4SettlementHook is BaseHook, IHookEvents {
     ///      simply never called, and this counter would stay at zero.
     uint256 public receiptCount;
 
+    /// @notice Version of the receipt's field layout (`docs/RECEIPT-SCHEMA.md`). An indexer keys on
+    ///         it; any change to the fields below is a new version, never an edit of this one.
+    uint16 public constant RECEIPT_SCHEMA_VERSION = 1;
+
     /// @notice The settlement receipt (invariant I2), emitted from inside the swap that settled the
-    ///         order, so it exists only if the recipient was paid in the same transaction.
+    ///         order, so it exists only if the recipient was paid in the same transaction. Every
+    ///         field comes from the order or the swap; the hook address, chain id, transaction hash
+    ///         and log index come from the indexing context. `policyId` is reserved for a benefit
+    ///         applied by the executor (zero until one exists); `fee` is zero, this hook takes none.
     event SettlementReceipt(
         bytes32 indexed orderId,
         PoolId indexed poolId,
         address indexed recipient,
+        uint16 schemaVersion,
         address payer,
+        address executor,
+        address currencyIn,
+        address currencyOut,
         uint128 amountIn,
         uint128 amountOut,
-        uint128 fee
+        uint128 fee,
+        bytes32 policyId
     );
 
     /// @notice The swap did not arrive through the official router (invariant I1).
@@ -162,10 +175,31 @@ contract V4SettlementHook is BaseHook, IHookEvents {
         unchecked {
             ++receiptCount;
         }
-        PoolId poolId = key.toId();
-        emit SettlementReceipt(orderId, poolId, order.recipient, order.payer, order.amountIn, amountOut, 0);
-        emit HookFee(PoolId.unwrap(poolId), order.payer, 0, 0);
+        _receipt(orderId, key, order, amountOut);
         return (IHooks.afterSwap.selector, 0);
+    }
+
+    /// @dev The two events of invariant I2, in their own frame so the receipt's twelve fields do not
+    ///      crowd the callback's stack.
+    function _receipt(bytes32 orderId, PoolKey calldata key, SettlementExecutor.Order memory order, uint128 amountOut)
+        internal
+    {
+        PoolId poolId = key.toId();
+        emit SettlementReceipt(
+            orderId,
+            poolId,
+            order.recipient,
+            RECEIPT_SCHEMA_VERSION,
+            order.payer,
+            SETTLEMENT_EXECUTOR,
+            Currency.unwrap(key.currency0),
+            Currency.unwrap(key.currency1),
+            order.amountIn,
+            amountOut,
+            0,
+            bytes32(0)
+        );
+        emit HookFee(PoolId.unwrap(poolId), order.payer, 0, 0);
     }
 
     /// @dev The one thing hook data may carry, resolved against the executor's storage (spec C1).

@@ -63,10 +63,11 @@ contract SettlementExecutorTest is SettlementTestBase {
         assertEq(o.payer, payer, "the payer was not recorded");
     }
 
-    /// @notice Invariant I2. One receipt, from the hook, inside the settling swap: the order id, the
-    ///         pool, the recipient, the authenticated payer (resolved through the router's msgSender
-    ///         and the order, never from hook data), the amounts, and a zero fee. Beside it, exactly
-    ///         one OpenZeppelin-standard HookFee, so a generic indexer sees the settlement too.
+    /// @notice Invariant I2. One receipt, from the hook, inside the settling swap, in schema v1: the
+    ///         version, the order id, the pool, the recipient, the authenticated payer (resolved
+    ///         through the router's msgSender and the order, never from hook data), the executor,
+    ///         both currencies, both amounts, a zero fee, and a zero policy id. Beside it, exactly one
+    ///         OpenZeppelin-standard HookFee, so a generic indexer sees the settlement too.
     function test_ReceiptCarriesTheOrderAndTheStandardEvent() public {
         bytes32 orderId = _order(AMOUNT_IN, 1);
         vm.recordLogs();
@@ -83,12 +84,7 @@ contract SettlementExecutorTest is SettlementTestBase {
                 assertEq(logs[i].topics[1], orderId, "receipt names another order");
                 assertEq(logs[i].topics[2], PoolId.unwrap(key.toId()), "receipt names another pool");
                 assertEq(address(uint160(uint256(logs[i].topics[3]))), merchant, "receipt names another recipient");
-                (address p, uint128 amountIn, uint128 amountOut, uint128 fee) =
-                    abi.decode(logs[i].data, (address, uint128, uint128, uint128));
-                assertEq(p, payer, "receipt names another payer");
-                assertEq(amountIn, AMOUNT_IN);
-                assertEq(amountOut, usdc.balanceOf(merchant), "receipted output differs from what arrived");
-                assertEq(fee, 0, "this hook takes no fee");
+                _assertReceiptData(logs[i].data);
             } else if (logs[i].topics[0] == HOOK_FEE_TOPIC) {
                 fees++;
                 assertEq(logs[i].topics[1], PoolId.unwrap(key.toId()));
@@ -100,6 +96,30 @@ contract SettlementExecutorTest is SettlementTestBase {
         }
         assertEq(receipts, 1, "exactly one SettlementReceipt");
         assertEq(fees, 1, "exactly one HookFee");
+    }
+
+    function _assertReceiptData(bytes memory data) internal view {
+        (
+            uint16 version,
+            address p,
+            address exec,
+            address currencyIn,
+            address currencyOut,
+            uint128 amountIn,
+            uint128 amountOut,
+            uint128 fee,
+            bytes32 policyId
+        ) = abi.decode(data, (uint16, address, address, address, address, uint128, uint128, uint128, bytes32));
+        assertEq(version, hook.RECEIPT_SCHEMA_VERSION(), "schema version");
+        assertEq(version, 1, "schema v1 is what this test knows");
+        assertEq(p, payer, "receipt names another payer");
+        assertEq(exec, address(executor), "receipt names another executor");
+        assertEq(currencyIn, address(0), "input currency is native ETH");
+        assertEq(currencyOut, address(usdc), "output currency is the pool's currency1");
+        assertEq(amountIn, AMOUNT_IN);
+        assertEq(amountOut, usdc.balanceOf(merchant), "receipted output differs from what arrived");
+        assertEq(fee, 0, "this hook takes no fee");
+        assertEq(policyId, bytes32(0), "no benefit applied, so no policy id");
     }
 
     /// @notice Every payment size the pool can fill is delivered once and receipted once. The upper
