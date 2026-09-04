@@ -94,7 +94,9 @@ embeds the deployed Sepolia runtime as a 19,540-byte library with its keccak rec
 (`test/utils/artifacts/UniversalRouterV2Sepolia.sol`), which is the honest way to test against
 the real router today and a clumsy one. A published runtime artifact per chain would remove it.
 
-### 2026-09-04 — `v4-security-foundations` run over the real gate and router: two catches, three misses, one template that does not compile
+### 2026-09-04 — `v4-security-foundations` run over the real gate and router
+
+> Paths in this entry are as they were that evening: `src/UnicaHook.sol` is now `src/V4SettlementHook.sol` and `src/UnicaSettlementRouter.sol` was replaced by `src/SettlementExecutor.sol` the same night. The entry is not rewritten; the findings stand as recorded.: two catches, three misses, one template that does not compile
 
 **Trying to:** apply the `v4-security-foundations` skill (uniswap-ai plugin `uniswap-hooks`
 1.6.0, the tool the track links) to the code that exists tonight: `src/UnicaHook.sol` (the

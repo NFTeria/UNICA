@@ -26,7 +26,7 @@ contains only this project's commits.
 
 ## 3. Project-specific implementation, written during the event
 
-`src/`, `test/`, `script/`, `docs/`, `design/`, `web/`, and every commit in this repository.
+`src/`, `test/`, `script/`, `docs/`, `design/`, and every commit in this repository.
 The remote was created empty at 2026-09-04 16:06 UTC; the first commit is later. A judge can
 confirm the bright line with:
 

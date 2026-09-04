@@ -30,23 +30,25 @@ without it they do not), so a run without the key still deploys and verifies on 
 
 ## Deterministic deployment
 
-Both contracts have zero-argument constructors and deploy through the canonical CREATE2 factory
-`0x4e59b44847b379578588920cA78FbF26c0B4956C`, so their addresses depend only on creation code and
-salt:
+Both contracts deploy through the canonical CREATE2 factory
+`0x4e59b44847b379578588920cA78FbF26c0B4956C`, so their addresses depend only on creation code,
+constructor arguments, and salt:
 
-- the executor uses salt `0` (the hook's `EXECUTOR_SALT`); the hook derives the executor's
-  address from the executor's creation code in its own constructor and the deploy stage asserts
-  the executor landed exactly there, or reverts;
-- the hook's salt is mined at deploy time for the `0xC0` permission mask (`beforeSwap | afterSwap`)
-  and asserted against the prediction; `make predict` prints the address and salt before any
-  deploy, from the same arithmetic.
+- the hook has no constructor argument; its salt is mined at deploy time for the `0xC0`
+  permission mask (`beforeSwap | afterSwap`) and asserted against the prediction; `make predict`
+  prints the address and salt before any deploy, from the same arithmetic;
+- the executor has one constructor argument, the hook's address, and uses salt `0` (the hook's
+  `EXECUTOR_SALT`); the hook derives the executor's address in its own constructor from the
+  executor's creation code plus `address(this)`, and the deploy stage deploys the hook first,
+  then the executor, and asserts both the derivation and `executor.HOOK()`, or reverts.
 
-Measured 2026-09-04 night: `make predict` printed salt `0x9c5` and an address ending in `40C0`;
-the fork rehearsal deployed the executor at `0x182ae08BdBF0865Dcc3bd7f980978Ea370d412F3` and the
-hook at `0xD5ecb33016ADDA50F902Fcde97fAB8b3F2CD40C0`, both equal to their predictions. The hook
-address changes with every edit of the hook or the executor, which is why nothing is broadcast
-before the deploy day. There is no circular dependency: the executor's creation code does not
-mention the hook; the hook's creation code embeds the executor's.
+There is no circular dependency: the executor's creation code embeds an interface, never the
+hook's code; the hook's creation code embeds the executor's, and the hook's own address is known
+to it at construction. Measured 2026-09-04 night, after the review fixes: the fork rehearsal
+deployed the hook at `0xe478371d804EF56D8e84403F8D97F6184bdEc0C0` and the executor at
+`0x338Faac2D716AEBFd265EBc8DDf46664155eba72`, both equal to their predictions, and the readback
+showed each naming the other. The hook address changes with every edit of the hook or the
+executor, which is why nothing is broadcast before the deploy day.
 
 ## Staged interactions
 
@@ -59,24 +61,24 @@ an initialised pool):
 | `make deploy` | `DeploySettlement` | executor at its derived address, then the hook at its mined salt; asserts both |
 | `make init-pool` | `InitPool` | initialises the ETH/USDC pool with the hook at the configured price |
 | `make seed` | `SeedLiquidity` | approves and adds liquidity sized to what the deployer holds above a floor |
-| `make settle` | `Settle` | creates an order and pays it through the executor and the official router; asserts the receipt counter moved by one and the executor holds nothing |
+| `make settle` | `Settle` | creates an order (id from the sender and `ORDER_SALT`, default `1`, computed before the call so the broadcast pays the id the simulation computed; a used salt is refused with a message) for 0.001 ETH with a 1.5 USDC minimum and pays it through the executor and the official router; asserts the receipt counter moved by one, the id matched, and the executor holds nothing |
 | `make live` | `LiveFire` | all four in one run |
-| `make rehearse` | `script/rehearse-anvil.sh` | all four on a throwaway anvil fork of Sepolia, impersonating the deployer, then a readback; broadcast artifacts under `.rehearsal/` (ignored), never `broadcast/` |
-| `make readback` | `script/readback.sh` | pure reads: executor code and order count, hook code and receipt count, pool id, slot0, liquidity |
+| `make rehearse` | `script/rehearse-anvil.sh` | all four on a throwaway anvil fork of Sepolia, impersonating the deployer, then a readback; broadcast artifacts under `.rehearsal/` (ignored), never `broadcast/`. Every local-mode target sets `FOUNDRY_BROADCAST=.rehearsal/broadcast` for the same reason: a fork carries the real chain id, and without it a local run would overwrite the committed day-1 record |
+| `make readback` | `script/readback.sh` | pure reads: executor code, order count, `executor.HOOK` and `executor.UNIVERSAL_ROUTER`; hook code, receipt count, `hook.SETTLEMENT_EXECUTOR`; pool id, slot0, liquidity. The two bindings must name each other |
 | `make verify` | `script/verify.sh` | source verification of both contracts on Sourcify, and on Etherscan when the key is set; picks the artifact whose runtime matches the chain outside the immutables |
 
-Measured 2026-09-04 night on the fork: seven transactions, all status 1, receipt counter 0 to 1,
-2.003660 USDC to the recipient for 0.001 ETH.
+Measured 2026-09-04 night on the fork, after the review fixes: seven transactions, all status 1,
+receipt counter 0 to 1, 2.003660 USDC to the recipient for 0.001 ETH against a 1.5 USDC minimum.
 
 ## Sizes
 
 | Contract | Runtime bytes | EIP-170 headroom |
 |---|---|---|
-| `V4SettlementHook` | 9,981 | 14,595 |
-| `SettlementExecutor` | 9,308 | 15,268 |
+| `V4SettlementHook` | 10,302 | 14,274 |
+| `SettlementExecutor` | 10,606 | 13,970 |
 
 Re-verify: `forge inspect src/V4SettlementHook.sol:V4SettlementHook deployedBytecode | wc -c`
-(divide by two, minus one for the `0x`). CI asserts the hook stays under 24,576.
+(divide by two, minus one for the `0x`). CI asserts both stay under 24,576.
 
 ## Compiler
 
