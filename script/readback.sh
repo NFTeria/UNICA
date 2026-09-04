@@ -7,6 +7,9 @@ USDC=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
 SV=0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C
 ZERO=0x0000000000000000000000000000000000000000
 SIG_COUNT='receiptCount()(uint256)'
+SIG_EXEC='SETTLEMENT_EXECUTOR()(address)'
+SIG_HOOK='HOOK()(address)'
+SIG_UR='UNIVERSAL_ROUTER()(address)'
 SIG_PM='poolManager()(address)'
 SIG_KEY='f(address,address,uint24,int24,address)'
 SIG_SLOT0='getSlot0(bytes32)(uint160,int24,uint24,uint24)'
@@ -22,7 +25,11 @@ code=$(cast code "$hook" --rpc-url "$RPC")
 bytes=$(( (${#code} - 2) / 2 ))
 echo "chain id        : $chain"
 echo "executor (derived): $executor  code bytes: $(( (${#rcode} - 2) / 2 ))"
-if [ "$rcode" != "0x" ]; then echo "orders created  : $(cast call "$executor" "$SIG_ORDERS" --rpc-url "$RPC")"; fi
+if [ "$rcode" != "0x" ]; then
+  echo "orders created  : $(cast call "$executor" "$SIG_ORDERS" --rpc-url "$RPC")"
+  echo "executor.HOOK   : $(cast call "$executor" "$SIG_HOOK" --rpc-url "$RPC")  (must equal the hook below)"
+  echo "executor.router : $(cast call "$executor" "$SIG_UR" --rpc-url "$RPC")"
+fi
 echo "hook (predicted): $hook"
 echo "hook code bytes : $bytes"
 if [ "$code" != "0x" ]; then
@@ -33,6 +40,7 @@ if [ "$code" != "0x" ]; then
   slot0=$(cast call "$SV" "$SIG_SLOT0" "$id" --rpc-url "$RPC" | tr '\n' ' ')
   liq=$(cast call "$SV" "$SIG_LIQ" "$id" --rpc-url "$RPC")
   echo "receiptCount    : $count"
+  echo "hook.executor   : $(cast call "$hook" "$SIG_EXEC" --rpc-url "$RPC")  (must equal the executor above)"
   echo "hook.poolManager: $pm"
   echo "pool id         : $id"
   echo "slot0           : $slot0"

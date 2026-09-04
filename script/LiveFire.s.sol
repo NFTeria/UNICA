@@ -51,6 +51,10 @@ abstract contract SettlementScriptBase is Script {
     int24 internal constant TICK_UPPER = 887_220;
     /// @dev The proof swap: 0.001 ETH exact-input, native, into USDC.
     uint256 internal constant SWAP_ETH = 0.001 ether;
+    /// @dev The floor the settle stage asks for, in USDC units (6 decimals): 1.5 USDC for 0.001 ETH,
+    ///      about 60% of the 2,500 USDC/ETH the pool opens at, so a drained or mispriced pool refuses
+    ///      the order (I3) instead of settling it for dust. Measured on the fork: 2.003660 USDC arrived.
+    uint128 internal constant SETTLE_MIN_OUT = 1_500_000;
 
     // ---- the declared permission set, spec section 5 -----------------------------------------
     uint160 internal constant FLAGS = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
@@ -240,8 +244,9 @@ abstract contract SettlementScriptBase is Script {
             "this ORDER_SALT was already used by this sender; set ORDER_SALT to a new value"
         );
         vm.startBroadcast();
-        bytes32 orderId =
-            executor.createOrder(recipient, key, uint128(SWAP_ETH), 1, uint64(block.timestamp + 1 hours), salt);
+        bytes32 orderId = executor.createOrder(
+            recipient, key, uint128(SWAP_ETH), SETTLE_MIN_OUT, uint64(block.timestamp + 1 hours), salt
+        );
         executor.pay{value: SWAP_ETH}(orderId);
         vm.stopBroadcast();
         require(orderId == expectedId, "the order id differs from the one computed before the call");

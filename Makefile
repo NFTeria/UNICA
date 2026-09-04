@@ -26,8 +26,12 @@ PIN_COMMIT := bd5287c4a9f5c22c2393f7587a9b357662916115
 
 # Local fork by default: impersonate the deployer (anvil --auto-impersonate), broadcast to the fork.
 NETWORK_ARGS := --rpc-url $(LOCAL_RPC_URL) --unlocked --sender $(DEPLOYER) --broadcast -vvv
+# Fork runs share the real chain id, so without this their broadcast files would land in the
+# committed broadcast/ record and overwrite the day-1 evidence. Local runs write under .rehearsal/.
+RUN_ENV      := FOUNDRY_BROADCAST=.rehearsal/broadcast
 ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
   NETWORK_ARGS := --rpc-url $(SEPOLIA_RPC_URL) --account $(DEPLOYER_ACCOUNT) --sender $(DEPLOYER) --broadcast -vvvv
+  RUN_ENV      :=
   ifneq ($(strip $(ETHERSCAN_API_KEY)),)
     NETWORK_ARGS += --verify --etherscan-api-key $(ETHERSCAN_API_KEY)
   endif
@@ -45,7 +49,7 @@ help:
 	@echo "    make doctor           what is present, what is missing, how to get it"
 	@echo ""
 	@echo "  CHECK (free, no transaction)"
-	@echo "    make gate             forge build && forge test && forge fmt --check (25 tests, fuzz at 10,000)"
+	@echo "    make gate             forge build && forge test && forge fmt --check (the test count is asserted in CI, fuzz at 10,000)"
 	@echo "    make test / fuzz      the suite, or only the fuzz tests"
 	@echo "    make predict          the hook address and salt this creation code lands on, any chain"
 	@echo "    make simulate         all four stages against live Sepolia state as the deployer, no broadcast"
@@ -87,7 +91,7 @@ doctor:
 	@test -f lib/uniswap-hooks/src/base/BaseHook.sol && echo "lib/uniswap-hooks present" || echo "MISSING lib/: run make deps"
 	@test -f lib/hookmate/src/artifacts/V4PoolManager.sol && echo "hookmate present (official PoolManager bytecode for tests)" || echo "MISSING hookmate: run make deps"
 	@test "$$(git -C lib/uniswap-hooks rev-parse HEAD 2>/dev/null)" = "$(PIN_COMMIT)" && echo "uniswap-hooks pinned at $(PIN_TAG)" || echo "uniswap-hooks NOT at the pin: run make deps"
-	@echo "== the gate, if everything above is present: make gate (expect 25 tests passed, 0 failed)"
+	@echo "== the gate, if everything above is present: make gate (expect every test passed, 0 failed; CI asserts the count)"
 
 _need-deps:
 	@test -f lib/uniswap-hooks/src/base/BaseHook.sol || { echo "the submodules are not fetched; run: make deps"; exit 1; }
@@ -122,11 +126,11 @@ rehearse: _need-deployer
 	DEPLOYER=$(DEPLOYER) SEPOLIA_RPC_URL=$(SEPOLIA_RPC_URL) bash script/rehearse-anvil.sh
 
 # ── the four stages (local fork by default; ARGS="--network sepolia" for the real thing) ───────
-deploy    : _need-network ; forge script script/DeploySettlement.s.sol:DeploySettlement  $(NETWORK_ARGS)
-init-pool : _need-network ; forge script script/Interactions.s.sol:InitPool     $(NETWORK_ARGS)
-seed      : _need-network ; forge script script/Interactions.s.sol:SeedLiquidity $(NETWORK_ARGS)
-settle    : _need-network ; forge script script/Interactions.s.sol:Settle       $(NETWORK_ARGS)
-live      : _need-network ; forge script script/LiveFire.s.sol:LiveFire         $(NETWORK_ARGS)
+deploy    : _need-network ; $(RUN_ENV) forge script script/DeploySettlement.s.sol:DeploySettlement  $(NETWORK_ARGS)
+init-pool : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:InitPool     $(NETWORK_ARGS)
+seed      : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:SeedLiquidity $(NETWORK_ARGS)
+settle    : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:Settle       $(NETWORK_ARGS)
+live      : _need-network ; $(RUN_ENV) forge script script/LiveFire.s.sol:LiveFire         $(NETWORK_ARGS)
 
 readback:
 	bash script/readback.sh $(SEPOLIA_RPC_URL)
