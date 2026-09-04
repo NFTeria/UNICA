@@ -108,7 +108,8 @@ written here. `RPC=https://ethereum-sepolia-rpc.publicnode.com` in the commands 
 | Liquidity | 0.008 ETH + 19.999999 USDC, full range, liquidity `400000000000` | LIVE, approve [`0x7e56b7ca…3213`](https://sepolia.etherscan.io/tx/0x7e56b7ca63d2ccf0be66f73f2e728bf20de645581a8aba5de7f9e5fc103e3213) then seed [`0xb5356276…baae`](https://sepolia.etherscan.io/tx/0xb535627674e56b751d88335688021aa2cfc2e34dc6d749dc8f4a920da425baae), 257,782 gas | `cast call 0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C 'getLiquidity(bytes32)(uint128)' 0xaffd50d25121496e627f2d9574f160fee32829f04a945de1dbfea5af3668fde7 --rpc-url $RPC` prints 400000000000 |
 | **The swap through the hook** | 0.001 ETH exact-input to 2.216294 USDC; the receipt carries the PoolManager's `Swap` event and the hook's `AfterSwapObserved(sender, poolId, delta)` with delta `-1000000000000000 / +2216294`; `afterSwapCount` went 0 to 1 | LIVE, tx [`0x6d580aef…06bf`](https://sepolia.etherscan.io/tx/0x6d580aef7b3d8848fcee555ab8cd7c28fa28c1abeb4d538455be349d0a8a06bf), block 11635908, 166,516 gas | `cast receipt 0x6d580aef7b3d8848fcee555ab8cd7c28fa28c1abeb4d538455be349d0a8a06bf --rpc-url $RPC --field status` prints `1`; `cast call 0x23b46783709E4A94C229612bfA55580a6682c040 'afterSwapCount()(uint256)' --rpc-url $RPC` prints `1`; `make readback-sepolia` prints all of the above |
 | Broadcast record | [`broadcast/LiveFire.s.sol/11155111/run-latest.json`](broadcast/LiveFire.s.sol/11155111/run-latest.json): five transactions, five receipts, 1,923,832 gas, identical to the fork rehearsal | committed | `python3 -c "import json;r=json.load(open('broadcast/LiveFire.s.sol/11155111/run-latest.json'));print(len(r['receipts']),sorted(set(x['status'] for x in r['receipts'])))"` prints `5 ['0x1']` |
-| Source verification | see the row below once it has run | pending | `make verify-sepolia` |
+| Source verification | Etherscan: Source Code Verified, Exact Match, compiler v0.8.30+commit.73712a01, optimizer off, cancun. Sourcify: full match on creation and runtime, verified 2026-09-04T21:18:15Z | VERIFIED, [explorer](https://sepolia.etherscan.io/address/0x23b46783709E4A94C229612bfA55580a6682c040#code) | `curl -s https://sourcify.dev/server/v2/contract/11155111/0x23b46783709E4A94C229612bfA55580a6682c040` prints `"match":"match"`; `make verify-sepolia` re-submits |
+| Proof images and the re-verification script | [`docs/proof/`](docs/proof/README.md): the swap at status 1, its Logs tab with the PoolManager's `Swap` and the hook's `AfterSwapObserved`, the verified source page | committed | `bash docs/proof/verify-day1.sh` prints `checks run: 14, passed: 14, failed: 0` |
 | Public surface | not yet (day 5) | pending | |
 | Demo video | not yet (day 7) | pending | |
 
@@ -116,6 +117,12 @@ The swap's price impact is large on purpose: the seed is sized to what the deplo
 and the point of the row is that the callback ran on Uniswap's real PoolManager. The
 transaction labels the tool prints beside each hash were shuffled; the mapping above is from
 the receipts (target address and function selector), which is the only mapping that counts.
+
+One compiler fact worth knowing before you rebuild: this tree pins no solc, so forge compiled
+the hook at 0.8.26 in the test unit (which needs v4-core's exact-pinned PoolManager) and at
+0.8.30 in the script unit, and the script is what deployed. The verified source is the 0.8.30
+build, byte-identical to the chain outside the immutable slots; `script/verify.sh` picks the
+artifact that matches the chain rather than assuming one.
 
 ## Security limitations, stated
 
