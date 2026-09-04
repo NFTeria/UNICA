@@ -30,7 +30,7 @@ import {Chains} from "./Chains.sol";
 ///         all four; `--sig "deploy()"` and friends do one.
 /// @dev The signer is whatever `--account` / `--sender` the operator passes; nothing here reads a key.
 ///      The chain must be a testnet listed in `Chains`; a mainnet id reverts before any broadcast.
-contract LiveFire is Script {
+abstract contract UnicaScriptBase is Script {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
 
@@ -59,13 +59,6 @@ contract LiveFire is Script {
     bytes32 internal constant ROUTER_SALT = bytes32(0);
     /// @dev Uniswap reserves the top address byte 0x91 as a routing signal (spec addendum A9).
     uint8 internal constant RESERVED_PREFIX = 0x91;
-
-    function run() external {
-        deploy();
-        init();
-        seed();
-        swap();
-    }
 
     // ---- stage 1: the hook -----------------------------------------------------------------
 
@@ -107,6 +100,10 @@ contract LiveFire is Script {
 
     /// @notice Pure: where the router lands for its creation code, the canonical factory, and the
     ///         router salt. The same arithmetic the hook runs in its constructor.
+    function predictRouter() public pure returns (address) {
+        return _predictRouter();
+    }
+
     function _predictRouter() internal pure returns (address) {
         bytes32 initCodeHash = keccak256(type(UnicaSettlementRouter).creationCode);
         return address(
@@ -241,5 +238,15 @@ contract LiveFire is Script {
         require(hook.afterSwapCount() == before + 1, "the hook did not observe the settlement");
         require(router.orders(orderId).settled, "the order was not settled");
         require(address(router).balance == 0, "the router kept native value");
+    }
+}
+
+/// @title LiveFire, all four stages in one run
+contract LiveFire is UnicaScriptBase {
+    function run() external {
+        deploy();
+        init();
+        seed();
+        swap();
     }
 }
