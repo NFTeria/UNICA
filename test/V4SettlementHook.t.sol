@@ -9,10 +9,10 @@ import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
-import {UnicaTestBase} from "./utils/UnicaTestBase.sol";
+import {SettlementTestBase} from "./utils/SettlementTestBase.sol";
 import {ExecutorHarness} from "./utils/ExecutorHarness.sol";
 import {UniversalRouterV2Sepolia} from "./utils/artifacts/UniversalRouterV2Sepolia.sol";
-import {UnicaHook} from "../src/UnicaHook.sol";
+import {V4SettlementHook} from "../src/V4SettlementHook.sol";
 import {SettlementExecutor, IUniversalRouter} from "../src/SettlementExecutor.sol";
 
 /// @title Tests for the hook itself: the permission-bit guard, the gate, and the order checks
@@ -21,7 +21,7 @@ import {SettlementExecutor, IUniversalRouter} from "../src/SettlementExecutor.so
 ///         the hook trusts is the one the executor lands on, that a swap from anywhere but the official
 ///         router driven by the executor is refused (invariant I1), and that the hook verifies every
 ///         term of the order from the executor's storage, never from hook data (spec C1, I3, I4, I5).
-contract UnicaHookTest is UnicaTestBase {
+contract V4SettlementHookTest is SettlementTestBase {
     address internal merchant = makeAddr("merchant");
     uint128 internal constant AMOUNT_IN = 1e15;
 
@@ -34,7 +34,7 @@ contract UnicaHookTest is UnicaTestBase {
             DECLARED_MASK,
             "declared permissions drifted from the declared set (beforeSwap | afterSwap)"
         );
-        deployUnica();
+        deploySettlement();
     }
 
     // ------------------------------------------------------------------ T5: the flag guard
@@ -71,7 +71,7 @@ contract UnicaHookTest is UnicaTestBase {
     /// @notice The positive twin: a salt mined for the declared mask deploys.
     function test_MinedSalt_DeploysAtTheDeclaredMask() public {
         bytes32 salt = _mineSalt(DECLARED_MASK);
-        UnicaHook mined = new UnicaHook{salt: salt}();
+        V4SettlementHook mined = new V4SettlementHook{salt: salt}();
         assertEq(address(mined), _create2Address(salt));
         assertEq(uint160(address(mined)) & Hooks.ALL_HOOK_MASK, DECLARED_MASK);
     }
@@ -111,7 +111,7 @@ contract UnicaHookTest is UnicaTestBase {
         vm.expectRevert(
             _wrapped(
                 IHooks.beforeSwap.selector,
-                abi.encodeWithSelector(UnicaHook.NotOfficialPath.selector, address(swapRouter))
+                abi.encodeWithSelector(V4SettlementHook.NotOfficialPath.selector, address(swapRouter))
             )
         );
         swapNativeExactIn(k, AMOUNT_IN, ZERO_BYTES);
@@ -128,7 +128,8 @@ contract UnicaHookTest is UnicaTestBase {
         (bytes memory commands, bytes[] memory inputs) = _plan(k, AMOUNT_IN, 1, stranger, abi.encode(bytes32(0)));
         vm.expectRevert(
             _wrapped(
-                IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.NotSettlementExecutor.selector, stranger)
+                IHooks.beforeSwap.selector,
+                abi.encodeWithSelector(V4SettlementHook.NotSettlementExecutor.selector, stranger)
             )
         );
         vm.prank(stranger);
@@ -157,13 +158,15 @@ contract UnicaHookTest is UnicaTestBase {
 
         (bytes memory commands, bytes[] memory inputs) = _plan(k, AMOUNT_IN, 1, merchant, "");
         vm.expectRevert(
-            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.MalformedHookData.selector, 0))
+            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(V4SettlementHook.MalformedHookData.selector, 0))
         );
         h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
 
         (commands, inputs) = _plan(k, AMOUNT_IN, 1, merchant, abi.encodePacked(merchant));
         vm.expectRevert(
-            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.MalformedHookData.selector, 20))
+            _wrapped(
+                IHooks.beforeSwap.selector, abi.encodeWithSelector(V4SettlementHook.MalformedHookData.selector, 20)
+            )
         );
         h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
         assertEq(hook.receiptCount(), 0);
@@ -202,7 +205,9 @@ contract UnicaHookTest is UnicaTestBase {
         vm.warp(deadline + 1);
         (bytes memory commands, bytes[] memory inputs) = h.planFor(id);
         vm.expectRevert(
-            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.OrderExpired.selector, id, deadline))
+            _wrapped(
+                IHooks.beforeSwap.selector, abi.encodeWithSelector(V4SettlementHook.OrderExpired.selector, id, deadline)
+            )
         );
         h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
     }
@@ -214,7 +219,9 @@ contract UnicaHookTest is UnicaTestBase {
         bytes32 id = _order(h, k, AMOUNT_IN, 1);
         (bytes memory commands, bytes[] memory inputs) = _plan(k, AMOUNT_IN + 1, 1, merchant, abi.encode(id));
         vm.expectRevert(
-            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.ParamsDoNotMatchOrder.selector, id))
+            _wrapped(
+                IHooks.beforeSwap.selector, abi.encodeWithSelector(V4SettlementHook.ParamsDoNotMatchOrder.selector, id)
+            )
         );
         h.payWithPlan{value: AMOUNT_IN + 1}(id, commands, inputs);
     }
@@ -231,7 +238,9 @@ contract UnicaHookTest is UnicaTestBase {
         bytes32 id = _order(h, k, AMOUNT_IN, 1);
         (bytes memory commands, bytes[] memory inputs) = _plan(other, AMOUNT_IN, 1, merchant, abi.encode(id));
         vm.expectRevert(
-            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.PoolDoesNotMatchOrder.selector, id))
+            _wrapped(
+                IHooks.beforeSwap.selector, abi.encodeWithSelector(V4SettlementHook.PoolDoesNotMatchOrder.selector, id)
+            )
         );
         h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
     }
@@ -248,7 +257,8 @@ contract UnicaHookTest is UnicaTestBase {
         (bytes memory commands, bytes[] memory inputs) = _plan(k, AMOUNT_IN, 1, merchant, abi.encode(named));
         vm.expectRevert(
             _wrapped(
-                IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.OrderNotInFlight.selector, named, expected)
+                IHooks.beforeSwap.selector,
+                abi.encodeWithSelector(V4SettlementHook.OrderNotInFlight.selector, named, expected)
             )
         );
         h.payWithPlan{value: AMOUNT_IN}(marked, commands, inputs);
@@ -301,7 +311,7 @@ contract UnicaHookTest is UnicaTestBase {
         address predicted = _create2Address(salt);
         assertEq(uint160(predicted) & Hooks.ALL_HOOK_MASK, wrongMask);
         vm.expectRevert(abi.encodeWithSelector(Hooks.HookAddressNotValid.selector, predicted));
-        new UnicaHook{salt: salt}();
+        new V4SettlementHook{salt: salt}();
     }
 
     /// @dev Reads the permission struct off the REAL runtime code without running the constructor.
@@ -309,8 +319,8 @@ contract UnicaHookTest is UnicaTestBase {
     ///      the address it will be deployed at, which is the whole point of the guard.
     function _declaredMask() internal returns (uint160 mask) {
         address probe = makeAddr("permissions-probe");
-        vm.etch(probe, vm.getDeployedCode("UnicaHook.sol:UnicaHook"));
-        Hooks.Permissions memory p = UnicaHook(probe).getHookPermissions();
+        vm.etch(probe, vm.getDeployedCode("V4SettlementHook.sol:V4SettlementHook"));
+        Hooks.Permissions memory p = V4SettlementHook(probe).getHookPermissions();
         if (p.beforeInitialize) mask |= Hooks.BEFORE_INITIALIZE_FLAG;
         if (p.afterInitialize) mask |= Hooks.AFTER_INITIALIZE_FLAG;
         if (p.beforeAddLiquidity) mask |= Hooks.BEFORE_ADD_LIQUIDITY_FLAG;
@@ -330,7 +340,7 @@ contract UnicaHookTest is UnicaTestBase {
     /// @dev Finds a salt whose CREATE2 address, deployed from this test contract, carries `wantMask`.
     ///      The init-code hash is computed once; recomputing it per iteration ran out of memory.
     function _mineSalt(uint160 wantMask) internal view returns (bytes32) {
-        bytes32 initCodeHash = keccak256(type(UnicaHook).creationCode);
+        bytes32 initCodeHash = keccak256(type(V4SettlementHook).creationCode);
         for (uint256 i = 0; i < 200_000; i++) {
             bytes32 salt = bytes32(i);
             if (uint160(_create2Address(salt, initCodeHash)) & Hooks.ALL_HOOK_MASK == wantMask) return salt;
@@ -339,7 +349,7 @@ contract UnicaHookTest is UnicaTestBase {
     }
 
     function _create2Address(bytes32 salt) internal view returns (address) {
-        return _create2Address(salt, keccak256(type(UnicaHook).creationCode));
+        return _create2Address(salt, keccak256(type(V4SettlementHook).creationCode));
     }
 
     function _create2Address(bytes32 salt, bytes32 initCodeHash) internal view returns (address) {

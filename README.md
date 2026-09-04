@@ -33,8 +33,8 @@ payer ─► UnicaSettlementRouter (the sole authorised caller; arrives with inv
             └─ PoolManager.unlock()
                  └─ unlockCallback
                       ├─ PoolManager.swap(key, params, abi.encode(orderId))
-                      │     ├─ UnicaHook.beforeSwap   refuse any sender but the router   (I1, I4, I5)
-                      │     └─ UnicaHook.afterSwap    verify realised output, emit receipt (I2, I3)
+                      │     ├─ V4SettlementHook.beforeSwap   refuse any sender but the router   (I1, I4, I5)
+                      │     └─ V4SettlementHook.afterSwap    verify realised output, emit receipt (I2, I3)
                       └─ PoolManager.take(outputCurrency, order.recipient, amountOut)
 ```
 
@@ -47,30 +47,30 @@ lands on day 3. The invariants land one slice at a time, each with a negative te
 
 | What | Where |
 |---|---|
-| The hook contract | [`src/UnicaHook.sol:26`](src/UnicaHook.sol#L26) |
-| The only admitted swap sender, derived from the router's creation code through the canonical CREATE2 factory; nothing configurable after deploy | [`src/UnicaHook.sol:36`](src/UnicaHook.sol#L36), [`:59`](src/UnicaHook.sol#L59) |
-| Zero-argument constructor resolving the PoolManager from the chain id (one address on every chain, spec section 7d) | [`src/UnicaHook.sol:52`](src/UnicaHook.sol#L52) |
-| Declared permissions, `beforeSwap` and `afterSwap`, no returns-delta flag (mask 0xC0) | [`src/UnicaHook.sol:67`](src/UnicaHook.sol#L67) |
-| **Invariant I1's gate**: `beforeSwap` refuses every sender but the router | [`src/UnicaHook.sol:88`](src/UnicaHook.sol#L88), the revert at [`:94`](src/UnicaHook.sol#L94) |
-| The `afterSwap` observation (`afterSwapCount`), replaced by the receipt on day 3 | [`src/UnicaHook.sol:99`](src/UnicaHook.sol#L99), [`:45`](src/UnicaHook.sol#L45) |
+| The hook contract | [`src/V4SettlementHook.sol:26`](src/V4SettlementHook.sol#L26) |
+| The only admitted swap sender, derived from the router's creation code through the canonical CREATE2 factory; nothing configurable after deploy | [`src/V4SettlementHook.sol:36`](src/V4SettlementHook.sol#L36), [`:59`](src/V4SettlementHook.sol#L59) |
+| Zero-argument constructor resolving the PoolManager from the chain id (one address on every chain, spec section 7d) | [`src/V4SettlementHook.sol:52`](src/V4SettlementHook.sol#L52) |
+| Declared permissions, `beforeSwap` and `afterSwap`, no returns-delta flag (mask 0xC0) | [`src/V4SettlementHook.sol:67`](src/V4SettlementHook.sol#L67) |
+| **Invariant I1's gate**: `beforeSwap` refuses every sender but the router | [`src/V4SettlementHook.sol:88`](src/V4SettlementHook.sol#L88), the revert at [`:94`](src/V4SettlementHook.sol#L94) |
+| The `afterSwap` observation (`afterSwapCount`), replaced by the receipt on day 3 | [`src/V4SettlementHook.sol:99`](src/V4SettlementHook.sol#L99), [`:45`](src/V4SettlementHook.sol#L45) |
 | The router contract and its `Order` (the only source of recipient, amount, minimum, deadline) | [`src/UnicaSettlementRouter.sol:25`](src/UnicaSettlementRouter.sol#L25), [`:31`](src/UnicaSettlementRouter.sol#L31) |
 | `createOrder` (writes the order) and `pay` (the payer's single call) | [`src/UnicaSettlementRouter.sol:85`](src/UnicaSettlementRouter.sol#L85), [`:116`](src/UnicaSettlementRouter.sol#L116) |
 | **Invariant I5**: the order is consumed before the unlock | [`src/UnicaSettlementRouter.sol:125`](src/UnicaSettlementRouter.sol#L125) |
 | The unlock callback: swap with only the order id as hook data (spec C1), refuse a partial fill (A13, I6), refuse output below the minimum (I3), settle, take to the registered recipient (I1) | [`src/UnicaSettlementRouter.sol:135`](src/UnicaSettlementRouter.sol#L135), [`:153`](src/UnicaSettlementRouter.sol#L153), [`:158`](src/UnicaSettlementRouter.sol#L158) |
 | **Invariant I7**: `sync` for native immediately before the native `settle` | [`src/UnicaSettlementRouter.sol:169`](src/UnicaSettlementRouter.sol#L169) |
-| T5 guard, asserted numerically before any deploy; the day-1 address shape now refused; the derived router address checked against where the router lands | [`test/UnicaHook.t.sol:39`](test/UnicaHook.t.sol#L39), [`:33`](test/UnicaHook.t.sol#L33), [`:49`](test/UnicaHook.t.sol#L49), [`:55`](test/UnicaHook.t.sol#L55), [`:70`](test/UnicaHook.t.sol#L70) |
-| I1 negative: a swap from the official test router is refused with the hook's own error, wrapped by the PoolManager | [`test/UnicaHook.t.sol:79`](test/UnicaHook.t.sol#L79) |
-| Reading permissions off the real runtime code | [`test/UnicaHook.t.sol:114`](test/UnicaHook.t.sol#L114) |
+| T5 guard, asserted numerically before any deploy; the day-1 address shape now refused; the derived router address checked against where the router lands | [`test/V4SettlementHook.t.sol:39`](test/V4SettlementHook.t.sol#L39), [`:33`](test/V4SettlementHook.t.sol#L33), [`:49`](test/V4SettlementHook.t.sol#L49), [`:55`](test/V4SettlementHook.t.sol#L55), [`:70`](test/V4SettlementHook.t.sol#L70) |
+| I1 negative: a swap from the official test router is refused with the hook's own error, wrapped by the PoolManager | [`test/V4SettlementHook.t.sol:79`](test/V4SettlementHook.t.sol#L79) |
+| Reading permissions off the real runtime code | [`test/V4SettlementHook.t.sol:114`](test/V4SettlementHook.t.sol#L114) |
 | I1 positive, fuzzed at 10,000; I5, I4, I3 and the partial fill, each asserting nothing moved | [`test/UnicaSettlementRouter.t.sol:32`](test/UnicaSettlementRouter.t.sol#L32), [`:56`](test/UnicaSettlementRouter.t.sol#L56), [`:71`](test/UnicaSettlementRouter.t.sol#L71), [`:81`](test/UnicaSettlementRouter.t.sol#L81), [`:104`](test/UnicaSettlementRouter.t.sol#L104), [`:120`](test/UnicaSettlementRouter.t.sol#L120) |
 | I7 as four rows: the control, the trap, the defect, the invariant | [`test/I7NativeSettle.t.sol:41`](test/I7NativeSettle.t.sol#L41), [`:49`](test/I7NativeSettle.t.sol#L49), [`:57`](test/I7NativeSettle.t.sol#L57), [`:72`](test/I7NativeSettle.t.sol#L72) |
-| The test base: Uniswap's official PoolManager bytecode etched at the canonical address, its 24,009-byte runtime asserted | [`test/utils/UnicaTestBase.sol:61`](test/utils/UnicaTestBase.sol#L61), [`:36`](test/utils/UnicaTestBase.sol#L36) |
+| The test base: Uniswap's official PoolManager bytecode etched at the canonical address, its 24,009-byte runtime asserted | [`test/utils/SettlementTestBase.sol:61`](test/utils/SettlementTestBase.sol#L61), [`:36`](test/utils/SettlementTestBase.sol#L36) |
 | Deterministic salt mining and CREATE2 deploy; pool initialisation, seeding, and the proof swap (the day-1 scaffold's script, reworked for the gated hook before day 4) | [`script/LiveFire.s.sol:89`](script/LiveFire.s.sol#L89), [`:69`](script/LiveFire.s.sol#L69), [`:118`](script/LiveFire.s.sol#L118), [`:139`](script/LiveFire.s.sol#L139), [`:182`](script/LiveFire.s.sol#L182) |
 
 ## Uniswap dependencies
 
 | Dependency | Pin | Used at |
 |---|---|---|
-| OpenZeppelin `uniswap-hooks` (`BaseHook`) | v1.1.1, `bd5287c` | `src/UnicaHook.sol` |
+| OpenZeppelin `uniswap-hooks` (`BaseHook`) | v1.1.1, `bd5287c` | `src/V4SettlementHook.sol` |
 | `v4-core` (through `uniswap-hooks`) | `d153b04` | `Hooks`, `PoolKey`, `BalanceDelta`, `StateLibrary`, the local PoolManager under test |
 | `v4-periphery` (through `uniswap-hooks`) | `7ebd04b` | `HookMiner.computeAddress` in the deploy script |
 | `hookmate` | `ef3e984` | `AddressConstants.getPoolManagerAddress(chainid)` |

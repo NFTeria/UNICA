@@ -89,11 +89,12 @@ this note is a working design record, not a disclosed pre-event document.
 ## Appended 2026-09-04 night, owner ruling: the official execution path
 
 The settlement goes through Uniswap's official Universal Router. The `UnicaSettlementRouter`
-row above is superseded; the contracts are now:
+row above is superseded, and the hook is named for the venue rather than the brand
+(`UnicaHook` became `V4SettlementHook`, owner ruling the same night); the contracts are now:
 
 | Contract | Language | Why it exists | Serves |
 |---|---|---|---|
-| `src/UnicaHook.sol` | Solidity | The v4 hook. Admits a swap only when the sender is the Universal Router and the router reports the executor as its caller (I1); reads the order from the executor and refuses one that is not in flight, expired, or swapped with other parameters or in another pool (I3, I4, I5); refuses a partial fill or a short output (I6); emits `SettlementReceipt` and OpenZeppelin's standard `HookFee` (I2). | Uniswap. The Graph (its events are what a shared schema indexes). |
+| `src/V4SettlementHook.sol` | Solidity | The v4 hook. Admits a swap only when the sender is the Universal Router and the router reports the executor as its caller (I1); reads the order from the executor and refuses one that is not in flight, expired, or swapped with other parameters or in another pool (I3, I4, I5); refuses a partial fill or a short output (I6); emits `SettlementReceipt` and OpenZeppelin's standard `HookFee` (I2). | Uniswap. The Graph (its events are what a shared schema indexes). |
 | `src/SettlementExecutor.sol` | Solidity | The one thin contract between an application and the official router. Keeps the orders, records the payer, marks an order in flight before any external call, composes the router's plan from the order so the output is taken to the order's recipient, and calls `execute`. Never calls the PoolManager; no route discovery; not a router. | Uniswap. |
 | `src/libraries/UniswapDeployments.sol` | Solidity | The official Universal Router per chain, resolved from the chain id so neither the hook nor the executor takes a constructor argument and both land at one address on every listed chain. | Uniswap. |
 | Universal Router (Uniswap's deployment) | not ours | The execution path: unlock, swap, sync and settle, take. Its runtime is etched in the tests at its Sepolia address. | |

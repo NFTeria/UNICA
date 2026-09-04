@@ -18,7 +18,7 @@ import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiqui
 import {IERC20Minimal} from "@uniswap/v4-core/src/interfaces/external/IERC20Minimal.sol";
 import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import {AddressConstants} from "hookmate/constants/AddressConstants.sol";
-import {UnicaHook} from "../src/UnicaHook.sol";
+import {V4SettlementHook} from "../src/V4SettlementHook.sol";
 import {SettlementExecutor} from "../src/SettlementExecutor.sol";
 import {Chains} from "./Chains.sol";
 
@@ -30,7 +30,7 @@ import {Chains} from "./Chains.sol";
 ///         all four; `--sig "deploy()"` and friends do one.
 /// @dev The signer is whatever `--account` / `--sender` the operator passes; nothing here reads a key.
 ///      The chain must be a testnet listed in `Chains`; a mainnet id reverts before any broadcast.
-abstract contract UnicaScriptBase is Script {
+abstract contract SettlementScriptBase is Script {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
 
@@ -54,7 +54,7 @@ abstract contract UnicaScriptBase is Script {
 
     // ---- the declared permission set, spec section 5 -----------------------------------------
     uint160 internal constant FLAGS = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
-    /// @dev Must equal UnicaHook.EXECUTOR_SALT. Checked after every deploy: the hook's derived SETTLER
+    /// @dev Must equal V4SettlementHook.EXECUTOR_SALT. Checked after every deploy: the hook's derived SETTLER
     ///      must be the address the executor landed on, or the deploy stage reverts.
     bytes32 internal constant EXECUTOR_SALT = bytes32(0);
     /// @dev Uniswap reserves the top address byte 0x91 as a routing signal (spec addendum A9).
@@ -66,7 +66,7 @@ abstract contract UnicaScriptBase is Script {
     ///         canonical factory, salt zero), then the hook at a salt mined deterministically (first
     ///         salt from zero whose address carries the flags and avoids the reserved prefix).
     ///         Re-running after a deploy finds code at both addresses and skips.
-    function deploy() public returns (UnicaHook hook) {
+    function deploy() public returns (V4SettlementHook hook) {
         Chains.requireTestnet(block.chainid);
         (address predicted, bytes32 salt) = predict();
         address settler = _predictExecutor();
@@ -87,10 +87,10 @@ abstract contract UnicaScriptBase is Script {
 
         if (predicted.code.length != 0) {
             console.log("hook already deployed, skipping");
-            return UnicaHook(predicted);
+            return V4SettlementHook(predicted);
         }
         vm.startBroadcast();
-        hook = new UnicaHook{salt: salt}();
+        hook = new V4SettlementHook{salt: salt}();
         vm.stopBroadcast();
         require(address(hook) == predicted, "deployed address differs from the prediction");
         require(uint160(address(hook)) & Hooks.ALL_HOOK_MASK == FLAGS, "address flags differ from the declared set");
@@ -114,7 +114,7 @@ abstract contract UnicaScriptBase is Script {
     /// @notice Pure: the address and salt this repository's creation code lands on, on every chain
     ///         hookmate knows, because the constructor takes no arguments (spec section 7d).
     function predict() public pure returns (address predicted, bytes32 salt) {
-        bytes memory creationCode = type(UnicaHook).creationCode;
+        bytes memory creationCode = type(V4SettlementHook).creationCode;
         for (uint256 i = 0; i < HookMiner.MAX_LOOP; i++) {
             address a = HookMiner.computeAddress(CREATE2_FACTORY, i, creationCode);
             if (uint160(a) & Hooks.ALL_HOOK_MASK != FLAGS) continue;
@@ -219,7 +219,7 @@ abstract contract UnicaScriptBase is Script {
         Chains.Config memory c = Chains.get(block.chainid);
         PoolKey memory key = poolKey();
         require(manager().getLiquidity(key.toId()) != 0, "seed the pool first");
-        UnicaHook hook = UnicaHook(address(key.hooks));
+        V4SettlementHook hook = V4SettlementHook(address(key.hooks));
         SettlementExecutor executor = SettlementExecutor(hook.SETTLEMENT_EXECUTOR());
         require(address(executor).code.length != 0, "deploy the executor first");
         address recipient = msg.sender;
@@ -242,7 +242,7 @@ abstract contract UnicaScriptBase is Script {
 }
 
 /// @title LiveFire, all four stages in one run
-contract LiveFire is UnicaScriptBase {
+contract LiveFire is SettlementScriptBase {
     function run() external {
         deploy();
         init();

@@ -118,7 +118,7 @@ rehearse: _need-deployer
 	DEPLOYER=$(DEPLOYER) SEPOLIA_RPC_URL=$(SEPOLIA_RPC_URL) bash script/rehearse-anvil.sh
 
 # ── the four stages (local fork by default; ARGS="--network sepolia" for the real thing) ───────
-deploy    : _need-network ; forge script script/DeployUnica.s.sol:DeployUnica  $(NETWORK_ARGS)
+deploy    : _need-network ; forge script script/DeploySettlement.s.sol:DeploySettlement  $(NETWORK_ARGS)
 init-pool : _need-network ; forge script script/Interactions.s.sol:InitPool     $(NETWORK_ARGS)
 seed      : _need-network ; forge script script/Interactions.s.sol:SeedLiquidity $(NETWORK_ARGS)
 settle    : _need-network ; forge script script/Interactions.s.sol:Settle       $(NETWORK_ARGS)

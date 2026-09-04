@@ -41,4 +41,4 @@ verify_one() {
 }
 
 verify_one "$EXECUTOR" src/SettlementExecutor.sol SettlementExecutor
-verify_one "$HOOK" src/UnicaHook.sol UnicaHook
+verify_one "$HOOK" src/V4SettlementHook.sol V4SettlementHook

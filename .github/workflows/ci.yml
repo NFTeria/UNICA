@@ -58,9 +58,9 @@ jobs:
 
       - name: Assert the hook is under the EIP-170 runtime limit
         run: |
-          hex=$(forge inspect src/UnicaHook.sol:UnicaHook deployedBytecode)
+          hex=$(forge inspect src/V4SettlementHook.sol:V4SettlementHook deployedBytecode)
           bytes=$(( (${#hex} - 2) / 2 ))
-          echo "UnicaHook runtime bytes: $bytes"
+          echo "V4SettlementHook runtime bytes: $bytes"
           test "$bytes" -le 24576
 
       # A lane that ran zero tests is not a green lane. Require the total, not just the exit code.

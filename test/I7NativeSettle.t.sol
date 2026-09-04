@@ -9,7 +9,7 @@ import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientSta
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
-import {UnicaTestBase} from "./utils/UnicaTestBase.sol";
+import {SettlementTestBase} from "./utils/SettlementTestBase.sol";
 import {RouterHarness} from "./utils/RouterHarness.sol";
 import {ExecutorHarness} from "./utils/ExecutorHarness.sol";
 import {SettlementExecutor} from "../src/SettlementExecutor.sol";
@@ -27,7 +27,7 @@ import {SettlementExecutor} from "../src/SettlementExecutor.sol";
 ///      because the official bytecode cannot have its defence removed. The precondition is real:
 ///      `PoolManager._settle` reads the last synced currency and rejects native value when that
 ///      currency is an ERC-20 (`v4-core/src/PoolManager.sol`, `_settle`).
-contract I7NativeSettleTest is UnicaTestBase {
+contract I7NativeSettleTest is SettlementTestBase {
     using TransientStateLibrary for IPoolManager;
 
     RouterHarness internal harness;
@@ -38,7 +38,7 @@ contract I7NativeSettleTest is UnicaTestBase {
 
     function setUp() public {
         setUpV4();
-        deployUnica();
+        deploySettlement();
         // The stand-in at the official router's address: the hook and the executor talk to it unchanged.
         deployCodeTo("RouterHarness.sol:RouterHarness", abi.encode(manager), universalRouter);
         harness = RouterHarness(payable(universalRouter));

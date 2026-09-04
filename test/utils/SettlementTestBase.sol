@@ -17,13 +17,13 @@ import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {AddressConstants} from "hookmate/constants/AddressConstants.sol";
 import {V4PoolManagerDeployer} from "hookmate/artifacts/V4PoolManager.sol";
-import {UnicaHook} from "../../src/UnicaHook.sol";
+import {V4SettlementHook} from "../../src/V4SettlementHook.sol";
 import {SettlementExecutor} from "../../src/SettlementExecutor.sol";
 import {UniswapDeployments} from "../../src/libraries/UniswapDeployments.sol";
 import {UniversalRouterV2Sepolia} from "./artifacts/UniversalRouterV2Sepolia.sol";
 import {ExecutorHarness} from "./ExecutorHarness.sol";
 
-/// @title UnicaTestBase, the local v4 topology every UNICA test stands on
+/// @title SettlementTestBase, the local v4 topology every UNICA test stands on
 /// @notice The PoolManager under test is the OFFICIAL bytecode, not a local compile: hookmate ships
 ///         the creation code of Uniswap's deployment, and it is placed at the canonical Sepolia
 ///         address so the hook's zero-argument constructor resolves it exactly as on the live chain.
@@ -33,7 +33,7 @@ import {ExecutorHarness} from "./ExecutorHarness.sol";
 ///         Circle USDC. Nothing here is a live-testnet result.
 /// @dev Why not compile v4-core's PoolManager: its exact `0.8.26` pragma would force a second
 ///      compiler into the tree, and on day 1 that produced two different builds of the hook.
-abstract contract UnicaTestBase is Test {
+abstract contract SettlementTestBase is Test {
     using PoolIdLibrary for PoolKey;
 
     uint256 internal constant SEPOLIA = 11155111;
@@ -60,7 +60,7 @@ abstract contract UnicaTestBase is Test {
     IPoolManager internal manager;
     /// @notice The official Universal Router, at its Sepolia address, running its deployed bytecode.
     address internal universalRouter;
-    UnicaHook internal hook;
+    V4SettlementHook internal hook;
     SettlementExecutor internal executor;
     PoolSwapTest internal swapRouter;
     PoolModifyLiquidityTest internal liquidityRouter;
@@ -115,12 +115,12 @@ abstract contract UnicaTestBase is Test {
 
     /// @notice Deploys the hook at the namespaced 0xC0 address and the executor at the address the hook
     ///         derives for it, so `hook.SETTLEMENT_EXECUTOR()` is a contract that exists.
-    function deployUnica() internal {
-        deployCodeTo("UnicaHook.sol:UnicaHook", "", HOOK_ADDR);
-        hook = UnicaHook(HOOK_ADDR);
+    function deploySettlement() internal {
+        deployCodeTo("V4SettlementHook.sol:V4SettlementHook", "", HOOK_ADDR);
+        hook = V4SettlementHook(HOOK_ADDR);
         deployCodeTo("SettlementExecutor.sol:SettlementExecutor", "", hook.SETTLEMENT_EXECUTOR());
         executor = SettlementExecutor(hook.SETTLEMENT_EXECUTOR());
-        vm.label(HOOK_ADDR, "UnicaHook");
+        vm.label(HOOK_ADDR, "V4SettlementHook");
         vm.label(hook.SETTLEMENT_EXECUTOR(), "SettlementExecutor");
     }
 

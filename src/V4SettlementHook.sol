@@ -16,7 +16,7 @@ import {AddressConstants} from "hookmate/constants/AddressConstants.sol";
 import {UniswapDeployments} from "./libraries/UniswapDeployments.sol";
 import {SettlementExecutor} from "./SettlementExecutor.sol";
 
-/// @title UnicaHook, the settlement hook
+/// @title V4SettlementHook, the settlement hook
 /// @notice Makes a pool usable only for settlements: a swap is admitted when it arrives through
 ///         Uniswap's official Universal Router, driven by the SettlementExecutor, for an order that is
 ///         being paid right now, with the swap parameters the order dictates (invariant I1). After
@@ -32,7 +32,7 @@ import {SettlementExecutor} from "./SettlementExecutor.sol";
 ///      address is derived from its own creation code and a fixed salt through the canonical CREATE2
 ///      factory, so all three are the same on every listed chain and nothing is configurable after
 ///      deploy. The hook takes no fee this event: `HookFee` reports zero, honestly.
-contract UnicaHook is BaseHook, IHookEvents {
+contract V4SettlementHook is BaseHook, IHookEvents {
     using PoolIdLibrary for PoolKey;
 
     /// @notice The canonical CREATE2 factory (the same one forge scripts use) and the salt the executor

@@ -7,8 +7,8 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
-import {UnicaTestBase} from "./utils/UnicaTestBase.sol";
-import {UnicaHook} from "../src/UnicaHook.sol";
+import {SettlementTestBase} from "./utils/SettlementTestBase.sol";
+import {V4SettlementHook} from "../src/V4SettlementHook.sol";
 import {SettlementExecutor} from "../src/SettlementExecutor.sol";
 
 /// @title Tests for the executor: invariant I1's positive path through the official router, the
@@ -16,7 +16,7 @@ import {SettlementExecutor} from "../src/SettlementExecutor.sol";
 /// @notice Every assertion is about SHAPE, never the implementation's arithmetic: who received, who
 ///         paid, that neither the executor nor the router holds anything, that the hook receipted
 ///         exactly one settlement, and that each refusal leaves the order payable (invariant I6).
-contract SettlementExecutorTest is UnicaTestBase {
+contract SettlementExecutorTest is SettlementTestBase {
     using PoolIdLibrary for PoolKey;
 
     address internal merchant = makeAddr("merchant");
@@ -27,7 +27,7 @@ contract SettlementExecutorTest is UnicaTestBase {
 
     function setUp() public {
         setUpV4();
-        deployUnica();
+        deploySettlement();
         (key,) = initNativePoolWithLiquidity(IHooks(address(hook)), 10 ether);
         vm.deal(payer, 1 ether);
     }
@@ -175,7 +175,9 @@ contract SettlementExecutorTest is UnicaTestBase {
         vm.expectRevert(
             _wrapped(
                 IHooks.afterSwap.selector,
-                abi.encodeWithSelector(UnicaHook.OutputBelowMinimum.selector, orderId, minOut, uint128(actualOut))
+                abi.encodeWithSelector(
+                    V4SettlementHook.OutputBelowMinimum.selector, orderId, minOut, uint128(actualOut)
+                )
             )
         );
         vm.prank(payer);
@@ -195,7 +197,9 @@ contract SettlementExecutorTest is UnicaTestBase {
         vm.expectRevert(
             _wrapped(
                 IHooks.afterSwap.selector,
-                abi.encodeWithSelector(UnicaHook.PartialFill.selector, orderId, tooLarge, uint128(6035841794200769))
+                abi.encodeWithSelector(
+                    V4SettlementHook.PartialFill.selector, orderId, tooLarge, uint128(6035841794200769)
+                )
             )
         );
         vm.prank(payer);
