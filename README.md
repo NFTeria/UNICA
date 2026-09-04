@@ -7,11 +7,12 @@ Built from scratch during ETHOnline 2026 by NFTeria.
 > The specification and threat model were written before the event; every line of code was
 > written during it. Both pre-event documents ship unedited in [`specs/`](specs/README.md).
 
-**Status, day 1 (2026-09-04):** the hook frame is deployed on Ethereum Sepolia, its permission-bit
-guard has been seen to fail and then pass, a real swap has run through it on Uniswap's official
-PoolManager with the receipt read back from the chain, and CI is green on three lanes including
-a stranger's clone. The gate, the invariants, and the surface are the next days' work. Nothing
-here is claimed past the rung it has reached.
+**Status, day 2 (2026-09-04, evening):** the settlement router exists and the hook admits only it
+(invariant I1), native settlement is proven as four rows (I7), and every refusal leaves the payer
+whole and the order payable (I6); I3, I4, I5 hold at the router. Twenty-five tests, fuzz at
+10,000, against Uniswap's official PoolManager bytecode. On chain, the day-1 scaffold hook keeps
+its record; the gated hook is mined fresh and live-fired on day 4. The receipt (I2), the surface,
+and the video are the next days' work. Nothing here is claimed past the rung it has reached.
 
 ## The problem
 
@@ -37,8 +38,8 @@ payer ─► UnicaSettlementRouter (the sole authorised caller; arrives with inv
                       └─ PoolManager.take(outputCurrency, order.recipient, amountOut)
 ```
 
-The contract layout for the three partners this entry builds on, and which contracts are Vyper, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Today only the `afterSwap` leg exists, with no logic beyond observation. The invariants land one
-slice at a time, each with a negative test first; their rungs are in
+The contract layout for the three partners this entry builds on, and which contracts are Vyper, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The router and the `beforeSwap` gate exist; `afterSwap` still only observes until the receipt
+lands on day 3. The invariants land one slice at a time, each with a negative test first; their rungs are in
 [`docs/INVARIANTS.md`](docs/INVARIANTS.md) and the threats in
 [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md).
 
@@ -46,18 +47,24 @@ slice at a time, each with a negative test first; their rungs are in
 
 | What | Where |
 |---|---|
-| The hook contract | [`src/UnicaHook.sol:22`](src/UnicaHook.sol#L22) |
-| Zero-argument constructor resolving the PoolManager from the chain id (one address on every chain, spec section 7d) | [`src/UnicaHook.sol:36`](src/UnicaHook.sol#L36) |
-| Declared permissions, `afterSwap` only today | [`src/UnicaHook.sol:39`](src/UnicaHook.sol#L39) (the one `true` at line 48) |
-| The `afterSwap` callback, reachable only through `BaseHook.onlyPoolManager` | [`src/UnicaHook.sol:59`](src/UnicaHook.sol#L59) |
-| The observable: `afterSwapCount` and `AfterSwapObserved` | [`src/UnicaHook.sol:29`](src/UnicaHook.sol#L29), [`:34`](src/UnicaHook.sol#L34) |
-| T5 guard, asserted numerically before any deploy | [`test/UnicaHook.t.sol:41`](test/UnicaHook.t.sol#L41) and [`:58`](test/UnicaHook.t.sol#L58) |
-| Reading permissions off the real runtime code | [`test/UnicaHook.t.sol:134`](test/UnicaHook.t.sol#L134) |
-| The negative control from v4 itself (`HookAddressNotValid` at a beforeSwap-only address) | [`test/UnicaHook.t.sol:76`](test/UnicaHook.t.sol#L76) |
-| A real swap through v4-core's PoolManager reaching the hook | [`test/UnicaHook.t.sol:96`](test/UnicaHook.t.sol#L96), fuzzed at [`:110`](test/UnicaHook.t.sol#L110), hookless control at [`:121`](test/UnicaHook.t.sol#L121) |
-| Local PoolManager placed at the canonical Sepolia address so the zero-arg constructor resolves | [`test/UnicaHook.t.sol:48`](test/UnicaHook.t.sol#L48) |
-| Deterministic salt mining and CREATE2 deploy | [`script/LiveFire.s.sol:88`](script/LiveFire.s.sol#L88), [`:68`](script/LiveFire.s.sol#L68) |
-| Pool initialisation, seeding, and the proof swap | [`script/LiveFire.s.sol:117`](script/LiveFire.s.sol#L117), [`:138`](script/LiveFire.s.sol#L138), [`:181`](script/LiveFire.s.sol#L181) |
+| The hook contract | [`src/UnicaHook.sol:26`](src/UnicaHook.sol#L26) |
+| The only admitted swap sender, derived from the router's creation code through the canonical CREATE2 factory; nothing configurable after deploy | [`src/UnicaHook.sol:36`](src/UnicaHook.sol#L36), [`:59`](src/UnicaHook.sol#L59) |
+| Zero-argument constructor resolving the PoolManager from the chain id (one address on every chain, spec section 7d) | [`src/UnicaHook.sol:52`](src/UnicaHook.sol#L52) |
+| Declared permissions, `beforeSwap` and `afterSwap`, no returns-delta flag (mask 0xC0) | [`src/UnicaHook.sol:67`](src/UnicaHook.sol#L67) |
+| **Invariant I1's gate**: `beforeSwap` refuses every sender but the router | [`src/UnicaHook.sol:88`](src/UnicaHook.sol#L88), the revert at [`:94`](src/UnicaHook.sol#L94) |
+| The `afterSwap` observation (`afterSwapCount`), replaced by the receipt on day 3 | [`src/UnicaHook.sol:99`](src/UnicaHook.sol#L99), [`:45`](src/UnicaHook.sol#L45) |
+| The router contract and its `Order` (the only source of recipient, amount, minimum, deadline) | [`src/UnicaSettlementRouter.sol:25`](src/UnicaSettlementRouter.sol#L25), [`:31`](src/UnicaSettlementRouter.sol#L31) |
+| `createOrder` (writes the order) and `pay` (the payer's single call) | [`src/UnicaSettlementRouter.sol:85`](src/UnicaSettlementRouter.sol#L85), [`:116`](src/UnicaSettlementRouter.sol#L116) |
+| **Invariant I5**: the order is consumed before the unlock | [`src/UnicaSettlementRouter.sol:125`](src/UnicaSettlementRouter.sol#L125) |
+| The unlock callback: swap with only the order id as hook data (spec C1), refuse a partial fill (A13, I6), refuse output below the minimum (I3), settle, take to the registered recipient (I1) | [`src/UnicaSettlementRouter.sol:135`](src/UnicaSettlementRouter.sol#L135), [`:153`](src/UnicaSettlementRouter.sol#L153), [`:158`](src/UnicaSettlementRouter.sol#L158) |
+| **Invariant I7**: `sync` for native immediately before the native `settle` | [`src/UnicaSettlementRouter.sol:169`](src/UnicaSettlementRouter.sol#L169) |
+| T5 guard, asserted numerically before any deploy; the day-1 address shape now refused; the derived router address checked against where the router lands | [`test/UnicaHook.t.sol:39`](test/UnicaHook.t.sol#L39), [`:33`](test/UnicaHook.t.sol#L33), [`:49`](test/UnicaHook.t.sol#L49), [`:55`](test/UnicaHook.t.sol#L55), [`:70`](test/UnicaHook.t.sol#L70) |
+| I1 negative: a swap from the official test router is refused with the hook's own error, wrapped by the PoolManager | [`test/UnicaHook.t.sol:79`](test/UnicaHook.t.sol#L79) |
+| Reading permissions off the real runtime code | [`test/UnicaHook.t.sol:114`](test/UnicaHook.t.sol#L114) |
+| I1 positive, fuzzed at 10,000; I5, I4, I3 and the partial fill, each asserting nothing moved | [`test/UnicaSettlementRouter.t.sol:32`](test/UnicaSettlementRouter.t.sol#L32), [`:56`](test/UnicaSettlementRouter.t.sol#L56), [`:71`](test/UnicaSettlementRouter.t.sol#L71), [`:81`](test/UnicaSettlementRouter.t.sol#L81), [`:104`](test/UnicaSettlementRouter.t.sol#L104), [`:120`](test/UnicaSettlementRouter.t.sol#L120) |
+| I7 as four rows: the control, the trap, the defect, the invariant | [`test/I7NativeSettle.t.sol:41`](test/I7NativeSettle.t.sol#L41), [`:49`](test/I7NativeSettle.t.sol#L49), [`:57`](test/I7NativeSettle.t.sol#L57), [`:72`](test/I7NativeSettle.t.sol#L72) |
+| The test base: Uniswap's official PoolManager bytecode etched at the canonical address, its 24,009-byte runtime asserted | [`test/utils/UnicaTestBase.sol:61`](test/utils/UnicaTestBase.sol#L61), [`:36`](test/utils/UnicaTestBase.sol#L36) |
+| Deterministic salt mining and CREATE2 deploy; pool initialisation, seeding, and the proof swap (the day-1 scaffold's script, reworked for the gated hook before day 4) | [`script/LiveFire.s.sol:89`](script/LiveFire.s.sol#L89), [`:69`](script/LiveFire.s.sol#L69), [`:118`](script/LiveFire.s.sol#L118), [`:139`](script/LiveFire.s.sol#L139), [`:182`](script/LiveFire.s.sol#L182) |
 
 ## Uniswap dependencies
 
@@ -80,8 +87,8 @@ on 2026-09-04 (`cast code <addr> --rpc-url https://ethereum-sepolia-rpc.publicno
 git clone https://github.com/NFTeria/UNICA.git && cd UNICA
 make deps        # fetches the pinned submodules (the v4 toolchain) and asserts the pin
 make doctor      # says what is present, what is missing, and how to get it
-make gate        # forge build && forge test && forge fmt --check; expect 7 tests passed, 0 failed
-forge test -vv   # the fuzz test prints its run count (10,000)
+make gate        # forge build && forge test && forge fmt --check; expect 25 tests passed, 0 failed
+forge test -vv   # 25 tests; the fuzz tests print their run count (10,000)
 make predict     # the hook address and salt this creation code lands on, before any deploy
 ```
 
@@ -128,7 +135,7 @@ artifact that matches the chain rather than assuming one.
 
 ## Security limitations, stated
 
-- Today's hook has no gate: it declares `afterSwap` only and observes. It is a frame.
+- The hook gates on the router's address only; the order checks the spec places in the hook (I3, I4, I5) are enforced by the router today and reach the hook with the receipt on day 3.
 - Everything inside v4's unlock window is reentrant; the design keys callback state by pool and
   caller and adds its own guard (spec C3). Not implemented yet.
 - The router is the security boundary once it exists: its ownership, upgradeability (none,
