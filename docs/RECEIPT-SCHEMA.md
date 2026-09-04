@@ -31,6 +31,27 @@ From the indexing context, not the event: chain id, block number, transaction ha
 and the hook address (the emitter). Together `(chainId, hook, orderId)` identifies one settlement,
 and there is exactly one receipt per order, ever (I5).
 
+## The requirements, frozen (day 3, slice A)
+
+These are the rules an indexer may rely on. Each is a test in `test/ReceiptSchema.t.sol` or in the
+suite named beside it, and a change to any of them is a new schema version.
+
+| Requirement | Rule | Proven by |
+|---|---|---|
+| Field types and indexed fields | as in the table above; three indexed topics, nine static data fields; the emitter is the hook | `test_Schema_TopicAndVersionAreTheDocumentedOnes` (the topic in this file equals the code's) |
+| Units and semantics | amounts in the currency's smallest unit; `amountIn` is what the pool consumed, `amountOut` what it credited; both equal the PoolManager's own `Swap` deltas and, for a standard token, the recipient's balance change | `test_Schema_OneReceiptWhoseAmountsAreTheDeltasAndTheBalanceChange` |
+| Native currency | `address(0)` in `currencyIn` or `currencyOut`, as in v4's pool key | the same test (`currencyIn == address(0)`) |
+| Event order within the transaction | the PoolManager's `Swap`, then `SettlementReceipt`, then `HookFee`, then the token `Transfer` that pays the recipient, then the executor's `Settled`. The receipt precedes payment in the log; it survives only because the executor verifies the recipient afterwards and reverts otherwise | `test_Schema_LogOrderIsSwapReceiptFeeThenPayment` |
+| Uniqueness key | `(chainId, hook, orderId)`; exactly one receipt exists for it, ever | `test_Schema_DuplicateOrderIdCannotProduceTwoReceipts`, `test_RevertWhen_OrderIsSwappedTwiceInOnePlan`, `test_OrderIdsAreChainBoundCreatorBoundAndKnownInAdvance` |
+| Hook-address-agnostic decoding | an indexer selects by topic and `schemaVersion`, takes the hook from the emitter, and never hard-codes a deployment | `test_Schema_DecodingIsHookAddressAgnostic` (two hooks at two addresses, one decoder) |
+| Versioning and migration | `schemaVersion` is the first data field; any change to fields, types, order or indexing is version 2 with a new signature and topic; version 1 is never edited; an indexer adds a handler for the new topic and leaves version-1 entities untouched | this file's rule; the constant `RECEIPT_SCHEMA_VERSION` |
+| Completeness | a settlement is complete if and only if its receipt exists in a mined transaction: the receipt is emitted inside the swap, after the fill checks, and the whole transaction reverts on any refusal | the refusal tests below |
+| Refused or reverted settlements | no receipt, no counter change, no entity: wrong path, stranger through the router, malformed hook data, order not in flight, expired, wrong parameters or pool, partial fill, short output, short delivery, second swap, replay | `test_RevertWhen_SwapSenderIsNotTheOfficialRouter`, `test_RevertWhen_OfficialRouterIsDrivenByAStranger`, `test_RevertWhen_HookDataIsNotAnOrderId`, `test_RevertWhen_OrderIsNotInFlight`, `test_RevertWhen_ExpiredOrderReachesTheHook`, `test_RevertWhen_SwapDirectionDisagreesWithTheOrder`, `test_RevertWhen_SwapParamsDisagreeWithTheOrder`, `test_RevertWhen_PoolDisagreesWithTheOrder`, `test_RevertWhen_PoolCannotFillTheOrder_NothingMoves`, `test_RevertWhen_OutputBelowMinimum_NothingMoves`, `test_RevertWhen_RecipientReceivesLessThanTheMinimum_FeeOnTransfer`, `test_RevertWhen_OrderIsSwappedTwiceInOnePlan`, `test_RevertWhen_OrderPaidTwice`, and row 3 of `test/I7NativeSettle.t.sol` |
+
+Every control above was green against the implementation as of the commit that added this
+section: the schema landed the same night with these properties, so no red control was needed to
+motivate a change. The controls exist to keep it that way.
+
 ## Beside it
 
 - OpenZeppelin `IHookEvents.HookFee(poolId, sender, feeAmount0, feeAmount1)` with `sender` the
