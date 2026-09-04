@@ -149,3 +149,6 @@ Session.vim
 # UNICA-private shelf lives in the toolkit war room, never here (owner ruling 2026-09-04)
 unica-closet/
 ROBINHOOD-UNISWAP.md
+
+# anvil-fork rehearsal artifacts: never the committed record
+.rehearsal/
