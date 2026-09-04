@@ -4,6 +4,9 @@ pragma solidity ^0.8.30;
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
+import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {UnicaTestBase} from "./utils/UnicaTestBase.sol";
 import {RouterHarness} from "./utils/RouterHarness.sol";
 import {UnicaHook} from "../src/UnicaHook.sol";
@@ -18,6 +21,8 @@ import {UnicaHook} from "../src/UnicaHook.sol";
 ///      is real: `PoolManager._settle` reads the last synced currency and rejects native value when
 ///      that currency is an ERC-20 (`v4-core/src/PoolManager.sol`, `_settle`).
 contract I7NativeSettleTest is UnicaTestBase {
+    using TransientStateLibrary for IPoolManager;
+
     RouterHarness internal harness;
     address internal merchant = makeAddr("merchant");
     address internal payer = makeAddr("payer");
@@ -59,12 +64,19 @@ contract I7NativeSettleTest is UnicaTestBase {
         harness.setForeignSyncFirst(usdcCurrency);
         bytes32 orderId = _order();
         uint256 payerBefore = payer.balance;
+        vm.recordLogs();
         vm.expectRevert(IPoolManager.NonzeroNativeValue.selector);
         vm.prank(payer);
         harness.pay{value: AMOUNT_IN}(orderId);
+        // Nothing moved, anywhere: balances, PoolManager deltas, router state, hook state, receipts.
         assertEq(payer.balance, payerBefore, "payer lost value on a refused payment");
         assertEq(usdc.balanceOf(merchant), 0);
+        assertEq(address(harness).balance, 0);
+        assertEq(manager.currencyDelta(address(harness), CurrencyLibrary.ADDRESS_ZERO), 0, "native delta left open");
+        assertEq(manager.currencyDelta(address(harness), usdcCurrency), 0, "token delta left open");
         assertFalse(harness.orders(orderId).settled, "a refused payment consumed the order");
+        assertEq(hook.afterSwapCount(), 0, "the hook observed a refused settlement");
+        assertEq(_settledEvents(), 0, "a receipt was emitted for a refused settlement");
     }
 
     /// @notice Row 4, the invariant: defence ON with the same precondition. The sync resets the
@@ -81,6 +93,14 @@ contract I7NativeSettleTest is UnicaTestBase {
         assertEq(address(harness).balance, 0);
         _pay();
         assertEq(address(harness).balance, 0);
+    }
+
+    function _settledEvents() internal returns (uint256 n) {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 topic = keccak256("Settled(bytes32,address,address,uint256,uint256)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].emitter == address(harness) && logs[i].topics[0] == topic) n++;
+        }
     }
 
     function _order() internal returns (bytes32) {
