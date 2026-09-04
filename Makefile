@@ -5,7 +5,7 @@
 # Every deploy target is a public TESTNET; the scripts refuse any other chain id by construction.
 -include .env
 
-.PHONY: help build test fuzz fmt gate clean predict simulate-sepolia anvil-fork rehearse \
+.PHONY: help deps doctor build test fuzz fmt gate clean predict simulate-sepolia anvil-fork rehearse \
         live-sepolia deploy-sepolia init-sepolia seed-sepolia swap-sepolia readback-sepolia \
         verify-sepolia balances
 
@@ -23,6 +23,10 @@ SCRIPT    := script/LiveFire.s.sol:LiveFire
 
 help:
 	@echo "UNICA"
+	@echo ""
+	@echo "  FIRST, on a fresh clone"
+	@echo "    make deps              fetch the pinned submodules (the v4 toolchain) and assert the pin"
+	@echo "    make doctor            say exactly what is present, what is missing, and how to get it"
 	@echo ""
 	@echo "  CHECK (free, no transaction)"
 	@echo "    make gate              build + test (fuzz at the configured runs) + fmt --check"
@@ -43,13 +47,39 @@ help:
 	@echo ""
 	@echo "  Every LIVE target needs DEPLOYER_ACCOUNT=<keystore name> DEPLOYER=<its address>, in .env or inline."
 
+# ── first, on a fresh clone ───────────────────────────────────────────────────
+PIN_TAG    := v1.1.1
+PIN_COMMIT := bd5287c4a9f5c22c2393f7587a9b357662916115
+
+deps:
+	git submodule update --init --recursive
+	@test "$$(git -C lib/uniswap-hooks rev-parse HEAD)" = "$(PIN_COMMIT)" \
+	  || { echo "lib/uniswap-hooks is not at $(PIN_TAG) ($(PIN_COMMIT)); run: git submodule update --init --recursive --checkout"; exit 1; }
+	@echo "deps: uniswap-hooks at $(PIN_TAG) = $(PIN_COMMIT); v4-core, v4-periphery, hookmate, forge-std present"
+
+doctor:
+	@echo "== toolchain"
+	@command -v forge >/dev/null && forge --version | head -1 || echo "MISSING forge: install Foundry from getfoundry.sh (CI uses upstream v1.5.1; this tree was built with the foundry-zksync fork of 1.3.5)"
+	@command -v cast  >/dev/null && cast --version | head -1  || echo "MISSING cast (comes with Foundry)"
+	@command -v anvil >/dev/null && anvil --version | head -1 || echo "MISSING anvil (comes with Foundry; needed only for make rehearse)"
+	@command -v vyper >/dev/null && echo "vyper $$(vyper --version)" || echo "vyper not found (not needed yet; the Vyper contracts are not in the tree)"
+	@echo "== submodules"
+	@test -f lib/uniswap-hooks/src/base/BaseHook.sol && echo "lib/uniswap-hooks present" || echo "MISSING lib/: run make deps"
+	@test -f lib/uniswap-hooks/lib/v4-core/src/PoolManager.sol && echo "v4-core present" || echo "MISSING v4-core: run make deps"
+	@test -f lib/hookmate/src/constants/AddressConstants.sol && echo "hookmate present" || echo "MISSING hookmate: run make deps"
+	@test -d lib/uniswap-hooks/.git -o -f lib/uniswap-hooks/.git && test "$$(git -C lib/uniswap-hooks rev-parse HEAD 2>/dev/null)" = "$(PIN_COMMIT)" && echo "uniswap-hooks pinned at $(PIN_TAG)" || echo "uniswap-hooks NOT at the pin: run make deps"
+	@echo "== the gate, if everything above is present: make gate (expect 7 tests passed, 0 failed)"
+
+_need-deps:
+	@test -f lib/uniswap-hooks/src/base/BaseHook.sol || { echo "the submodules are not fetched; run: make deps"; exit 1; }
+
 # ── check ─────────────────────────────────────────────────────────────────────
-build :; forge build
-test  :; forge test -vv
-fuzz  :; forge test --match-test testFuzz -vv
+build : _need-deps ; forge build
+test  : _need-deps ; forge test -vv
+fuzz  : _need-deps ; forge test --match-test testFuzz -vv
 fmt   :; forge fmt
 clean :; forge clean
-gate  :
+gate  : _need-deps
 	forge build && forge test && forge fmt --check
 	@echo "gate: build, test, fmt-check all exit 0"
 
