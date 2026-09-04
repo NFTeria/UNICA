@@ -50,6 +50,50 @@ specific as the friction — "the `X` helper saved an hour because it did `Y`" �
 
 <!-- newest first -->
 
+### 2026-09-04 — the Universal Router as the execution path for a settlement hook: what it carries, what it cannot express, and one shape the interface does not describe
+
+**What happened.** The owner ruled that settlement must go through Uniswap's official execution
+path where it supports the custom-hook pool, keeping only the smallest supporting contract. Ten
+verification questions were answered from the pinned v4-periphery sources, the
+`Uniswap/universal-router` repository on `main`, and the two deployed Sepolia routers read with
+`cast` (`docs/EXECUTION-PATH.md`). Then the tree was reworked onto it the same night: the hook
+admits only the Universal Router driven by a `SettlementExecutor`, and every test runs against
+the router's deployed runtime etched at its Sepolia address.
+
+**Credit first, because it is earned.** `IMsgSender.msgSender()` works exactly as the
+accessing-msg.sender guide says: the hook confirms `sender == UniversalRouter`, then asks it who
+drove the call, and the answer is the executor (`test_RevertWhen_OfficialRouterIsDrivenByAStranger`
+names a stranger through the same path). `DeltaResolver._settle` syncs before every settle, native
+included; invariant I7's fifth row runs the deployed router bytecode with an ERC-20 settle leg
+before the native one in the same unlock and it survives
+(`test_I7_OfficialRouter_ForeignSettleBeforeNative_Survives`). That is the defence this hook
+relies on, and it is Uniswap's.
+
+**What the router cannot express, with the line that says so.** Two settlement invariants have
+no home in the router. The `TAKE` recipient is caller-encoded
+(`v4-periphery/src/V4Router.sol`, the `TAKE` branch of `_handleAction`, `_mapRecipient`), so
+nothing binds it to an authenticated order; and `V4Router` never compares consumed input to
+requested input, so an exact-input swap that hits the price limit is a partial fill the router
+settles as a success. Both are reasonable for a general router. For a settlement, they are the
+whole point. This is why one thin executor exists in this tree, and it is the only reason.
+
+**The shape the interface does not describe.** `IUniversalRouter` declares
+`error ExecutionFailed(uint256 commandIndex, bytes message)` for "a required command that has
+failed". A `V4_SWAP` command that fails does not produce it: the `Dispatcher` runs V4 actions as
+an internal call with no try, so the low-level `(success, output)` pattern that feeds
+`ExecutionFailed` applies to the Permit2 and position-manager commands and not to `V4_SWAP`. A
+hook's revert comes out of `execute` raw, as the PoolManager's
+`WrappedError(hook, selector, reason, HookCallFailed)`. Reproduce:
+`test_RevertWhen_OfficialRouterIsDrivenByAStranger` asserts the raw wrapped bytes and passes
+against the deployed runtime; an integrator catching `ExecutionFailed` around a v4 swap would
+catch nothing. One sentence in the interface's NatSpec would save that integrator an hour.
+
+**A tooling gap.** hookmate ships the PoolManager's initcode as an artifact so a test can deploy
+the official bytecode; nothing equivalent exists for the Universal Router. This repository
+embeds the deployed Sepolia runtime as a 19,540-byte library with its keccak recorded
+(`test/utils/artifacts/UniversalRouterV2Sepolia.sol`), which is the honest way to test against
+the real router today and a clumsy one. A published runtime artifact per chain would remove it.
+
 ### 2026-09-04 — `v4-security-foundations` run over the real gate and router: two catches, three misses, one template that does not compile
 
 **Trying to:** apply the `v4-security-foundations` skill (uniswap-ai plugin `uniswap-hooks`

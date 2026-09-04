@@ -90,3 +90,14 @@ carry the router's creation code into the hook's runtime.
 **Day 3 starts with** I2: the receipt event with order id, net, fee, and recipient beside the
 standard `HookFee`; the hook reading the order from the router in `beforeSwap` (I4, I5) and
 `afterSwap` (I3). Then the pool allowlist (C2) if the clock allows. Day 4 deploys.
+
+**Changed against the plan, day 2 night (2026-09-04).** The owner ruled that settlement goes
+through Uniswap's official Universal Router where it supports the custom-hook pool. The tree was
+reworked onto it the same night: `UnicaSettlementRouter` became the thin `SettlementExecutor`
+that composes the router's plan and never touches the PoolManager; the hook admits only the
+official router driven by the executor; and the hook-side I3, I4, I5 checks and the I2 receipt,
+planned for day 3, landed with the rework because the gate change forced every test to move
+anyway. I7's four rows now run against a stand-in at the router's address, with a fifth row
+against the router's deployed bytecode. The hook was renamed `V4SettlementHook` for the venue.
+Day 3 is therefore free for the reentrancy test (T6), the pool allowlist (C2), and the sponsor
+artifacts, ahead of the day-4 deploy.
