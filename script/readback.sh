@@ -14,9 +14,15 @@ SIG_LIQ='getLiquidity(bytes32)(uint128)'
 
 chain=$(cast chain-id --rpc-url "$RPC")
 hook=$(forge script script/LiveFire.s.sol:LiveFire --sig "predict()" 2>/dev/null | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
+router=$(forge script script/LiveFire.s.sol:LiveFire --sig "predictRouter()" 2>/dev/null | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
+rcode=$(cast code "$router" --rpc-url "$RPC")
+SIG_ORDERS='orderCount()(uint256)'
+
 code=$(cast code "$hook" --rpc-url "$RPC")
 bytes=$(( (${#code} - 2) / 2 ))
 echo "chain id        : $chain"
+echo "router (derived): $router  code bytes: $(( (${#rcode} - 2) / 2 ))"
+if [ "$rcode" != "0x" ]; then echo "orders created  : $(cast call "$router" "$SIG_ORDERS" --rpc-url "$RPC")"; fi
 echo "hook (predicted): $hook"
 echo "hook code bytes : $bytes"
 if [ "$code" != "0x" ]; then
