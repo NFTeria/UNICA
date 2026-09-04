@@ -37,7 +37,7 @@ payer ─► UnicaSettlementRouter (the sole authorised caller; arrives with inv
                       └─ PoolManager.take(outputCurrency, order.recipient, amountOut)
 ```
 
-Today only the `afterSwap` leg exists, with no logic beyond observation. The invariants land one
+The contract layout for the three partners this entry builds on, and which contracts are Vyper, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Today only the `afterSwap` leg exists, with no logic beyond observation. The invariants land one
 slice at a time, each with a negative test first; their rungs are in
 [`docs/INVARIANTS.md`](docs/INVARIANTS.md) and the threats in
 [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md).
