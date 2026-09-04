@@ -150,5 +150,40 @@ Session.vim
 unica-closet/
 ROBINHOOD-UNISWAP.md
 
+# ── more tripwires: every other file name the private event runtime uses ────
+# None of these is a file this repository will ever legitimately hold. If one appears,
+# it arrived by accident; git refuses it before a commit can.
+SESSION-PROMPT.md
+ANSWERS.md
+HANDOFF.md
+SPONSORS.md
+SPONSOR-BRIEF.md
+SLOT-*.md
+LAW.md
+PRIZE.md
+SHIP.md
+WHOSE-PROJECT.md
+HOOK-CRAFT.md
+UNISWAP-GITHUB.md
+V4-*.md
+DRILL-*.md
+FEEDBACK-PLAN.md
+FEEDBACK-DISCIPLINE.md
+QUESTIONS.md
+SIGNUP-*.md
+WINNERS-*.md
+PURSUIT-KIT.md
+CHAINS.md
+DISCIPLINE.md
+WORLD-*.md
+*.REFERENCE
+pseudocode/
+day1/
+unica-closet*
+# agent working files and task output are never repository content
+*.output
+tasks/
+scratchpad/
+
 # anvil-fork rehearsal artifacts: never the committed record
 .rehearsal/
