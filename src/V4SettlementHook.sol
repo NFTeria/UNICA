@@ -89,6 +89,8 @@ contract V4SettlementHook is BaseHook, IHookEvents {
     error ParamsDoNotMatchOrder(bytes32 orderId);
     /// @notice The swap is in a pool other than the order's (invariant I3).
     error PoolDoesNotMatchOrder(bytes32 orderId);
+    /// @notice A second swap for the same order in the same transaction (invariant I5, one receipt per order).
+    error OrderAlreadySwapped(bytes32 orderId);
     /// @notice The pool consumed less than the order's input: a partial fill is never a settlement (invariant I6).
     error PartialFill(bytes32 orderId, uint128 requested, uint128 consumed);
     /// @notice The output is below the order's minimum (invariant I6).
@@ -150,6 +152,7 @@ contract V4SettlementHook is BaseHook, IHookEvents {
         if (caller != SETTLEMENT_EXECUTOR) revert NotSettlementExecutor(caller);
 
         (bytes32 orderId, SettlementExecutor.Order memory order) = _inFlightOrder(hookData);
+        if (_swapped(orderId)) revert OrderAlreadySwapped(orderId);
         if (block.timestamp > order.deadline) revert OrderExpired(orderId, order.deadline);
         if (!params.zeroForOne || params.amountSpecified != -int256(uint256(order.amountIn))) {
             revert ParamsDoNotMatchOrder(orderId);
@@ -177,8 +180,28 @@ contract V4SettlementHook is BaseHook, IHookEvents {
         unchecked {
             ++receiptCount;
         }
+        _markSwapped(orderId);
         _receipt(orderId, key, order, amountOut);
         return (IHooks.afterSwap.selector, 0);
+    }
+
+    /// @dev One swap per order per transaction, whatever plan the executor's caller composed: a plan
+    ///      with two swaps for one in-flight order would otherwise receipt twice. Transient storage
+    ///      (EIP-1153), so the mark costs no persistent state and vanishes with the transaction; the
+    ///      order itself leaves Paying when the executor returns, so a later transaction cannot
+    ///      re-enter here either. The slot is namespaced so it cannot collide with anything else.
+    function _swapped(bytes32 orderId) internal view returns (bool yes) {
+        bytes32 slot = keccak256(abi.encode(orderId, "V4SettlementHook.swapped"));
+        assembly ("memory-safe") {
+            yes := tload(slot)
+        }
+    }
+
+    function _markSwapped(bytes32 orderId) internal {
+        bytes32 slot = keccak256(abi.encode(orderId, "V4SettlementHook.swapped"));
+        assembly ("memory-safe") {
+            tstore(slot, 1)
+        }
     }
 
     /// @dev The two events of invariant I2, in their own frame so the receipt's twelve fields do not

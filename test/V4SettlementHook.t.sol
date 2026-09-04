@@ -246,7 +246,56 @@ contract V4SettlementHookTest is SettlementTestBase {
         h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
     }
 
+    /// @notice Invariant I5 at the hook, within one transaction: a plan with two swaps for one order,
+    ///         each with the order's own parameters, is refused at the second with the order named,
+    ///         so exactly one receipt can ever exist for an order however the plan is composed. The
+    ///         control is the same plan with one swap, which settles.
+    function test_RevertWhen_OrderIsSwappedTwiceInOnePlan() public {
+        ExecutorHarness h = deployExecutorHarness();
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 10 ether);
+        bytes32 id = _order(h, k, AMOUNT_IN, 1);
+        (bytes memory commands, bytes[] memory inputs) = _twoSwapPlan(k, AMOUNT_IN, merchant, abi.encode(id));
+        vm.expectRevert(
+            _wrapped(
+                IHooks.beforeSwap.selector, abi.encodeWithSelector(V4SettlementHook.OrderAlreadySwapped.selector, id)
+            )
+        );
+        h.payWithPlan{value: 2 * AMOUNT_IN}(id, commands, inputs);
+        assertEq(hook.receiptCount(), 0);
+
+        (commands, inputs) = h.planFor(id);
+        h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
+        assertEq(hook.receiptCount(), 1, "the control did not settle once");
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    /// @dev Two identical exact-input swaps for the same order, then one settle and one take.
+    function _twoSwapPlan(PoolKey memory k, uint128 amountIn, address recipient, bytes memory hookData)
+        internal
+        pure
+        returns (bytes memory commands, bytes[] memory inputs)
+    {
+        bytes memory actions = abi.encodePacked(
+            uint8(Actions.SWAP_EXACT_IN_SINGLE),
+            uint8(Actions.SWAP_EXACT_IN_SINGLE),
+            uint8(Actions.SETTLE),
+            uint8(Actions.TAKE)
+        );
+        bytes[] memory params = new bytes[](4);
+        bytes memory swapParams = abi.encode(
+            IV4Router.ExactInputSingleParams({
+                poolKey: k, zeroForOne: true, amountIn: amountIn, amountOutMinimum: 1, hookData: hookData
+            })
+        );
+        params[0] = swapParams;
+        params[1] = swapParams;
+        params[2] = abi.encode(k.currency0, ActionConstants.OPEN_DELTA, false);
+        params[3] = abi.encode(k.currency1, recipient, ActionConstants.OPEN_DELTA);
+        inputs = new bytes[](1);
+        inputs[0] = abi.encode(actions, params);
+        commands = abi.encodePacked(uint8(0x10));
+    }
 
     function _expectNotInFlight(
         ExecutorHarness h,
