@@ -319,7 +319,7 @@ contract V4SettlementHookTest is SettlementTestBase {
         returns (bytes32)
     {
         vm.prank(merchant);
-        return on.createOrder(merchant, k, amountIn, minOut, uint64(block.timestamp + 1 hours));
+        return on.createOrder(merchant, k, amountIn, minOut, uint64(block.timestamp + 1 hours), _salt());
     }
 
     /// @dev The official router's plan for one exact-input native swap, with every field open, so a

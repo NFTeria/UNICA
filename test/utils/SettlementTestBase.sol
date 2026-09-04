@@ -197,5 +197,12 @@ abstract contract SettlementTestBase is Test {
         }
     }
 
+    /// @dev A fresh order salt per call; ids are keccak(chainid, executor, creator, salt).
+    uint256 internal saltNonce;
+
+    function _salt() internal returns (bytes32) {
+        return bytes32(++saltNonce);
+    }
+
     receive() external payable {}
 }

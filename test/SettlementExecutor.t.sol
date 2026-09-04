@@ -239,17 +239,17 @@ contract SettlementExecutorTest is SettlementTestBase {
     function test_RevertWhen_CreateOrderRejectsBadInputs() public {
         uint64 deadline = uint64(block.timestamp + 1 hours);
         vm.expectRevert(SettlementExecutor.ZeroRecipient.selector);
-        executor.createOrder(address(0), key, AMOUNT_IN, 1, deadline);
+        executor.createOrder(address(0), key, AMOUNT_IN, 1, deadline, _salt());
         vm.expectRevert(SettlementExecutor.ZeroAmount.selector);
-        executor.createOrder(merchant, key, 0, 1, deadline);
+        executor.createOrder(merchant, key, 0, 1, deadline, _salt());
         vm.expectRevert(SettlementExecutor.ZeroMinOut.selector);
-        executor.createOrder(merchant, key, AMOUNT_IN, 0, deadline);
+        executor.createOrder(merchant, key, AMOUNT_IN, 0, deadline, _salt());
         vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.DeadlineInPast.selector, uint64(block.timestamp)));
-        executor.createOrder(merchant, key, AMOUNT_IN, 1, uint64(block.timestamp));
+        executor.createOrder(merchant, key, AMOUNT_IN, 1, uint64(block.timestamp), _salt());
         PoolKey memory erc20In = key;
         erc20In.currency0 = usdcCurrency;
         vm.expectRevert(SettlementExecutor.NativeInputOnly.selector);
-        executor.createOrder(merchant, erc20In, AMOUNT_IN, 1, deadline);
+        executor.createOrder(merchant, erc20In, AMOUNT_IN, 1, deadline, _salt());
     }
 
     /// @notice An order may name only a pool this executor's hook guards. A key with no hook, and a
@@ -260,11 +260,11 @@ contract SettlementExecutorTest is SettlementTestBase {
         PoolKey memory hookless = key;
         hookless.hooks = IHooks(address(0));
         vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.PoolNotGuarded.selector, address(0)));
-        executor.createOrder(merchant, hookless, AMOUNT_IN, 1, deadline);
+        executor.createOrder(merchant, hookless, AMOUNT_IN, 1, deadline, _salt());
         PoolKey memory otherHook = key;
         otherHook.hooks = IHooks(address(uint160(DECLARED_MASK) ^ (0x5555 << 144)));
         vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.PoolNotGuarded.selector, address(otherHook.hooks)));
-        executor.createOrder(merchant, otherHook, AMOUNT_IN, 1, deadline);
+        executor.createOrder(merchant, otherHook, AMOUNT_IN, 1, deadline, _salt());
         assertEq(executor.orderCount(), 0, "a refused order was counted");
     }
 
@@ -274,9 +274,9 @@ contract SettlementExecutorTest is SettlementTestBase {
     function test_RevertWhen_RecipientIsARouterSentinel() public {
         uint64 deadline = uint64(block.timestamp + 1 hours);
         vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.ReservedRecipient.selector, address(1)));
-        executor.createOrder(address(1), key, AMOUNT_IN, 1, deadline);
+        executor.createOrder(address(1), key, AMOUNT_IN, 1, deadline, _salt());
         vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.ReservedRecipient.selector, address(2)));
-        executor.createOrder(address(2), key, AMOUNT_IN, 1, deadline);
+        executor.createOrder(address(2), key, AMOUNT_IN, 1, deadline, _salt());
     }
 
     /// @notice Invariant I3 where it is felt, at the recipient. A payout token that burns a share of
@@ -297,7 +297,7 @@ contract SettlementExecutorTest is SettlementTestBase {
         // Measure the pool's credit for this order size on a snapshot, then unwind.
         uint256 snapshot = vm.snapshotState();
         vm.prank(merchant);
-        bytes32 probe = executor.createOrder(merchant, fotKey, AMOUNT_IN, 1, uint64(block.timestamp + 1 hours));
+        bytes32 probe = executor.createOrder(merchant, fotKey, AMOUNT_IN, 1, uint64(block.timestamp + 1 hours), _salt());
         vm.recordLogs();
         vm.prank(payer);
         executor.pay{value: AMOUNT_IN}(probe);
@@ -308,8 +308,9 @@ contract SettlementExecutorTest is SettlementTestBase {
 
         // The order asks for the full credit: the pool gives it, the token does not deliver it, refused.
         vm.prank(merchant);
-        bytes32 orderId =
-            executor.createOrder(merchant, fotKey, AMOUNT_IN, uint128(credit), uint64(block.timestamp + 1 hours));
+        bytes32 orderId = executor.createOrder(
+            merchant, fotKey, AMOUNT_IN, uint128(credit), uint64(block.timestamp + 1 hours), _salt()
+        );
         uint256 payerBefore = payer.balance;
         vm.expectRevert(
             abi.encodeWithSelector(SettlementExecutor.RecipientShort.selector, orderId, uint128(credit), delivered)
@@ -323,8 +324,9 @@ contract SettlementExecutorTest is SettlementTestBase {
 
         // The control: a minimum at what arrives settles, and the two records say what each measured.
         vm.prank(merchant);
-        bytes32 ok =
-            executor.createOrder(merchant, fotKey, AMOUNT_IN, uint128(delivered), uint64(block.timestamp + 1 hours));
+        bytes32 ok = executor.createOrder(
+            merchant, fotKey, AMOUNT_IN, uint128(delivered), uint64(block.timestamp + 1 hours), _salt()
+        );
         vm.recordLogs();
         vm.prank(payer);
         executor.pay{value: AMOUNT_IN}(ok);
@@ -349,19 +351,30 @@ contract SettlementExecutorTest is SettlementTestBase {
         assertEq(address(executor).balance, 0);
     }
 
-    /// @notice Order ids are bound to the chain and the executor and never repeat.
-    function test_OrderIdsAreChainBoundAndUnique() public {
-        bytes32 a = _order(AMOUNT_IN, 1);
-        bytes32 b = _order(AMOUNT_IN, 1);
-        assertTrue(a != b);
-        assertEq(a, keccak256(abi.encode(block.chainid, address(executor), uint256(1))));
+    /// @notice Order ids are bound to the chain, the executor, and the creator, and are known before
+    ///         the call: the same creator and salt is refused, and another creator with the same salt
+    ///         gets a different id. A deploy script can therefore pay the id it simulated.
+    function test_OrderIdsAreChainBoundCreatorBoundAndKnownInAdvance() public {
+        bytes32 salt = keccak256("order salt");
+        uint64 deadline = uint64(block.timestamp + 1 hours);
+        bytes32 expected = keccak256(abi.encode(block.chainid, address(executor), merchant, salt));
+        vm.prank(merchant);
+        bytes32 a = executor.createOrder(merchant, key, AMOUNT_IN, 1, deadline, salt);
+        assertEq(a, expected, "the id is not the documented derivation");
+        vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.OrderExists.selector, expected));
+        vm.prank(merchant);
+        executor.createOrder(merchant, key, AMOUNT_IN, 1, deadline, salt);
+        vm.prank(payer);
+        bytes32 b = executor.createOrder(merchant, key, AMOUNT_IN, 1, deadline, salt);
+        assertTrue(a != b, "two creators collided on one salt");
+        assertEq(executor.orderCount(), 2);
     }
 
     // ------------------------------------------------------------------ helpers
 
     function _order(uint128 amountIn, uint128 minOut) internal returns (bytes32) {
         vm.prank(merchant);
-        return executor.createOrder(merchant, key, amountIn, minOut, uint64(block.timestamp + 1 hours));
+        return executor.createOrder(merchant, key, amountIn, minOut, uint64(block.timestamp + 1 hours), _salt());
     }
 
     function _assertNothingMoved(bytes32 orderId, uint256 payerBefore) internal {

@@ -149,7 +149,7 @@ contract I7NativeSettleTest is SettlementTestBase {
 
     function _order() internal returns (bytes32) {
         vm.prank(merchant);
-        return executor.createOrder(merchant, key, AMOUNT_IN, 1, uint64(block.timestamp + 1 hours));
+        return executor.createOrder(merchant, key, AMOUNT_IN, 1, uint64(block.timestamp + 1 hours), _salt());
     }
 
     function _pay() internal {

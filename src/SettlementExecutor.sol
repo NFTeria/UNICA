@@ -66,7 +66,7 @@ contract SettlementExecutor {
     address public immutable HOOK;
 
     mapping(bytes32 orderId => Order) internal _orders;
-    /// @notice Orders created so far; part of every order id, so ids never repeat.
+    /// @notice Orders created so far. A statistic; ids come from the creator and a salt.
     uint256 public orderCount;
 
     event OrderCreated(
@@ -99,6 +99,8 @@ contract SettlementExecutor {
     error DeadlineInPast(uint64 deadline);
     error NativeInputOnly();
     error UnknownOrder(bytes32 orderId);
+    /// @notice This creator already used this salt; the id would repeat.
+    error OrderExists(bytes32 orderId);
     error OrderNotOpen(bytes32 orderId, Status status);
     error OrderExpired(bytes32 orderId, uint64 deadline);
     error WrongValue(uint256 expected, uint256 got);
@@ -113,10 +115,18 @@ contract SettlementExecutor {
 
     /// @notice Registers what a payment must do. Anyone may create an order; only the order decides
     ///         where output goes. Native ETH is the only input currency today (the live pool's shape).
-    function createOrder(address recipient, PoolKey calldata key, uint128 amountIn, uint128 minOut, uint64 deadline)
-        external
-        returns (bytes32 orderId)
-    {
+    ///         The id is `keccak256(chainid, executor, creator, salt)`: bound to this chain and this
+    ///         executor (threat T10), owned by the creator, and known before the call, so a caller can
+    ///         compute it offline and a deploy script pays the id it simulated, whatever other orders
+    ///         land in between. A creator reusing a salt is refused.
+    function createOrder(
+        address recipient,
+        PoolKey calldata key,
+        uint128 amountIn,
+        uint128 minOut,
+        uint64 deadline,
+        bytes32 salt
+    ) external returns (bytes32 orderId) {
         if (recipient == address(0)) revert ZeroRecipient();
         if (recipient == ActionConstants.MSG_SENDER || recipient == ActionConstants.ADDRESS_THIS) {
             revert ReservedRecipient(recipient);
@@ -127,8 +137,9 @@ contract SettlementExecutor {
         if (deadline <= block.timestamp) revert DeadlineInPast(deadline);
         if (!key.currency0.isAddressZero()) revert NativeInputOnly();
 
-        // Bound to this chain and this executor, so an id can never be replayed elsewhere (threat T10).
-        orderId = keccak256(abi.encode(block.chainid, address(this), ++orderCount));
+        orderId = keccak256(abi.encode(block.chainid, address(this), msg.sender, salt));
+        if (_orders[orderId].status != Status.None) revert OrderExists(orderId);
+        ++orderCount;
         _orders[orderId] = Order({
             recipient: recipient,
             creator: msg.sender,

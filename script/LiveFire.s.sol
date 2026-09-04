@@ -230,10 +230,21 @@ abstract contract SettlementScriptBase is Script {
         uint256 before = hook.receiptCount();
         uint256 usdcBefore = IERC20Minimal(c.usdc).balanceOf(recipient);
 
+        // The id depends on the creator and a salt, never on a count or a timestamp, so the id this
+        // simulation computes is the id the broadcast pays, whatever other orders land in between.
+        // Re-running the stage needs a new salt: ORDER_SALT=<anything new> make settle.
+        bytes32 salt = keccak256(abi.encodePacked("unica settle stage ", vm.envOr("ORDER_SALT", string("1"))));
+        bytes32 expectedId = keccak256(abi.encode(block.chainid, address(executor), recipient, salt));
+        require(
+            executor.orders(expectedId).status == SettlementExecutor.Status.None,
+            "this ORDER_SALT was already used by this sender; set ORDER_SALT to a new value"
+        );
         vm.startBroadcast();
-        bytes32 orderId = executor.createOrder(recipient, key, uint128(SWAP_ETH), 1, uint64(block.timestamp + 1 hours));
+        bytes32 orderId =
+            executor.createOrder(recipient, key, uint128(SWAP_ETH), 1, uint64(block.timestamp + 1 hours), salt);
         executor.pay{value: SWAP_ETH}(orderId);
         vm.stopBroadcast();
+        require(orderId == expectedId, "the order id differs from the one computed before the call");
 
         console.log("order id");
         console.logBytes32(orderId);
