@@ -227,6 +227,23 @@ contract V4SettlementHookTest is SettlementTestBase {
         h.payWithPlan{value: AMOUNT_IN + 1}(id, commands, inputs);
     }
 
+    /// @notice Invariant I3 at the hook, the direction half: a swap the other way, output to input,
+    ///         with the order's amount is refused before anything settles. Without this test, removing
+    ///         the direction check left the whole suite green (review finding, 2026-09-04).
+    function test_RevertWhen_SwapDirectionDisagreesWithTheOrder() public {
+        ExecutorHarness h = deployExecutorHarness();
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        bytes32 id = _order(h, k, AMOUNT_IN, 1);
+        (bytes memory commands, bytes[] memory inputs) = _plan(k, false, AMOUNT_IN, 1, merchant, abi.encode(id));
+        vm.expectRevert(
+            _wrapped(
+                IHooks.beforeSwap.selector, abi.encodeWithSelector(V4SettlementHook.ParamsDoNotMatchOrder.selector, id)
+            )
+        );
+        h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
+        assertEq(hook.receiptCount(), 0);
+    }
+
     /// @notice Invariant I3 at the hook: the pool must be the order's. A second hooked pool with a
     ///         different fee tier is initialised so the swap reaches the hook and is refused there.
     function test_RevertWhen_PoolDisagreesWithTheOrder() public {
@@ -329,16 +346,29 @@ contract V4SettlementHookTest is SettlementTestBase {
         pure
         returns (bytes memory commands, bytes[] memory inputs)
     {
-        bytes memory actions =
-            abi.encodePacked(uint8(Actions.SWAP_EXACT_IN_SINGLE), uint8(Actions.SETTLE), uint8(Actions.TAKE));
+        return _plan(k, true, amountIn, minOut, recipient, hookData);
+    }
+
+    /// @dev The same plan with the direction open, so the direction half of I3 has a test.
+    function _plan(
+        PoolKey memory k,
+        bool zeroForOne,
+        uint128 amountIn,
+        uint128 minOut,
+        address recipient,
+        bytes memory hookData
+    ) internal pure returns (bytes memory commands, bytes[] memory inputs) {
+        bytes memory actions = abi.encodePacked(
+            uint8(Actions.SWAP_EXACT_IN_SINGLE), uint8(Actions.SETTLE), uint8(Actions.TAKE)
+        );
         bytes[] memory params = new bytes[](3);
         params[0] = abi.encode(
             IV4Router.ExactInputSingleParams({
-                poolKey: k, zeroForOne: true, amountIn: amountIn, amountOutMinimum: minOut, hookData: hookData
+                poolKey: k, zeroForOne: zeroForOne, amountIn: amountIn, amountOutMinimum: minOut, hookData: hookData
             })
         );
-        params[1] = abi.encode(k.currency0, ActionConstants.OPEN_DELTA, false);
-        params[2] = abi.encode(k.currency1, recipient, ActionConstants.OPEN_DELTA);
+        params[1] = abi.encode(zeroForOne ? k.currency0 : k.currency1, ActionConstants.OPEN_DELTA, false);
+        params[2] = abi.encode(zeroForOne ? k.currency1 : k.currency0, recipient, ActionConstants.OPEN_DELTA);
         inputs = new bytes[](1);
         inputs[0] = abi.encode(actions, params);
         commands = abi.encodePacked(uint8(0x10));

@@ -71,11 +71,12 @@ contract I7NativeSettleTest is SettlementTestBase {
         harness.setForeignSyncFirst(usdcCurrency);
         bytes32 orderId = _order();
         uint256 payerBefore = payer.balance;
-        vm.recordLogs();
         vm.expectRevert(IPoolManager.NonzeroNativeValue.selector);
         vm.prank(payer);
         executor.pay{value: AMOUNT_IN}(orderId);
         // Nothing moved, anywhere: balances, PoolManager deltas, executor state, hook state, receipts.
+        // After a revert of the whole call these hold by EVM semantics; they are asserted so that a
+        // future pay() that caught the failure and returned would be caught here, not by a reader.
         assertEq(payer.balance, payerBefore, "payer lost value on a refused payment");
         assertEq(usdc.balanceOf(merchant), 0);
         assertEq(universalRouter.balance, 0);

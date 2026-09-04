@@ -377,6 +377,8 @@ contract SettlementExecutorTest is SettlementTestBase {
         return executor.createOrder(merchant, key, amountIn, minOut, uint64(block.timestamp + 1 hours), _salt());
     }
 
+    /// @dev After a revert of the whole call these hold by EVM semantics; they are asserted so that a
+    ///      future pay() that caught the failure and returned would be caught here, not by a reader.
     function _assertNothingMoved(bytes32 orderId, uint256 payerBefore) internal {
         assertEq(payer.balance, payerBefore, "payer lost value on a refused payment");
         assertEq(usdc.balanceOf(merchant), 0, "recipient received output from a refused payment");
