@@ -77,12 +77,17 @@ on 2026-09-04 (`cast code <addr> --rpc-url https://ethereum-sepolia-rpc.publicno
 ## Setup, test, fuzz
 
 ```sh
-git clone --recurse-submodules git@github.com:NFTeria/UNICA.git && cd UNICA
-git -C lib/uniswap-hooks describe --tags        # must print v1.1.1
-make gate                                        # forge build && forge test && forge fmt --check
-forge test -vv                                   # 7 tests; the fuzz test prints its run count (10,000)
-make predict                                     # the hook address and salt, before any deploy
+git clone https://github.com/NFTeria/UNICA.git && cd UNICA
+make deps        # fetches the pinned submodules (the v4 toolchain) and asserts the pin
+make doctor      # says what is present, what is missing, and how to get it
+make gate        # forge build && forge test && forge fmt --check; expect 7 tests passed, 0 failed
+forge test -vv   # the fuzz test prints its run count (10,000)
+make predict     # the hook address and salt this creation code lands on, before any deploy
 ```
+
+Needs Foundry (`forge`, `cast`; `anvil` only for the fork rehearsal) and git. Nothing from
+the author's machine is required; CI runs the same commands on a fresh clone of this
+repository, without submodules, on every push.
 
 Toolchain on the machine that produced the numbers in this file: forge/cast
 `1.3.5-foundry-zksync-v0.1.9`, anvil `1.5.1-stable`. CI pins upstream Foundry v1.5.1.
