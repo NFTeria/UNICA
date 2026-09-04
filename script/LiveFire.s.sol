@@ -22,10 +22,11 @@ import {UnicaHook} from "../src/UnicaHook.sol";
 import {Chains} from "./Chains.sol";
 
 /// @title LiveFire, the day-1 proof on a public testnet, one stage at a time
-/// @notice Four idempotent stages: deploy the hook by CREATE2, initialise the native-ETH / USDC pool,
-///         seed it, swap through it. Each stage reads the chain first and skips itself if its result
-///         already exists, so a re-run after a failure never repeats a transaction. `run()` does all
-///         four; `--sig "deploy()"` and friends do one.
+/// @notice Four stages: deploy the hook by CREATE2, initialise the native-ETH / USDC pool, seed it,
+///         swap through it. The first three read the chain first and skip themselves if their result
+///         already exists, so a re-run after a failure repeats none of them. The swap stage always
+///         sends a fresh swap: every run of `run()` or `--sig "swap()"` spends 0.001 ETH. `run()` does
+///         all four; `--sig "deploy()"` and friends do one.
 /// @dev The signer is whatever `--account` / `--sender` the operator passes; nothing here reads a key.
 ///      The chain must be a testnet listed in `Chains`; a mainnet id reverts before any broadcast.
 contract LiveFire is Script {

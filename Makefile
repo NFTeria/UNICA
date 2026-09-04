@@ -35,7 +35,7 @@ help:
 	@echo "    make anvil-fork        just the fork, in the foreground, on port 8546"
 	@echo ""
 	@echo "  LIVE (real Sepolia transactions; prompts the keystore password)"
-	@echo "    make live-sepolia      all four stages in one run: deploy, init, seed, swap. Idempotent."
+	@echo "    make live-sepolia      all four stages in one run. deploy/init/seed skip if already done; swap always sends"
 	@echo "    make deploy-sepolia    stage 1 only    make init-sepolia   stage 2 only"
 	@echo "    make seed-sepolia      stage 3 only    make swap-sepolia   stage 4 only"
 	@echo "    make readback-sepolia  what the chain says now: code, count, price, liquidity"
