@@ -33,8 +33,18 @@ jobs:
           test "$(git -C lib/uniswap-hooks rev-parse HEAD)" = "bd5287c4a9f5c22c2393f7587a9b357662916115"
           echo "uniswap-hooks pinned at v1.1.1 = bd5287c"
 
+      # Not --sizes: that flag fails the build when ANY compiled contract exceeds EIP-170, and
+      # v4-core's PoolManager, compiled here without via_ir for the local tests, does. The
+      # contract this repository ships is checked on its own.
       - name: forge build
-        run: forge build --sizes
+        run: forge build
+
+      - name: Assert the hook is under the EIP-170 runtime limit
+        run: |
+          hex=$(forge inspect src/UnicaHook.sol:UnicaHook deployedBytecode)
+          bytes=$(( (${#hex} - 2) / 2 ))
+          echo "UnicaHook runtime bytes: $bytes"
+          test "$bytes" -le 24576
 
       # A lane that ran zero tests is not a green lane. Require the total, not just the exit code.
       - name: forge test
