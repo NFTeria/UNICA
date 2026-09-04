@@ -43,3 +43,25 @@ key holder.
 **What is deliberately not in this plan.** More than one page of surface. Any change to the
 pinned toolchain. Any partner integration before the core hook, its surface, and its
 compliance artifacts are complete. Mainnet, of any kind.
+
+## 2026-09-04 — day 1, closed
+
+**Done, with proof.** The repository is public with one identity and CI green on three lanes,
+including a lane that clones it like a stranger. The hook frame is deployed on Ethereum
+Sepolia at `0x23b46783709E4A94C229612bfA55580a6682c040`, its source verified on Etherscan
+(exact match) and Sourcify (full match), the native-ETH / USDC pool initialised and seeded on
+the official PoolManager, and a real swap executed through the hook: five transactions in
+block 11635908, all status 1, the hook's own event in the swap receipt, the callback counter
+read back as 1. The README's proof rows carry each hash with its command;
+`docs/proof/verify-day1.sh` re-proves fourteen facts from the chain; four explorer captures
+are in `docs/proof/`.
+
+**Changed against the morning's plan.** The router stays in Solidity; Vyper is for the order
+registry and the benefit ledger only, and neither begins before the core hook and its
+invariants are complete (owner ruling). The tree pins no solc, and that produced two builds
+of the hook (0.8.26 in the test unit, 0.8.30 in the script unit that deployed); day 2 opens by
+pinning 0.8.30 and deploying the real PoolManager bytecode from hookmate's artifact in tests
+instead of compiling it, so tests, scripts, and verification agree on one compiler.
+
+**Day 2 starts with** I1: the settlement router as the sole admitted swap sender, the
+`beforeSwap` gate, mask 0xC0, a new mined address; then I7. Each with its negative test first.
