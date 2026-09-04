@@ -28,3 +28,8 @@ line_length     = 120
 tab_width       = 4
 bracket_spacing = false
 int_types       = "long"
+
+# Fuzzing a v4 swap is nearly free on this stack (measured: 10,000 runs in about a second), so
+# the count is high and CI runs the same number. Lowering it is a change that needs a reason.
+[fuzz]
+runs = 10000
