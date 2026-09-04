@@ -214,8 +214,13 @@ dependency layout follows the public `Uniswap/v4-template`, MIT, used as a start
 cloned); and the implementation written during the event. AI tooling assisted the build and
 [`AI_USAGE.md`](AI_USAGE.md) says exactly where; no commit carries an AI co-author.
 
-An earlier settlement-receipt hook by the same author is cited as prior art in the spec and was
-not copied. NFTeria's private `.click` product is the first integrator: it settles customer
+An earlier settlement-receipt hook by the same author, `Access0x1SwapReceiptHook` in the public
+`Access0x1/Access0x1` repository (`src/uniswap/Access0x1SwapReceiptHook.sol`, live-fired on
+Sepolia on 2026-08-17), is cited as prior art in the spec and was not copied: it observed and
+receipted without gating, and UNICA inverts each of those choices. The admission mechanic
+itself follows Uniswap's own guide "Access msg.sender Inside a Hook" and Uniswap Labs'
+`PermissionedHooks`; the closest third-party works, what is and is not new, and the sweep's blind
+spots are in [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md). NFTeria's private `.click` product is the first integrator: it settles customer
 payments and wants pay-in-X, receive-in-Y, atomically, with a receipt. The private product
 never enters this repository.
 

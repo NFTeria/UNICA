@@ -109,11 +109,13 @@ not gated and the hook cannot see what it is not called for.
 
 ## Which Universal Router
 
-Sepolia has two: `UniversalRouterV2` `0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b` (19,540-byte
-runtime, the one the deployments page lists as "Universal Router") and `UniversalRouterV2_1_1`
-`0x7DfD4F31be6814D2906BDE155c3e1B146EAc1468` (24,546 bytes, adds permissioned-pool support).
-Both answer `msgSender()` and `poolManager()`. The hook admits V2 today, resolved from the chain
-id (never a constructor argument); other chains are added when verified there.
+The hook admits `UniversalRouterV2` at `0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b`, the entry
+the official deployments page lists as "Universal Router" for Ethereum Sepolia (19,540-byte
+runtime, answers `msgSender()` and `poolManager()`, confirmed 2026-09-04). Sepolia carries other
+Universal Router deployments, including one for permissioned pools; none is admitted here, and
+an earlier draft of this section attributed permissioned-pool support to the wrong one of them,
+which the prior-art sweep caught on chain. The router is resolved from the chain id, never a
+constructor argument; other chains and routers are added only when verified there.
 
 ## What the official router leaves to the executor, in one sentence each
 

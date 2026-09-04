@@ -25,7 +25,10 @@ Re-verify either hash: `shasum -a 256 specs/HOOK-SPEC.md specs/THREAT-MODEL.md`.
   `UNISWAP-NEEDS.md`, and others). Those files are schedules, rulings, and prize arithmetic,
   not part of the contribution, and they are not in this repository. A dangling name is a
   disclosed absence, not a broken promise.
-- The specification names an earlier settlement hook by the same author as prior art. It is
+- The specification names an earlier settlement hook by the same author as prior art:
+  `Access0x1SwapReceiptHook` in the public `Access0x1/Access0x1` repository
+  (`src/uniswap/Access0x1SwapReceiptHook.sol`), which the spec fingerprints by address, code size,
+  flags, salt and live-fire transaction without naming the repository. It is
   cited, never copied: nothing from that project is a dependency of this one, and nothing
   from it was brought in.
 - Where the design changed during the build, the change is recorded in `docs/` with its date
