@@ -21,6 +21,23 @@ jobs:
       - name: Record the toolchain
         run: forge --version
 
+      # The compiler is fetched from binaries.soliditylang.org on first use; a reset connection
+      # there turned the gate red once with no change in this tree. Cache it between runs and
+      # retry the fetch, loudly, so a network blip is a logged retry and not a false red.
+      - name: Cache solc
+        uses: actions/cache@v4
+        with:
+          path: ~/.svm
+          key: solc-${{ runner.os }}-0.8.26-0.8.30
+
+      - name: Fetch the compilers, retrying on a network failure
+        run: |
+          for attempt in 1 2 3; do
+            if forge build --skip test --skip script >/dev/null 2>build.err; then echo "compilers present (attempt $attempt)"; exit 0; fi
+            echo "attempt $attempt failed:"; tail -3 build.err; sleep 15
+          done
+          echo "compiler fetch failed three times"; exit 1
+
       # The submodule pin is load-bearing. A recursive update run before the pin was staged
       # silently resets a tag checkout to whatever the superproject recorded. Fail here, loudly,
       # rather than build against an unintended revision.
