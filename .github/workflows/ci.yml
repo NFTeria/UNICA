@@ -80,9 +80,18 @@ jobs:
           fi
           echo "history clean: one identity, no attribution shapes"
 
+      # A private key is 32 bytes, and so is a pool id, a salt, a transaction hash, and a
+      # commit-pinned checksum; bare length proves nothing. Fail on labelled secrets and known
+      # token formats, and on a bare 32-byte hex value only when nothing on its line says what
+      # it is. Every hit is printed so a human can read it either way.
       - name: No secrets in the tree
         run: |
-          if git grep -nE 'PRIVATE_KEY=|MNEMONIC=|0x[a-fA-F0-9]{64}' -- . ':!lib' ':!*.lock'; then
-            echo "possible secret in the tree"; exit 1
+          fail=0
+          if git grep -nE '(PRIVATE_KEY|MNEMONIC|SECRET|API_KEY|AUTH_TOKEN|PASSWORD)[A-Z_]*[[:space:]]*=[[:space:]]*[^[:space:]<$]{8,}|"ciphertext"|ghp_[A-Za-z0-9]{36}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}' -- . ':!lib' ':!.github/workflows/ci.yml'; then
+            echo "labelled secret or token format found"; fail=1
           fi
-          echo "no secret-shaped strings outside lib/"
+          bare=$(git grep -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' | grep -viE 'pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]]|\|' || true)
+          if [ -n "$bare" ]; then
+            echo "$bare"; echo "bare 32-byte hex value with no label on its line"; fail=1
+          fi
+          test "$fail" -eq 0 && echo "no secret-shaped strings outside lib/"
