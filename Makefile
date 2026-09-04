@@ -31,6 +31,10 @@ ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
   ifneq ($(strip $(ETHERSCAN_API_KEY)),)
     NETWORK_ARGS += --verify --etherscan-api-key $(ETHERSCAN_API_KEY)
   endif
+else ifneq ($(findstring --network,$(ARGS)),)
+  # Any other --network is refused, never silently mapped to the local fork (measured 2026-09-04:
+  # ARGS="--network mainnet" fell through to the fork target before this branch existed).
+  UNSUPPORTED_NETWORK := $(ARGS)
 endif
 
 help:
@@ -135,7 +139,9 @@ _need-deployer:
 	@test -n "$(DEPLOYER)" || { echo "DEPLOYER (public address) is not set"; exit 1; }
 
 _need-network: _need-deployer
-ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
+ifdef UNSUPPORTED_NETWORK
+	@echo "unsupported network in ARGS=\"$(UNSUPPORTED_NETWORK)\": only \"--network sepolia\" is supported (testnet only); with no ARGS the target is the local fork"; exit 1
+else ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
 	@test -n "$(DEPLOYER_ACCOUNT)" || { echo "DEPLOYER_ACCOUNT (keystore name) is not set"; exit 1; }
 	@echo "SEPOLIA: signing with keystore '$(DEPLOYER_ACCOUNT)' as $(DEPLOYER); the password will be prompted; verification $(if $(strip $(ETHERSCAN_API_KEY)),on,off)"
 else
