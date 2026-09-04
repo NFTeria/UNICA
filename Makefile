@@ -1,56 +1,72 @@
-# UNICA — the one place every command lives. Read the help before running anything that signs.
+# UNICA — every command lives here. Run `make help` first.
 #
-# Signing is keystore-only: `--account <name> --sender <address>`. The password is prompted at
-# run time and is never stored, passed, or logged. There is no private-key path in this file.
-# Every deploy target is a public TESTNET; the scripts refuse any other chain id by construction.
+# Shape: one NETWORK_ARGS switch. With no ARGS, commands target a LOCAL ANVIL FORK of Sepolia on
+# port 8545 (start it with `make anvil`), impersonating the deployer: real PoolManager, real USDC,
+# zero real transactions. With ARGS="--network sepolia", commands sign with the keystore account
+# (`--account`, password prompted, never stored) and broadcast to Ethereum Sepolia; verification
+# flags are added only when ETHERSCAN_API_KEY is set. There is no private-key path in this file.
+# Every script refuses any chain id that is not a listed testnet, by construction.
+#
+# Why the local target is a FORK and not a bare anvil: the hook resolves the PoolManager from the
+# chain id (one address on every chain), and a bare chain 31337 has no PoolManager to resolve.
 -include .env
 
-.PHONY: help deps doctor build test fuzz fmt gate clean predict simulate-sepolia anvil-fork rehearse \
-        live-sepolia deploy-sepolia init-sepolia seed-sepolia swap-sepolia readback-sepolia \
-        verify-sepolia balances
+.PHONY: help all deps doctor build test fuzz snapshot format fmt gate clean anvil predict simulate \
+        rehearse deploy init-pool seed settle live readback verify balances _need-deployer _need-signing
 
-# Keyless public RPC by default; a value in .env wins.
-SEPOLIA_RPC_URL ?= https://ethereum-sepolia-rpc.publicnode.com
-
-# The keystore account name and its PUBLIC address. No defaults on purpose: a wrong --sender
-# signs with the wrong key, so a broadcast target refuses to run until both are named.
+# ── configuration ─────────────────────────────────────────────────────────────
+SEPOLIA_RPC_URL  ?= https://ethereum-sepolia-rpc.publicnode.com
+LOCAL_RPC_URL    ?= http://127.0.0.1:8545
 DEPLOYER_ACCOUNT ?=
-DEPLOYER ?=
+DEPLOYER         ?=
+ETHERSCAN_API_KEY ?=
 
-SIGN      := --account $(DEPLOYER_ACCOUNT) --sender $(DEPLOYER)
-SEP_ARGS  := --rpc-url $(SEPOLIA_RPC_URL) $(SIGN) --broadcast -vvv
-SCRIPT    := script/LiveFire.s.sol:LiveFire
+PIN_TAG    := v1.1.1
+PIN_COMMIT := bd5287c4a9f5c22c2393f7587a9b357662916115
+
+# Local fork by default: impersonate the deployer (anvil --auto-impersonate), broadcast to the fork.
+NETWORK_ARGS := --rpc-url $(LOCAL_RPC_URL) --unlocked --sender $(DEPLOYER) --broadcast -vvv
+ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
+  NETWORK_ARGS := --rpc-url $(SEPOLIA_RPC_URL) --account $(DEPLOYER_ACCOUNT) --sender $(DEPLOYER) --broadcast -vvvv
+  ifneq ($(strip $(ETHERSCAN_API_KEY)),)
+    NETWORK_ARGS += --verify --etherscan-api-key $(ETHERSCAN_API_KEY)
+  endif
+endif
 
 help:
 	@echo "UNICA"
 	@echo ""
 	@echo "  FIRST, on a fresh clone"
-	@echo "    make deps              fetch the pinned submodules (the v4 toolchain) and assert the pin"
-	@echo "    make doctor            say exactly what is present, what is missing, and how to get it"
+	@echo "    make deps             fetch the pinned submodules (the v4 toolchain) and assert the pin"
+	@echo "    make doctor           what is present, what is missing, how to get it"
 	@echo ""
 	@echo "  CHECK (free, no transaction)"
-	@echo "    make gate              build + test (fuzz at the configured runs) + fmt --check"
-	@echo "    make predict           the hook address and salt this creation code lands on, any chain"
-	@echo "    make simulate-sepolia  dry-run all four live-fire stages against Sepolia as the deployer, no broadcast"
-	@echo "    make balances          the deployer's ETH and USDC on Sepolia"
+	@echo "    make gate             forge build && forge test && forge fmt --check (25 tests, fuzz at 10,000)"
+	@echo "    make test / fuzz      the suite, or only the fuzz tests"
+	@echo "    make predict          the hook address and salt this creation code lands on, any chain"
+	@echo "    make simulate         all four stages against live Sepolia state as the deployer, no broadcast"
+	@echo "    make balances         the deployer's ETH and USDC on Sepolia"
 	@echo ""
-	@echo "  REHEARSE (anvil fork of Sepolia: real mechanics, impersonated deployer, zero real transactions)"
-	@echo "    make rehearse          fork Sepolia, run all four stages as the deployer, read the results back"
-	@echo "    make anvil-fork        just the fork, in the foreground, on port 8546"
+	@echo "  LOCAL (anvil fork of Sepolia on :8545; real contracts, impersonated deployer, no real tx)"
+	@echo "    make anvil            start the fork (leave it running in its own terminal)"
+	@echo "    make deploy           stage 1: router at its derived address, hook at its mined salt"
+	@echo "    make init-pool        stage 2: the native-ETH / USDC pool at 2,500 USDC per ETH"
+	@echo "    make seed             stage 3: full-range liquidity from what the deployer holds"
+	@echo "    make settle           stage 4: create an order and pay it through the router"
+	@echo "    make live             all four stages in one run (deploy/init/seed skip if done; settle always sends)"
+	@echo "    make rehearse         the same, on a throwaway fork on :8546, with a readback, in one command"
 	@echo ""
-	@echo "  LIVE (real Sepolia transactions; prompts the keystore password)"
-	@echo "    make live-sepolia      all four stages in one run. deploy/init/seed skip if already done; swap always sends"
-	@echo "    make deploy-sepolia    stage 1 only    make init-sepolia   stage 2 only"
-	@echo "    make seed-sepolia      stage 3 only    make swap-sepolia   stage 4 only"
-	@echo "    make readback-sepolia  what the chain says now: code, count, price, liquidity"
-	@echo "    make verify-sepolia    source verification (Sourcify; Etherscan too if ETHERSCAN_API_KEY is set)"
+	@echo "  SEPOLIA (real transactions; keystore password prompted; add ARGS=\"--network sepolia\")"
+	@echo "    make deploy ARGS=\"--network sepolia\"      (and init-pool / seed / settle / live the same way)"
+	@echo "    make readback         what the chain says now: code, count, price, liquidity, router"
+	@echo "    make verify           source verification of hook and router (Sourcify; Etherscan when the key is set)"
 	@echo ""
-	@echo "  Every LIVE target needs DEPLOYER_ACCOUNT=<keystore name> DEPLOYER=<its address>, in .env or inline."
+	@echo "  Every LOCAL and SEPOLIA target needs DEPLOYER=<public address>; SEPOLIA also DEPLOYER_ACCOUNT=<keystore name>."
+	@echo "  Put them in .env (see .env.example) or pass them inline."
+
+all: deps build test
 
 # ── first, on a fresh clone ───────────────────────────────────────────────────
-PIN_TAG    := v1.1.1
-PIN_COMMIT := bd5287c4a9f5c22c2393f7587a9b357662916115
-
 deps:
 	git submodule update --init --recursive
 	@test "$$(git -C lib/uniswap-hooks rev-parse HEAD)" = "$(PIN_COMMIT)" \
@@ -59,64 +75,69 @@ deps:
 
 doctor:
 	@echo "== toolchain"
-	@command -v forge >/dev/null && forge --version | head -1 || echo "MISSING forge: install Foundry from getfoundry.sh (CI uses upstream v1.5.1; this tree was built with the foundry-zksync fork of 1.3.5)"
+	@command -v forge >/dev/null && forge --version | head -1 || echo "MISSING forge: install Foundry from getfoundry.sh (CI uses upstream v1.5.1)"
 	@command -v cast  >/dev/null && cast --version | head -1  || echo "MISSING cast (comes with Foundry)"
-	@command -v anvil >/dev/null && anvil --version | head -1 || echo "MISSING anvil (comes with Foundry; needed only for make rehearse)"
-	@command -v vyper >/dev/null && echo "vyper $$(vyper --version)" || echo "vyper not found (not needed yet; the Vyper contracts are not in the tree)"
+	@command -v anvil >/dev/null && anvil --version | head -1 || echo "MISSING anvil (comes with Foundry; needed for the local fork)"
+	@command -v vyper >/dev/null && echo "vyper $$(vyper --version)" || echo "vyper not found (not needed yet)"
 	@echo "== submodules"
 	@test -f lib/uniswap-hooks/src/base/BaseHook.sol && echo "lib/uniswap-hooks present" || echo "MISSING lib/: run make deps"
-	@test -f lib/uniswap-hooks/lib/v4-core/src/PoolManager.sol && echo "v4-core present" || echo "MISSING v4-core: run make deps"
-	@test -f lib/hookmate/src/constants/AddressConstants.sol && echo "hookmate present" || echo "MISSING hookmate: run make deps"
-	@test -d lib/uniswap-hooks/.git -o -f lib/uniswap-hooks/.git && test "$$(git -C lib/uniswap-hooks rev-parse HEAD 2>/dev/null)" = "$(PIN_COMMIT)" && echo "uniswap-hooks pinned at $(PIN_TAG)" || echo "uniswap-hooks NOT at the pin: run make deps"
-	@echo "== the gate, if everything above is present: make gate (expect 7 tests passed, 0 failed)"
+	@test -f lib/hookmate/src/artifacts/V4PoolManager.sol && echo "hookmate present (official PoolManager bytecode for tests)" || echo "MISSING hookmate: run make deps"
+	@test "$$(git -C lib/uniswap-hooks rev-parse HEAD 2>/dev/null)" = "$(PIN_COMMIT)" && echo "uniswap-hooks pinned at $(PIN_TAG)" || echo "uniswap-hooks NOT at the pin: run make deps"
+	@echo "== the gate, if everything above is present: make gate (expect 25 tests passed, 0 failed)"
 
 _need-deps:
 	@test -f lib/uniswap-hooks/src/base/BaseHook.sol || { echo "the submodules are not fetched; run: make deps"; exit 1; }
 
 # ── check ─────────────────────────────────────────────────────────────────────
-build : _need-deps ; forge build
-test  : _need-deps ; forge test -vv
-fuzz  : _need-deps ; forge test --match-test testFuzz -vv
-fmt   :; forge fmt
-clean :; forge clean
-gate  : _need-deps
+build    : _need-deps ; forge build
+test     : _need-deps ; forge test -vv
+fuzz     : _need-deps ; forge test --match-test testFuzz -vv
+snapshot : _need-deps ; forge snapshot
+format   :; forge fmt
+fmt      :; forge fmt
+clean    :; forge clean
+gate     : _need-deps
 	forge build && forge test && forge fmt --check
 	@echo "gate: build, test, fmt-check all exit 0"
 
 predict:
-	forge script $(SCRIPT) --sig "predict()" --rpc-url $(SEPOLIA_RPC_URL) -vv
+	forge script script/LiveFire.s.sol:LiveFire --sig "predict()" -vv
 
-simulate-sepolia: _need-deployer
-	forge script $(SCRIPT) --rpc-url $(SEPOLIA_RPC_URL) --sender $(DEPLOYER) -vvv
+simulate: _need-deployer
+	forge script script/LiveFire.s.sol:LiveFire --rpc-url $(SEPOLIA_RPC_URL) --sender $(DEPLOYER) -vvv
 
 balances: _need-deployer
 	@echo "ETH : $$(cast balance $(DEPLOYER) --rpc-url $(SEPOLIA_RPC_URL) --ether)"
 	@echo "USDC: $$(cast call 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238 'balanceOf(address)(uint256)' $(DEPLOYER) --rpc-url $(SEPOLIA_RPC_URL)) (6 decimals)"
 
-# ── rehearse ──────────────────────────────────────────────────────────────────
-anvil-fork:
-	anvil --fork-url $(SEPOLIA_RPC_URL) --port 8546
+# ── local fork ────────────────────────────────────────────────────────────────
+anvil:
+	anvil --fork-url $(SEPOLIA_RPC_URL) --port 8545 --auto-impersonate
 
 rehearse: _need-deployer
 	DEPLOYER=$(DEPLOYER) SEPOLIA_RPC_URL=$(SEPOLIA_RPC_URL) bash script/rehearse-anvil.sh
 
-# ── live ──────────────────────────────────────────────────────────────────────
-live-sepolia:   _need-signing ; forge script $(SCRIPT) $(SEP_ARGS)
-deploy-sepolia: _need-signing ; forge script $(SCRIPT) --sig "deploy()" $(SEP_ARGS)
-init-sepolia:   _need-signing ; forge script $(SCRIPT) --sig "init()"   $(SEP_ARGS)
-seed-sepolia:   _need-signing ; forge script $(SCRIPT) --sig "seed()"   $(SEP_ARGS)
-swap-sepolia:   _need-signing ; forge script $(SCRIPT) --sig "swap()"   $(SEP_ARGS)
+# ── the four stages (local fork by default; ARGS="--network sepolia" for the real thing) ───────
+deploy    : _need-network ; forge script script/DeployUnica.s.sol:DeployUnica  $(NETWORK_ARGS)
+init-pool : _need-network ; forge script script/Interactions.s.sol:InitPool     $(NETWORK_ARGS)
+seed      : _need-network ; forge script script/Interactions.s.sol:SeedLiquidity $(NETWORK_ARGS)
+settle    : _need-network ; forge script script/Interactions.s.sol:Settle       $(NETWORK_ARGS)
+live      : _need-network ; forge script script/LiveFire.s.sol:LiveFire         $(NETWORK_ARGS)
 
-readback-sepolia:
+readback:
 	bash script/readback.sh $(SEPOLIA_RPC_URL)
 
-verify-sepolia:
+verify:
 	bash script/verify.sh $(SEPOLIA_RPC_URL)
 
 # ── guards ────────────────────────────────────────────────────────────────────
 _need-deployer:
 	@test -n "$(DEPLOYER)" || { echo "DEPLOYER (public address) is not set"; exit 1; }
 
-_need-signing: _need-deployer
+_need-network: _need-deployer
+ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
 	@test -n "$(DEPLOYER_ACCOUNT)" || { echo "DEPLOYER_ACCOUNT (keystore name) is not set"; exit 1; }
-	@echo "signing with keystore '$(DEPLOYER_ACCOUNT)' as $(DEPLOYER) on $$(echo '$(SEPOLIA_RPC_URL)' | cut -d/ -f3); the password will be prompted"
+	@echo "SEPOLIA: signing with keystore '$(DEPLOYER_ACCOUNT)' as $(DEPLOYER); the password will be prompted; verification $(if $(strip $(ETHERSCAN_API_KEY)),on,off)"
+else
+	@echo "LOCAL FORK on $(LOCAL_RPC_URL), impersonating $(DEPLOYER); start it with: make anvil"
+endif
