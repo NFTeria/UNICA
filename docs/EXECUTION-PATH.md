@@ -63,6 +63,14 @@ bytecode etched at its Sepolia address with a foreign settle leg before the nati
 hook's runtime is 9,669 bytes with the order checks and both events in it. Every test named in
 `docs/INVARIANTS.md` runs against that bytecode and hookmate's official PoolManager.
 
+End to end, on 2026-09-04 night: `make rehearse` forked Sepolia with anvil, impersonated the
+deployer, and ran all four stages against the deployed Universal Router at its real address:
+the executor at its derived address, the hook at its mined `0xC0` address, the pool initialised
+and seeded, one order for 0.001 ETH paid through `execute`, the hook's counter 0 to 1, the
+recipient credited 2.003660 USDC, seven transactions at status 1, none broadcast. That is the
+compatibility claim this document makes: tested against the deployed router on a fork, not yet
+live-fired. The live-fire is day 4.
+
 ## Which Universal Router
 
 Sepolia has two: `UniversalRouterV2` `0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b` (19,540-byte

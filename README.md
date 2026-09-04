@@ -15,9 +15,12 @@ Router and the hook admits nothing else (invariant I1); the hook reads every ter
 from the executor's storage and enforces it itself (I3, I4, I5), refuses a partial fill or a
 short output (I6), and emits the receipt beside OpenZeppelin's standard `HookFee` (I2); native
 settlement is proven as four rows plus the official router's own bytecode (I7). Thirty-four
-tests, fuzz at 10,000, against Uniswap's official PoolManager and Universal Router bytecode. On
-chain, the day-1 scaffold hook keeps its record; the gated hook is mined fresh and live-fired on
-day 4. The surface and the video are the next days' work. Nothing here is claimed past the rung
+tests, fuzz at 10,000, against Uniswap's official PoolManager and Universal Router bytecode. The
+whole path was then rehearsed end to end on an anvil fork of Sepolia against the deployed
+Universal Router: executor and hook deployed at their derived and mined addresses, pool
+initialised and seeded, one order paid, one receipt, seven transactions at status 1, nothing
+broadcast (`make rehearse`). On chain, the day-1 scaffold hook keeps its record; the gated hook
+is mined fresh and live-fired on day 4. The surface and the video are the next days' work. Nothing here is claimed past the rung
 it has reached.
 
 ## The problem
