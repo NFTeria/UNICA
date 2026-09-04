@@ -98,22 +98,22 @@ abstract contract UnicaTestBase is Test {
     }
 
     /// @notice The native-ETH / mock-USDC key for a given hook, matching the live pool's shape.
-    function nativeUsdcKey(IHooks hook) internal view returns (PoolKey memory) {
+    function nativeUsdcKey(IHooks withHook) internal view returns (PoolKey memory) {
         return PoolKey({
             currency0: CurrencyLibrary.ADDRESS_ZERO,
             currency1: usdcCurrency,
             fee: FEE,
             tickSpacing: TICK_SPACING,
-            hooks: hook
+            hooks: withHook
         });
     }
 
     /// @notice Initialises the pool at 1:1 and adds symmetric liquidity around the price.
-    function initNativePoolWithLiquidity(IHooks hook, uint256 ethForLiquidity)
+    function initNativePoolWithLiquidity(IHooks withHook, uint256 ethForLiquidity)
         internal
         returns (PoolKey memory key, PoolId id)
     {
-        key = nativeUsdcKey(hook);
+        key = nativeUsdcKey(withHook);
         id = key.toId();
         manager.initialize(key, SQRT_PRICE_1_1);
         liquidityRouter.modifyLiquidity{value: ethForLiquidity}(
