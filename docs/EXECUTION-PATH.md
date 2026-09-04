@@ -54,11 +54,14 @@ invariants of `specs/HOOK-SPEC.md` section 3, and they are enforced in two place
   (I3, I6) and emits the receipt (I2). The hook is the second contract after the official path
   and the last word before the PoolManager.
 
-What changes from day 2's design: the executor no longer unlocks the PoolManager or settles; the
-official router does. What stays: the order as the only source of who is paid, I5's in-flight
-marking before any external call, and the four-row I7 test, now against a stand-in for the
-official router's action path with the sync switchable, beside tests against the real Universal
-Router bytecode etched at its Sepolia address.
+What changed from day 2's first design, done the same night: the executor no longer unlocks the
+PoolManager or settles; the official router does, and a test proves the executor has no unlock
+callback at all. What stayed: the order as the only source of who is paid, I5's in-flight
+marking before any external call, and the four-row I7 test, now against a stand-in at the
+router's address with the sync switchable, plus a fifth row against the real Universal Router
+bytecode etched at its Sepolia address with a foreign settle leg before the native one. The
+hook's runtime is 9,669 bytes with the order checks and both events in it. Every test named in
+`docs/INVARIANTS.md` runs against that bytecode and hookmate's official PoolManager.
 
 ## Which Universal Router
 

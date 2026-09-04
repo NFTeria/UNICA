@@ -7,22 +7,22 @@ this repository exercises it and its negative control has been seen red.
 
 | # | Threat (spec wording, abbreviated) | Defence in the tree | Test | Status |
 |---|---|---|---|---|
-| T1 | A callback callable by anyone, not only the PoolManager (the Cork Protocol shape) | Hook: `BaseHook.onlyPoolManager` on every external callback, OpenZeppelin `uniswap-hooks` v1.1.1 `src/base/BaseHook.sol` lines 57–60. Router: `unlockCallback` reverts `NotPoolManager` for any other caller | `test_RevertWhen_UnlockCallbackCalledDirectly` | hook INHERITED; router **TESTED** |
+| T1 | A callback callable by anyone, not only the PoolManager (the Cork Protocol shape) | Hook: `BaseHook.onlyPoolManager` on every external callback, OpenZeppelin `uniswap-hooks` v1.1.1 `src/base/BaseHook.sol` lines 57–60. Executor: has no unlock callback at all; the official router owns that surface | `test_ExecutorHasNoUnlockCallback` | hook INHERITED; executor **TESTED** (the door does not exist) |
 | T2 | Hostile pool key: our hook attached to attacker-chosen currencies | pool allowlist (spec C2) | init an unlisted pool → revert | PLANNED |
-| T3 | `hookData` is attacker-controlled | only an order id travels in `hookData`; everything else is read from storage the router wrote (spec C1) | forged hook data → no effect | WRITTEN (the router encodes only the id); the hook does not read it until day 3 |
+| T3 | `hookData` is attacker-controlled | only an order id travels in `hookData`; the hook refuses any other length and reads everything else from the executor's storage (spec C1) | empty and 20-byte hook data → wrapped `MalformedHookData`; a forged id names an order that is not in flight → wrapped `OrderNotInFlight` | **TESTED** (`test_RevertWhen_HookDataIsNotAnOrderId`, `test_RevertWhen_OrderIsNotInFlight`) |
 | T4 | `BalanceDelta` sign conventions | exact-input and exact-output tests on both legs | both directions asserted | PLANNED |
 | **T5** | **Flag / permission mismatch, fails silently** | mask asserted numerically off the real runtime code before deploy; v4's `HookAddressNotValid` as the second control | `test_MinedAddress_MatchesDeclaredPermissions`, `test_RevertWhen_AddressBitsSayBeforeSwapOnly` and the rest listed in `docs/INVARIANTS.md` | **TESTED**, control seen red 2026-09-04 |
-| T6 | Reentrancy inside the unlock window | callback state keyed by pool and caller, cleared after use, own guard (spec C3) | reentrant swap between callbacks | PLANNED |
+| T6 | Reentrancy inside the unlock window | the hook keeps no state between callbacks: `beforeSwap` and `afterSwap` each read the order from the executor, so there is nothing to poison (spec C3's keyed state is not needed); a reentrant second swap meets the same gate | reentrant swap between callbacks | WRITTEN (by construction); the test is PLANNED |
 | T7 | Fee-on-transfer / rebasing payout tokens | payout-asset allowlist (spec C4); Circle USDC qualifies | FoT mock is refused | PLANNED |
-| T8 | Revert-DoS on the exit path | I6: the hook never moves funds; every refusal reverts the whole payment and leaves the order payable; the router has no refund path at all (exact input, no `receive`) | every refusal test asserts nothing moved | **TESTED** at the router |
-| T9 | Dust / `clear()` settlement DoS | router settles exact deltas | dust-sized swap | PLANNED |
-| T10 | Cross-chain replay | order ids are `keccak256(chainid, router, count)` | `test_OrderIdsAreChainBoundAndUnique` | **TESTED** (id binding); a forked-chain replay test PLANNED |
+| T8 | Revert-DoS on the exit path | I6: the hook never moves funds; every refusal reverts the whole payment and leaves the order payable; the executor has no refund path at all (exact input, no `receive`) | every refusal test asserts nothing moved | **TESTED** |
+| T9 | Dust / `clear()` settlement DoS | the plan settles the full debt and takes the full credit (`OPEN_DELTA`), never a caller-typed amount | dust-sized swap | WRITTEN; test PLANNED |
+| T10 | Cross-chain replay | order ids are `keccak256(chainid, executor, count)` | `test_OrderIdsAreChainBoundAndUnique` | **TESTED** (id binding); a forked-chain replay test PLANNED |
 | T11 | NoOp rug via `beforeSwapReturnDelta` | designed out: no returns-delta bits, ever; `test_NoUndeclaredPermissionsCreepIn` asserts both delta flags false | `test_NoUndeclaredPermissionsCreepIn` | TESTED (absence asserted) |
 | T12 | Unbounded-loop gas exhaustion | no loops over user-controlled data in the hook | gas snapshot | PLANNED |
-| T13 | Spot-price manipulation of the slippage floor | the floor is the registered order's minimum, never a spot quote read on-chain | output below the minimum reverts | **TESTED** at the router (`test_RevertWhen_OutputBelowMinimum_NothingMoves`) |
+| T13 | Spot-price manipulation of the slippage floor | the floor is the registered order's minimum, never a spot quote read on-chain; the hook enforces it from the swap's delta | output below the minimum reverts | **TESTED** at the hook (`test_RevertWhen_OutputBelowMinimum_NothingMoves`) |
 
 ## Day 2
 
-T1 (router), T5, T8, T10, T13 and the T11 absence are tested; T3 is written. T2 (pool
-allowlist), T4, T6, T7, T9, T12 remain PLANNED. This table is updated in the commit that
-changes a row.
+T1 (executor), T3, T5, T8, T10, T13 and the T11 absence are tested; T6 and T9 are written by
+construction and await their tests. T2 (pool allowlist), T4, T7, T12 remain PLANNED. This
+table is updated in the commit that changes a row.
