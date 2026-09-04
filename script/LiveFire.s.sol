@@ -19,7 +19,7 @@ import {IERC20Minimal} from "@uniswap/v4-core/src/interfaces/external/IERC20Mini
 import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import {AddressConstants} from "hookmate/constants/AddressConstants.sol";
 import {UnicaHook} from "../src/UnicaHook.sol";
-import {UnicaSettlementRouter} from "../src/UnicaSettlementRouter.sol";
+import {SettlementExecutor} from "../src/SettlementExecutor.sol";
 import {Chains} from "./Chains.sol";
 
 /// @title LiveFire, the day-1 proof on a public testnet, one stage at a time
@@ -54,35 +54,35 @@ abstract contract UnicaScriptBase is Script {
 
     // ---- the declared permission set, spec section 5 -----------------------------------------
     uint160 internal constant FLAGS = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
-    /// @dev Must equal UnicaHook.ROUTER_SALT. Checked after every deploy: the hook's derived SETTLER
-    ///      must be the address the router landed on, or the deploy stage reverts.
-    bytes32 internal constant ROUTER_SALT = bytes32(0);
+    /// @dev Must equal UnicaHook.EXECUTOR_SALT. Checked after every deploy: the hook's derived SETTLER
+    ///      must be the address the executor landed on, or the deploy stage reverts.
+    bytes32 internal constant EXECUTOR_SALT = bytes32(0);
     /// @dev Uniswap reserves the top address byte 0x91 as a routing signal (spec addendum A9).
     uint8 internal constant RESERVED_PREFIX = 0x91;
 
     // ---- stage 1: the hook -----------------------------------------------------------------
 
-    /// @notice Deploys the router at the address the hook derives for it (CREATE2 through the
+    /// @notice Deploys the executor at the address the hook derives for it (CREATE2 through the
     ///         canonical factory, salt zero), then the hook at a salt mined deterministically (first
     ///         salt from zero whose address carries the flags and avoids the reserved prefix).
     ///         Re-running after a deploy finds code at both addresses and skips.
     function deploy() public returns (UnicaHook hook) {
         Chains.requireTestnet(block.chainid);
         (address predicted, bytes32 salt) = predict();
-        address settler = _predictRouter();
+        address settler = _predictExecutor();
         console.log("chain          ", block.chainid);
-        console.log("router expected", settler);
+        console.log("executor expected", settler);
         console.log("hook predicted ", predicted);
         console.logBytes32(salt);
 
         if (settler.code.length == 0) {
             vm.startBroadcast();
-            UnicaSettlementRouter router = new UnicaSettlementRouter{salt: ROUTER_SALT}();
+            SettlementExecutor executor = new SettlementExecutor{salt: EXECUTOR_SALT}();
             vm.stopBroadcast();
-            require(address(router) == settler, "router landed away from the address the hook derives");
-            console.log("router deployed", address(router));
+            require(address(executor) == settler, "executor landed away from the address the hook derives");
+            console.log("executor deployed", address(executor));
         } else {
-            console.log("router already deployed, skipping");
+            console.log("executor already deployed, skipping");
         }
 
         if (predicted.code.length != 0) {
@@ -94,20 +94,20 @@ abstract contract UnicaScriptBase is Script {
         vm.stopBroadcast();
         require(address(hook) == predicted, "deployed address differs from the prediction");
         require(uint160(address(hook)) & Hooks.ALL_HOOK_MASK == FLAGS, "address flags differ from the declared set");
-        require(hook.SETTLER() == settler, "the deployed hook derives a different router address");
+        require(hook.SETTLEMENT_EXECUTOR() == settler, "the deployed hook derives a different executor address");
         console.log("hook deployed  ", address(hook));
     }
 
-    /// @notice Pure: where the router lands for its creation code, the canonical factory, and the
-    ///         router salt. The same arithmetic the hook runs in its constructor.
-    function predictRouter() public pure returns (address) {
-        return _predictRouter();
+    /// @notice Pure: where the executor lands for its creation code, the canonical factory, and the
+    ///         executor salt. The same arithmetic the hook runs in its constructor.
+    function predictExecutor() public pure returns (address) {
+        return _predictExecutor();
     }
 
-    function _predictRouter() internal pure returns (address) {
-        bytes32 initCodeHash = keccak256(type(UnicaSettlementRouter).creationCode);
+    function _predictExecutor() internal pure returns (address) {
+        bytes32 initCodeHash = keccak256(type(SettlementExecutor).creationCode);
         return address(
-            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), CREATE2_FACTORY, ROUTER_SALT, initCodeHash))))
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), CREATE2_FACTORY, EXECUTOR_SALT, initCodeHash))))
         );
     }
 
@@ -209,10 +209,10 @@ abstract contract UnicaScriptBase is Script {
         console.log("pool liquidity ", manager().getLiquidity(key.toId()));
     }
 
-    // ---- stage 4: a real settlement, through the router, the only path the hook admits --------
+    // ---- stage 4: a real settlement, through the executor and the official router ---------------
 
     /// @notice Creates an order for SWAP_ETH with the deployer as recipient and pays it. The hook
-    ///         admits the router and only the router; the router delivers the output to the order's
+    ///         admits only the official router driven by the executor; the output goes to the order's
     ///         recipient and the hook's counter moves by one.
     function swap() public {
         Chains.requireTestnet(block.chainid);
@@ -220,24 +220,24 @@ abstract contract UnicaScriptBase is Script {
         PoolKey memory key = poolKey();
         require(manager().getLiquidity(key.toId()) != 0, "seed the pool first");
         UnicaHook hook = UnicaHook(address(key.hooks));
-        UnicaSettlementRouter router = UnicaSettlementRouter(hook.SETTLER());
-        require(address(router).code.length != 0, "deploy the router first");
+        SettlementExecutor executor = SettlementExecutor(hook.SETTLEMENT_EXECUTOR());
+        require(address(executor).code.length != 0, "deploy the executor first");
         address recipient = msg.sender;
-        uint256 before = hook.afterSwapCount();
+        uint256 before = hook.receiptCount();
         uint256 usdcBefore = IERC20Minimal(c.usdc).balanceOf(recipient);
 
         vm.startBroadcast();
-        bytes32 orderId = router.createOrder(recipient, key, uint128(SWAP_ETH), 1, uint64(block.timestamp + 1 hours));
-        router.pay{value: SWAP_ETH}(orderId);
+        bytes32 orderId = executor.createOrder(recipient, key, uint128(SWAP_ETH), 1, uint64(block.timestamp + 1 hours));
+        executor.pay{value: SWAP_ETH}(orderId);
         vm.stopBroadcast();
 
         console.log("order id");
         console.logBytes32(orderId);
-        console.log("afterSwapCount ", before, "->", hook.afterSwapCount());
+        console.log("receiptCount   ", before, "->", hook.receiptCount());
         console.log("USDC received  ", IERC20Minimal(c.usdc).balanceOf(recipient) - usdcBefore);
-        require(hook.afterSwapCount() == before + 1, "the hook did not observe the settlement");
-        require(router.orders(orderId).settled, "the order was not settled");
-        require(address(router).balance == 0, "the router kept native value");
+        require(hook.receiptCount() == before + 1, "the hook did not receipt the settlement");
+        require(executor.orders(orderId).status == SettlementExecutor.Status.Settled, "the order was not settled");
+        require(address(executor).balance == 0, "the executor kept native value");
     }
 }
 

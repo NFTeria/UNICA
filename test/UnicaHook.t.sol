@@ -4,16 +4,27 @@ pragma solidity ^0.8.30;
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
+import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
+import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
+import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
 import {UnicaTestBase} from "./utils/UnicaTestBase.sol";
+import {ExecutorHarness} from "./utils/ExecutorHarness.sol";
+import {UniversalRouterV2Sepolia} from "./utils/artifacts/UniversalRouterV2Sepolia.sol";
 import {UnicaHook} from "../src/UnicaHook.sol";
-import {UnicaSettlementRouter} from "../src/UnicaSettlementRouter.sol";
+import {SettlementExecutor, IUniversalRouter} from "../src/SettlementExecutor.sol";
 
-/// @title Tests for the hook itself: the permission-bit guard and the router-only gate
-/// @notice Proves, against Uniswap's official PoolManager bytecode, that the address bits equal the
-///         declared permissions (THREAT-MODEL T5), that the router address the hook trusts is the
-///         one the router lands on, and that any other swap sender is refused (invariant I1).
+/// @title Tests for the hook itself: the permission-bit guard, the gate, and the order checks
+/// @notice Proves, against Uniswap's official PoolManager and Universal Router bytecode, that the
+///         address bits equal the declared permissions (THREAT-MODEL T5), that the executor address
+///         the hook trusts is the one the executor lands on, that a swap from anywhere but the official
+///         router driven by the executor is refused (invariant I1), and that the hook verifies every
+///         term of the order from the executor's storage, never from hook data (spec C1, I3, I4, I5).
 contract UnicaHookTest is UnicaTestBase {
+    address internal merchant = makeAddr("merchant");
+    uint128 internal constant AMOUNT_IN = 1e15;
+
     function setUp() public {
         setUpV4();
         // T5, in this order on purpose: assert the mask numerically BEFORE deploying, because the
@@ -51,8 +62,8 @@ contract UnicaHookTest is UnicaTestBase {
         _expectRefusedAt(Hooks.BEFORE_SWAP_FLAG);
     }
 
-    /// @notice The day-1 address shape (afterSwap only, 0x40) is now refused too: the gate changed
-    ///         the mask, so the scaffold's address can never carry this code.
+    /// @notice The day-1 address shape (afterSwap only, 0x40) is refused too: the gate changed the
+    ///         mask, so the scaffold's address can never carry this code.
     function test_RevertWhen_AddressBitsSayAfterSwapOnly() public {
         _expectRefusedAt(Hooks.AFTER_SWAP_FLAG);
     }
@@ -67,49 +78,223 @@ contract UnicaHookTest is UnicaTestBase {
 
     // ------------------------------------------------------------------ I1: the gate
 
-    /// @notice The router address the hook derives is the address the router actually lands on.
-    function test_SettlerDerivationMatchesTheRouterAddress() public view {
-        assertEq(hook.SETTLER(), address(router));
-        // The same arithmetic, recomputed here from the router's creation code, so a change to the
-        // router, the factory, or the salt on either side is caught.
-        bytes32 initCodeHash = keccak256(type(UnicaSettlementRouter).creationCode);
+    /// @notice The executor address the hook derives is the address the executor actually lands on.
+    function test_ExecutorDerivationMatchesTheDeployedAddress() public view {
+        assertEq(hook.SETTLEMENT_EXECUTOR(), address(executor));
+        // The same arithmetic, recomputed here from the executor's creation code, so a change to the
+        // executor, the factory, or the salt on either side is caught.
+        bytes32 initCodeHash = keccak256(type(SettlementExecutor).creationCode);
         address recomputed = address(
             uint160(
                 uint256(
-                    keccak256(abi.encodePacked(bytes1(0xff), hook.CREATE2_FACTORY(), hook.ROUTER_SALT(), initCodeHash))
+                    keccak256(
+                        abi.encodePacked(bytes1(0xff), hook.CREATE2_FACTORY(), hook.EXECUTOR_SALT(), initCodeHash)
+                    )
                 )
             )
         );
-        assertEq(hook.SETTLER(), recomputed);
-        assertGt(address(router).code.length, 0, "router has no code at the derived address");
+        assertEq(hook.SETTLEMENT_EXECUTOR(), recomputed);
+        assertGt(address(executor).code.length, 0, "executor has no code at the derived address");
     }
 
-    /// @notice Invariant I1, the negative: a swap from any sender other than the router is refused by
-    ///         the hook in beforeSwap, with the hook's own error wrapped by the PoolManager, and the
-    ///         hook observes nothing.
-    function test_RevertWhen_SwapSenderIsNotTheRouter() public {
+    /// @notice The router the hook and the executor trust is Uniswap's, running its deployed bytecode.
+    function test_OfficialRouterIsTheDeployedRuntime() public view {
+        assertEq(hook.UNIVERSAL_ROUTER(), universalRouter);
+        assertEq(executor.UNIVERSAL_ROUTER(), universalRouter);
+        assertEq(keccak256(universalRouter.code), UniversalRouterV2Sepolia.RUNTIME_KECCAK);
+    }
+
+    /// @notice Invariant I1, first half: a swap from any sender other than the official router is
+    ///         refused in beforeSwap, before the hook asks anyone anything, and nothing is receipted.
+    function test_RevertWhen_SwapSenderIsNotTheOfficialRouter() public {
         (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                CustomRevert.WrappedError.selector,
-                address(hook),
+            _wrapped(
                 IHooks.beforeSwap.selector,
-                abi.encodeWithSelector(UnicaHook.NotSettler.selector, address(swapRouter)),
-                abi.encodeWithSelector(Hooks.HookCallFailed.selector)
+                abi.encodeWithSelector(UnicaHook.NotOfficialPath.selector, address(swapRouter))
             )
         );
-        swapNativeExactIn(k, 1e15, ZERO_BYTES);
-        assertEq(hook.afterSwapCount(), 0);
+        swapNativeExactIn(k, AMOUNT_IN, ZERO_BYTES);
+        assertEq(hook.receiptCount(), 0);
+    }
+
+    /// @notice Invariant I1, second half: the official router itself, driven by anyone but the
+    ///         executor, is refused. The router reports its caller through msgSender() and the hook
+    ///         names that caller in the error. The stranger keeps every wei.
+    function test_RevertWhen_OfficialRouterIsDrivenByAStranger() public {
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        address stranger = makeAddr("stranger");
+        vm.deal(stranger, 1 ether);
+        (bytes memory commands, bytes[] memory inputs) = _plan(k, AMOUNT_IN, 1, stranger, abi.encode(bytes32(0)));
+        vm.expectRevert(
+            _wrapped(
+                IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.NotSettlementExecutor.selector, stranger)
+            )
+        );
+        vm.prank(stranger);
+        IUniversalRouter(universalRouter).execute{value: AMOUNT_IN}(commands, inputs, block.timestamp + 1);
+        assertEq(hook.receiptCount(), 0);
+        assertEq(stranger.balance, 1 ether);
     }
 
     /// @notice A pool WITHOUT the hook is untouched by it: the counter measures this hook's path only.
     function test_SwapOnAHooklessPoolIsNotObserved() public {
         (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(0)), 1 ether);
-        swapNativeExactIn(k, 1e15, ZERO_BYTES);
-        assertEq(hook.afterSwapCount(), 0);
+        swapNativeExactIn(k, AMOUNT_IN, ZERO_BYTES);
+        assertEq(hook.receiptCount(), 0);
+    }
+
+    // ------------------------------------------------------------------ C1, I3, I4, I5: the order checks
+    // Reached through the executor HARNESS at the executor's address, which drives the official router
+    // with a plan the real executor would never compose. The hook cannot tell them apart by design.
+
+    /// @notice Spec C1: hook data is one order id and nothing else. Empty data and a 20-byte payload,
+    ///         the shape a hook that trusted hook data for a payee would accept, are both refused.
+    function test_RevertWhen_HookDataIsNotAnOrderId() public {
+        ExecutorHarness h = deployExecutorHarness();
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        bytes32 id = _order(h, k, AMOUNT_IN, 1);
+
+        (bytes memory commands, bytes[] memory inputs) = _plan(k, AMOUNT_IN, 1, merchant, "");
+        vm.expectRevert(
+            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.MalformedHookData.selector, 0))
+        );
+        h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
+
+        (commands, inputs) = _plan(k, AMOUNT_IN, 1, merchant, abi.encodePacked(merchant));
+        vm.expectRevert(
+            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.MalformedHookData.selector, 20))
+        );
+        h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
+        assertEq(hook.receiptCount(), 0);
+    }
+
+    /// @notice Invariant I5 at the hook: a swap names an order that is not being paid right now. An
+    ///         unknown id, an order that was created but never paid, and an order already settled are
+    ///         each refused with the state the hook read. The order the harness marked Paying is a
+    ///         different one, so the id in hook data decides nothing on its own.
+    function test_RevertWhen_OrderIsNotInFlight() public {
+        ExecutorHarness h = deployExecutorHarness();
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        bytes32 inFlight = _order(h, k, AMOUNT_IN, 1);
+
+        bytes32 unknown = keccak256("never created");
+        _expectNotInFlight(h, k, inFlight, unknown, SettlementExecutor.Status.None);
+
+        bytes32 open = _order(h, k, AMOUNT_IN, 1);
+        _expectNotInFlight(h, k, inFlight, open, SettlementExecutor.Status.Open);
+
+        bytes32 settled = _order(h, k, AMOUNT_IN, 1);
+        (bytes memory commands, bytes[] memory inputs) = h.planFor(settled);
+        h.payWithPlan{value: AMOUNT_IN}(settled, commands, inputs);
+        assertEq(hook.receiptCount(), 1);
+        _expectNotInFlight(h, k, inFlight, settled, SettlementExecutor.Status.Settled);
+        assertEq(hook.receiptCount(), 1);
+    }
+
+    /// @notice Invariant I4 at the hook: the executor's own deadline check bypassed, the hook still
+    ///         refuses an expired order from the deadline it reads itself.
+    function test_RevertWhen_ExpiredOrderReachesTheHook() public {
+        ExecutorHarness h = deployExecutorHarness();
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        bytes32 id = _order(h, k, AMOUNT_IN, 1);
+        uint64 deadline = h.orders(id).deadline;
+        vm.warp(deadline + 1);
+        (bytes memory commands, bytes[] memory inputs) = h.planFor(id);
+        vm.expectRevert(
+            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.OrderExpired.selector, id, deadline))
+        );
+        h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
+    }
+
+    /// @notice Invariant I3 at the hook: the swap amount must be the order's.
+    function test_RevertWhen_SwapParamsDisagreeWithTheOrder() public {
+        ExecutorHarness h = deployExecutorHarness();
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        bytes32 id = _order(h, k, AMOUNT_IN, 1);
+        (bytes memory commands, bytes[] memory inputs) = _plan(k, AMOUNT_IN + 1, 1, merchant, abi.encode(id));
+        vm.expectRevert(
+            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.ParamsDoNotMatchOrder.selector, id))
+        );
+        h.payWithPlan{value: AMOUNT_IN + 1}(id, commands, inputs);
+    }
+
+    /// @notice Invariant I3 at the hook: the pool must be the order's. A second hooked pool with a
+    ///         different fee tier is initialised so the swap reaches the hook and is refused there.
+    function test_RevertWhen_PoolDisagreesWithTheOrder() public {
+        ExecutorHarness h = deployExecutorHarness();
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        PoolKey memory other = nativeUsdcKey(IHooks(address(hook)));
+        other.fee = 500;
+        other.tickSpacing = 10;
+        initPoolWithLiquidity(other, 1 ether);
+        bytes32 id = _order(h, k, AMOUNT_IN, 1);
+        (bytes memory commands, bytes[] memory inputs) = _plan(other, AMOUNT_IN, 1, merchant, abi.encode(id));
+        vm.expectRevert(
+            _wrapped(IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.PoolDoesNotMatchOrder.selector, id))
+        );
+        h.payWithPlan{value: AMOUNT_IN}(id, commands, inputs);
     }
 
     // ------------------------------------------------------------------ helpers
+
+    function _expectNotInFlight(
+        ExecutorHarness h,
+        PoolKey memory k,
+        bytes32 marked,
+        bytes32 named,
+        SettlementExecutor.Status expected
+    ) internal {
+        (bytes memory commands, bytes[] memory inputs) = _plan(k, AMOUNT_IN, 1, merchant, abi.encode(named));
+        vm.expectRevert(
+            _wrapped(
+                IHooks.beforeSwap.selector, abi.encodeWithSelector(UnicaHook.OrderNotInFlight.selector, named, expected)
+            )
+        );
+        h.payWithPlan{value: AMOUNT_IN}(marked, commands, inputs);
+    }
+
+    function _order(SettlementExecutor on, PoolKey memory k, uint128 amountIn, uint128 minOut)
+        internal
+        returns (bytes32)
+    {
+        vm.prank(merchant);
+        return on.createOrder(merchant, k, amountIn, minOut, uint64(block.timestamp + 1 hours));
+    }
+
+    /// @dev The official router's plan for one exact-input native swap, with every field open, so a
+    ///      test can compose what the executor never would.
+    function _plan(PoolKey memory k, uint128 amountIn, uint128 minOut, address recipient, bytes memory hookData)
+        internal
+        pure
+        returns (bytes memory commands, bytes[] memory inputs)
+    {
+        bytes memory actions =
+            abi.encodePacked(uint8(Actions.SWAP_EXACT_IN_SINGLE), uint8(Actions.SETTLE), uint8(Actions.TAKE));
+        bytes[] memory params = new bytes[](3);
+        params[0] = abi.encode(
+            IV4Router.ExactInputSingleParams({
+                poolKey: k, zeroForOne: true, amountIn: amountIn, amountOutMinimum: minOut, hookData: hookData
+            })
+        );
+        params[1] = abi.encode(k.currency0, ActionConstants.OPEN_DELTA, false);
+        params[2] = abi.encode(k.currency1, recipient, ActionConstants.OPEN_DELTA);
+        inputs = new bytes[](1);
+        inputs[0] = abi.encode(actions, params);
+        commands = abi.encodePacked(uint8(0x10));
+    }
+
+    /// @dev The PoolManager wraps a hook's revert: the hook, the callback selector, the hook's own
+    ///      reason, and HookCallFailed. The official router passes it up unchanged.
+    function _wrapped(bytes4 callback, bytes memory reason) internal view returns (bytes memory) {
+        return abi.encodeWithSelector(
+            CustomRevert.WrappedError.selector,
+            address(hook),
+            callback,
+            reason,
+            abi.encodeWithSelector(Hooks.HookCallFailed.selector)
+        );
+    }
 
     function _expectRefusedAt(uint160 wrongMask) internal {
         bytes32 salt = _mineSalt(wrongMask);

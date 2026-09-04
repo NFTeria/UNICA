@@ -76,6 +76,7 @@ contract SettlementExecutor {
 
     error ZeroRecipient();
     error ZeroAmount();
+    error ZeroMinOut();
     error DeadlineInPast(uint64 deadline);
     error NativeInputOnly();
     error UnknownOrder(bytes32 orderId);
@@ -98,6 +99,7 @@ contract SettlementExecutor {
     {
         if (recipient == address(0)) revert ZeroRecipient();
         if (amountIn == 0) revert ZeroAmount();
+        if (minOut == 0) revert ZeroMinOut();
         if (deadline <= block.timestamp) revert DeadlineInPast(deadline);
         if (!key.currency0.isAddressZero()) revert NativeInputOnly();
 
