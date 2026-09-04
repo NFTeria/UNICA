@@ -12,7 +12,7 @@ One switch, `ARGS`. Three cases, and only three:
 |---|---|---|
 | (none) | the local anvil fork of Sepolia: `--rpc-url http://127.0.0.1:8545 --unlocked --sender $DEPLOYER --broadcast`; impersonation, no signing, no real transaction | `make -n deploy DEPLOYER=<addr>` prints the fork command and the line `LOCAL FORK on …` |
 | `--network sepolia` | Ethereum Sepolia with keystore signing: `--rpc-url $SEPOLIA_RPC_URL --account $DEPLOYER_ACCOUNT --sender $DEPLOYER --broadcast` | `make -n deploy ARGS="--network sepolia" DEPLOYER=<addr> DEPLOYER_ACCOUNT=<name>` prints `--account <name>` |
-| any other `--network` | refused before any forge command: `unsupported network in ARGS="--network mainnet": only "--network sepolia" is supported (testnet only)`, exit 1 | `make deploy ARGS="--network mainnet" DEPLOYER=<addr>` exits 1 with that line. Before the fix in commit `fix(make): an unsupported --network fails closed` it fell through to the fork; that is why the branch exists |
+| any other `--network` | refused before any forge command: `unsupported network in ARGS="--network mainnet": only "--network sepolia" is supported (testnet only)`, exit 1 | `make deploy ARGS="--network mainnet" DEPLOYER=<addr>` stops with `make: *** [_need-network] Error 1` after printing that line. Before the fix in commit `fix(make): an unsupported --network fails closed` it fell through to the fork; that is why the branch exists |
 
 Every network target also refuses to run without `DEPLOYER` (a public address), and the Sepolia
 path without `DEPLOYER_ACCOUNT` (a keystore name). Values come from `.env` (never committed;
