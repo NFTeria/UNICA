@@ -1,103 +1,97 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.30;
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
 import {UnicaTestBase} from "./utils/UnicaTestBase.sol";
 import {UnicaHook} from "../src/UnicaHook.sol";
 
-/// @title Day-1 tests for the UnicaHook frame
-/// @notice Two things are proven here and nothing else: the permission bits in the hook's address
-///         equal the permissions the contract declares (THREAT-MODEL T5, spec section 5), and a
-///         real swap through a real PoolManager reaches the hook's callback.
-/// @dev The PoolManager under test is Uniswap's official bytecode, placed at the canonical Sepolia
-///      address by `UnicaTestBase` so the zero-argument constructor (spec section 7d) resolves it.
-///      The second currency is a labelled local ERC-20 mock; the live pool uses Circle USDC. Nothing
-///      here is a live-testnet result.
+/// @title Tests for the hook itself: the permission-bit guard and the router-only gate
+/// @notice Proves, against Uniswap's official PoolManager bytecode, that the address bits equal the
+///         declared permissions (THREAT-MODEL T5), that the router address the hook trusts is the
+///         one the router lands on, and that any other swap sender is refused (invariant I1).
 contract UnicaHookTest is UnicaTestBase {
-    /// @dev The day-1 permission set: afterSwap only. beforeSwap joins with invariant I1.
-    uint160 internal constant DAY1_MASK = Hooks.AFTER_SWAP_FLAG;
-
-    /// @dev Namespaced so an etched address never lands on a precompile or a reserved prefix.
-    address internal constant HOOK_ADDR = address(uint160(DAY1_MASK) ^ (0x4444 << 144));
-
-    UnicaHook internal hook;
-
     function setUp() public {
         setUpV4();
-
-        // T5, in this order on purpose: assert the mask numerically BEFORE deploying, because
-        // deployCodeTo swallows the constructor's HookAddressNotValid into a bare cheatcode error.
-        assertEq(_declaredMask(), DAY1_MASK, "declared permissions drifted from the day-1 set (afterSwap only)");
-        deployCodeTo("UnicaHook.sol:UnicaHook", "", HOOK_ADDR);
-        hook = UnicaHook(HOOK_ADDR);
+        // T5, in this order on purpose: assert the mask numerically BEFORE deploying, because the
+        // deploy cheat swallows the constructor's HookAddressNotValid into a bare cheatcode error.
+        assertEq(
+            _declaredMask(),
+            DECLARED_MASK,
+            "declared permissions drifted from the declared set (beforeSwap | afterSwap)"
+        );
+        deployUnica();
     }
 
     // ------------------------------------------------------------------ T5: the flag guard
 
     /// @notice THREAT-MODEL T5. The mask encoded in the hook's address equals the permissions the
-    ///         runtime code declares. Either side drifting makes this red.
+    ///         runtime code declares. Either side drifting makes this red; it was seen red on
+    ///         2026-09-04 when beforeSwap was added and the test still expected the day-1 mask.
     function test_MinedAddress_MatchesDeclaredPermissions() public {
         assertEq(uint160(address(hook)) & Hooks.ALL_HOOK_MASK, _declaredMask());
     }
 
-    /// @notice No permission beyond the day-1 set is declared. The beforeSwap gate is added by the
-    ///         router-gate work, and this test is what changes when it does.
+    /// @notice Exactly the declared set: both swap callbacks, no returns-delta flag ever (threat T11).
     function test_NoUndeclaredPermissionsCreepIn() public {
-        assertEq(_declaredMask(), DAY1_MASK);
+        assertEq(_declaredMask(), DECLARED_MASK);
         Hooks.Permissions memory p = hook.getHookPermissions();
+        assertTrue(p.beforeSwap);
         assertTrue(p.afterSwap);
-        assertFalse(p.beforeSwap);
         assertFalse(p.beforeSwapReturnDelta);
         assertFalse(p.afterSwapReturnDelta);
     }
 
-    /// @notice The negative control for T5, from v4 itself: the same bytecode deployed to an address
-    ///         whose bits say beforeSwap-only is refused by the BaseHook constructor with
-    ///         HookAddressNotValid. If this ever passes without reverting, the guard means nothing.
+    /// @notice The negative control from v4 itself: the same bytecode at an address whose bits say
+    ///         beforeSwap-only is refused by the BaseHook constructor with HookAddressNotValid.
     function test_RevertWhen_AddressBitsSayBeforeSwapOnly() public {
-        bytes32 salt = _mineSalt(Hooks.BEFORE_SWAP_FLAG);
-        address predicted = _create2Address(salt);
-        assertEq(uint160(predicted) & Hooks.ALL_HOOK_MASK, Hooks.BEFORE_SWAP_FLAG);
-        vm.expectRevert(abi.encodeWithSelector(Hooks.HookAddressNotValid.selector, predicted));
-        new UnicaHook{salt: salt}();
+        _expectRefusedAt(Hooks.BEFORE_SWAP_FLAG);
     }
 
-    /// @notice The positive twin of the control above: a salt mined for the declared mask deploys.
+    /// @notice The day-1 address shape (afterSwap only, 0x40) is now refused too: the gate changed
+    ///         the mask, so the scaffold's address can never carry this code.
+    function test_RevertWhen_AddressBitsSayAfterSwapOnly() public {
+        _expectRefusedAt(Hooks.AFTER_SWAP_FLAG);
+    }
+
+    /// @notice The positive twin: a salt mined for the declared mask deploys.
     function test_MinedSalt_DeploysAtTheDeclaredMask() public {
-        bytes32 salt = _mineSalt(DAY1_MASK);
+        bytes32 salt = _mineSalt(DECLARED_MASK);
         UnicaHook mined = new UnicaHook{salt: salt}();
         assertEq(address(mined), _create2Address(salt));
-        assertEq(uint160(address(mined)) & Hooks.ALL_HOOK_MASK, DAY1_MASK);
+        assertEq(uint160(address(mined)) & Hooks.ALL_HOOK_MASK, DECLARED_MASK);
     }
 
-    // ------------------------------------------------------------------ the swap
+    // ------------------------------------------------------------------ I1: the gate
 
-    /// @notice A real swap through a real PoolManager reaches the callback: native ETH in,
-    ///         mock USDC out, and the hook's counter moves from 0 to 1.
-    function test_SwapExecutesThroughTheHook() public {
+    /// @notice The router address the hook derives is the address the router actually lands on.
+    function test_SettlerDerivationMatchesTheRouterAddress() public view {
+        assertEq(hook.SETTLER(), address(router));
+        assertEq(hook.computeSettler(), address(router));
+        assertGt(address(router).code.length, 0, "router has no code at the derived address");
+    }
+
+    /// @notice Invariant I1, the negative: a swap from any sender other than the router is refused by
+    ///         the hook in beforeSwap, with the hook's own error wrapped by the PoolManager, and the
+    ///         hook observes nothing.
+    function test_RevertWhen_SwapSenderIsNotTheRouter() public {
         (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CustomRevert.WrappedError.selector,
+                address(hook),
+                IHooks.beforeSwap.selector,
+                abi.encodeWithSelector(UnicaHook.NotSettler.selector, address(swapRouter)),
+                abi.encodeWithSelector(Hooks.HookCallFailed.selector)
+            )
+        );
+        swapNativeExactIn(k, 1e15, ZERO_BYTES);
         assertEq(hook.afterSwapCount(), 0);
-
-        BalanceDelta d = swapNativeExactIn(k, 1e15, ZERO_BYTES);
-
-        assertEq(hook.afterSwapCount(), 1, "the hook did not observe the swap");
-        assertLt(d.amount0(), 0, "payer did not pay ETH");
-        assertGt(d.amount1(), 0, "payer did not receive the payout token");
     }
 
-    /// @notice Every swap size in the pool's range is observed exactly once.
-    function testFuzz_EverySwapIsObservedOnce(uint128 amountIn) public {
-        amountIn = uint128(bound(amountIn, 1e9, 1e17));
-        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
-        swapNativeExactIn(k, amountIn, ZERO_BYTES);
-        assertEq(hook.afterSwapCount(), 1);
-    }
-
-    /// @notice A swap on a pool WITHOUT the hook does not touch the hook. The counter is a measure of
-    ///         this hook's path, not of the manager's activity.
+    /// @notice A pool WITHOUT the hook is untouched by it: the counter measures this hook's path only.
     function test_SwapOnAHooklessPoolIsNotObserved() public {
         (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(0)), 1 ether);
         swapNativeExactIn(k, 1e15, ZERO_BYTES);
@@ -105,6 +99,14 @@ contract UnicaHookTest is UnicaTestBase {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    function _expectRefusedAt(uint160 wrongMask) internal {
+        bytes32 salt = _mineSalt(wrongMask);
+        address predicted = _create2Address(salt);
+        assertEq(uint160(predicted) & Hooks.ALL_HOOK_MASK, wrongMask);
+        vm.expectRevert(abi.encodeWithSelector(Hooks.HookAddressNotValid.selector, predicted));
+        new UnicaHook{salt: salt}();
+    }
 
     /// @dev Reads the permission struct off the REAL runtime code without running the constructor.
     ///      Etching lets the test read what the contract CLAIMS even when the claim disagrees with
@@ -130,8 +132,7 @@ contract UnicaHookTest is UnicaTestBase {
     }
 
     /// @dev Finds a salt whose CREATE2 address, deployed from this test contract, carries `wantMask`.
-    ///      The init-code hash is computed once: copying the creation code on every iteration is
-    ///      what ran the first version of this loop out of memory.
+    ///      The init-code hash is computed once; recomputing it per iteration ran out of memory.
     function _mineSalt(uint160 wantMask) internal view returns (bytes32) {
         bytes32 initCodeHash = keccak256(type(UnicaHook).creationCode);
         for (uint256 i = 0; i < 200_000; i++) {

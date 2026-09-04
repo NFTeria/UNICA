@@ -13,8 +13,11 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {AddressConstants} from "hookmate/constants/AddressConstants.sol";
 import {V4PoolManagerDeployer} from "hookmate/artifacts/V4PoolManager.sol";
+import {UnicaHook} from "../../src/UnicaHook.sol";
+import {UnicaSettlementRouter} from "../../src/UnicaSettlementRouter.sol";
 
 /// @title UnicaTestBase, the local v4 topology every UNICA test stands on
 /// @notice The PoolManager under test is the OFFICIAL bytecode, not a local compile: hookmate ships
@@ -39,7 +42,14 @@ abstract contract UnicaTestBase is Test {
     int24 internal constant TICK_SPACING = 60;
     bytes internal constant ZERO_BYTES = "";
 
+    /// @dev The declared permission set, spec section 5: beforeSwap | afterSwap = 0xC0.
+    uint160 internal constant DECLARED_MASK = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
+    /// @dev Namespaced so an etched address never lands on a precompile or a reserved prefix.
+    address internal constant HOOK_ADDR = address(uint160(DECLARED_MASK) ^ (0x4444 << 144));
+
     IPoolManager internal manager;
+    UnicaHook internal hook;
+    UnicaSettlementRouter internal router;
     PoolSwapTest internal swapRouter;
     PoolModifyLiquidityTest internal liquidityRouter;
     /// @notice A labelled local stand-in for the payout token. 18 decimals so a 1:1 pool price reads plainly.
@@ -74,6 +84,17 @@ abstract contract UnicaTestBase is Test {
         usdc.approve(address(swapRouter), type(uint256).max);
         usdc.approve(address(liquidityRouter), type(uint256).max);
         vm.label(address(usdc), "USDC(mock)");
+    }
+
+    /// @notice Deploys the hook at the namespaced 0xC0 address and the router at the address the hook
+    ///         derives for it, so `hook.SETTLER()` is a contract that exists.
+    function deployUnica() internal {
+        deployCodeTo("UnicaHook.sol:UnicaHook", "", HOOK_ADDR);
+        hook = UnicaHook(HOOK_ADDR);
+        deployCodeTo("UnicaSettlementRouter.sol:UnicaSettlementRouter", "", hook.SETTLER());
+        router = UnicaSettlementRouter(hook.SETTLER());
+        vm.label(HOOK_ADDR, "UnicaHook");
+        vm.label(hook.SETTLER(), "UnicaSettlementRouter");
     }
 
     /// @notice The native-ETH / mock-USDC key for a given hook, matching the live pool's shape.
