@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# verify.sh <rpc-url> — source verification of the hook AND the router. Sourcify needs no key;
+# verify.sh <rpc-url> — source verification of the hook AND the executor. Sourcify needs no key;
 # Etherscan runs too when ETHERSCAN_API_KEY is set in the environment. Prints what it did.
 set -euo pipefail
 RPC="${1:?rpc url}"
 CHAIN=$(cast chain-id --rpc-url "$RPC")
 HOOK=$(forge script script/LiveFire.s.sol:LiveFire --sig "predict()" 2>/dev/null | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
-ROUTER=$(forge script script/LiveFire.s.sol:LiveFire --sig "predictRouter()" 2>/dev/null | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
+EXECUTOR=$(forge script script/LiveFire.s.sol:LiveFire --sig "predictExecutor()" 2>/dev/null | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
 
 # The compiler version is taken from whichever artifact's runtime matches the chain byte for byte
 # outside the immutables (measured 2026-09-04: an unpinned tree built the hook twice).
@@ -40,5 +40,5 @@ verify_one() {
   fi
 }
 
-verify_one "$ROUTER" src/UnicaSettlementRouter.sol UnicaSettlementRouter
+verify_one "$EXECUTOR" src/SettlementExecutor.sol SettlementExecutor
 verify_one "$HOOK" src/UnicaHook.sol UnicaHook
