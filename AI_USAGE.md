@@ -19,7 +19,7 @@ form, and every purchase is the owner's own action, performed outside the assist
 | Tool | Version / model | What it was used for |
 |---|---|---|
 | Claude Code (Anthropic) | `claude-fable-5-1` | Drafting every file named in the table below, under the owner's direction; running `forge`, `cast`, and `git` locally; reading official documentation and on-chain state to verify facts before they were written down |
-| Uniswap AI skills (`github.com/Uniswap/uniswap-ai`) | as installed in the same assistant | Consulted before the hook frame was written, as the track's own resources suggest; what it produced, and where it broke against the pinned dependencies, is logged in `FEEDBACK.md` the hour it happened |
+| Uniswap AI skills (`github.com/Uniswap/uniswap-ai`, plugin `uniswap-hooks` 1.6.0) | as installed in the same assistant | Consulted before the hook frame was written, as the track's own resources suggest. Its generator depends on an MCP tool the plugin does not ship, so it produced no code; the hook was hand-written from the spec. Logged in `FEEDBACK.md` the hour it happened |
 | Foundry | forge/cast `1.3.5-foundry-zksync-v0.1.9`, anvil `1.5.1-stable` | Build, test, fuzz, deploy. Not an AI tool; listed so the toolchain is on record with the rest |
 
 ## Files and directories each tool touched
@@ -35,6 +35,8 @@ was not AI-assisted.
 | `CLAUDE.md` | Claude Code (earlier session, owner's toolkit) | Public repository template from the owner's toolkit, same provenance as `.gitignore`; the header block naming this project was added by the assistant in this session |
 | `AI_USAGE.md` | Claude Code | This file, drafted by the assistant from the toolkit's public template |
 | `FEEDBACK.md`, `BACKFEED.md`, `docs/feedback/README.md` | Claude Code (earlier session, owner's toolkit) | Public templates from the owner's toolkit; every entry added to them is written in this session at the time the friction or the thought occurred |
+| `src/UnicaHook.sol` | Claude Code | Drafted from `specs/HOOK-SPEC.md` sections 5 and 7d and the pinned OpenZeppelin `BaseHook`; the counter and event exist so the callback's execution is observable |
+| `test/UnicaHook.t.sol` | Claude Code | Drafted from `specs/THREAT-MODEL.md` T5 and v4-core's own `Deployers` test utilities. The first salt-mining loop ran out of memory and was corrected in the same hour; the guard was sabotaged (beforeSwap flipped on) and seen to fail before it was trusted |
 
 ## Pre-existing work carried in
 
