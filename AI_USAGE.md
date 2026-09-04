@@ -37,6 +37,11 @@ was not AI-assisted.
 | `FEEDBACK.md`, `BACKFEED.md`, `docs/feedback/README.md` | Claude Code (earlier session, owner's toolkit) | Public templates from the owner's toolkit; every entry added to them is written in this session at the time the friction or the thought occurred |
 | `src/UnicaHook.sol` | Claude Code | Drafted from `specs/HOOK-SPEC.md` sections 5 and 7d and the pinned OpenZeppelin `BaseHook`; the counter and event exist so the callback's execution is observable |
 | `test/UnicaHook.t.sol` | Claude Code | Drafted from `specs/THREAT-MODEL.md` T5 and v4-core's own `Deployers` test utilities. The first salt-mining loop ran out of memory and was corrected in the same hour; the guard was sabotaged (beforeSwap flipped on) and seen to fail before it was trusted |
+| `script/Chains.sol`, `script/LiveFire.s.sol` | Claude Code | Drafted from `specs/HOOK-SPEC.md` sections 7c and 7d and the pinned v4-core test routers; every address was read from the official deployments page and checksummed by `cast`, not typed. Simulated against live Sepolia state and rehearsed on an anvil fork before any handoff |
+| `script/rehearse-anvil.sh`, `script/readback.sh`, `script/verify.sh`, `Makefile` | Claude Code | Written from the conventions of the owner's earlier deploy tooling (keystore-only signing, public RPC defaults, anvil-fork rehearsal by impersonation); nothing was copied from it. Three bash 3.2 parse errors were found by running them and fixed the same hour |
+| `design/README.md` | Claude Code | Drafted from the surface brief in the session's task description |
+| `PLAN.md` | Claude Code | Drafted from the pre-event day budget, restricted to the technical schedule |
+| `docs/INVARIANTS.md`, `docs/THREAT-MODEL.md`, `specs/README.md`, `HACKATHON.md` | Claude Code | Drafted by the assistant; every rung stated is the one the tree had reached at the commit |
 
 ## Pre-existing work carried in
 
