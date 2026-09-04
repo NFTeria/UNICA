@@ -75,6 +75,30 @@ jobs:
       - name: forge fmt --check
         run: forge fmt --check
 
+  # A stranger's path, exactly: clone the public repository without submodules, fetch them
+  # with the Makefile, run the gate. If this lane is red, the README's setup is a lie.
+  fresh-clone:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - name: Clone like a stranger and run the gate
+        run: |
+          git clone --no-recurse-submodules https://github.com/${{ github.repository }}.git stranger
+          cd stranger
+          git checkout --quiet ${{ github.sha }}
+          make gate 2>&1 | tail -2 || true
+          make deps
+          make doctor
+          set -o pipefail
+          make gate 2>&1 | tee gate.log
+          total=$(grep -oE '\(([0-9]+) total tests\)' gate.log | grep -oE '[0-9]+')
+          echo "tests run on the fresh clone: ${total:-0}"
+          test "${total:-0}" -ge 7
+
   provenance:
     runs-on: ubuntu-latest
     steps:
