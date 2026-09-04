@@ -5,14 +5,14 @@ libs   = ["lib"]
 test   = "test"
 script = "script"
 
-# solc_version is deliberately unpinned. v4-core's PoolManager.sol carries the exact
-# pragma `0.8.26` (no caret), the only such file in v4-core; a global pin above it has
-# an empty intersection and the first build that deploys the concrete PoolManager
-# fails. Letting forge resolve per file compiles the whole tree at 0.8.26. Any file
-# here that imports the concrete PoolManager must itself admit 0.8.26 (^0.8.26).
-#
-# This is settled before any hook address is mined: the compiler sets the bytecode,
-# the bytecode sets the init-code hash, and the hash sets the CREATE2 salt.
+# Pinned. The tree first shipped without a pin so v4-core's exact-pinned PoolManager.sol
+# (`pragma solidity 0.8.26`) could compile inside the test unit; the price, measured on day 1,
+# was two builds of the hook (0.8.26 in tests, 0.8.30 in the script that deployed) and a
+# rejected verification until the matching artifact was found. The tests now deploy the
+# official PoolManager BYTECODE from hookmate's artifact instead of compiling it, so nothing
+# in the tree needs 0.8.26 and one compiler serves tests, scripts, and verification. This is
+# the version the template pins and the version the day-1 hook was verified with.
+solc_version = "0.8.30"
 evm_version = "cancun"        # v4 requires transient storage (EIP-1153)
 via_ir      = false
 

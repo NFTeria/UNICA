@@ -1,27 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {AddressConstants} from "hookmate/constants/AddressConstants.sol";
+import {UnicaTestBase} from "./utils/UnicaTestBase.sol";
 import {UnicaHook} from "../src/UnicaHook.sol";
 
 /// @title Day-1 tests for the UnicaHook frame
 /// @notice Two things are proven here and nothing else: the permission bits in the hook's address
 ///         equal the permissions the contract declares (THREAT-MODEL T5, spec section 5), and a
 ///         real swap through a real PoolManager reaches the hook's callback.
-/// @dev The PoolManager under test is v4-core's own, deployed locally at the canonical Sepolia
-///      address so the zero-argument constructor (spec section 7d) resolves it. The second
-///      currency is a labelled local ERC-20 mock; the live pool uses Circle USDC. Nothing here is
-///      a live-testnet result.
-contract UnicaHookTest is Deployers {
-    uint256 internal constant SEPOLIA = 11155111;
-
+/// @dev The PoolManager under test is Uniswap's official bytecode, placed at the canonical Sepolia
+///      address by `UnicaTestBase` so the zero-argument constructor (spec section 7d) resolves it.
+///      The second currency is a labelled local ERC-20 mock; the live pool uses Circle USDC. Nothing
+///      here is a live-testnet result.
+contract UnicaHookTest is UnicaTestBase {
     /// @dev The day-1 permission set: afterSwap only. beforeSwap joins with invariant I1.
     uint160 internal constant DAY1_MASK = Hooks.AFTER_SWAP_FLAG;
 
@@ -31,24 +26,13 @@ contract UnicaHookTest is Deployers {
     UnicaHook internal hook;
 
     function setUp() public {
-        vm.chainId(SEPOLIA);
-        vm.deal(address(this), 100 ether);
-        deployFreshManagerAndRouters();
-        deployMintAndApprove2Currencies();
+        setUpV4();
 
         // T5, in this order on purpose: assert the mask numerically BEFORE deploying, because
         // deployCodeTo swallows the constructor's HookAddressNotValid into a bare cheatcode error.
         assertEq(_declaredMask(), DAY1_MASK, "declared permissions drifted from the day-1 set (afterSwap only)");
         deployCodeTo("UnicaHook.sol:UnicaHook", "", HOOK_ADDR);
         hook = UnicaHook(HOOK_ADDR);
-    }
-
-    /// @dev The hook binds to the canonical PoolManager of the chain it is deployed on. Put the local
-    ///      manager at that exact address so the local test and the live chain share one topology.
-    function deployFreshManager() internal override {
-        address canonical = AddressConstants.getPoolManagerAddress(block.chainid);
-        deployCodeTo("PoolManager.sol:PoolManager", abi.encode(address(this)), canonical);
-        manager = IPoolManager(canonical);
     }
 
     // ------------------------------------------------------------------ T5: the flag guard
@@ -92,37 +76,31 @@ contract UnicaHookTest is Deployers {
     // ------------------------------------------------------------------ the swap
 
     /// @notice A real swap through a real PoolManager reaches the callback: native ETH in,
-    ///         currency1 out, and the hook's counter moves from 0 to 1.
+    ///         mock USDC out, and the hook's counter moves from 0 to 1.
     function test_SwapExecutesThroughTheHook() public {
-        (PoolKey memory k,) = initPoolAndAddLiquidityETH(
-            CurrencyLibrary.ADDRESS_ZERO, currency1, IHooks(address(hook)), 3000, SQRT_PRICE_1_1, 1 ether
-        );
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
         assertEq(hook.afterSwapCount(), 0);
 
-        BalanceDelta d = swap(k, true, -1e15, ZERO_BYTES);
+        BalanceDelta d = swapNativeExactIn(k, 1e15, ZERO_BYTES);
 
         assertEq(hook.afterSwapCount(), 1, "the hook did not observe the swap");
         assertLt(d.amount0(), 0, "payer did not pay ETH");
-        assertGt(d.amount1(), 0, "payer did not receive currency1");
+        assertGt(d.amount1(), 0, "payer did not receive the payout token");
     }
 
     /// @notice Every swap size in the pool's range is observed exactly once.
     function testFuzz_EverySwapIsObservedOnce(uint128 amountIn) public {
         amountIn = uint128(bound(amountIn, 1e9, 1e17));
-        (PoolKey memory k,) = initPoolAndAddLiquidityETH(
-            CurrencyLibrary.ADDRESS_ZERO, currency1, IHooks(address(hook)), 3000, SQRT_PRICE_1_1, 1 ether
-        );
-        swap(k, true, -int256(uint256(amountIn)), ZERO_BYTES);
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        swapNativeExactIn(k, amountIn, ZERO_BYTES);
         assertEq(hook.afterSwapCount(), 1);
     }
 
     /// @notice A swap on a pool WITHOUT the hook does not touch the hook. The counter is a measure of
     ///         this hook's path, not of the manager's activity.
     function test_SwapOnAHooklessPoolIsNotObserved() public {
-        (PoolKey memory k,) = initPoolAndAddLiquidityETH(
-            CurrencyLibrary.ADDRESS_ZERO, currency1, IHooks(address(0)), 3000, SQRT_PRICE_1_1, 1 ether
-        );
-        swap(k, true, -1e15, ZERO_BYTES);
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(0)), 1 ether);
+        swapNativeExactIn(k, 1e15, ZERO_BYTES);
         assertEq(hook.afterSwapCount(), 0);
     }
 
