@@ -65,3 +65,28 @@ instead of compiling it, so tests, scripts, and verification agree on one compil
 
 **Day 2 starts with** I1: the settlement router as the sole admitted swap sender, the
 `beforeSwap` gate, mask 0xC0, a new mined address; then I7. Each with its negative test first.
+
+## 2026-09-04 — day 2, closed the same evening
+
+**Done, with proof.** The compiler is pinned and the tests run against Uniswap's official
+PoolManager bytecode. The settlement router exists and the hook admits only it: invariant I1
+proven both ways, the refusal with the exact wrapped error, the delivery by balance shape.
+Native settlement (I7) proven as four rows, with the foreign-sync precondition that makes the
+missing defence fatal and the trap row that shows why omitting the sync alone proves nothing.
+Every refusal leaves the payer whole and the order payable (I6); I3, I4, I5 hold at the router.
+The fuzzer found the partial-fill refusal at 0.0428 ETH against a band holding about 0.006 ETH;
+it is an intentional I6 refusal caused by finite pool depth, kept as its own regression test.
+Twenty-five tests, fuzz at 10,000. The sponsor's security checklist was run over the real code
+and logged with what it caught and what it missed. The live-fire script deploys the router at
+the address the hook derives and settles through it; simulated against Sepolia and rehearsed on
+a fork, seven transactions, all status 1, not broadcast. The Makefile took the one-switch shape:
+a local fork by default, keystore signing on Sepolia, every stage a target.
+
+**Changed against the plan.** I3, I4, I5 are enforced by the router today and reach the hook
+with the receipt (I2) on day 3, when the hook reads the order it is asked to admit. The hook
+derives the router's address in its constructor only, after a public derivation was measured to
+carry the router's creation code into the hook's runtime.
+
+**Day 3 starts with** I2: the receipt event with order id, net, fee, and recipient beside the
+standard `HookFee`; the hook reading the order from the router in `beforeSwap` (I4, I5) and
+`afterSwap` (I3). Then the pool allowlist (C2) if the clock allows. Day 4 deploys.
