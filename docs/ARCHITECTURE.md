@@ -101,3 +101,49 @@ row above is superseded, and the hook is named for the venue rather than the bra
 
 The order registry and the benefit ledger remain as ruled above: Vyper, after the core, if at
 all. The reasoning, question by question with sources, is in `docs/EXECUTION-PATH.md`.
+
+## Appended 2026-09-04 night, owner ruling: partner layering, and the words for what is new
+
+```
+World authorization / policy
+        ↓
+Settlement executor or adapter
+        ↓
+Official Uniswap-compatible execution path (the Universal Router today)
+        ↓
+V4SettlementHook + PoolManager
+        ↓
+Settlement receipt (schema v1)
+        ↓
+The Graph indexing
+```
+
+- **Uniswap is the core**: the PoolManager and the hook lifecycle, the official routing path where
+  technically compatible, custom-hook settlement invariants, reproducible tests, verification,
+  and tooling feedback. Terminology follows the actual traces, not the diagram's arrows: the
+  executor calls the Universal Router, the router unlocks the PoolManager, and the hook sees the
+  router as `sender` and the executor through `msgSender()`. The hook enforces its admitted
+  caller; it does not make the pool usable "only" through anything else it cannot see.
+- **The Graph**: a stable, versioned receipt schema, `docs/RECEIPT-SCHEMA.md`, version 1 tonight.
+  Contributing a useful schema is enough; no claim of priority until the research establishes
+  what exists, with its search method stated.
+- **World stays outside the hook.** It authorises a bounded benefit at the executor: one verified
+  human may consume one discounted settlement benefit once. The authorisation must be scoped to
+  an action or order, expiring, non-replayable, consumed atomically, consequential to price, fee,
+  limit or access, and safe if World is unavailable. Never a badge or a disconnected verification
+  screen. The receipt's `policyId` field is reserved for it.
+- **ENS, optional.** A legitimate seam maps a human-readable merchant or settlement name to
+  verified configuration: recipient address, accepted currency, settlement policy, metadata
+  endpoint, executor version. Resolution fails closed, is chain-aware, and never silently
+  redirects funds after a stale or malicious record change. Useful only if the demo actually
+  resolves and uses a record.
+- **Privy** is an onboarding or session-wallet seam, never settlement logic. Chainlink, 1inch, Arc,
+  Ledger and others enter only with a published requirement and a real end-to-end use.
+- **The hook stays minimal.** It is the trust-critical enforcement boundary; complexity is welcome
+  in the modules around it.
+- **The words for what is new.** Settlement hooks, caller allowlisting, hook events, Universal
+  Router execution, partial-fill controls and receipts are each known concepts or prior art.
+  Until the prior-art sweep is sourced (exact match, partial match, adjacent work, UNICA's own
+  disclosed prior art, unsupported claim), the sentence is: "UNICA composes Uniswap v4 hooks and
+  official execution infrastructure into a verifiable settlement flow with enforceable order
+  invariants and indexable receipts." No "first", no "unique", no "no one has done this".

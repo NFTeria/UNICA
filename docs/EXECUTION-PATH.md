@@ -60,7 +60,7 @@ callback at all. What stayed: the order as the only source of who is paid, I5's 
 marking before any external call, and the four-row I7 test, now against a stand-in at the
 router's address with the sync switchable, plus a fifth row against the real Universal Router
 bytecode etched at its Sepolia address with a foreign settle leg before the native one. The
-hook's runtime is 9,669 bytes with the order checks and both events in it. Every test named in
+hook's runtime is 9,981 bytes with the order checks and the versioned receipt in it. Every test named in
 `docs/INVARIANTS.md` runs against that bytecode and hookmate's official PoolManager.
 
 End to end, on 2026-09-04 night: `make rehearse` forked Sepolia with anvil, impersonated the

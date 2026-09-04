@@ -1,5 +1,11 @@
 # docs/proof — the evidence, in the order a judge should read it
 
+> **Historical day-1 observation-only scaffold; not the current gated implementation.** The contract
+> in these captures is `UnicaHook` at `0x23b46783709E4A94C229612bfA55580a6682c040`, deployed and
+> source-verified on 2026-09-04 under that name with `afterSwap` only. It observed swaps; it gated
+> nothing. The current implementation is `V4SettlementHook` in `src/`, and it gets its own proof on
+> day 4. Nothing below is rewritten.
+
 Every image here is a capture of a public explorer page for a transaction or contract that
 exists on Ethereum Sepolia (chain id 11155111). Nothing is mocked, simulated, or staged. The
 script beside them re-proves the same facts from the chain, without trusting this repository:
