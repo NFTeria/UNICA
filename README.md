@@ -118,10 +118,12 @@ and the point of the row is that the callback ran on Uniswap's real PoolManager.
 transaction labels the tool prints beside each hash were shuffled; the mapping above is from
 the receipts (target address and function selector), which is the only mapping that counts.
 
-One compiler fact worth knowing before you rebuild: this tree pins no solc, so forge compiled
-the hook at 0.8.26 in the test unit (which needs v4-core's exact-pinned PoolManager) and at
-0.8.30 in the script unit, and the script is what deployed. The verified source is the 0.8.30
-build, byte-identical to the chain outside the immutable slots; `script/verify.sh` picks the
+One compiler fact worth knowing: on day 1 this tree pinned no solc, so forge compiled the hook
+at 0.8.26 in the test unit (which then needed v4-core's exact-pinned PoolManager) and at 0.8.30
+in the script unit, and the script is what deployed. The verified source is the 0.8.30 build,
+byte-identical to the chain outside the immutable slots. Since day 2 the tree pins 0.8.30 and
+the tests deploy the official PoolManager bytecode from hookmate's artifact instead of compiling
+it, so one compiler serves tests, scripts, and verification; `script/verify.sh` still picks the
 artifact that matches the chain rather than assuming one.
 
 ## Security limitations, stated
