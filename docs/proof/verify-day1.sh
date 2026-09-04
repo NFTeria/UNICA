@@ -5,7 +5,7 @@
 set -uo pipefail
 RPC="${1:-https://ethereum-sepolia-rpc.publicnode.com}"
 HOOK=0x23b46783709E4A94C229612bfA55580a6682c040
-ID=0xaffd50d25121496e627f2d9574f160fee32829f04a945de1dbfea5af3668fde7
+POOLID=0xaffd50d25121496e627f2d9574f160fee32829f04a945de1dbfea5af3668fde7
 SV=0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C
 SWAP=0x6d580aef7b3d8848fcee555ab8cd7c28fa28c1abeb4d538455be349d0a8a06bf
 TXS="0x0171976a8716d2084890d8cfa155924fcf7b315b03263f1015d6794cee34b8da 0xe7cc4bbc094938ca3c74857d585f4e53cecc6161ae579e8838e11a32084df08b 0x7e56b7ca63d2ccf0be66f73f2e728bf20de645581a8aba5de7f9e5fc103e3213 0xb535627674e56b751d88335688021aa2cfc2e34dc6d749dc8f4a920da425baae $SWAP"
@@ -24,7 +24,7 @@ done
 code=$(cast code $HOOK --rpc-url "$RPC" 2>/dev/null)
 chk "hook has runtime code at $HOOK (6051 bytes)" "[ \$(( (\${#code}-2)/2 )) = 6051 ]"
 chk "hook.poolManager is the official PoolManager" "[ \"\$(cast call $HOOK 'poolManager()(address)' --rpc-url $RPC)\" = 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543 ]"
-chk "pool liquidity is 400000000000" "[ \"\$(cast call $SV \"$SIG_LIQ\" $ID --rpc-url $RPC | awk '{print \$1}')\" = 400000000000 ]"
+chk "pool liquidity is 400000000000" "[ \"\$(cast call $SV \"$SIG_LIQ\" $POOLID --rpc-url $RPC | awk '{print \$1}')\" = 400000000000 ]"
 chk "afterSwapCount is at least 1" "[ \"\$(cast call $HOOK \"$SIG_COUNT\" --rpc-url $RPC | awk '{print \$1}')\" -ge 1 ]"
 topic=$(cast keccak 'AfterSwapObserved(address,bytes32,int256)')
 chk "swap receipt carries AfterSwapObserved from the hook" "[ \"\$(cast receipt $SWAP --rpc-url $RPC --json | python3 -c \"import sys,json;r=json.load(sys.stdin);print(any(l['address'].lower()=='$HOOK'.lower() and l['topics'][0]=='$topic' for l in r['logs']))\")\" = True ]"
