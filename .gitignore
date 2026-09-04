@@ -187,3 +187,5 @@ scratchpad/
 
 # anvil-fork rehearsal artifacts: never the committed record
 .rehearsal/
+
+privatenotes.md
