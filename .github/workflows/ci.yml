@@ -26,8 +26,12 @@ jobs:
       # rather than build against an unintended revision.
       - name: Assert the uniswap-hooks pin
         run: |
-          test "$(git -C lib/uniswap-hooks describe --tags)" = "v1.1.1"
+          # The checkout fetches submodules without tags, so fetch the one tag that matters and
+          # prove it resolves to the pinned commit, then prove HEAD is that commit.
+          git -C lib/uniswap-hooks fetch --no-tags --depth 1 origin tag v1.1.1
+          test "$(git -C lib/uniswap-hooks rev-parse 'v1.1.1^{commit}')" = "bd5287c4a9f5c22c2393f7587a9b357662916115"
           test "$(git -C lib/uniswap-hooks rev-parse HEAD)" = "bd5287c4a9f5c22c2393f7587a9b357662916115"
+          echo "uniswap-hooks pinned at v1.1.1 = bd5287c"
 
       - name: forge build
         run: forge build --sizes
@@ -51,17 +55,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Every commit is authored under the project identity alone, and none carries an
-      # AI attribution trailer. Both are checked against the whole history on every push.
+      # Every commit is authored AND committed under the project identity alone, and no message
+      # carries an attribution shape: a co-author trailer naming a tool, a "generated with"
+      # line, or the robot-emoji banner. Checked against the whole history on every push.
+      # (Bare tool names in prose are the local pre-commit hook's job, where they can still be
+      # fixed; a pushed message is permanent, so this job checks the shapes that grant credit.)
       - name: Single author, no AI attribution
         run: |
-          authors=$(git log --format='%an <%ae>' | sort -u)
-          echo "authors: $authors"
-          test "$authors" = "NFTeria <dev@nfteria.click>"
-          if git log --format='%B' | grep -ivE 'CLAUDE\.md' | grep -inE 'co-authored-by|generated with|claude|anthropic|copilot|chatgpt'; then
+          identities=$(git log --format='%an <%ae>%n%cn <%ce>' | sort -u)
+          echo "identities: $identities"
+          test "$identities" = "NFTeria <dev@nfteria.click>"
+          if git log --format='%B' | grep -inE 'co-authored-by:[[:space:]]*(claude|anthropic|copilot|chatgpt|gpt-|openai|cursor|codex)|generated[[:space:]]+with[[:space:]]+\[?(claude|chatgpt|copilot|cursor)|🤖[[:space:]]*generated'; then
             echo "AI attribution found in history"; exit 1
           fi
-          echo "history clean"
+          echo "history clean: one identity, no attribution shapes"
 
       - name: No secrets in the tree
         run: |
