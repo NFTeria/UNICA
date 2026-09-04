@@ -7,6 +7,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
 import {UnicaTestBase} from "./utils/UnicaTestBase.sol";
 import {UnicaHook} from "../src/UnicaHook.sol";
+import {UnicaSettlementRouter} from "../src/UnicaSettlementRouter.sol";
 
 /// @title Tests for the hook itself: the permission-bit guard and the router-only gate
 /// @notice Proves, against Uniswap's official PoolManager bytecode, that the address bits equal the
@@ -69,7 +70,17 @@ contract UnicaHookTest is UnicaTestBase {
     /// @notice The router address the hook derives is the address the router actually lands on.
     function test_SettlerDerivationMatchesTheRouterAddress() public view {
         assertEq(hook.SETTLER(), address(router));
-        assertEq(hook.computeSettler(), address(router));
+        // The same arithmetic, recomputed here from the router's creation code, so a change to the
+        // router, the factory, or the salt on either side is caught.
+        bytes32 initCodeHash = keccak256(type(UnicaSettlementRouter).creationCode);
+        address recomputed = address(
+            uint160(
+                uint256(
+                    keccak256(abi.encodePacked(bytes1(0xff), hook.CREATE2_FACTORY(), hook.ROUTER_SALT(), initCodeHash))
+                )
+            )
+        );
+        assertEq(hook.SETTLER(), recomputed);
         assertGt(address(router).code.length, 0, "router has no code at the derived address");
     }
 

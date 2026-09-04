@@ -50,13 +50,15 @@ contract UnicaHook is BaseHook {
     event AfterSwapObserved(address indexed sender, PoolId indexed poolId, BalanceDelta delta);
 
     constructor() BaseHook(IPoolManager(AddressConstants.getPoolManagerAddress(block.chainid))) {
-        SETTLER = computeSettler();
+        SETTLER = _computeSettler();
     }
 
-    /// @notice The router's CREATE2 address for this creation code, factory, and salt.
-    /// @dev Pure and public so a test and a deploy script can check the derivation against the
-    ///      address the router actually lands on.
-    function computeSettler() public pure returns (address) {
+    /// @dev The router's CREATE2 address for its creation code, the factory, and the salt. Internal
+    ///      and called from the constructor only, so the router's creation code lives in this
+    ///      contract's creation code and never in its runtime (a public version carried it into the
+    ///      runtime and tripled the deployed size). Tests and the deploy script recompute the same
+    ///      arithmetic themselves and compare it with SETTLER.
+    function _computeSettler() internal pure returns (address) {
         bytes32 initCodeHash = keccak256(type(UnicaSettlementRouter).creationCode);
         return address(
             uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), CREATE2_FACTORY, ROUTER_SALT, initCodeHash))))
