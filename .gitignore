@@ -1,0 +1,151 @@
+# ── the local AI harness — NEVER public ─────────────────────────────────────
+# .claude/ holds the session's local state. settings.local.json in particular
+# records every folder a session was granted, which on this machine means the
+# private toolkit and the war room. The guard hook and settings.json are generic,
+# but nothing under this directory is worth the risk of one local write leaking.
+.claude/
+.cursor/
+.aider*
+.copilot*
+.continue/
+*.local.json
+*.local.md
+*.local.*
+
+# ── secrets — no exceptions, no "temporarily" ───────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+keystore/
+keystores/
+*.keystore
+*.wallet
+wallet*.json
+*.seed
+seed*.txt
+mnemonic*
+secrets/
+.secrets/
+secrets.*
+*.secret
+*.token
+*.credentials
+
+# ── planning material — lives in a private runtime, never in this tree ──────
+# The event's planning corpus is disclosed by name in specs/ and cited in prose.
+# The rest of it — schedules, rulings, slot decisions, prize arithmetic — is not
+# part of the contribution and does not belong in a public history. These names
+# are a tripwire: if one of them appears here, it arrived by accident.
+STATE.md
+MVP-PATH.md
+SLOT-DECISION.md
+BATTLE-PLAN.md
+PLAYBOOK.md
+PREBUILD.md
+BOOTSTRAP.md
+WINNERS-EVIDENCE.md
+UNISWAP-NEEDS.md
+UF-SKILL-REVIEW.md
+CHAIN-ADVANTAGES.md
+INSIDE-THE-STACK.md
+IDENTITY-RULING.md
+REMINDERS.md
+ROUTINE-*.md
+*-routine-instructions.txt
+prize-watch/
+snap-*.txt
+sponsors/
+routines/
+critique/
+do-not-ship/
+warroom*/
+war-room*/
+*.bundle
+NOTES.md
+NOTES-*.md
+TODO.md
+TODO-*.md
+SCRATCH*.md
+*.draft.md
+notes/
+scratch/
+tmp/
+.tmp/
+
+# ── foundry ─────────────────────────────────────────────────────────────────
+out/
+cache/
+# lib/ is NOT ignored — the v4 toolchain is vendored as git submodules (gitlinks)
+# local anvil broadcasts only; TESTNET broadcasts are committed on purpose —
+# they are the day-4 proof artifact (verified address + live-fire tx)
+broadcast/*/31337/
+broadcast/**/dry-run/
+# forge coverage / gas artefacts
+lcov.info
+coverage/
+.gas-snapshot.local
+# a deployments record that names a LOCAL chain is noise; the real one is committed
+deployments/*.local.json
+deployments/31337*
+
+# ── web ─────────────────────────────────────────────────────────────────────
+node_modules/
+web/node_modules/
+web/.next/
+web/dist/
+web/build/
+web/.turbo/
+web/.vercel/
+web/.env*
+!web/.env.example
+*.tsbuildinfo
+
+# ── subgraph ────────────────────────────────────────────────────────────────
+integrations/graph/build/
+integrations/graph/generated/
+integrations/graph/node_modules/
+# the Studio deploy key and query keys are secrets; the subgraph.yaml is not
+integrations/graph/.graphclientrc*
+integrations/graph/*.key
+
+# ── video / demo working files — the FINAL video is linked, not committed ───
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.skbundle
+*.skbundle.tmp
+recordings/
+demo/raw/
+# proof screenshots ARE committed under docs/proof/ — nothing else image-shaped is
+*.png
+*.jpg
+*.jpeg
+*.gif
+!docs/proof/*.png
+!docs/proof/*.jpg
+!design/*.png
+!web/public/**
+
+# ── editor / os / backups / logs ────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+.history/
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.rej
+Session.vim
+
+# UNICA-private shelf lives in the toolkit war room, never here (owner ruling 2026-09-04)
+unica-closet/
+ROBINHOOD-UNISWAP.md
