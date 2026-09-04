@@ -42,6 +42,12 @@ was not AI-assisted.
 | `design/README.md` | Claude Code | Drafted from the surface brief in the session's task description |
 | `PLAN.md` | Claude Code | Drafted from the pre-event day budget, restricted to the technical schedule |
 | `docs/INVARIANTS.md`, `docs/THREAT-MODEL.md`, `specs/README.md`, `HACKATHON.md` | Claude Code | Drafted by the assistant; every rung stated is the one the tree had reached at the commit |
+| `docs/ARCHITECTURE.md` | Claude Code | Drafted from the owner's direction on the three partners and the Vyper allocation; corrected in place to the owner's ruling the same evening |
+| `.github/workflows/ci.yml` | Claude Code | Written from the starter-kit CI configuration, then reworked five times against real red runs on the remote (submodule tags, EIP-170 sizes, the secrets and private-material checks, compiler caching, the fresh-clone lane) |
+| `.env.example` | Claude Code | Variable names only |
+| `docs/proof/README.md`, `docs/proof/verify-day1.sh` | Claude Code | The manifest and the re-verification script, written from the receipts read back from Sepolia |
+| `docs/proof/01-…04-*.png` | none (captures) | Screenshots of public explorer pages, taken with macOS `screencapture` of a browser window, cropped to remove the browser toolbar. Not generated or altered by any tool beyond the crop |
+| `broadcast/LiveFire.s.sol/11155111/*.json` | none (Foundry output) | Written by `forge script --broadcast` when the owner ran the live-fire; committed unchanged as the deployment record |
 
 ## Pre-existing work carried in
 
