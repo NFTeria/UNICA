@@ -17,14 +17,17 @@ cannot be met at a seam, the conflict is named and the smallest extension propos
 | Contract | Language | Why it exists | Serves |
 |---|---|---|---|
 | `src/UnicaHook.sol` | Solidity | The v4 hook. Inherits OpenZeppelin `BaseHook`, validates its own address bits, gates `beforeSwap` to the router (I1, I4, I5), verifies the realised output and emits the receipt in `afterSwap` (I2, I3). It also emits the Foundation's standard hook events (`HookSwap`, `HookFee`) so ecosystem tooling reads it without interpretation. | Uniswap. The Graph (its events are what the shared schema indexes). |
-| `src/UnicaSettlementRouter.vy` | Vyper | The only contract the hook admits as a swap sender. Unlocks the PoolManager, swaps with the order id as hook data, `take`s the output to the registered recipient, settles native ETH with `sync` immediately before `settle` (I7), refunds by `raw_call`, never holds a balance. | Uniswap: a reference v4 settlement router in Vyper, which the ecosystem does not have. |
+| `src/UnicaSettlementRouter.sol` | Solidity | The only contract the hook admits as a swap sender. Unlocks the PoolManager, swaps with the order id as hook data, `take`s the output to the registered recipient, settles native ETH with `sync` immediately before `settle` (I7), refunds by `call`, never holds a balance. Solidity because it sits closest to the v4 integration and is the money path (owner ruling 2026-09-04). | Uniswap. |
 | `src/OrderRegistry.vy` | Vyper | The single source of truth the hook and router read: payer, recipient, currencies, minimum output, deadline, fee, consumed flag. Written by an authenticated registrar; `hookData` carries only the order id (spec C1). | Uniswap (the invariants are enforced against it). |
 | `src/BenefitLedger.vy` | Vyper | One-time bounded benefits (a discount, a fee waiver, a higher limit) keyed by a nullifier the application derived from an official verification, consumed on settlement, never replayed. The router applies at most one to an order. It stores no identity data. | World, at a seam: "one human, one discounted settlement". |
 
-Vyper is chosen where the estate has depth in it and where a second implementation
-language is a contribution in itself: v4 routers in Vyper are rare, and a correct native
-settlement in Vyper is a worked example the ecosystem lacks. Solidity stays where the
-dependency demands it: the hook must inherit `BaseHook` and use the `Hooks` library.
+Vyper is used for the two isolated state modules, the registry and the benefit ledger, where
+the estate has depth in it and where a clean interface boundary keeps the language choice
+from touching the settlement path. The hook and the router stay in Solidity: the hook must
+inherit `BaseHook`, and the router is the money path and sits closest to the v4 integration
+(owner ruling 2026-09-04: Vyper for the router only if a tested interface boundary proves it
+adds concrete value). Neither Vyper module begins before the core hook and its invariants are
+complete.
 
 **Toolchain fact, measured 2026-09-04:** this repository's Foundry build (forge
 1.3.5-foundry-zksync) compiles a `.vy` file placed under `src/` with the Vyper 0.4.0 on this
@@ -76,3 +79,9 @@ schema and the benefit ledger are day-8 work and are cut before anything on the 
   round-trips a swap through the Vyper router against v4-core's real PoolManager.
 - Whether the Trading API can route through a custom-hook pool at all: one API call after
   the pool exists, response recorded verbatim.
+
+## Appended 2026-09-04 evening, owner ruling
+
+Router in Solidity; Vyper for the order registry and the benefit ledger only; neither before
+the core hook and its invariants are complete. The table above is corrected in place because
+this note is a working design record, not a disclosed pre-event document.
