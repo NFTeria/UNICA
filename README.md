@@ -7,11 +7,11 @@ Built from scratch during ETHOnline 2026 by NFTeria.
 > The specification and threat model were written before the event; every line of code was
 > written during it. Both pre-event documents ship unedited in [`specs/`](specs/README.md).
 
-**Status, day 1 (2026-09-04):** the hook frame compiles, its permission-bit guard has been seen
-to fail and then pass, a real swap runs through it against v4-core's own PoolManager locally,
-and the full deploy-init-seed-swap sequence has been simulated against live Ethereum Sepolia
-state as the deployer. The live-fire transactions themselves are the next step and their rows
-below say so. Nothing here is claimed past the rung it has reached.
+**Status, day 1 (2026-09-04):** the hook frame is deployed on Ethereum Sepolia, its permission-bit
+guard has been seen to fail and then pass, a real swap has run through it on Uniswap's official
+PoolManager with the receipt read back from the chain, and CI is green on three lanes including
+a stranger's clone. The gate, the invariants, and the surface are the next days' work. Nothing
+here is claimed past the rung it has reached.
 
 ## The problem
 
@@ -95,24 +95,27 @@ Toolchain on the machine that produced the numbers in this file: forge/cast
 ## Proof: Ethereum Sepolia (chain id 11155111)
 
 The pool is native ETH against Circle's USDC, a v4-only shape: `currency0 = address(0)`, no
-wrapping. Each row names the rung it has reached. PREDICTED means computed from the creation
-code; SIMULATED means executed against live chain state as the deployer without broadcasting;
-LIVE means mined with status 1. A row is never promoted without the command beside it.
+wrapping. Every row names the rung it has reached and carries the command that re-proves it.
+LIVE means mined on Ethereum Sepolia with status 1, read back from the chain before it was
+written here. `RPC=https://ethereum-sepolia-rpc.publicnode.com` in the commands below.
 
 | Item | Value | Rung | Re-verify |
 |---|---|---|---|
-| Hook address | `0x23b46783709E4A94C229612bfA55580a6682c040`, salt `0x93fb`, flags `0x40` | PREDICTED | `make predict` |
-| PoolManager | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` | LIVE (Uniswap's) | `cast code 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543 --rpc-url https://ethereum-sepolia-rpc.publicnode.com \| wc -c` prints 48021 (24,009 bytes) |
-| Pool | ETH / USDC, fee 3000, spacing 60, id `0xaffd50d25121496e627f2d9574f160fee32829f04a945de1dbfea5af3668fde7`, initial price 2,500 USDC per ETH (`sqrtPriceX96` [`3961408125713216879677197`](script/LiveFire.s.sol#L40)) | SIMULATED | `make simulate-sepolia DEPLOYER=<address>` |
-| Liquidity | 0.008 ETH + 19.999999 USDC, full range, liquidity 400000000000 | SIMULATED | same |
-| Swap through the hook | 0.001 ETH exact-input to 2.216294 USDC; `afterSwapCount` 0 to 1 | SIMULATED | same |
-| Deploy, init, seed, swap transactions | not yet broadcast | pending | `make live-sepolia` by the key holder, then `make readback-sepolia` |
-| Source verification | not yet | pending | `make verify-sepolia` |
-| Public surface | not yet (scheduled for day 5) | pending | |
-| Demo video | not yet (scheduled for day 7) | pending | |
+| Hook | `0x23b46783709E4A94C229612bfA55580a6682c040`, salt `0x93fb`, flags `0x40` (afterSwap only), 6,051 bytes of runtime code | LIVE, [explorer](https://sepolia.etherscan.io/address/0x23b46783709E4A94C229612bfA55580a6682c040) | `cast code 0x23b46783709E4A94C229612bfA55580a6682c040 --rpc-url $RPC \| wc -c` prints 12105; `make predict` reproduces the address and salt |
+| Deploy transaction | [`0x0171976a…b8da`](https://sepolia.etherscan.io/tx/0x0171976a8716d2084890d8cfa155924fcf7b315b03263f1015d6794cee34b8da), block 11635908, 1,392,115 gas, through the CREATE2 factory `0x4e59…956C` | LIVE | `cast receipt 0x0171976a8716d2084890d8cfa155924fcf7b315b03263f1015d6794cee34b8da --rpc-url $RPC --field status` prints `1` |
+| PoolManager | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` (Uniswap's official Sepolia deployment) | LIVE | `cast call 0x23b46783709E4A94C229612bfA55580a6682c040 'poolManager()(address)' --rpc-url $RPC` prints it |
+| Pool | ETH / USDC, fee 3000, spacing 60, id `0xaffd50d25121496e627f2d9574f160fee32829f04a945de1dbfea5af3668fde7`, initialised at 2,500 USDC per ETH ([`sqrtPriceX96`](script/LiveFire.s.sol#L40) `3961408125713216879677197`) | LIVE, tx [`0xe7cc4bbc…f08b`](https://sepolia.etherscan.io/tx/0xe7cc4bbc094938ca3c74857d585f4e53cecc6161ae579e8838e11a32084df08b), 51,982 gas | `cast call 0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C 'getSlot0(bytes32)(uint160,int24,uint24,uint24)' 0xaffd50d25121496e627f2d9574f160fee32829f04a945de1dbfea5af3668fde7 --rpc-url $RPC` |
+| Liquidity | 0.008 ETH + 19.999999 USDC, full range, liquidity `400000000000` | LIVE, approve [`0x7e56b7ca…3213`](https://sepolia.etherscan.io/tx/0x7e56b7ca63d2ccf0be66f73f2e728bf20de645581a8aba5de7f9e5fc103e3213) then seed [`0xb5356276…baae`](https://sepolia.etherscan.io/tx/0xb535627674e56b751d88335688021aa2cfc2e34dc6d749dc8f4a920da425baae), 257,782 gas | `cast call 0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C 'getLiquidity(bytes32)(uint128)' 0xaffd50d25121496e627f2d9574f160fee32829f04a945de1dbfea5af3668fde7 --rpc-url $RPC` prints 400000000000 |
+| **The swap through the hook** | 0.001 ETH exact-input to 2.216294 USDC; the receipt carries the PoolManager's `Swap` event and the hook's `AfterSwapObserved(sender, poolId, delta)` with delta `-1000000000000000 / +2216294`; `afterSwapCount` went 0 to 1 | LIVE, tx [`0x6d580aef…06bf`](https://sepolia.etherscan.io/tx/0x6d580aef7b3d8848fcee555ab8cd7c28fa28c1abeb4d538455be349d0a8a06bf), block 11635908, 166,516 gas | `cast receipt 0x6d580aef7b3d8848fcee555ab8cd7c28fa28c1abeb4d538455be349d0a8a06bf --rpc-url $RPC --field status` prints `1`; `cast call 0x23b46783709E4A94C229612bfA55580a6682c040 'afterSwapCount()(uint256)' --rpc-url $RPC` prints `1`; `make readback-sepolia` prints all of the above |
+| Broadcast record | [`broadcast/LiveFire.s.sol/11155111/run-latest.json`](broadcast/LiveFire.s.sol/11155111/run-latest.json): five transactions, five receipts, 1,923,832 gas, identical to the fork rehearsal | committed | `python3 -c "import json;r=json.load(open('broadcast/LiveFire.s.sol/11155111/run-latest.json'));print(len(r['receipts']),sorted(set(x['status'] for x in r['receipts'])))"` prints `5 ['0x1']` |
+| Source verification | see the row below once it has run | pending | `make verify-sepolia` |
+| Public surface | not yet (day 5) | pending | |
+| Demo video | not yet (day 7) | pending | |
 
-The swap's price impact is large on purpose: the seed is deliberately small, sized to what the
-deployer holds, and the point of the row is that the callback ran on a real PoolManager.
+The swap's price impact is large on purpose: the seed is sized to what the deployer held,
+and the point of the row is that the callback ran on Uniswap's real PoolManager. The
+transaction labels the tool prints beside each hash were shuffled; the mapping above is from
+the receipts (target address and function selector), which is the only mapping that counts.
 
 ## Security limitations, stated
 
