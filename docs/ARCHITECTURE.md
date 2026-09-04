@@ -147,3 +147,13 @@ The Graph indexing
   disclosed prior art, unsupported claim), the sentence is: "UNICA composes Uniswap v4 hooks and
   official execution infrastructure into a verifiable settlement flow with enforceable order
   invariants and indexable receipts." No "first", no "unique", no "no one has done this".
+
+## Appended 2026-09-04 night, after the adversarial review
+
+Two rows of the first table and one paragraph above are superseded and kept as the record:
+the day-1 table's `src/UnicaHook.sol` and `src/UnicaSettlementRouter.sol` rows (the files are
+`src/V4SettlementHook.sol` and `src/SettlementExecutor.sol`), the promise of "a reference Vyper
+settlement router" (ruled Solidity the same evening), and the order-of-work paragraph that
+scheduled I2 to I5 for day 3 (they landed on day 2 night). One correction to the appended
+execution-path table: the executor takes one constructor argument, the hook's address, so the
+pair is bound in both directions; the hook still takes none.

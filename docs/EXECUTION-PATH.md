@@ -29,11 +29,11 @@ between 22:14 and 22:18 UTC.
 | 2 | Can it carry the required `hookData`? | Yes. `ExactInputSingleParams` carries `bytes hookData`, passed to `poolManager.swap`. | `v4-periphery/src/interfaces/IV4Router.sol` lines 18–24 |
 | 3 | Which address does the hook observe as `sender`? | The Universal Router itself: `V4Router._swap` calls `poolManager.swap` from the router contract. The original caller is exposed by `msgSender()`, the documented `IMsgSender` pattern, live on both Sepolia deployments. | `V4Router.sol` line 156–162; `IMsgSender.sol`; `cast call 0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b 'msgSender()(address)'` and the same on `0x7DfD4F31be6814D2906BDE155c3e1B146EAc1468`, both answer |
 | 4 | Can it bind payer, recipient, currencies, amount, minimum output, nonce, and deadline? | Partly. Amount, minimum, currencies, and the execute deadline are per-call parameters; Permit2 nonces cover ERC-20 payers. **It cannot bind the take recipient to anything but the caller's own encoding**: `TAKE` reads `recipient` from the action params and `TAKE_ALL` sends to `msgSender()`. It has no notion of an authenticated order. | `V4Router.sol` lines 60–75 (`_take(currency, _mapRecipient(recipient), …)`); `ActionConstants.sol` (`MSG_SENDER = address(1)`) |
-| 5 | Can direct PoolManager access bypass the settlement rules? | No, whichever router is admitted: every `swap` on the pool reaches the hook's `beforeSwap`, which refuses any sender but the admitted path, and a direct caller of `PoolManager.swap` is its own `sender`. | `src/V4SettlementHook.sol` `_beforeSwap`; tested by `test_RevertWhen_SwapSenderIsNotTheRouter` |
+| 5 | Can direct PoolManager access bypass the settlement rules? | No, whichever router is admitted: every `swap` on the pool reaches the hook's `beforeSwap`, which refuses any sender but the admitted path, and a direct caller of `PoolManager.swap` is its own `sender`. | `src/V4SettlementHook.sol` `_beforeSwap`; tested by `test_RevertWhen_SwapSenderIsNotTheOfficialRouter` and `test_RevertWhen_OfficialRouterIsDrivenByAStranger` |
 | 6 | Do native ETH input and USDC output stay atomic? | Yes: one `execute`, one unlock, swap, settle, take, or the whole call reverts. | `Dispatcher.sol` V4_SWAP → `_executeActions`; `V4Router.sol` |
-| 7 | Can partial fills be rejected under I6? | Not by the router: `V4Router` does not compare consumed input to requested input. The hook can: `afterSwap` receives the delta and reverts when `-amount0 != amountIn` of the order. | `V4Router.sol` (no such check); `src/V4SettlementHook.sol` `_afterSwap` (day 3) |
+| 7 | Can partial fills be rejected under I6? | Not by the router: `V4Router` does not compare consumed input to requested input. The hook can: `afterSwap` receives the delta and reverts when `-amount0 != amountIn` of the order. | `V4Router.sol` (no such check); `src/V4SettlementHook.sol` `_afterSwap` (done the same night (see `docs/INVARIANTS.md`)) |
 | 8 | Can I7's synchronisation be enforced? | Yes, by the official path itself: `DeltaResolver._settle` calls `poolManager.sync(currency)` before every settle, native included, in both the pinned commit and the router's pinned commit. (v4-core's *test* helper `CurrencySettler` still skips it; that is a separate, verified feedback item.) | `v4-periphery/src/base/DeltaResolver.sol` lines 38–48 at `7ebd04b` and at `07336f2` |
-| 9 | Can the receipt be emitted exactly once with the required fields? | Yes, from the hook's `afterSwap`, which runs once per swap; the fields come from the order the hook reads through the order id in `hookData` and from the delta. | `src/V4SettlementHook.sol` (day 3), `docs/INVARIANTS.md` I2 |
+| 9 | Can the receipt be emitted exactly once with the required fields? | Yes, from the hook's `afterSwap`, which runs once per swap; the fields come from the order the hook reads through the order id in `hookData` and from the delta. | `src/V4SettlementHook.sol` (done the same night (see `docs/INVARIANTS.md`)), `docs/INVARIANTS.md` I2 |
 | 10 | Do the Permit2 spender and the transaction target remain official Uniswap contracts? | With the Universal Router as the execution path, yes: the payer's Permit2 approval names the Universal Router and the swap transaction targets it. For native ETH there is no Permit2 leg. | `universal-router/contracts/modules/uniswap/v4/V4SwapRouter.sol` (`payOrPermit2Transfer`) |
 
 ## The decision
@@ -56,20 +56,30 @@ invariants of `specs/HOOK-SPEC.md` section 3, and they are enforced in two place
 
 What changed from day 2's first design, done the same night: the executor no longer unlocks the
 PoolManager or settles; the official router does, and a test proves the executor has no unlock
-callback at all. What stayed: the order as the only source of who is paid, I5's in-flight
+callback at all. Later the same night, after the adversarial review: the executor is bound to
+the hook (it takes the hook as its one constructor argument and refuses any pool the hook does
+not guard), the hook derives the executor from that creation code plus its own address, the
+executor verifies what the recipient actually received, and the hook refuses a second swap for
+an order inside one transaction. What stayed: the order as the only source of who is paid, I5's in-flight
 marking before any external call, and the four-row I7 test, now against a stand-in at the
 router's address with the sync switchable, plus a fifth row against the real Universal Router
 bytecode etched at its Sepolia address with a foreign settle leg before the native one. The
-hook's runtime is 9,981 bytes with the order checks and the versioned receipt in it. Every test named in
-`docs/INVARIANTS.md` runs against that bytecode and hookmate's official PoolManager.
+hook's runtime is 10,302 bytes with the order checks, the versioned receipt and the one-swap
+guard in it. The tests in `docs/INVARIANTS.md` run against hookmate's official PoolManager; the
+gate, order-check and executor tests and row 5 of I7 run against the router's deployed bytecode,
+while rows 1 to 4 of I7 run against a stand-in at the router's address, because the official
+bytecode cannot have its defence switched off.
 
 End to end, on 2026-09-04 night: `make rehearse` forked Sepolia with anvil, impersonated the
 deployer, and ran all four stages against the deployed Universal Router at its real address:
-the executor at its derived address, the hook at its mined `0xC0` address, the pool initialised
-and seeded, one order for 0.001 ETH paid through `execute`, the hook's counter 0 to 1, the
-recipient credited 2.003660 USDC, seven transactions at status 1, none broadcast. That is the
-compatibility claim this document makes: tested against the deployed router on a fork, not yet
-live-fired. The live-fire is day 4.
+the hook at its mined `0xC0` address, then the executor bound to it at its derived address, the
+pool initialised and seeded, one order for 0.001 ETH with a 1.5 USDC minimum paid through
+`execute`, the hook's counter 0 to 1, the recipient credited 2.003660 USDC, seven transactions
+at status 1, none broadcast; the readback showed `executor.HOOK` and `hook.SETTLEMENT_EXECUTOR`
+naming each other. That is the compatibility claim this document makes: tested against the
+deployed router on a fork, not yet live-fired. The live-fire is day 4. The fork record is
+written under `.rehearsal/`, which is ignored on purpose; the numbers are quoted here and in
+`docs/DEPLOYMENT.md` and are reproduced by `make rehearse`.
 
 ## The call path, as measured
 
