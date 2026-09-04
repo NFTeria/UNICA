@@ -15,7 +15,7 @@ USDC=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
 # single-quoted argument inside a $( ) substitution
 SIG_BALANCE_OF='balanceOf(address)(uint256)'
 
-echo "== forking $RPC on :$PORT"
+echo "== forking $(printf '%s' "$RPC" | cut -d/ -f3) on :$PORT"
 anvil --fork-url "$RPC" --port "$PORT" --auto-impersonate --silent &
 ANVIL=$!
 trap 'kill $ANVIL 2>/dev/null || true' EXIT

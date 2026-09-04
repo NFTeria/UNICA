@@ -89,4 +89,4 @@ _need-deployer:
 
 _need-signing: _need-deployer
 	@test -n "$(DEPLOYER_ACCOUNT)" || { echo "DEPLOYER_ACCOUNT (keystore name) is not set"; exit 1; }
-	@echo "signing with keystore '$(DEPLOYER_ACCOUNT)' as $(DEPLOYER) on $(SEPOLIA_RPC_URL); the password will be prompted"
+	@echo "signing with keystore '$(DEPLOYER_ACCOUNT)' as $(DEPLOYER) on $$(echo '$(SEPOLIA_RPC_URL)' | cut -d/ -f3); the password will be prompted"
