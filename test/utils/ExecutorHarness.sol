@@ -10,6 +10,8 @@ import {SettlementExecutor, IUniversalRouter} from "../../src/SettlementExecutor
 ///         in flight, parameters or a pool that disagree with the order, a foreign settle leg before
 ///         the native one) with inputs the real executor would never compose.
 contract ExecutorHarness is SettlementExecutor {
+    constructor(address hook) SettlementExecutor(hook) {}
+
     function payWithPlan(bytes32 orderId, bytes calldata commands, bytes[] calldata inputs) external payable {
         Order storage order = _orders[orderId];
         order.payer = msg.sender;

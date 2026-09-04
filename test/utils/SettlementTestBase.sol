@@ -120,7 +120,7 @@ abstract contract SettlementTestBase is Test {
     function deploySettlement() internal {
         deployCodeTo("V4SettlementHook.sol:V4SettlementHook", "", HOOK_ADDR);
         hook = V4SettlementHook(HOOK_ADDR);
-        deployCodeTo("SettlementExecutor.sol:SettlementExecutor", "", hook.SETTLEMENT_EXECUTOR());
+        deployCodeTo("SettlementExecutor.sol:SettlementExecutor", abi.encode(HOOK_ADDR), hook.SETTLEMENT_EXECUTOR());
         executor = SettlementExecutor(hook.SETTLEMENT_EXECUTOR());
         vm.label(HOOK_ADDR, "V4SettlementHook");
         vm.label(hook.SETTLEMENT_EXECUTOR(), "SettlementExecutor");
@@ -130,7 +130,7 @@ abstract contract SettlementTestBase is Test {
     ///         official router with a plan the real executor would never compose and reach the
     ///         hook's own checks. The hook admits it by address alone, exactly as it would the real one.
     function deployExecutorHarness() internal returns (ExecutorHarness harness) {
-        deployCodeTo("ExecutorHarness.sol:ExecutorHarness", "", hook.SETTLEMENT_EXECUTOR());
+        deployCodeTo("ExecutorHarness.sol:ExecutorHarness", abi.encode(HOOK_ADDR), hook.SETTLEMENT_EXECUTOR());
         harness = ExecutorHarness(hook.SETTLEMENT_EXECUTOR());
         executor = SettlementExecutor(address(harness));
         vm.label(address(harness), "ExecutorHarness");

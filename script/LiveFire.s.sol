@@ -54,58 +54,62 @@ abstract contract SettlementScriptBase is Script {
 
     // ---- the declared permission set, spec section 5 -----------------------------------------
     uint160 internal constant FLAGS = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
-    /// @dev Must equal V4SettlementHook.EXECUTOR_SALT. Checked after every deploy: the hook's derived SETTLER
-    ///      must be the address the executor landed on, or the deploy stage reverts.
+    /// @dev Must equal V4SettlementHook.EXECUTOR_SALT. Checked after every deploy: the hook's derived executor
+    ///      address must be the address the executor landed on, or the deploy stage reverts.
     bytes32 internal constant EXECUTOR_SALT = bytes32(0);
     /// @dev Uniswap reserves the top address byte 0x91 as a routing signal (spec addendum A9).
     uint8 internal constant RESERVED_PREFIX = 0x91;
 
     // ---- stage 1: the hook -----------------------------------------------------------------
 
-    /// @notice Deploys the executor at the address the hook derives for it (CREATE2 through the
-    ///         canonical factory, salt zero), then the hook at a salt mined deterministically (first
-    ///         salt from zero whose address carries the flags and avoids the reserved prefix).
+    /// @notice Deploys the hook at a salt mined deterministically (first salt from zero whose
+    ///         address carries the flags and avoids the reserved prefix), then the executor bound to
+    ///         that hook at salt zero, and asserts the hook derived exactly that executor address.
     ///         Re-running after a deploy finds code at both addresses and skips.
     function deploy() public returns (V4SettlementHook hook) {
         Chains.requireTestnet(block.chainid);
         (address predicted, bytes32 salt) = predict();
-        address settler = _predictExecutor();
+        address settler = _predictExecutor(predicted);
         console.log("chain          ", block.chainid);
-        console.log("executor expected", settler);
         console.log("hook predicted ", predicted);
         console.logBytes32(salt);
-
-        if (settler.code.length == 0) {
-            vm.startBroadcast();
-            SettlementExecutor executor = new SettlementExecutor{salt: EXECUTOR_SALT}();
-            vm.stopBroadcast();
-            require(address(executor) == settler, "executor landed away from the address the hook derives");
-            console.log("executor deployed", address(executor));
-        } else {
-            console.log("executor already deployed, skipping");
-        }
+        console.log("executor expected", settler);
 
         if (predicted.code.length != 0) {
             console.log("hook already deployed, skipping");
-            return V4SettlementHook(predicted);
+            hook = V4SettlementHook(predicted);
+        } else {
+            vm.startBroadcast();
+            hook = new V4SettlementHook{salt: salt}();
+            vm.stopBroadcast();
+            require(address(hook) == predicted, "deployed address differs from the prediction");
+            require(uint160(address(hook)) & Hooks.ALL_HOOK_MASK == FLAGS, "address flags differ from the declared set");
+            console.log("hook deployed  ", address(hook));
+        }
+        require(hook.SETTLEMENT_EXECUTOR() == settler, "the deployed hook derives a different executor address");
+
+        if (settler.code.length != 0) {
+            console.log("executor already deployed, skipping");
+            return hook;
         }
         vm.startBroadcast();
-        hook = new V4SettlementHook{salt: salt}();
+        SettlementExecutor executor = new SettlementExecutor{salt: EXECUTOR_SALT}(address(hook));
         vm.stopBroadcast();
-        require(address(hook) == predicted, "deployed address differs from the prediction");
-        require(uint160(address(hook)) & Hooks.ALL_HOOK_MASK == FLAGS, "address flags differ from the declared set");
-        require(hook.SETTLEMENT_EXECUTOR() == settler, "the deployed hook derives a different executor address");
-        console.log("hook deployed  ", address(hook));
+        require(address(executor) == settler, "executor landed away from the address the hook derives");
+        require(executor.HOOK() == address(hook), "the executor is not bound to the hook");
+        console.log("executor deployed", address(executor));
     }
 
-    /// @notice Pure: where the executor lands for its creation code, the canonical factory, and the
-    ///         executor salt. The same arithmetic the hook runs in its constructor.
+    /// @notice Pure: where the executor lands for its creation code plus the predicted hook address,
+    ///         the canonical factory, and the executor salt. The same arithmetic the hook runs in its
+    ///         constructor, with the factory and salt held here independently.
     function predictExecutor() public pure returns (address) {
-        return _predictExecutor();
+        (address predictedHook,) = predict();
+        return _predictExecutor(predictedHook);
     }
 
-    function _predictExecutor() internal pure returns (address) {
-        bytes32 initCodeHash = keccak256(type(SettlementExecutor).creationCode);
+    function _predictExecutor(address hook) internal pure returns (address) {
+        bytes32 initCodeHash = keccak256(abi.encodePacked(type(SettlementExecutor).creationCode, abi.encode(hook)));
         return address(
             uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), CREATE2_FACTORY, EXECUTOR_SALT, initCodeHash))))
         );

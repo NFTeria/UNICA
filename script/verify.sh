@@ -28,17 +28,22 @@ PYEOF
 }
 
 verify_one() {
-  local addr="$1" src="$2" name="$3"
+  local addr="$1" src="$2" name="$3" ctor="${4:-}"
   if [ "$(cast code "$addr" --rpc-url "$RPC")" = "0x" ]; then echo "$name: no code at $addr on chain $CHAIN, skipping"; return; fi
   local solc; solc=$(matching_solc "$addr" "$name")
+  # The executor's one constructor argument is the hook address; the hook has none. bash 3.2 needs the
+  # ${arr[@]+"${arr[@]}"} form for a possibly-empty array under set -u.
+  local args=()
+  if [ -n "$ctor" ]; then args=(--constructor-args "$ctor"); fi
   echo "verifying $name at $addr on chain $CHAIN with $solc"
-  forge verify-contract "$addr" "$src:$name" --chain-id "$CHAIN" --compiler-version "$solc" --verifier sourcify --watch || echo "$name sourcify: failed (see above)"
+  forge verify-contract "$addr" "$src:$name" --chain-id "$CHAIN" --compiler-version "$solc" --verifier sourcify --watch ${args[@]+"${args[@]}"} || echo "$name sourcify: failed (see above)"
   if [ -n "${ETHERSCAN_API_KEY:-}" ]; then
-    forge verify-contract "$addr" "$src:$name" --chain-id "$CHAIN" --compiler-version "$solc" --verifier etherscan --watch || echo "$name etherscan: failed (see above)"
+    forge verify-contract "$addr" "$src:$name" --chain-id "$CHAIN" --compiler-version "$solc" --verifier etherscan --watch ${args[@]+"${args[@]}"} || echo "$name etherscan: failed (see above)"
   else
     echo "$name etherscan: skipped, ETHERSCAN_API_KEY not set"
   fi
 }
 
-verify_one "$EXECUTOR" src/SettlementExecutor.sol SettlementExecutor
+SIG_CTOR='constructor(address)'
+verify_one "$EXECUTOR" src/SettlementExecutor.sol SettlementExecutor "$(cast abi-encode "$SIG_CTOR" "$HOOK")"
 verify_one "$HOOK" src/V4SettlementHook.sol V4SettlementHook

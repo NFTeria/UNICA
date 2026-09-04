@@ -15,6 +15,11 @@ interface IUniversalRouter {
     function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external payable;
 }
 
+/// @notice The one thing this contract asks the hook: how many settlements it has receipted.
+interface ISettlementReceipts {
+    function receiptCount() external view returns (uint256);
+}
+
 /// @title SettlementExecutor, the thin contract between an application and the official router
 /// @notice UNICA uses Uniswap's official routing stack where compatible. This executor exists only to
 ///         enforce settlement-specific invariants the official router cannot currently express
@@ -22,10 +27,13 @@ interface IUniversalRouter {
 ///         Universal Router's plan from the order so the output is taken to the order's recipient,
 ///         which the router would otherwise leave to whoever encodes the call. It never calls the
 ///         PoolManager, performs no route discovery, and is not a router.
-/// @dev Zero-argument constructor: the router is resolved from the chain id, so this creation code,
-///      and with it the CREATE2 address the hook trusts, is the same on every listed chain. The
-///      contract never holds a balance: native value arrives only through `pay` and leaves in the
-///      same call through the router; there is no `receive`, so a stray transfer reverts.
+/// @dev One constructor argument, the hook this executor serves: an order is accepted only for a
+///      pool that hook guards, so no settlement can bypass the hook by naming another pool. The
+///      hook derives this contract's CREATE2 address from this creation code plus its own address,
+///      so the pair is bound both ways and nothing is configurable after deploy. The router is
+///      resolved from the chain id. The contract never holds a balance: native value arrives only
+///      through `pay` and leaves in the same call through the router; there is no `receive`, so a
+///      stray transfer reverts.
 contract SettlementExecutor {
     using CurrencyLibrary for Currency;
     using PoolIdLibrary for PoolKey;
@@ -54,6 +62,8 @@ contract SettlementExecutor {
 
     /// @notice Uniswap's Universal Router on this chain, the execution path the hook admits.
     address public immutable UNIVERSAL_ROUTER;
+    /// @notice The settlement hook every order's pool must carry, and the only receipt this contract trusts.
+    address public immutable HOOK;
 
     mapping(bytes32 orderId => Order) internal _orders;
     /// @notice Orders created so far; part of every order id, so ids never repeat.
@@ -75,6 +85,12 @@ contract SettlementExecutor {
     );
 
     error ZeroRecipient();
+    /// @notice The router maps address(1) and address(2) to itself or its caller; neither can be a recipient.
+    error ReservedRecipient(address recipient);
+    /// @notice The order's pool is not guarded by this executor's hook (invariants I3 to I6 would not apply).
+    error PoolNotGuarded(address hooks);
+    /// @notice The hook did not receipt exactly one settlement for this payment.
+    error NoReceipt(bytes32 orderId);
     error ZeroAmount();
     error ZeroMinOut();
     error DeadlineInPast(uint64 deadline);
@@ -87,8 +103,9 @@ contract SettlementExecutor {
     /// @dev The Universal Router command that runs v4 actions.
     uint8 internal constant COMMAND_V4_SWAP = 0x10;
 
-    constructor() {
+    constructor(address hook) {
         UNIVERSAL_ROUTER = UniswapDeployments.universalRouter(block.chainid);
+        HOOK = hook;
     }
 
     /// @notice Registers what a payment must do. Anyone may create an order; only the order decides
@@ -98,6 +115,10 @@ contract SettlementExecutor {
         returns (bytes32 orderId)
     {
         if (recipient == address(0)) revert ZeroRecipient();
+        if (recipient == ActionConstants.MSG_SENDER || recipient == ActionConstants.ADDRESS_THIS) {
+            revert ReservedRecipient(recipient);
+        }
+        if (address(key.hooks) != HOOK) revert PoolNotGuarded(address(key.hooks));
         if (amountIn == 0) revert ZeroAmount();
         if (minOut == 0) revert ZeroMinOut();
         if (deadline <= block.timestamp) revert DeadlineInPast(deadline);
@@ -139,8 +160,11 @@ contract SettlementExecutor {
         order.status = Status.Paying;
 
         uint256 recipientBefore = IERC20Minimal(Currency.unwrap(order.key.currency1)).balanceOf(order.recipient);
+        uint256 receiptsBefore = ISettlementReceipts(HOOK).receiptCount();
         (bytes memory commands, bytes[] memory inputs) = _plan(orderId, order);
         IUniversalRouter(UNIVERSAL_ROUTER).execute{value: order.amountIn}(commands, inputs, order.deadline);
+        // The hook receipted exactly one settlement inside that call, or this was not a settlement.
+        if (ISettlementReceipts(HOOK).receiptCount() != receiptsBefore + 1) revert NoReceipt(orderId);
         uint256 amountOut =
             IERC20Minimal(Currency.unwrap(order.key.currency1)).balanceOf(order.recipient) - recipientBefore;
 

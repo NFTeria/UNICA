@@ -250,6 +250,33 @@ contract SettlementExecutorTest is SettlementTestBase {
         executor.createOrder(merchant, erc20In, AMOUNT_IN, 1, deadline);
     }
 
+    /// @notice An order may name only a pool this executor's hook guards. A key with no hook, and a
+    ///         key with a different hook, are both refused at creation, so no settlement can run with
+    ///         none of I3 to I6 enforced and no receipt.
+    function test_RevertWhen_OrderNamesAPoolTheHookDoesNotGuard() public {
+        uint64 deadline = uint64(block.timestamp + 1 hours);
+        PoolKey memory hookless = key;
+        hookless.hooks = IHooks(address(0));
+        vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.PoolNotGuarded.selector, address(0)));
+        executor.createOrder(merchant, hookless, AMOUNT_IN, 1, deadline);
+        PoolKey memory otherHook = key;
+        otherHook.hooks = IHooks(address(uint160(DECLARED_MASK) ^ (0x5555 << 144)));
+        vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.PoolNotGuarded.selector, address(otherHook.hooks)));
+        executor.createOrder(merchant, otherHook, AMOUNT_IN, 1, deadline);
+        assertEq(executor.orderCount(), 0, "a refused order was counted");
+    }
+
+    /// @notice The router maps address(1) to its caller and address(2) to itself in a TAKE. An order
+    ///         naming either would deliver the output to the executor or the router, where it would be
+    ///         stuck; both are refused at creation.
+    function test_RevertWhen_RecipientIsARouterSentinel() public {
+        uint64 deadline = uint64(block.timestamp + 1 hours);
+        vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.ReservedRecipient.selector, address(1)));
+        executor.createOrder(address(1), key, AMOUNT_IN, 1, deadline);
+        vm.expectRevert(abi.encodeWithSelector(SettlementExecutor.ReservedRecipient.selector, address(2)));
+        executor.createOrder(address(2), key, AMOUNT_IN, 1, deadline);
+    }
+
     /// @notice The executor has no door to the PoolManager at all: it never unlocks, so it has no
     ///         unlock callback to guard. The official router owns that surface.
     function test_ExecutorHasNoUnlockCallback() public {

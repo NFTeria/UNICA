@@ -30,9 +30,8 @@ import {SettlementExecutor} from "./SettlementExecutor.sol";
 /// @dev Zero-argument constructor on purpose (spec section 7d): a constructor argument enters the
 ///      CREATE2 init-code hash, so a per-chain argument would put the hook at a different address on
 ///      every chain. The manager and the router are resolved from the chain id, and the executor's
-///      address is derived from its own creation code and a fixed salt through the canonical CREATE2
-///      factory, so all three are the same on every listed chain and nothing is configurable after
-///      deploy. The hook takes no fee this event: `HookFee` reports zero, honestly.
+///      address is derived from its creation code, this hook's address, and a fixed salt through the
+///      canonical CREATE2 factory, so nothing is configurable after deploy and the pair is bound. The hook takes no fee this event: `HookFee` reports zero, honestly.
 contract V4SettlementHook is BaseHook, IHookEvents {
     using PoolIdLibrary for PoolKey;
 
@@ -100,13 +99,16 @@ contract V4SettlementHook is BaseHook, IHookEvents {
         SETTLEMENT_EXECUTOR = _computeExecutor();
     }
 
-    /// @dev The executor's CREATE2 address for its creation code, the factory, and the salt. Internal
-    ///      and called from the constructor only, so the executor's creation code lives in this
+    /// @dev The executor's CREATE2 address for its creation code plus this hook's address as its one
+    ///      constructor argument, the factory, and the salt. So the executor is bound to this hook
+    ///      and this hook to that executor, and neither can be paired with another. Internal and
+    ///      called from the constructor only, so the executor's creation code lives in this
     ///      contract's creation code and never in its runtime (a public version carried it into the
     ///      runtime and tripled the deployed size). Tests and the deploy script recompute the same
-    ///      arithmetic themselves and compare it with SETTLEMENT_EXECUTOR.
-    function _computeExecutor() internal pure returns (address) {
-        bytes32 initCodeHash = keccak256(type(SettlementExecutor).creationCode);
+    ///      arithmetic themselves, from the factory and salt they hold independently, and compare.
+    function _computeExecutor() internal view returns (address) {
+        bytes32 initCodeHash =
+            keccak256(abi.encodePacked(type(SettlementExecutor).creationCode, abi.encode(address(this))));
         return address(
             uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), CREATE2_FACTORY, EXECUTOR_SALT, initCodeHash))))
         );

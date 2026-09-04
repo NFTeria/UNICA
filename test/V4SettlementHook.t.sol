@@ -78,22 +78,23 @@ contract V4SettlementHookTest is SettlementTestBase {
 
     // ------------------------------------------------------------------ I1: the gate
 
-    /// @notice The executor address the hook derives is the address the executor actually lands on.
+    /// @notice The executor address the hook derives is the address the executor actually lands on,
+    ///         and the executor is bound back to this hook. The arithmetic is recomputed here from
+    ///         constants this test holds INDEPENDENTLY (the canonical factory, salt zero, the
+    ///         executor's creation code plus the hook's address), so a wrong factory or salt in the
+    ///         hook is caught rather than echoed.
     function test_ExecutorDerivationMatchesTheDeployedAddress() public view {
         assertEq(hook.SETTLEMENT_EXECUTOR(), address(executor));
-        // The same arithmetic, recomputed here from the executor's creation code, so a change to the
-        // executor, the factory, or the salt on either side is caught.
-        bytes32 initCodeHash = keccak256(type(SettlementExecutor).creationCode);
-        address recomputed = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(bytes1(0xff), hook.CREATE2_FACTORY(), hook.EXECUTOR_SALT(), initCodeHash)
-                    )
-                )
-            )
-        );
-        assertEq(hook.SETTLEMENT_EXECUTOR(), recomputed);
+        assertEq(executor.HOOK(), address(hook), "the executor is not bound to this hook");
+        address canonicalFactory = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
+        bytes32 salt = bytes32(0);
+        bytes32 initCodeHash =
+            keccak256(abi.encodePacked(type(SettlementExecutor).creationCode, abi.encode(address(hook))));
+        address recomputed =
+            address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), canonicalFactory, salt, initCodeHash)))));
+        assertEq(hook.SETTLEMENT_EXECUTOR(), recomputed, "the hook's derivation differs from the independent one");
+        assertEq(hook.CREATE2_FACTORY(), canonicalFactory);
+        assertEq(hook.EXECUTOR_SALT(), salt);
         assertGt(address(executor).code.length, 0, "executor has no code at the derived address");
     }
 
