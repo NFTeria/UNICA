@@ -20,7 +20,7 @@ or a short output (I3, and I6 by reverting), and emits the versioned receipt bes
 standard `HookFee` (I2); native settlement is proven as four rows against a switchable stand-in
 plus a fifth against the official router's own bytecode (I7). A pool carrying this hook is native
 ETH against the chain's payout currency or it cannot be initialised, so no pool of an attacker's
-devising can mint a receipt (spec C2 and C4), and no settlement may pay a contract on its own path. Thirty-nine tests, fuzz at 10,000,
+devising can mint a receipt (spec C2 and C4), and no settlement may pay a contract on its own path. Fifty-four tests, fuzz at 10,000,
 against Uniswap's official PoolManager bytecode and, for the gate and order checks, the deployed
 Universal Router runtime. The whole path was then rehearsed end to end on an anvil fork of Sepolia
 against the deployed Universal Router: hook and executor at their mined and derived addresses and
@@ -147,23 +147,32 @@ Toolchain on the machine that produced the numbers in this file: forge/cast
 The pool is native ETH against Circle's USDC, a v4-only shape: `currency0 = address(0)`, no
 wrapping. Every row names the rung it has reached and carries the command that re-proves it.
 
-> **Historical day-1 observation-only scaffold; not the current gated implementation.** The
-> contract in these rows is `UnicaHook`, deployed and source-verified under that name on day 1
-> with `afterSwap` only; it observed swaps and gated nothing. Its evidence is not rewritten. The
-> current implementation, `V4SettlementHook` in `src/`, is mined fresh and live-fired on day 4
-> and gets its own rows then.
+### The gated hook, live: 2026-09-05
+
+`V4SettlementHook` and `SettlementExecutor`, the current implementation, deployed from
+`deploy-candidate-4` and settled from `deploy-candidate-5` (the settle stage's deadline changed in
+between; nothing under `src/` did). Every row is read from the chain; `bash docs/proof/verify-live.sh`
+re-proves all of them without trusting this file. `RPC=https://ethereum-sepolia-rpc.publicnode.com`.
+
+| Item | Value | Rung | Re-verify |
+|---|---|---|---|
+| Hook | `0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0`, salt `0xd76`, flags `0x20C0` (beforeInitialize, beforeSwap, afterSwap), 10,634 bytes of runtime code, zero-argument constructor | LIVE, [explorer](https://sepolia.etherscan.io/address/0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0) | `cast code 0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0 --rpc-url $RPC \| wc -c` prints 21271; `make predict` reproduces the address and salt |
+| Executor | `0x044bc8a8773EC7b9B8de2467766636dFFCaC6210`, 11,289 bytes, constructor argument = the hook; the hook derives this address from the executor's creation code and names it, and the executor names the hook | LIVE, [explorer](https://sepolia.etherscan.io/address/0x044bc8a8773EC7b9B8de2467766636dFFCaC6210) | `cast call 0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0 'SETTLEMENT_EXECUTOR()(address)' --rpc-url $RPC` prints the executor; `cast call 0x044bc8a8773EC7b9B8de2467766636dFFCaC6210 'HOOK()(address)' --rpc-url $RPC` prints the hook |
+| Deploy transactions | hook [`0xc76bc0a3…a014`](https://sepolia.etherscan.io/tx/0xc76bc0a3ef3cf659fc3c8eb0e76febd2006801b1e0e3fbca4f51bfea4108a014), 2,603,048 gas; executor [`0x8c067692…7ebb`](https://sepolia.etherscan.io/tx/0x8c06769270297e2794593dfc5084a628e31582492c135419535d3ddcb0c57ebb), 2,510,930 gas; both through the CREATE2 factory `0x4e59…956C`, block 11639895 | LIVE | `cast receipt 0xc76bc0a3ef3cf659fc3c8eb0e76febd2006801b1e0e3fbca4f51bfea4108a014 --rpc-url $RPC --field status` prints `1`, and the same for the executor's |
+| Pool | native ETH / USDC, fee 3000, spacing 60, id `0xff4f4e2438f61817271cbd8399a925f5f99a1482f88c55419a2b69d0768e56db` (keccak of the live key), initialised at 2,500 USDC per ETH (`sqrtPriceX96` `3961408125713216879677197`) | LIVE, tx [`0x8b07ff44…5858`](https://sepolia.etherscan.io/tx/0x8b07ff44f85dcb563255f3bdd03aefd052253e53c8b631a676beb3edb5ba5858), 56,966 gas | `cast call 0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C 'getSlot0(bytes32)(uint160,int24,uint24,uint24)' 0xff4f4e2438f61817271cbd8399a925f5f99a1482f88c55419a2b69d0768e56db --rpc-url $RPC` |
+| Liquidity | full range, from what the deployer held (about 10 USDC against 0.004 ETH), liquidity `204325880000` | LIVE, approve [`0x5316bc41…1da1`](https://sepolia.etherscan.io/tx/0x5316bc41036e17cf6c2c74e44a6f651aedfdecc2547bb93a952861858f081da1) then seed [`0x7751ed3d…5be4`](https://sepolia.etherscan.io/tx/0x7751ed3d5f38075a7fac3c70c9466335dd2c8a797b0c9d1896ed2e99dd795be4), 259,843 gas | `cast call 0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C 'getLiquidity(bytes32)(uint128)' 0xff4f4e2438f61817271cbd8399a925f5f99a1482f88c55419a2b69d0768e56db --rpc-url $RPC` prints 204325880000 |
+| The first settlement attempt | createOrder [`0xd4240fbd…c089`](https://sepolia.etherscan.io/tx/0xd4240fbde823a37ca484bbf90272e71fd6456277a7fe173ea4489acfc9cec089) and pay [`0xc78da1e9…4647`](https://sepolia.etherscan.io/tx/0xc78da1e9bcbed8ec6395e4790fcd417ef2242427850af19ad1733be95cd54647) failed in the deploy block: `DeadlineInPast`, a one-hour deadline computed during forge's simulation and aged out at the keystore prompt that follows it. Cause, fork reproduction and fix in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | FAILED, recorded as it happened | `cast receipt 0xd4240fbde823a37ca484bbf90272e71fd6456277a7fe173ea4489acfc9cec089 --rpc-url $RPC --field status` prints `0` |
+| **The settlement through the hook** | order `0x72b25a9b…b8e9` for 0.001 ETH with a 1.5 USDC minimum, recipient = the deployer, created by [`0x51b6d094…1cef`](https://sepolia.etherscan.io/tx/0x51b6d094a9c31a99ffefec5e84f52d5c738e99e44b50dcbc64fbda14b9001cef) and paid by [`0x1120af18…cb83`](https://sepolia.etherscan.io/tx/0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83) through Uniswap's Universal Router. The hook's `SettlementReceipt` v1: `amountIn` 1000000000000000, `amountOut` 2003660, `fee` 0, beside OpenZeppelin's `HookFee`; the recipient's USDC grew by exactly 2.003660; `receiptCount` and `orderCount` 0 to 1; the order is Settled and a replay is refused | LIVE, block 11640026, 281,144 gas | `cast receipt 0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83 --rpc-url $RPC --field status` prints `1`; `cast call 0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0 'receiptCount()(uint256)' --rpc-url $RPC` prints `1`; `make readback` prints all of the above |
+| Broadcast records | deploy [`run-1788605617356.json`](broadcast/LiveFire.s.sol/11155111/run-1788605617356.json): seven transactions, five receipts (the two failures have none); settlement [`run-1788607248915.json`](broadcast/Interactions.s.sol/11155111/run-1788607248915.json): two transactions, two receipts. The labels the tool printed beside the hashes were shuffled in both; the rows above are from the receipts | committed | `bash docs/proof/verify-live.sh` reads both by hash |
+| Source verification | Sourcify: `match` for both contracts, compiler v0.8.30+commit.73712a01, 2026-09-05 | VERIFIED | `curl -s https://sourcify.dev/server/v2/contract/11155111/0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0` prints `"match"`, and the same for the executor; `make verify` re-submits |
+| Re-verification script | [`docs/proof/verify-live.sh`](docs/proof/verify-live.sh): 31 pure reads, seen to fail on a fork before the settlement and pass after | 31 of 31 | `bash docs/proof/verify-live.sh` prints `checks run: 31, passed: 31, failed: 0` |
+
+### Historical: the day-1 scaffold
 
 > **Historical day-1 observation-only scaffold; not the current gated implementation.** The
 > contract in these rows is `UnicaHook`, deployed and source-verified under that name on day 1
 > with `afterSwap` only; it observed swaps and gated nothing. Its evidence is not rewritten. The
-> current implementation, `V4SettlementHook` in `src/`, is mined fresh and live-fired on day 4
-> and gets its own rows then.
-
-> **Historical day-1 observation-only scaffold; not the current gated implementation.** The
-> contract in these rows is `UnicaHook`, deployed and source-verified under that name on day 1
-> with `afterSwap` only; it observed swaps and gated nothing. Its evidence is not rewritten. The
-> current implementation, `V4SettlementHook` in `src/`, is mined fresh and live-fired on day 4
-> and gets its own rows then.
+> current implementation, `V4SettlementHook` in `src/`, has its own rows above.
 
 > **Historical day-1 observation-only scaffold; not the current gated implementation.** The
 > contract in these rows is `UnicaHook`, deployed and source-verified under that name on day 1
