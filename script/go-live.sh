@@ -20,7 +20,9 @@
 #           Makefile, or the repository.
 # After   : make readback, make proof (verify-day1 14/14 and verify-live must go from its pre-deploy
 #           red to all green), make verify (Sourcify; Etherscan if ETHERSCAN_API_KEY is set), then the
-#           closing tag live-green.
+#           closing tag live-green. If the deploy landed and only the settlement is missing (the
+#           first live run, docs/DEPLOYMENT.md), the pre-flight below stops because the targets have
+#           code; run make settle-live for that stage alone.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 RPC=https://ethereum-sepolia-rpc.publicnode.com

@@ -11,7 +11,7 @@
 # chain id (one address on every chain), and a bare chain 31337 has no PoolManager to resolve.
 -include .env
 
-.PHONY: help all deps doctor build test fuzz snapshot format fmt gate clean anvil predict simulate go-live go-live-check proof \
+.PHONY: help all deps doctor build test fuzz snapshot format fmt gate clean anvil predict simulate go-live go-live-check settle-live settle-check proof \
         rehearse deploy init-pool seed settle live readback verify balances _need-deployer _need-signing
 
 # ── configuration ─────────────────────────────────────────────────────────────
@@ -67,7 +67,9 @@ help:
 	@echo "  GO LIVE (the whole deploy, one command; keystore password prompted)"
 	@echo "    make go-live-check    the pre-flight only: chain, frozen code, nonce, vacant targets. Sends nothing"
 	@echo "    make go-live          the pre-flight, then deploy + pool + liquidity + one settlement on Sepolia; closes with the tag live-green"
-	@echo "    make proof            re-prove both deployments from the chain (verify-day1, verify-live)"
+	@echo "    make settle-check     the pre-flight for the settlement stage alone: frozen code, live contracts, seeded pool, unused order id. Sends nothing"
+	@echo "    make settle-live      the pre-flight, then the settlement stage alone on Sepolia (the stage the first run lost; go-live refuses once the targets have code)"
+	@echo "    make proof            re-prove both deployments and the settlement from the chain (verify-day1, verify-live)"
 	@echo ""
 	@echo "  SEPOLIA, one stage at a time (real transactions; keystore password prompted)"
 	@echo "    make deploy ARGS=\"--network sepolia\"      (and init-pool / seed / settle / live the same way)"
@@ -136,6 +138,12 @@ go-live:
 
 go-live-check:
 	DRY_RUN=1 bash script/go-live.sh
+
+settle-live:
+	bash script/settle-live.sh
+
+settle-check:
+	DRY_RUN=1 bash script/settle-live.sh
 
 proof:
 	bash docs/proof/verify-day1.sh
