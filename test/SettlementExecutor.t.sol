@@ -27,6 +27,8 @@ contract SettlementExecutorTest is SettlementTestBase {
     PoolKey internal key;
 
     uint128 internal constant AMOUNT_IN = 1e15;
+    /// @dev Threat T12; set from the measurement in test_Gas_OneSettlementStaysUnderTheCeiling.
+    uint256 internal constant SETTLEMENT_GAS_CEILING = 300_000;
 
     function setUp() public {
         setUpV4();
@@ -486,6 +488,24 @@ contract SettlementExecutorTest is SettlementTestBase {
         assertEq(receipts, 1);
         assertEq(hook.receiptCount(), 2);
         assertEq(uint8(executor.orders(second).status), uint8(SettlementExecutor.Status.Settled));
+    }
+
+    // ------------------------------------------------------------------ T12, gas
+
+    /// @notice Threat T12. Neither the hook nor the executor loops over anything a caller controls;
+    ///         this bounds one whole settlement, both callbacks included, at a ceiling a later change
+    ///         cannot cross unnoticed. Measured at 236,726 gas on the commit that added this test
+    ///         (the pool at 1:1 with one position, a cold order, a cold payer); the ceiling leaves room
+    ///         for a compiler or a dependency to move, not for a loop.
+    function test_Gas_OneSettlementStaysUnderTheCeiling() public {
+        bytes32 orderId = _order(AMOUNT_IN, 1);
+        vm.prank(payer);
+        uint256 before = gasleft();
+        executor.pay{value: AMOUNT_IN}(orderId);
+        uint256 used = before - gasleft();
+        emit log_named_uint("settlement gas", used);
+        assertLt(used, SETTLEMENT_GAS_CEILING, "the settlement crossed its gas ceiling");
+        assertEq(hook.receiptCount(), 1);
     }
 
     // ------------------------------------------------------------------ helpers
