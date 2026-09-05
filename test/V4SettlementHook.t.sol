@@ -285,6 +285,34 @@ contract V4SettlementHookTest is SettlementTestBase {
         assertEq(hook.receiptCount(), 1, "the control did not settle once");
     }
 
+    /// @notice Threat T4, the exact-output legs. The hook reads the swap's delta with one sign
+    ///         convention, that of an exact-input, zero-for-one swap: amount0 negative is what the pool
+    ///         consumed, amount1 positive is what it credited. An exact-output swap in either direction
+    ///         is refused at the parameter check in beforeSwap, before any delta exists, so the
+    ///         afterSwap arithmetic never meets a delta of another shape. With the direction test above
+    ///         this covers both kinds in both directions: the exact-input zero-for-one swap is the
+    ///         settlement, and its amounts equal the deltas (the schema suite); the other three are refused.
+    function test_RevertWhen_SwapIsExactOutput_EitherDirection() public {
+        ExecutorHarness h = deployExecutorHarness();
+        (PoolKey memory k,) = initNativePoolWithLiquidity(IHooks(address(hook)), 1 ether);
+        bytes32 id = _order(h, k, AMOUNT_IN, 1);
+        bytes memory refusal = _wrapped(
+            IHooks.beforeSwap.selector, abi.encodeWithSelector(V4SettlementHook.ParamsDoNotMatchOrder.selector, id)
+        );
+
+        // Exact output, zero for one: asks the pool for the order's amount OF OUTPUT under a generous input cap.
+        (bytes memory commands, bytes[] memory inputs) =
+            _exactOutPlan(k, true, AMOUNT_IN, AMOUNT_IN * 2, merchant, abi.encode(id));
+        vm.expectRevert(refusal);
+        h.payWithPlan{value: AMOUNT_IN * 2}(id, commands, inputs);
+
+        // Exact output, one for zero: asks for the order's amount of ETH out, to be paid in the payout token.
+        (commands, inputs) = _exactOutPlan(k, false, AMOUNT_IN, AMOUNT_IN * 2, merchant, abi.encode(id));
+        vm.expectRevert(refusal);
+        h.payWithPlan(id, commands, inputs);
+        assertEq(hook.receiptCount(), 0);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /// @dev Two identical exact-input swaps for the same order, then one settle and one take.
@@ -365,6 +393,35 @@ contract V4SettlementHookTest is SettlementTestBase {
         params[0] = abi.encode(
             IV4Router.ExactInputSingleParams({
                 poolKey: k, zeroForOne: zeroForOne, amountIn: amountIn, amountOutMinimum: minOut, hookData: hookData
+            })
+        );
+        params[1] = abi.encode(zeroForOne ? k.currency0 : k.currency1, ActionConstants.OPEN_DELTA, false);
+        params[2] = abi.encode(zeroForOne ? k.currency1 : k.currency0, recipient, ActionConstants.OPEN_DELTA);
+        inputs = new bytes[](1);
+        inputs[0] = abi.encode(actions, params);
+        commands = abi.encodePacked(uint8(0x10));
+    }
+
+    /// @dev An exact-output plan, which the real executor never composes (threat T4).
+    function _exactOutPlan(
+        PoolKey memory k,
+        bool zeroForOne,
+        uint128 amountOut,
+        uint128 amountInMaximum,
+        address recipient,
+        bytes memory hookData
+    ) internal pure returns (bytes memory commands, bytes[] memory inputs) {
+        bytes memory actions = abi.encodePacked(
+            uint8(Actions.SWAP_EXACT_OUT_SINGLE), uint8(Actions.SETTLE), uint8(Actions.TAKE)
+        );
+        bytes[] memory params = new bytes[](3);
+        params[0] = abi.encode(
+            IV4Router.ExactOutputSingleParams({
+                poolKey: k,
+                zeroForOne: zeroForOne,
+                amountOut: amountOut,
+                amountInMaximum: amountInMaximum,
+                hookData: hookData
             })
         );
         params[1] = abi.encode(zeroForOne ? k.currency0 : k.currency1, ActionConstants.OPEN_DELTA, false);
