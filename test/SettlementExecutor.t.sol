@@ -9,6 +9,7 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
 import {SettlementTestBase} from "./utils/SettlementTestBase.sol";
 import {FeeOnTakeERC20} from "./utils/FeeOnTakeERC20.sol";
+import {ReenteringERC20, IPayable} from "./utils/ReenteringERC20.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {V4SettlementHook} from "../src/V4SettlementHook.sol";
 import {SettlementExecutor} from "../src/SettlementExecutor.sol";
@@ -418,11 +419,90 @@ contract SettlementExecutorTest is SettlementTestBase {
         _assertNothingMoved(dust, payerBefore);
     }
 
+    // ------------------------------------------------------------------ T6, reentrancy
+
+    /// @notice Threat T6, the same order. A payout token that calls out on transfer re-enters `pay`
+    ///         for the very order being paid, from inside the take that pays the recipient, while the
+    ///         PoolManager is still unlocked. The order left Open before any external call (invariant
+    ///         I5), so the inner payment is refused by the order's own state and its value goes back;
+    ///         the outer settlement completes with exactly one receipt; the recipient is paid once.
+    function test_ReentrantPaymentOfTheSameOrderIsRefusedByItsState() public {
+        ReenteringERC20 token = _armablePayoutToken();
+        bytes32 orderId = _order(AMOUNT_IN, 1);
+        token.arm(IPayable(address(executor)), orderId, AMOUNT_IN);
+        vm.recordLogs();
+        vm.prank(payer);
+        executor.pay{value: AMOUNT_IN}(orderId);
+
+        assertEq(token.reentries(), 1, "the token did not re-enter; this is not the test");
+        assertFalse(token.innerSucceeded(), "a reentrant payment of the same order succeeded");
+        assertEq(
+            token.innerRevert(),
+            abi.encodeWithSelector(SettlementExecutor.OrderNotOpen.selector, orderId, SettlementExecutor.Status.Paying)
+        );
+        (uint256 receipts, uint256 amountOut) = receiptsEmitted();
+        assertEq(receipts, 1, "exactly one receipt");
+        assertEq(usdc.balanceOf(merchant), amountOut, "the recipient was paid other than once");
+        assertEq(hook.receiptCount(), 1);
+        assertEq(uint8(executor.orders(orderId).status), uint8(SettlementExecutor.Status.Settled));
+        assertEq(address(token).balance, AMOUNT_IN, "the token's value moved on a refused reentry");
+    }
+
+    /// @notice Threat T6, another order. The same token instead pays a second, open order from inside
+    ///         the first one's unlock. That payment reaches the official router, whose own lock refuses
+    ///         a nested execute (`ContractLocked`, universal-router `base/Lock.sol`) before the
+    ///         PoolManager, whose `AlreadyUnlocked` would refuse it next, is even reached. Measured:
+    ///         the prediction was the PoolManager's refusal; the router's came first. The refusal
+    ///         unwinds the inner payment entirely, so the second order is not left Paying (a poisoned
+    ///         order would be unpayable for ever) and it settles normally afterwards, the control.
+    function test_ReentrantPaymentOfAnotherOrderIsRefusedByTheRouterLock_AndStaysPayable() public {
+        ReenteringERC20 token = _armablePayoutToken();
+        bytes32 first = _order(AMOUNT_IN, 1);
+        bytes32 second = _order(AMOUNT_IN, 1);
+        token.arm(IPayable(address(executor)), second, AMOUNT_IN);
+        vm.recordLogs();
+        vm.prank(payer);
+        executor.pay{value: AMOUNT_IN}(first);
+
+        assertEq(token.reentries(), 1, "the token did not re-enter; this is not the test");
+        assertFalse(token.innerSucceeded(), "a payment inside another payment's unlock succeeded");
+        assertEq(token.innerRevert(), abi.encodeWithSelector(bytes4(keccak256("ContractLocked()"))));
+        (uint256 receipts,) = receiptsEmitted();
+        assertEq(receipts, 1, "the outer settlement did not produce exactly one receipt");
+        assertEq(uint8(executor.orders(first).status), uint8(SettlementExecutor.Status.Settled));
+        SettlementExecutor.Order memory o = executor.orders(second);
+        assertEq(
+            uint8(o.status),
+            uint8(SettlementExecutor.Status.Open),
+            "the refused inner payment poisoned the second order"
+        );
+        assertEq(o.payer, address(0), "the refused inner payment left a payer on the second order");
+
+        // The control: the second order settles on its own afterwards.
+        vm.recordLogs();
+        vm.prank(payer);
+        executor.pay{value: AMOUNT_IN}(second);
+        (receipts,) = receiptsEmitted();
+        assertEq(receipts, 1);
+        assertEq(hook.receiptCount(), 2);
+        assertEq(uint8(executor.orders(second).status), uint8(SettlementExecutor.Status.Settled));
+    }
+
     // ------------------------------------------------------------------ helpers
 
     function _order(uint128 amountIn, uint128 minOut) internal returns (bytes32) {
         vm.prank(merchant);
         return executor.createOrder(merchant, key, amountIn, minOut, uint64(block.timestamp + 1 hours), _salt());
+    }
+
+    /// @dev The reentering runtime at the payout address, keeping the balances already there (the
+    ///      same placement as the fee-on-take test: the payout currency is fixed by the chain, so
+    ///      the residual risk is the sanctioned token itself behaving this way). Funded for one payment.
+    function _armablePayoutToken() internal returns (ReenteringERC20 token) {
+        ReenteringERC20 template = new ReenteringERC20(address(manager));
+        vm.etch(address(usdc), address(template).code);
+        token = ReenteringERC20(payable(address(usdc)));
+        vm.deal(address(token), AMOUNT_IN);
     }
 
     /// @dev After a revert of the whole call these hold by EVM semantics; they are asserted so that a
