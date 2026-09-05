@@ -66,8 +66,8 @@ help:
 	@echo ""
 	@echo "  GO LIVE (the whole deploy, one command; keystore password prompted)"
 	@echo "    make go-live-check    the pre-flight only: chain, frozen code, nonce, vacant targets. Sends nothing"
-	@echo "    make go-live          the pre-flight, then deploy + pool + liquidity + one settlement on Sepolia"
-	@echo "    make proof            re-prove the deployment from the chain (day-1 and day-4 verifiers)"
+	@echo "    make go-live          the pre-flight, then deploy + pool + liquidity + one settlement on Sepolia; closes with the tag live-green"
+	@echo "    make proof            re-prove both deployments from the chain (verify-day1, verify-live)"
 	@echo ""
 	@echo "  SEPOLIA, one stage at a time (real transactions; keystore password prompted)"
 	@echo "    make deploy ARGS=\"--network sepolia\"      (and init-pool / seed / settle / live the same way)"
@@ -137,7 +137,7 @@ go-live-check:
 
 proof:
 	bash docs/proof/verify-day1.sh
-	bash docs/proof/verify-day4.sh
+	bash docs/proof/verify-live.sh
 
 rehearse: _need-deployer
 	DEPLOYER=$(DEPLOYER) SEPOLIA_RPC_URL=$(SEPOLIA_RPC_URL) bash script/rehearse-anvil.sh

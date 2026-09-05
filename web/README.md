@@ -43,7 +43,7 @@ itself, which needs a browser wallet and a live deployment; the same path is pro
   nothing itself.
 - It renders the hook's receipt from the transaction it just sent. It is a view of the chain, not
   a source of truth about it: everything it shows is re-derivable with `make readback` and
-  `bash docs/proof/verify-day4.sh`.
+  `bash docs/proof/verify-live.sh`.
 
 ## The brand, decided once
 
