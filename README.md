@@ -142,6 +142,35 @@ repository, without submodules, on every push.
 Toolchain on the machine that produced the numbers in this file: forge/cast
 `1.3.5-foundry-zksync-v0.1.9`, anvil `1.5.1-stable`. CI pins upstream Foundry v1.5.1.
 
+## Versions
+
+Two things this table keeps apart. The **deployment tag** is the commit whose `src/` produced the
+bytecode that is live. The **documentation HEAD** is the commit you are reading this file at, and
+is normally later. A claim about what runs on chain belongs to the first; a claim about what is
+written down belongs to the second.
+
+`live-green` (`5e1d843`) is the deployment tag. `src/` and `test/` are byte-identical from it to
+HEAD, and so is `docs/proof/verify-live.sh` — `git diff --stat live-green..HEAD -- src/ test/`
+prints nothing. Everything committed since is documentation, scripts, the surface and indexer
+tooling. A semantic tag `v1.0.0` is **proposed and does not exist yet**; until it does, the
+release is named `live-green` in every claim. Full record: [`docs/versions/V1.md`](docs/versions/V1.md).
+
+| | V1 — live | V2 — specified, not implemented |
+|---|---|---|
+| Source commit / tag | `5e1d843`, tag `live-green`. `v1.0.0` proposed, not created | — |
+| Chain | Ethereum Sepolia, 11155111. Testnet only | — |
+| Addresses | hook `0x1120…a0C0`, executor `0x044b…6210` | — |
+| Supported input | native ETH only; any other `currency0` is refused at order creation | an approved ERC-20 payer asset, narrowly authorized. UNI is the first worked example |
+| Supported payout | USDC only, compiled in per chain | the merchant's order-selected settlement asset |
+| Execution path | Universal Router `V4_SWAP`, actions `SWAP_EXACT_IN_SINGLE`, `SETTLE`, `TAKE`; the hook admits the swap only with the executor behind the router. No Permit2 call | — |
+| Receipt schema | version 1, frozen; one receipt per settlement, emitted inside the swap | — |
+| Proof status | 31 of 31 chain checks, both sources verified, 54 tests | none. Nothing is deployed |
+| Production status | not production: unaudited, one settlement, thin liquidity | not implemented |
+| Limitations | one input, one payout, one chain, exact-input only, no merchant identity — the full list is in [`docs/versions/V1.md`](docs/versions/V1.md) | — |
+
+An em dash means the field is not decided yet. It is never filled with a guess.
+[`CHANGELOG.md`](CHANGELOG.md) records what has landed since the release.
+
 ## Proof: Ethereum Sepolia (chain id 11155111)
 
 The pool is native ETH against Circle's USDC, a v4-only shape: `currency0 = address(0)`, no
