@@ -134,7 +134,7 @@ if live=="1":
     LIVE_TX="0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"
     lv=[d for d in ds if d['transactionHash'].lower()==LIVE_TX]
     assert len(lv)==1, "the live receipt was indexed %d times" % len(lv)
-    assert lv[0]['orderId'].lower()=="0x72b25a9b4e6f89138766bb0251a1fc41f8da15efb0d87f058390da1737aab8e9" and int(lv[0]['amountOut'])==2003660 and int(lv[0]['logIndex'])==107, lv[0]
+    assert lv[0]['orderId'].lower()=="0x72b25a9b4e6f89138766bb0251a1fc41f8da15efb0d87f058390da1737aab8e9" and int(lv[0]['amountOut'])==2003660 and int(lv[0]['logIndex'])==107, lv[0]  # the live settlement: order id, receipt values
     print("the live receipt (block 11640026, log 107) is indexed exactly once with its on-chain values")
     fk=[d for d in ds if d['orderId'].lower()==order_id.lower()]
     assert len(fk)==1 and int(fk[0]['amountOut'])==int(fork_out), fk
