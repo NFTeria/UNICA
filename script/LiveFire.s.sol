@@ -158,7 +158,15 @@ abstract contract SettlementScriptBase is Script {
         console.log("pool id");
         console.logBytes32(PoolId.unwrap(key.toId()));
         if (sqrtPriceX96 != 0) {
-            console.log("pool already initialised, skipping; sqrtPriceX96", sqrtPriceX96);
+            // Someone initialised this pool before we did. The key is deterministic and public, so
+            // this is front-runnable the moment the hook has code, and v4 pools cannot be
+            // re-initialised. Accepting it quietly would hand the next stage a price an attacker
+            // chose (the day-5 attack review, threat T2). Continue only if the price is ours.
+            require(
+                sqrtPriceX96 == SQRT_PRICE_2500_USDC_PER_ETH,
+                "this pool was initialised by someone else at another price; pick a different fee tier"
+            );
+            console.log("pool already initialised at our price, skipping; sqrtPriceX96", sqrtPriceX96);
             return;
         }
         vm.startBroadcast();
@@ -177,6 +185,13 @@ abstract contract SettlementScriptBase is Script {
         PoolKey memory key = poolKey();
         (uint160 sqrtPriceX96,,,) = manager().getSlot0(key.toId());
         require(sqrtPriceX96 != 0, "initialise the pool first");
+        // Liquidity is placed at whatever price slot0 reports, so a pool initialised by someone else
+        // would place ours at their price and hand them the arbitrage. Seed only at the price this
+        // script chose; after our own settlement the pool has liquidity and this stage skips anyway.
+        require(
+            sqrtPriceX96 == SQRT_PRICE_2500_USDC_PER_ETH,
+            "the pool is not at the price this script initialised; refusing to seed"
+        );
         if (manager().getLiquidity(key.toId()) != 0) {
             console.log("pool already has liquidity, skipping;", manager().getLiquidity(key.toId()));
             return;
