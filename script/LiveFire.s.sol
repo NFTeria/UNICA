@@ -55,6 +55,13 @@ abstract contract SettlementScriptBase is Script {
     ///      about 60% of the 2,500 USDC/ETH the pool opens at, so a drained or mispriced pool refuses
     ///      the order (I3) instead of settling it for dust. Measured on the fork: 2.003660 USDC arrived.
     uint128 internal constant SETTLE_MIN_OUT = 1_500_000;
+    /// @dev How long the settle stage's order stays payable. forge simulates the whole run BEFORE it
+    ///      asks for the keystore password, so this is measured from the simulation, not from the
+    ///      broadcast. Measured 2026-09-05 on the first live run: the prompt was answered 5 h 22 min
+    ///      after the simulation and a one-hour deadline had aged out by 15,708 s; createOrder
+    ///      reverted DeadlineInPast on chain after passing in simulation. The order can only pay its
+    ///      registered recipient, the deployer, so a long window costs nothing.
+    uint64 internal constant ORDER_DEADLINE = 1 days;
 
     // ---- the declared permission set, spec section 5 -----------------------------------------
     uint160 internal constant FLAGS = Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
@@ -260,7 +267,7 @@ abstract contract SettlementScriptBase is Script {
         );
         vm.startBroadcast();
         bytes32 orderId = executor.createOrder(
-            recipient, key, uint128(SWAP_ETH), SETTLE_MIN_OUT, uint64(block.timestamp + 1 hours), salt
+            recipient, key, uint128(SWAP_ETH), SETTLE_MIN_OUT, uint64(block.timestamp + ORDER_DEADLINE), salt
         );
         executor.pay{value: SWAP_ETH}(orderId);
         vm.stopBroadcast();
