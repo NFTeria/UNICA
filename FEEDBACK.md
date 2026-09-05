@@ -50,6 +50,63 @@ specific as the friction — "the `X` helper saved an hour because it did `Y`" �
 
 <!-- newest first -->
 
+### 2026-09-05 — a Universal Router built from a newer v4-periphery refuses the listed single-swap encoding with an empty revert, and nothing on chain says which build it is
+
+**Trying to:** run this repository's exact settlement plan (command `0x10`; `SWAP_EXACT_IN_SINGLE`, `SETTLE`, `TAKE`; `OPEN_DELTA`; `hookData` = one `bytes32`) against a Universal Router observed on another testnet, on a fork, read-only, to learn whether the hook's admission path is portable.
+
+**Blocked by:** the router at `0x8876789976decbfcbbbe364623c63652db8c0904` on chain 46630 reverts inside its own `unlockCallback` with empty revert data before the PoolManager is called; the same plan with empty `hookData` swaps, and the same `bytes32` `hookData` is delivered once `ExactInputSingleParams` is encoded with one extra static word before `hookData`. That word is `uint256 minHopPriceX36`, added in `Uniswap/v4-periphery` commit `03b2d09` ("feat: add per-hop slippage to single swaps and flip to output/input ratio (#516)", 2026-03-17, <https://github.com/Uniswap/v4-periphery/commit/03b2d09>). The periphery this repository pins (`7ebd04b`) and the Sepolia router on the deployments page (<https://developers.uniswap.org/contracts/v4/deployments>, read 2026-09-05) predate it, and the same instrument passes against that Sepolia router on a fork. The router exposes no version or ABI discriminator: `poolManager()` and `msgSender()` answer identically on both builds.
+
+**Cost:** one afternoon on 2026-09-05 building a fork probe with a positive control before the cause was isolated to the struct layout; recorded on the branch `research/robinhood-readiness` under `test/fork/`.
+
+**Would have prevented it:** a version getter on the Universal Router, or a per-deployment note on the deployments page naming the periphery commit each router was built from; and a published runtime artifact per router deployment, which is the same request as the 2026-09-04 entry below. An integrator pinned to the listed periphery cannot detect the mismatch before broadcasting, and the failure mode is an empty revert.
+
+### 2026-09-05 — v4-core's exact `PoolManager` pragma really does split a downstream build across two compiler versions
+
+**Trying to:** confirm, before writing anything upstream, whether leaving `solc_version`
+unset in a downstream Foundry project that imports `PoolManager` actually produces two
+different compiler runs inside one `forge build` — the mechanism `docs/INTEGRATIONS.md`
+rank 7 raised and explicitly flagged as "not re-created in a fresh minimal project" as of
+2026-09-04.
+
+**Blocked by:** nothing — it reproduced cleanly once the remapping was right. In a scratch
+project outside this repository, remapped into this repository's own pinned `v4-core`
+commit (`d153b048868a60c2403a3ef5b2301bb247884d46`, the commit `lib/uniswap-hooks/lib/v4-core`
+is pinned at), with no `solc_version` set in `foundry.toml`, one sibling contract at
+`pragma solidity ^0.8.28;` next to a second contract that imports `PoolManager`
+(`pragma solidity 0.8.26;`, exact, `src/PoolManager.sol:2`) makes `forge build` print, in
+the same invocation:
+```
+Compiling 46 files with Solc 0.8.26
+Compiling 1 files with Solc 0.8.30
+Solc 0.8.30 finished in 45.45ms
+Solc 0.8.26 finished in 339.73ms
+Compiler run successful!
+```
+The two resulting artifacts confirm it by their own metadata:
+`out/MyContract.sol/MyContract.json` → `metadata.compiler.version` = `0.8.30+commit.73712a01`;
+`out/PoolManager.sol/PoolManager.json` → `metadata.compiler.version` = `0.8.26+commit.8a97fa7a`.
+Toolchain: `forge 1.3.5-foundry-zksync-v0.1.9`. The first attempt, with the sibling contract
+at `pragma solidity ^0.8.24;`, did **not** split — forge folded all 47 files into one
+`Compiling 47 files with Solc 0.8.26` run, because 0.8.26 satisfies `^0.8.24` too. The split
+only appears once a sibling file's floor version excludes 0.8.26 (e.g. `^0.8.28`), which is
+an ordinary pragma choice for a project written against newer Solidity features.
+
+**Cost:** about 20 minutes: 5 to scaffold the scratch project and remappings, 5 lost to a
+wrong `solmate/=…/lib/solmate/src/` remapping (should be `solmate/=…/lib/solmate/`, since
+the import inside `ProtocolFees.sol` is `solmate/src/auth/Owned.sol`), and 10 to find that
+`^0.8.24` does not trigger the split and `^0.8.28` does.
+
+**Would have prevented it:** nothing needed preventing here — this is the confirmation
+itself, not a blocker. What it changes: the two-compiler split moves from "undocumented,
+not to be filed upstream" (`docs/INTEGRATIONS.md`, Demoted section, 2026-09-04) to
+reproduced-today, so an upstream question to `Uniswap/v4-core` — is the exact pragma on
+`PoolManager.sol` intended to be load-bearing for every downstream compilation unit that
+reaches it, and should the test-facing surface instead carry a caret range — can now be
+asked with a fresh, minimal, timestamped repro rather than resting on the day-1 on-chain
+verification incident alone. Draft at `upstream/04-two-compiler-split-poolmanager.md`.
+
+---
+
 ### 2026-09-04 — the Universal Router as the execution path for a settlement hook: what it carries, what it cannot express, and one shape the interface does not describe
 
 **What happened.** The owner ruled that settlement must go through Uniswap's official execution
@@ -169,14 +226,17 @@ this template") so the skill degrades to something useful instead of to nothing.
 
 Filled in at submission, from the entries above, never from memory.
 
-| Question the form asks | Answer, pointing at the entry that proves it |
+| Question the form asks | Draft answer, pointing at the entry that proves it |
 |---|---|
-| What did you build? | |
-| Biggest blocker | |
-| Time to first successful integration | |
-| Documentation helpfulness (1–5) | |
-| Support (1–5) | |
-| What support was missing | |
+| What did you build? | UNICA — a Uniswap v4 hook enforcing order-bound, full-fill USDC settlement, executed only through the official Universal Router and a thin admitted executor, with an indexable settlement receipt. See the 2026-09-04 entry "the Universal Router as the execution path for a settlement hook" for the architecture this answer summarizes. |
+| Biggest blocker | The template `uniswap-ai`'s own `v4-security-foundations` skill hands out does not compile against the current public `v4-periphery`/`v4-core` — a stale `BaseHook` import with no working replacement path in that repository, and a `SwapParams` reference to a type `IPoolManager` no longer declares. See the 2026-09-04 entry "`v4-security-foundations` run over the real gate and router" and its upstream draft. |
+| Time to first successful integration | Not reconstructable honestly from memory; the entries record specific costs (4 minutes to find the missing MCP tool and abandon it; about 25 minutes to run the security checklist and re-verify each of its claims; about 20 minutes today to isolate the two-compiler split) rather than one end-to-end figure. Leave blank rather than estimate, per this file's own rule against reconstructed timelines. |
+| Documentation helpfulness (1–5) | Draft: 2. The guides that were followed (the first-hook guide's import, the deployment guide's `HookMiner` import) point at paths that do not exist in the current repository, and the troubleshooting and concepts pages stop at a selector or a partial failure-mode list exactly where a reader most needs cause and fix — see the 2026-09-04 and 2026-09-05 upstream drafts under `docs/upstream/`. |
+| Support (1–5) | Not answerable from this project's own experience — no support channel was used. Leave blank rather than guess. |
+| What support was missing | A stated fallback in `uniswap-ai`'s skills for when a named dependency (the MCP tool, a working import path) is absent, rather than the skill running to its final step and failing silently there. See the 2026-09-04 entry "the `v4-hook-generator` skill in `uniswap-ai` calls an MCP tool the plugin does not ship." |
+
+The owner should treat the blanks as blanks, not fill them with a guess — the file's own
+rule is that a reconstructed number is worse than an honest gap.
 
 If the form has no field for this file's URL, paste it into the free-text fields as
 a `github.com` blob URL pinned to a commit SHA, and screenshot the submitted form.
