@@ -51,6 +51,56 @@ receipt correctness; the rest is fixed when cheap or accepted here in writing.
 
 ## Contradicted by the refuters
 
-Filled from the refuters' verdicts as they land; a finding listed here was put to three refuters and at least two showed it wrong or immaterial.
+Four findings were refuted by all three of their refuters. Three of them were true of the
+snapshot the reviewer read and false at HEAD, because the fix had already landed while the vote
+ran; they are the same defects as E1, E3 and T3 above, seen from another lens. One was refuted
+on its mechanism.
 
-_(pending at the time of writing; see the commit that updates this file)_
+| # | Where | Claim | Verdict |
+|---|---|---|---|
+| R1 | `src/SettlementExecutor.sol` `pay` | the minimum is enforced on the pool credit, never on what the recipient received | stale: fixed in `b02cf0b` before the vote (E3) |
+| R2 | `src/SettlementExecutor.sol` `createOrder` | an order can name a pool without the hook | stale: fixed in `ad80a60` before the vote (E1); one refuter proved both barriers by sabotage |
+| R3 | `src/V4SettlementHook.sol` | no per-order once-only guard | stale: fixed in `c35e2bb` before the vote (T3) |
+| R4 | `src/V4SettlementHook.sol` `_afterSwap` | the delta casts are unsafe and safe only because of the returns-delta flags | refuted on mechanism: the casts are correct for an exact-input swap regardless of the flags; the observation that they are unchecked stands and is A1 above |
+
+## Refuter coverage, stated
+
+The vote was 164 refuter agents, three per finding. **80 of them failed on a session usage limit
+before voting**, so 27 findings carry fewer than two votes: one from the hook lens (A2, the double
+read), all eleven from the tests lens, and all fifteen from the scripts and CI lens. None of the 27
+changes an action: every one is either fixed above with its own test and commit (T1, T2, T3, T4,
+S1 to S6, C1 to C3) or accepted above with its reason (A2, A4, A6, A7, A8), each on the strength
+of its own reproduction rather than a vote. The reproduction column is the evidence a reader
+should weigh for those rows; the vote column is absent, and this file says so rather than
+implying a verdict that was not reached. The workflow run is `wf_6cd545b6-b9c`; its failed
+refuters can be resumed, and the record will be updated if they are.
+
+Findings with fewer than two votes, by title, for the record:
+
+- [hook] low: The order is read from the executor twice per settlement: ~34.9k gas, ~7.7% of the swap (src/V4SettlementHook.sol) — votes recorded: 1
+- [tests] high: test_ExecutorDerivationMatchesTheDeployedAddress is a tautology: a wrong CREATE2 factory or salt leaves the entire suite green (test/V4SettlementHook.t.sol) — votes recorded: 0
+- [tests] high: The hook's SettlementReceipt does not prove the order's recipient was paid, and no test distinguishes the two (src/V4SettlementHook.sol) — votes recorded: 0
+- [tests] medium: The Paying window admits unlimited swaps: two swaps for one order emit two receipts and set receiptCount to 2, and nothing tests it (src/V4SettlementHook.sol) — votes recorded: 0
+- [tests] medium: Invariant I3's direction half is untested: removing the zeroForOne check leaves the whole suite green (src/V4SettlementHook.sol) — votes recorded: 0
+- [tests] medium: The executor's slippage leg is unproven: setting the router's amountOutMinimum to 0 leaves the suite green (src/SettlementExecutor.sol) — votes recorded: 0
+- [tests] medium: I7 row 3's 'nothing moved' block is entirely post-revert state, and its recordLogs() call is dead (test/I7NativeSettle.t.sol) — votes recorded: 0
+- [tests] low: The CI test-count floor is 7 while the suite has 34 tests, so 27 tests could vanish and the gate stays green (.github/workflows/ci.yml) — votes recorded: 0
+- [tests] low: The 'official router runtime' assertion is self-consistent: the constant and the bytes live in the same file, so nothing checks either against the chain (test/V4SettlementHook.t.sol) — votes recorded: 0
+- [tests] low: Local greens and CI greens are produced by different Foundry binaries, and the file's 'measured on 2026-09-04' caveat names no version (test/I7NativeSettle.t.sol) — votes recorded: 0
+- [tests] low: Row 5 re-etches the official router over RouterHarness storage; the test is safe only because of statement order (test/I7NativeSettle.t.sol) — votes recorded: 0
+- [tests] low: Several negative tests assert post-revert state that is true by construction (test/V4SettlementHook.t.sol) — votes recorded: 0
+- [scripts] high: make deploy/init-pool/seed/settle/live on the LOCAL FORK write chain-11155111 broadcast artifacts into the committed proof record and overwrite it (Makefile) — votes recorded: 0
+- [scripts] high: Settle stage pays an order id computed during simulation; a permissionless createOrder mined between the two broadcast transactions redirects the payment (script/LiveFire.s.sol) — votes recorded: 0
+- [scripts] medium: .env.example defines SEPOLIA_RPC_URL as empty, and the Makefile's `?=` cannot override a defined-empty variable (.env.example) — votes recorded: 0
+- [scripts] medium: CI's private-material filename scan is anchored to the repository root, so any private runtime file in a subdirectory escapes it — and the step's own control only plants the root case (.github/workflows/ci.yml) — votes recorded: 0
+- [scripts] medium: privatenotes.md is the one gitignored private file with no CI backstop in the `names` scan (.github/workflows/ci.yml) — votes recorded: 0
+- [scripts] medium: make help and make doctor tell the operator to expect 25 tests; 34 run (Makefile) — votes recorded: 0
+- [scripts] medium: CI's "a lane that ran zero tests is not green" floor is 7 while 34 tests run — 27 tests can vanish silently (.github/workflows/ci.yml) — votes recorded: 0
+- [scripts] medium: The live settle stage sets minOut = 1, so invariant I6 is not exercised by the public proof, and the swap takes 11.3% price impact at the seeded depth (script/LiveFire.s.sol) — votes recorded: 0
+- [scripts] low: readback.sh never reads hook.SETTLEMENT_EXECUTOR(), so the readback cannot prove on chain the binding the whole design rests on (script/readback.sh) — votes recorded: 0
+- [scripts] low: .PHONY names a target that does not exist and omits two that do (Makefile) — votes recorded: 0
+- [scripts] low: docs/ARCHITECTURE.md's contract table still points at src/UnicaHook.sol and src/UnicaSettlementRouter.sol, files that no longer exist (docs/ARCHITECTURE.md) — votes recorded: 0
+- [scripts] medium: CI fresh-clone lane checks out github.sha after a plain clone, which cannot resolve on pull_request events (.github/workflows/ci.yml) — votes recorded: 0
+- [scripts] low: CI asserts the EIP-170 limit for the hook only; the executor's runtime is unguarded (.github/workflows/ci.yml) — votes recorded: 0
+- [scripts] low: CI solc cache key still names 0.8.26, a compiler the tree no longer uses (.github/workflows/ci.yml) — votes recorded: 0
+- [scripts] low: The private-location scan excludes specs/ entirely, so a leak into the published spec is never caught (.github/workflows/ci.yml) — votes recorded: 0
