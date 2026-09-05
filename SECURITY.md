@@ -57,11 +57,15 @@ Stated plainly, because an unstated gap is the dangerous kind.
   carrying this hook is native ETH against that currency or it cannot be initialised. That is a
   defence, but it is also a limit: supporting another payout currency or another chain changes the
   hook's creation code, and so its address, and needs a new deployment.
-- **No reentrancy test yet (threat T6).** The hook keeps no state between callbacks and the order
-  is `Paying` for the duration of the call, so a reentrant payment meets its own state check.
-  That is an argument, not a test, and it is listed as such in the threat model.
-- **Untested threat rows.** T4 (delta sign conventions on both legs) and T12 (gas exhaustion)
-  remain planned. T9 (dust and `clear()`) is defended by construction and untested.
+- **Reentrancy (threat T6) is tested, not argued.** A payout token that calls out on transfer
+  re-enters `pay` from inside the take that pays the recipient. The same order is refused by its
+  own state; another order is refused by the official router's own lock before the PoolManager is
+  reached; each outer settlement has exactly one receipt. The token is a test stand-in at the
+  payout address: the sanctioned token does not call out today, and the test covers the day it does.
+- **The rows once listed here as planned have tests.** T4 (an exact-output swap is refused in
+  either direction), T9 (dust settles whole or not at all) and T12 (one settlement is asserted
+  under 300,000 gas, measured at 236,726) each name their test in `docs/THREAT-MODEL.md`. What that
+  file still marks as prose rather than a test is marked there, not here.
 - **The Universal Router is trusted.** UNICA's admission decision depends on
   `IMsgSender.msgSender()` being truthful. It is Uniswap's deployed contract, used as Uniswap's
   own guide prescribes, and it is not audited here.
