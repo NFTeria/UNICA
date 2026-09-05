@@ -32,6 +32,19 @@
   },
   {
     "type": "function",
+    "name": "PAYOUT_CURRENCY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "RECEIPT_SCHEMA_VERSION",
     "inputs": [],
     "outputs": [
@@ -1214,6 +1227,22 @@
     "inputs": [
       {
         "name": "caller",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotTheSettlementShape",
+    "inputs": [
+      {
+        "name": "currency0",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "currency1",
         "type": "address",
         "internalType": "address"
       }
