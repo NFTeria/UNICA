@@ -1,0 +1,31 @@
+"""
+One settlement receipt, schema v1, exactly as the hook emitted it plus the indexing context.
+Immutable: a receipt is never edited, and exactly one exists per (network, hook, orderId).
+Field names follow the emitted ABI (docs/RECEIPT-SCHEMA.md in the repository).
+"""
+type Settlement @entity(immutable: true) {
+  "transaction hash ++ log index, unique on one network"
+  id: Bytes!
+  "the network this subgraph indexes, from the data source"
+  network: String!
+  schemaVersion: Int!
+  orderId: Bytes!
+  poolId: Bytes!
+  payer: Bytes!
+  recipient: Bytes!
+  "address(0) is native ETH"
+  currencyIn: Bytes!
+  currencyOut: Bytes!
+  amountIn: BigInt!
+  amountOut: BigInt!
+  fee: BigInt!
+  "reserved; zero until the executor applies a policy or benefit"
+  policyId: Bytes!
+  executor: Bytes!
+  "the emitter of the receipt"
+  hook: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}

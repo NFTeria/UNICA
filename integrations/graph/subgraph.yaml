@@ -1,0 +1,27 @@
+specVersion: 1.0.0
+description: UNICA settlement receipts (schema v1) from a V4SettlementHook on Uniswap v4
+repository: https://github.com/NFTeria/UNICA
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: V4SettlementHook
+    network: sepolia
+    source:
+      address: "0x0000000000000000000000000000000000000000"
+      abi: V4SettlementHook
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Settlement
+      abis:
+        - name: V4SettlementHook
+          file: ./abis/V4SettlementHook.json
+      eventHandlers:
+        - event: SettlementReceipt(indexed bytes32,indexed bytes32,indexed
+            address,uint16,address,address,address,address,uint128,uint128,uint128,bytes32)
+          handler: handleSettlementReceipt
+      file: ./src/mapping.ts

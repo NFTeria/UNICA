@@ -1,0 +1,17 @@
+{
+  "name": "unica-settlement-subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Indexes UNICA settlement receipts (schema v1) emitted by a V4SettlementHook on Uniswap v4. The hook address is configured per network, never hard-coded.",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build --network sepolia --network-file networks.json",
+    "test": "graph test"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "0.98.1",
+    "@graphprotocol/graph-ts": "0.38.2",
+    "matchstick-as": "0.6.0"
+  }
+}
