@@ -49,7 +49,7 @@ help:
 	@echo "    make doctor           what is present, what is missing, how to get it"
 	@echo ""
 	@echo "  CHECK (free, no transaction)"
-	@echo "    make gate             forge build && forge test && forge fmt --check (the test count is asserted in CI, fuzz at 10,000)"
+	@echo "    make gate             build, test (fuzz 10,000), fmt-check, and the secret scan CI runs"
 	@echo "    make test / fuzz      the suite, or only the fuzz tests"
 	@echo "    make predict          the hook address and salt this creation code lands on, any chain"
 	@echo "    make simulate         all four stages against live Sepolia state as the deployer, no broadcast"
@@ -106,7 +106,8 @@ fmt      :; forge fmt
 clean    :; forge clean
 gate     : _need-deps
 	forge build && forge test && forge fmt --check
-	@echo "gate: build, test, fmt-check all exit 0"
+	bash script/scan.sh
+	@echo "gate: build, test, fmt-check and the secret scan all exit 0"
 
 predict:
 	forge script script/LiveFire.s.sol:LiveFire --sig "predict()" -vv

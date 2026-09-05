@@ -151,24 +151,9 @@ jobs:
           if git grep -nE "$marks" -- . ':!lib' ':!.github/workflows/ci.yml' ':!.gitignore'; then echo "a private location is mentioned"; exit 1; fi
           echo "no private material in the tree"
 
-      - name: No secrets in the tree
-        run: |
-          fail=0
-          if git grep -nE '(PRIVATE_KEY|MNEMONIC|SECRET|API_KEY|AUTH_TOKEN|PASSWORD)[A-Z_]*[[:space:]]*=[[:space:]]*[^[:space:]<$]{8,}|"ciphertext"|ghp_[A-Za-z0-9]{36}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}' -- . ':!lib' ':!.github/workflows/ci.yml'; then
-            echo "labelled secret or token format found"; fail=1
-          fi
-          label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]]|swap|receipt'
-          # The step proves itself first: a planted labelled key, a planted bare value inside a
-          # Markdown table row, and a labelled pool id. The first two must be caught, the third must pass.
-          printf 'PRIVATE_KEY=0x%064d\n' 1 | grep -qE '(PRIVATE_KEY|MNEMONIC|SECRET|API_KEY|AUTH_TOKEN|PASSWORD)[A-Z_]*[[:space:]]*=[[:space:]]*[^[:space:]<$]{8,}' || { echo "control failed: labelled key not caught"; exit 1; }
-          printf '| key | 0x%064d |\n' 2 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE "$label" || { echo "control failed: bare value in a table row not caught"; exit 1; }
-          printf 'pool id 0x%064d\n' 3 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE "$label" && { echo "control failed: labelled pool id flagged"; exit 1; }
-          echo "controls passed"
-          # broadcast/ is forge's own record of mined transactions: calldata and init code are
-          # long hex by nature and no key is ever written there (forge puts sensitive values under
-          # cache/, which is ignored). The labelled-secret scan above still covers broadcast/.
-          bare=$(git grep -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' ':!broadcast/' | grep -viE "$label" || true)
-          if [ -n "$bare" ]; then
-            echo "$bare"; echo "bare 32-byte hex value with no label on its line"; fail=1
-          fi
-          test "$fail" -eq 0 && echo "no secret-shaped strings outside lib/"
+      # One definition of these rules, in script/scan.sh, so a developer can run exactly what CI
+      # runs before pushing. The script proves each pattern on a planted input before judging the
+      # tree, and prints a stated count. (Measured 2026-09-05: CI and a local copy of the same
+      # regex drifted, and four pushes went red on a rule the local run did not have.)
+      - name: No secrets or private material in the tree
+        run: bash script/scan.sh
