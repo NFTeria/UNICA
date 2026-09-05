@@ -64,8 +64,14 @@ an order inside one transaction. What stayed: the order as the only source of wh
 marking before any external call, and the four-row I7 test, now against a stand-in at the
 router's address with the sync switchable, plus a fifth row against the real Universal Router
 bytecode etched at its Sepolia address with a foreign settle leg before the native one. The
-hook's runtime is 10,302 bytes with the order checks, the versioned receipt and the one-swap
-guard in it. The tests in `docs/INVARIANTS.md` run against hookmate's official PoolManager; the
+hook's runtime is 10,634 bytes with the order checks, the versioned receipt and the one-swap
+guard in it — a recorded size, not a budget; this file sets no size budget. (This line read
+10,302 until 2026-09-05. That number entered the tree in `0c3663c` on 2026-09-04, and two `src/`
+commits landed after it — `6f99fe9`, refusing a pool that is not the settlement shape, and
+`87f9eca`, refusing a settlement that would pay a contract on its own path. This file was edited
+again afterwards and the figure was not carried forward. The live hook, a fresh `forge build`,
+`docs/DEPLOYMENT.md`, `docs/versions/V1.md`, the README proof row and `docs/proof/verify-live.sh`
+all say 10,634, and the chain is the arbiter.) The tests in `docs/INVARIANTS.md` run against hookmate's official PoolManager; the
 gate, order-check and executor tests and row 5 of I7 run against the router's deployed bytecode,
 while rows 1 to 4 of I7 run against a stand-in at the router's address, because the official
 bytecode cannot have its defence switched off.
