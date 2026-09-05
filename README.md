@@ -174,11 +174,6 @@ re-proves all of them without trusting this file. `RPC=https://ethereum-sepolia-
 > with `afterSwap` only; it observed swaps and gated nothing. Its evidence is not rewritten. The
 > current implementation, `V4SettlementHook` in `src/`, has its own rows above.
 
-> **Historical day-1 observation-only scaffold; not the current gated implementation.** The
-> contract in these rows is `UnicaHook`, deployed and source-verified under that name on day 1
-> with `afterSwap` only; it observed swaps and gated nothing. Its evidence is not rewritten. The
-> current implementation, `V4SettlementHook` in `src/`, is mined fresh and live-fired on day 4
-> and gets its own rows then.
 LIVE means mined on Ethereum Sepolia with status 1, read back from the chain before it was
 written here. `RPC=https://ethereum-sepolia-rpc.publicnode.com` in the commands below.
 
