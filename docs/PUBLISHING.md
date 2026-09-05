@@ -11,10 +11,11 @@ GitHub Pages is off until a repository owner turns it on by hand. The workflow c
 itself, and does not try to:
 
 1. Open **Settings > Pages** on `github.com/NFTeria/UNICA`.
-2. Under **Build and deployment > Source**, choose **GitHub Actions** — not "Deploy from a
+2. Open **Settings > Secrets and variables > Actions > Variables** and add a repository variable named `PAGES_ENABLED` with the value `true`. Until it exists the deploy job is skipped and the workflow stays green; the check job runs on every push regardless.
+3. Under **Build and deployment > Source**, choose **GitHub Actions** — not "Deploy from a
    branch". There is no `gh-pages` branch and none should be created; the workflow publishes an
    upload artifact directly, and the directory it uploads is `web/`, not the repository root.
-3. Save. No branch, no folder, and no further field is set here — the workflow's own `paths`
+4. Save. No branch, no folder, and no further field is set here — the workflow's own `paths`
    trigger and `path: web` input are what decide what gets published and when.
 
 That save is the only setting this document asks the owner to change. Everything after this

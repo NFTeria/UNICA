@@ -103,8 +103,8 @@ failed. Read from the chain by hash, in nonce order:
 | 456 | executor | `pay` | **failed**, no order to pay |
 
 The cause, measured: forge simulates the whole run before it asks for the keystore password, and
-the script computed the order's deadline as `block.timestamp + 1 hours` during that simulation at
-06:31 UTC. The prompt was answered later and the block was mined at 10:53 UTC, 15,708 seconds past
+the script computed the order's deadline as `block.timestamp + 1 hours` during that simulation, which
+put the deadline at 06:31 UTC, one hour after the simulation ran. The prompt was answered later and the block was mined at 10:53 UTC, 15,708 seconds past
 the deadline. The simulation had passed; the chain refused. Reproduced on a fork of the chain with
 Anvil's next-block timestamp: the old deadline fails under a five-hour gap and passes without one,
 the day-long deadline (`ORDER_DEADLINE`, `script/LiveFire.s.sol`) passes under both.
