@@ -27,7 +27,7 @@ DEPLOYER=0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73
 HOOK=0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0
 EXECUTOR=0x044bc8a8773EC7b9B8de2467766636dFFCaC6210
 NONCE_AT_VALIDATION=450
-FREEZE_TAG=${FREEZE_TAG:-day5-green}
+FREEZE_TAG=${FREEZE_TAG:-deploy-candidate-1}
 
 echo "== pre-flight against live Sepolia"
 chain=$(cast chain-id --rpc-url "$RPC"); test "$chain" = "11155111" || { echo "wrong chain: $chain"; exit 1; }
