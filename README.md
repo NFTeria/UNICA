@@ -242,39 +242,6 @@ the hook emitted inside the settling swap, and a refused settlement leaves no en
 does not prove: anything against a hosted Graph provider, which is the published bar for the
 sponsor's track and an owner action not yet taken.
 
-## The receipt, indexed (optional; The Graph as one consumer)
-
-The receipt is versioned and documented in [`docs/RECEIPT-SCHEMA.md`](docs/RECEIPT-SCHEMA.md)
-and frozen as a conformance suite in [`test/ReceiptSchema.t.sol`](test/ReceiptSchema.t.sol).
-[`integrations/graph/`](integrations/graph/) is one consumer of it: a subgraph whose data source
-takes the hook address and start block from a per-network file, a handler that keys on schema
-version one, three matchstick tests around a real local receipt, and a local end-to-end run.
-Nothing in the settlement path depends on it; a hook whose receipts nobody indexes settles the
-same. It claims no priority over other schemas; see `docs/INTEGRATIONS.md` for what was found.
-
-One command reconstructs a settlement from its log, locally, with no credentials and nothing
-broadcast (needs Docker, Node 22, and the pinned tooling installed by `npm install` in that
-directory):
-
-```sh
-DEPLOYER=0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73 bash integrations/graph/local-e2e.sh
-```
-
-It forks Sepolia, deploys and seeds through the repository's own stages, brings up a pinned
-graph-node against the fork, deploys the subgraph for that hook address, pays one order through
-the executor and Uniswap's official router, and queries:
-
-```graphql
-{ settlements { orderId recipient amountIn amountOut hook executor schemaVersion transactionHash logIndex } }
-```
-
-Measured 2026-09-05: one `Settlement` entity, `amountIn` 1000000000000000, `amountOut` 2003660 in
-real USDC, `hook` and `executor` equal to the deployment; then the same order paid again reverts
-on chain and the count stays at one. What that proves: the receipt an indexer reads is the one
-the hook emitted inside the settling swap, and a refused settlement leaves no entity. What it
-does not prove: anything against a hosted Graph provider, which is the published bar for the
-sponsor's track and an owner action not yet taken.
-
 ## Security limitations, stated
 
 - The hook keeps no state between callbacks: `beforeSwap` and `afterSwap` each read the order
