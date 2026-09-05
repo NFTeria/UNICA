@@ -8,3 +8,4 @@ tests/.latest.json
 # what ships, and committing it raised 45 dependency advisories on the repository page that
 # describe that tooling, not this code (measured 2026-09-04).
 package-lock.json
+networks.local.json
