@@ -28,21 +28,33 @@ already cost something to learn.
 - No "Generated with" line. No AI name in a commit message, a PR body, or a review.
 - This is not fixable later. A trailer in a pushed commit is in the permanent history.
 
-Run this before every push:
+Run this before every push. It is the same rule CI enforces in the `provenance` job, so a
+local pass and a green CI cannot disagree:
 
 ```sh
-if git log --format='%B%n%an <%ae>' \
-  | grep -ivE 'CLAUDE\.md' \
-  | grep -inE 'co-authored-by|generated with|claude|anthropic|copilot|chatgpt'; then
-  echo "⛔ AI attribution in history — DO NOT PUSH"; false
+ids=$(git log --format='%an <%ae>%n%cn <%ce>' | sort -u)
+if [ "$ids" != "NFTeria <dev@nfteria.click>" ]; then
+  echo "⛔ identity drift in history — DO NOT PUSH"; printf '%s\n' "$ids"
+elif git log --format='%B' | grep -inE 'co-authored-by:[[:space:]]*(claude|anthropic|copilot|chatgpt|gpt-|openai|cursor|codex)|generated[[:space:]]+with[[:space:]]+\[?(claude|chatgpt|copilot|cursor)|🤖[[:space:]]*generated'; then
+  echo "⛔ AI attribution in history — DO NOT PUSH"
 else
   echo "✅ clean"
 fi
 ```
 
-The `CLAUDE.md` exclusion exists because this file's own commit necessarily names it. The
-first version of this check fired on that subject line and, worse, printed both verdicts,
-because of how its `&&`/`||` chain was composed. A check that can print "clean" after
+**It matches attribution SHAPES, not tool names.** A trailer granting credit, a "generated
+with" line, the robot banner. It deliberately does not fire on a bare tool name in prose,
+because a commit whose body explains this very check has to say the word — three commits in
+this history do, and the earlier version of this snippet blocked every push forever on them
+while CI stayed green. A guard that cries wolf on its own documentation gets ignored, and an
+ignored guard protects nothing.
+
+A bare tool name in prose is still unwanted, and is the local pre-commit hook's job, where it
+can still be fixed. This check is for the shapes that grant credit, because those are the ones
+that are permanent the moment they are pushed.
+
+The first version of this check fired on this file's own subject line and, worse, printed both
+verdicts, because of how its `&&`/`||` chain was composed. A check that can print "clean" after
 printing "blocked" is not a check.
 
 If it fires before the first push, `git commit --amend` or rebase it out. After a push it
