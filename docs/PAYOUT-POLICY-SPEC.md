@@ -601,9 +601,7 @@ EURC address exactly as they are run at the USDC address today
 
 An ETH/EURC pool carrying the hook does not exist and cannot exist until the entry is compiled
 (row 4). When it can, it needs its own seed: Circle's faucet configuration, embedded as JSON in
-the page (live fetch 2026-09-05T16:23:27Z, <https://faucet.circle.com>; the frozen snapshot
-`circle-faucet.html`, sha256 `09dba6ef…`, retrieved 2026-09-05T16:12:12Z, was not readable when
-this was written), names for chain "ETH" the currencies `["USDC","EURC","CIRBTC"]` and for
+the page (<https://faucet.circle.com>, retrieved 2026-09-05T16:52Z), names for chain "ETH" the currencies `["USDC","EURC","CIRBTC"]` and for
 "BASE" `["USDC","EURC"]`, with a limit window of 3600000 ms; the amount per request is not in
 the saved text. The live ETH/USDC pool holds liquidity 204325880000 (the day's chain record);
 the seed stage refuses below a floor (`script/go-live.sh:71-73`, five USDC) and the deploy
