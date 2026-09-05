@@ -11,7 +11,7 @@
 # chain id (one address on every chain), and a bare chain 31337 has no PoolManager to resolve.
 -include .env
 
-.PHONY: help all deps doctor build test fuzz snapshot format fmt gate clean anvil predict simulate \
+.PHONY: help all deps doctor build test fuzz snapshot format fmt gate clean anvil predict simulate go-live go-live-check proof \
         rehearse deploy init-pool seed settle live readback verify balances _need-deployer _need-signing
 
 # ── configuration ─────────────────────────────────────────────────────────────
@@ -64,7 +64,12 @@ help:
 	@echo "    make live             all four stages in one run (deploy/init/seed skip if done; settle always sends)"
 	@echo "    make rehearse         the same, on a throwaway fork on :8546, with a readback, in one command"
 	@echo ""
-	@echo "  SEPOLIA (real transactions; keystore password prompted; add ARGS=\"--network sepolia\")"
+	@echo "  GO LIVE (the whole deploy, one command; keystore password prompted)"
+	@echo "    make go-live-check    the pre-flight only: chain, frozen code, nonce, vacant targets. Sends nothing"
+	@echo "    make go-live          the pre-flight, then deploy + pool + liquidity + one settlement on Sepolia"
+	@echo "    make proof            re-prove the deployment from the chain (day-1 and day-4 verifiers)"
+	@echo ""
+	@echo "  SEPOLIA, one stage at a time (real transactions; keystore password prompted)"
 	@echo "    make deploy ARGS=\"--network sepolia\"      (and init-pool / seed / settle / live the same way)"
 	@echo "    make readback         what the chain says now: code, count, price, liquidity, executor"
 	@echo "    make verify           source verification of hook and executor (Sourcify; Etherscan when the key is set)"
@@ -122,6 +127,17 @@ balances: _need-deployer
 # ── local fork ────────────────────────────────────────────────────────────────
 anvil:
 	anvil --fork-url $(SEPOLIA_RPC_URL) --port 8545 --auto-impersonate
+
+# ── go live: the one command the owner runs, and its pre-flight ───────────────────────────────
+go-live:
+	bash script/go-live.sh
+
+go-live-check:
+	DRY_RUN=1 bash script/go-live.sh
+
+proof:
+	bash docs/proof/verify-day1.sh
+	bash docs/proof/verify-day4.sh
 
 rehearse: _need-deployer
 	DEPLOYER=$(DEPLOYER) SEPOLIA_RPC_URL=$(SEPOLIA_RPC_URL) bash script/rehearse-anvil.sh

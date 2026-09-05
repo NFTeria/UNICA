@@ -87,10 +87,9 @@ Stated plainly, because an unstated gap is the dangerous kind.
 ## Verifying this yourself
 
 ```sh
-make gate                          # build, the full test suite with fuzz at 10,000, formatting
-bash docs/proof/verify-day1.sh     # the day-1 scaffold, re-proved from the chain
-bash docs/proof/verify-day4.sh     # the gated hook and its executor, re-proved from the chain
-make readback                      # what the chain says now, including both bindings
+make gate       # build, the suite with fuzz at 10,000, formatting, and the secret scan CI runs
+make proof      # both verifiers: the day-1 scaffold and the gated hook, re-proved from the chain
+make readback   # what the chain says now, including that the hook and the executor name each other
 ```
 
 Each verifier prints a stated count, `checks run: N, passed: N, failed: 0`, rather than a blank
