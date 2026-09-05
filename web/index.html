@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pay with UNICA</title>
+<meta name="description" content="Pay in ETH, the recipient is paid in USDC, in one transaction on Uniswap v4." />
+<style>
+  /* The brand: four fields and a rule, decided once.
+     ink     #14161A  the neutral that carries almost all of the page (17.49:1 on paper)
+     paper   #FBFBFA  the ground
+     accent  #0B6E4F  ONE colour, spent only on the settlement action
+     radius  4px      the serious end of the scale; this page moves money
+     rule    cta-only the accent appears on the pay button and the focus ring, nowhere else
+     Text on the accent is COMPUTED, not chosen: white 6.25:1, ink 2.90:1, so white wins.
+     Everything else derives: surfaces are ink mixed toward paper in fixed steps, muted text is
+     the 70% mix (6.04:1), the weight ramp is 400/500/700, spacing snaps to a 4px grid, body 16px. */
+  :root {
+    --ink: #14161A; --paper: #FBFBFA; --accent: #0B6E4F; --on-accent: #FFFFFF;
+    --muted: #5B6169; --line: #E4E4E1; --surface: #F2F2EF; --radius: 4px;
+    --bad: #8A1C1C;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink); font: 400 16px/1.5 ui-sans-serif, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 34rem; margin: 0 auto; padding: 32px 20px 64px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0; }
+  .card { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; background: var(--paper); }
+  .row { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; font-size: 14px; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row dt { color: var(--muted); margin: 0; flex: 0 0 auto; }
+  .row dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  dl { margin: 0; }
+  .big { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  button {
+    font: 500 16px/1 inherit; font-family: inherit; border: 1px solid transparent; border-radius: var(--radius);
+    padding: 14px 20px; cursor: pointer; width: 100%; margin-top: 16px;
+  }
+  .pay { background: var(--accent); color: var(--on-accent); }
+  .pay:hover:not(:disabled) { filter: brightness(1.08); }
+  .secondary { background: var(--surface); color: var(--ink); border-color: var(--line); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .note { font-size: 13px; color: var(--muted); margin: 16px 0 0; }
+  .bad { color: var(--bad); }
+  .ok { color: var(--accent); font-weight: 500; }
+  a { color: inherit; text-underline-offset: 2px; }
+  .hidden { display: none; }
+  code { background: var(--surface); padding: 1px 4px; border-radius: var(--radius); font-size: 13px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #F2F2EF; --paper: #121212; --line: #2A2C30; --surface: #1C1E22; --muted: #9AA0A6;
+            --accent: #35B888; --on-accent: #0B1F17; --bad: #E88; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Pay with UNICA</h1>
+    <p class="sub">You pay in ETH. The recipient is paid in USDC. One transaction, on Uniswap v4.</p>
+  </header>
+
+  <div id="view"><p class="sub">Reading the order from Ethereum Sepolia…</p></div>
+
+  <p class="note">
+    Testnet only (Ethereum Sepolia). The amount is settled through Uniswap's official Universal Router
+    into a pool whose hook admits only this path, and the hook emits a receipt naming the order.
+    <a href="https://github.com/NFTeria/UNICA">Source and proofs</a>.
+  </p>
+</main>
+
+<script>
+const CFG = {
+  chainIdHex: "0xaa36a7", chainId: 11155111, chainName: "Ethereum Sepolia",
+  rpc: "https://ethereum-sepolia-rpc.publicnode.com",
+  explorer: "https://sepolia.etherscan.io",
+  // Filled from the deploy. Both are CREATE2 addresses derived from the creation code, so they
+  // change if the contracts change; docs/DEPLOYMENT.md explains the derivation.
+  executor: "0x338Faac2D716AEBFd265EBc8DDf46664155eba72",
+  hook: "0xe478371d804EF56D8e84403F8D97F6184bdEc0C0",
+  usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+  fee: 3000, tickSpacing: 60,
+  sel: { orders: "0x9c3f1e90", pay: "0x8609cad1", createOrder: "0x849d8c9f", orderCount: "0x2453ffa8" },
+  topic: {
+    receipt: "0xf9b834e9c2d7d0250251dfdb3c5fdc3f97d829dbe3402f45c89257ab4ec43563",
+    orderCreated: "0xb44f69365ea9fe814655e6ffe1c0ba2e55cd0d2a6aa8ac7eb68db63fd5179cc0"
+  }
+};
+const STATUS = ["none", "open", "paying", "settled"];
+const $ = (s) => document.querySelector(s);
+const view = $("#view");
+
+const pad = (h) => h.replace(/^0x/, "").padStart(64, "0");
+const word = (data, i) => "0x" + data.slice(2 + i * 64, 2 + (i + 1) * 64);
+const addrOf = (w) => "0x" + w.slice(-40);
+const numOf = (w) => BigInt(w);
+const fmt = (v, decimals, places) => {
+  const neg = v < 0n; if (neg) v = -v;
+  const base = 10n ** BigInt(decimals);
+  const whole = v / base, frac = (v % base).toString().padStart(decimals, "0").slice(0, places).replace(/0+$/, "");
+  return (neg ? "-" : "") + whole.toString() + (frac ? "." + frac : "");
+};
+const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function rpc(method, params) {
+  const r = await fetch(CFG.rpc, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })
+  });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  return j.result;
+}
+const call = (to, data) => rpc("eth_call", [{ to, data }, "latest"]);
+
+function decodeOrder(data) {
+  if (!data || data.length < 2 + 12 * 64) return null;
+  return {
+    recipient: addrOf(word(data, 0)), creator: addrOf(word(data, 1)), payer: addrOf(word(data, 2)),
+    currency0: addrOf(word(data, 3)), currency1: addrOf(word(data, 4)),
+    fee: Number(numOf(word(data, 5))), tickSpacing: Number(BigInt.asIntN(24, numOf(word(data, 6)))),
+    hooks: addrOf(word(data, 7)),
+    amountIn: numOf(word(data, 8)), minOut: numOf(word(data, 9)),
+    deadline: Number(numOf(word(data, 10))), status: Number(numOf(word(data, 11)))
+  };
+}
+
+function decodeReceipt(log) {
+  const d = log.data;
+  return {
+    orderId: log.topics[1], poolId: log.topics[2], recipient: addrOf(log.topics[3]),
+    version: Number(numOf(word(d, 0))), payer: addrOf(word(d, 1)), executor: addrOf(word(d, 2)),
+    currencyIn: addrOf(word(d, 3)), currencyOut: addrOf(word(d, 4)),
+    amountIn: numOf(word(d, 5)), amountOut: numOf(word(d, 6)),
+    fee: numOf(word(d, 7)), policyId: word(d, 8)
+  };
+}
+
+const rows = (pairs) => "<dl>" + pairs.map(([k, v]) =>
+  `<div class="row"><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join("") + "</dl>";
+
+function renderMissing(msg, detail) {
+  view.innerHTML = `<div class="card"><p class="big">${esc(msg)}</p><p class="sub">${detail}</p></div>`;
+}
+
+async function main() {
+  const orderId = new URLSearchParams(location.search).get("order");
+  const deployed = (await rpc("eth_getCode", [CFG.executor, "latest"])) !== "0x";
+  if (!deployed) {
+    return renderMissing("Not deployed yet",
+      `The settlement executor is not on ${CFG.chainName} at <span class="mono">${short(CFG.executor)}</span> yet.
+       This page goes live with it. Everything it does is already tested and reproducible in the repository.`);
+  }
+  if (!orderId || !/^0x[0-9a-fA-F]{64}$/.test(orderId)) return renderNoLink();
+  await renderOrder(orderId);
+}
+
+async function renderNoLink() {
+  const count = numOf(await call(CFG.executor, CFG.sel.orderCount)).toString();
+  view.innerHTML = `
+    <div class="card">
+      <p class="big">A payment link</p>
+      <p class="sub">A merchant registers an order and shares a link ending in <code>?order=…</code>.
+      Opening it shows one button, and one click settles it. ${count} order${count === "1" ? " has" : "s have"}
+      been registered on ${CFG.chainName} so far.</p>
+      <button class="secondary" id="make">Register a demo order to my own address</button>
+      <p class="note" id="msg">That is the merchant's side, shown here so you can try the payer's side without one.
+      It costs a little test ETH and pays nothing.</p>
+    </div>`;
+  $("#make").onclick = createDemoOrder;
+}
+
+// The merchant's action, kept off the payment path on purpose: it registers an order to the
+// visitor's own address and then reloads the page as the payer would see it.
+async function createDemoOrder() {
+  const btn = $("#make"), msg = $("#msg");
+  const say = (html, bad) => { msg.innerHTML = html; msg.className = "note" + (bad ? " bad" : ""); };
+  if (!window.ethereum) return say("No wallet found in this browser.", true);
+  btn.disabled = true;
+  try {
+    const [from] = await window.ethereum.request({ method: "eth_requestAccounts" });
+    if (await window.ethereum.request({ method: "eth_chainId" }) !== CFG.chainIdHex) {
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CFG.chainIdHex }] });
+    }
+    const salt = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+    const deadline = Math.floor(Date.now() / 1000) + 3600;
+    const data = CFG.sel.createOrder + [
+      from, "0x0", CFG.usdc, CFG.fee.toString(16), CFG.tickSpacing.toString(16), CFG.hook,
+      (10n ** 15n).toString(16), (1500000n).toString(16), deadline.toString(16), salt
+    ].map((v) => pad(typeof v === "string" && v.startsWith("0x") ? v : "0x" + v)).join("");
+    say("Confirm in your wallet…");
+    const hash = await window.ethereum.request({
+      method: "eth_sendTransaction", params: [{ from, to: CFG.executor, data }]
+    });
+    say(`Registering… <a class="mono" href="${CFG.explorer}/tx/${hash}">${short(hash)}</a>`);
+    const receipt = await waitFor(hash);
+    if (receipt.status !== "0x1") return say("Registration reverted.", true);
+    const log = receipt.logs.find((l) =>
+      l.address.toLowerCase() === CFG.executor.toLowerCase() && l.topics[0] === CFG.topic.orderCreated);
+    if (!log) return say("Registered, but the order id was not in the logs.", true);
+    location.search = "?order=" + log.topics[1];
+  } catch (e) {
+    btn.disabled = false;
+    say(esc(e && e.message ? e.message : String(e)), true);
+  }
+}
+
+async function renderOrder(orderId) {
+  const order = decodeOrder(await call(CFG.executor, CFG.sel.orders + pad(orderId)));
+  if (!order || order.status === 0) {
+    return renderMissing("No such order", "This link names an order the executor does not know.");
+  }
+  const expired = order.deadline * 1000 < Date.now();
+  const settled = order.status === 3;
+  const eth = fmt(order.amountIn, 18, 6), usdc = fmt(order.minOut, 6, 6);
+  view.innerHTML = `
+    <div class="card">
+      <p class="big">${eth} ETH</p>
+      <p class="sub">to <span class="mono">${short(order.recipient)}</span>, who receives at least ${usdc} USDC</p>
+      ${rows([
+        ["Recipient", `<a class="mono" href="${CFG.explorer}/address/${order.recipient}">${short(order.recipient)}</a>`],
+        ["You pay", `${eth} ETH`],
+        ["They receive", `at least ${usdc} USDC`],
+        ["Expires", new Date(order.deadline * 1000).toLocaleString()],
+        ["Status", settled ? '<span class="ok">settled</span>' : (expired ? '<span class="bad">expired</span>' : STATUS[order.status])]
+      ])}
+      <button class="pay" id="pay" ${settled || expired ? "disabled" : ""}>
+        ${settled ? "Already settled" : expired ? "Expired" : `Pay ${eth} ETH`}
+      </button>
+      <p class="note" id="msg"></p>
+    </div>`;
+  const btn = $("#pay");
+  if (btn && !btn.disabled) btn.onclick = () => pay(orderId, order);
+}
+
+async function pay(orderId, order) {
+  const btn = $("#pay"), msg = $("#msg");
+  const say = (html, bad) => { msg.innerHTML = html; msg.className = "note" + (bad ? " bad" : ""); };
+  if (!window.ethereum) {
+    return say('No wallet found in this browser. Install a wallet, or settle from the repository with <code>make settle</code>.', true);
+  }
+  btn.disabled = true;
+  try {
+    const [from] = await window.ethereum.request({ method: "eth_requestAccounts" });
+    if (await window.ethereum.request({ method: "eth_chainId" }) !== CFG.chainIdHex) {
+      say(`Switching to ${CFG.chainName}…`);
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CFG.chainIdHex }] });
+    }
+    say("Confirm in your wallet…");
+    const hash = await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{ from, to: CFG.executor, data: CFG.sel.pay + pad(orderId), value: "0x" + order.amountIn.toString(16) }]
+    });
+    say(`Sent. <a class="mono" href="${CFG.explorer}/tx/${hash}">${short(hash)}</a> — waiting for the receipt…`);
+    const receipt = await waitFor(hash);
+    if (receipt.status !== "0x1") return say("The payment reverted. Nothing moved; the order is still payable.", true);
+    const log = receipt.logs.find((l) =>
+      l.address.toLowerCase() === CFG.hook.toLowerCase() && l.topics[0] === CFG.topic.receipt);
+    if (!log) return say("Settled, but no receipt was found in the transaction. That should not happen; please report it.", true);
+    renderReceipt(decodeReceipt(log), hash);
+  } catch (e) {
+    btn.disabled = false;
+    say(esc(e && e.message ? e.message : String(e)), true);
+  }
+}
+
+async function waitFor(hash) {
+  for (let i = 0; i < 90; i++) {
+    const r = await rpc("eth_getTransactionReceipt", [hash]);
+    if (r) return r;
+    await new Promise((s) => setTimeout(s, 2000));
+  }
+  throw new Error("The transaction is taking longer than expected; check the explorer link above.");
+}
+
+function renderReceipt(r, hash) {
+  view.innerHTML = `
+    <div class="card">
+      <p class="big"><span class="ok">Paid</span></p>
+      <p class="sub">The recipient received ${fmt(r.amountOut, 6, 6)} USDC in the same transaction.</p>
+      ${rows([
+        ["Recipient", `<a class="mono" href="${CFG.explorer}/address/${r.recipient}">${short(r.recipient)}</a>`],
+        ["You paid", `${fmt(r.amountIn, 18, 6)} ETH`],
+        ["They received", `${fmt(r.amountOut, 6, 6)} USDC`],
+        ["Hook fee", `${fmt(r.fee, 6, 6)} USDC`],
+        ["Order", `<span class="mono">${short(r.orderId)}</span>`],
+        ["Receipt schema", `v${r.version}`],
+        ["Transaction", `<a class="mono" href="${CFG.explorer}/tx/${hash}">${short(hash)}</a>`]
+      ])}
+      <p class="note">This receipt was emitted by the hook inside the swap, so it exists only because the
+      recipient was paid. <a href="${CFG.explorer}/tx/${hash}#eventlog">See it on the explorer</a>.</p>
+    </div>`;
+}
+
+main().catch((e) => renderMissing("Could not read the chain", esc(e.message)));
+</script>
+</body>
+</html>
