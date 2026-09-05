@@ -135,3 +135,49 @@ went 0 to 1; both sources are `match` on Sourcify; `verify-live.sh` prints 31 of
 `live-green` at commit `5e1d843`: the audited live-contract state, the records and the verifier.
 The README's proof rows and the evidence index were committed after the tag (`4a67a5c`, `5417a0f`);
 the tag was not moved for them. Read the tag for what was audited, HEAD for how it is described.
+
+## Protecting the live pool
+
+The hook admits swaps in one direction only: native ETH in, USDC out, through the executor and the
+Universal Router. Nothing can move the pool's price back up. Every settlement lowers the USDC per
+ETH the next one pays, and the pool's USDC is a reservoir that only new liquidity refills. That is
+a property of a settlement pool, not a defect, and it sets what a demo can promise.
+
+Measured on a fork of the live pool, 2026-09-05, settling 0.001 ETH repeatedly with a minimum of
+one unit so that every settlement lands and the outputs can be read:
+
+| Pool | Liquidity | Settlements paying at least 1.5 USDC | at least 1.0 | at least 0.5 | Outputs, USDC |
+|---|---|---|---|---|---|
+| as it stands, price 1,615 USDC/ETH | 204,325,880,000 | 0 | 1 | 4 | 1.347, 0.967, 0.728, 0.568, 0.456 |
+| after one 20 USDC top-up at that price | 701,915,084,069 | 1 | 5 | 14 | 1.524, 1.368, 1.234, 1.120, 1.020, 0.933, 0.857, 0.790, 0.730, 0.677, 0.630, 0.587, 0.549, 0.514, 0.482 |
+
+Two consequences. The script's own settle stage, whose order asks for 1.5 USDC, is done: it proved
+the path once and a second run would be refused by the hook with `OutputBelowMinimum`, which is
+the invariant, not a failure. The public surface must therefore derive each demo order's minimum
+from a live quote and disable itself when the quote is too small, rather than promise a fixed
+amount; it does (`web/README.md`).
+
+**The bounded top-up, prepared and not broadcast.** Stage 5, `topup()` in `script/LiveFire.s.sol`,
+adds full-range liquidity at the pool's current price to the position the seed stage opened.
+
+| Field | Value |
+|---|---|
+| USDC added | what the deployer holds, capped at 20 USDC, floor 5 USDC (the deployer holds 2.00 USDC now, so the stage refuses until a faucet round lands) |
+| ETH leg | computed from the USDC leg at the current price, capped at 0.02 ETH; the router refunds the rest. At 1,615 USDC/ETH and 20 USDC: 0.012379750800313461 ETH |
+| Expected liquidity after | printed by `planTopup()` before anything is signed; on the fork 701,915,084,069 for 20 USDC, and the stage refuses if the chain's result differs from the plan |
+| Tick range | full range, ticks -887,220 to 887,220 |
+| Position | the seed stage's, held by Uniswap's `PoolModifyLiquidityTest` router (salt 0). On that testnet router anyone may withdraw it: testnet money, nothing else |
+| Recipient / owner | no recipient; the deployer pays both legs |
+| Maximum exposure | 0.02 ETH plus about 0.0004 ETH of gas, and the USDC budget |
+| Transactions | two: `approve` of the exact USDC budget, then `modifyLiquidity` |
+| Minimum demo settlements after | 14 at 0.5 USDC or more, 5 at 1.0 or more, from the table above |
+| Refusals | wrong chain; HEAD not `deploy-candidate-6` or a dirty tree; the contracts not at their sizes or not naming each other; pool uninitialised or unseeded; price above the opening 2,500 or below 1,000 USDC/ETH; deployer below 5 USDC or below the ETH leg plus gas; and, after the broadcast, liquidity not equal to the plan |
+
+Controls seen on the fork: the stage stopped at the USDC floor with the deployer's real balance;
+with 20 USDC it added exactly the planned liquidity and left 2.00366 USDC, the settlement's proceeds.
+
+```sh
+make topup-check     # the pre-flight and the plan; sends nothing
+make topup-live      # after the owner's approval and a faucet round: the two transactions
+make readback && make proof   # liquidity must equal the plan's "liquidity after"; the verifier must stay all green
+```
