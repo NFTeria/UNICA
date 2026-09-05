@@ -6,7 +6,8 @@ should not hold value it cannot afford to lose.** This file states what is defen
 defence is proven, and what is not defended, so a reader can judge the posture rather than take
 a claim on trust. It is dated and it is updated in the commit that changes a row.
 
-Last reviewed 2026-09-05, against `main`.
+Last reviewed 2026-09-05, against `main`, after an adversarial attack review whose two
+exploitable findings are fixed and whose remaining findings are recorded in `docs/reviews/`.
 
 ## Reporting a vulnerability
 
@@ -42,6 +43,8 @@ in [`specs/`](specs/README.md).
 | I7 | Native settlement integrity | the official router syncs before every settle; the executor never holds a balance and has no `receive` | `test/I7NativeSettle.t.sol`, four rows against a switchable stand-in plus a fifth against the router's deployed bytecode |
 | T5 | The permission bits match the declared permissions | the mask is asserted numerically off the real runtime code before any deploy, and v4's own `HookAddressNotValid` is the second control | `test_MinedAddress_MatchesDeclaredPermissions` and four others |
 | T11 | No NoOp rug | designed out: no returns-delta permission, ever | `test_NoUndeclaredPermissionsCreepIn` asserts both flags false |
+| T2 | No pool of an attacker's devising can carry this hook | `beforeInitialize` refuses any pool that is not native ETH against the chain's payout currency, so a receipt cannot be minted for output nobody sanctioned | `test/attack/HostilePool.t.sol`, four tests including the control that the sanctioned shape still settles from any caller |
+| — | No settlement pays a contract on its own path | the router's two `TAKE` sentinels, the router, the executor, the hook and the PoolManager are all refused as recipients where the order is created | `test_RevertWhen_RecipientIsAContractOnThePath` walks all six |
 
 ## What is not defended
 
@@ -50,12 +53,10 @@ Stated plainly, because an unstated gap is the dangerous kind.
 - **No audit.** No firm has reviewed this code. The adversarial reviews in
   [`docs/reviews/`](docs/reviews/) are machine-run, and their coverage is stated there, including
   where a vote did not complete.
-- **No pool allowlist (spec C2).** Anyone may initialise a Uniswap v4 pool naming this hook with
-  currencies of their choosing. The executor refuses orders for pools its hook does not guard, so
-  such a pool cannot receive UNICA settlements, but it can exist and carry this hook's address.
-- **No payout-asset allowlist (spec C4).** An order's output currency is whatever its pool key
-  names. A token that delivers less than the pool credited is caught at the recipient
-  (`RecipientShort`), but a token free to behave arbitrarily is not otherwise constrained.
+- **The payout currency is one address per chain.** Spec C2 and C4 are enforced together: a pool
+  carrying this hook is native ETH against that currency or it cannot be initialised. That is a
+  defence, but it is also a limit: supporting another payout currency or another chain changes the
+  hook's creation code, and so its address, and needs a new deployment.
 - **No reentrancy test yet (threat T6).** The hook keeps no state between callbacks and the order
   is `Paying` for the duration of the call, so a reentrant payment meets its own state check.
   That is an argument, not a test, and it is listed as such in the threat model.

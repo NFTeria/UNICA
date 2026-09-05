@@ -7,8 +7,8 @@
 set -uo pipefail
 RPC="${1:-https://ethereum-sepolia-rpc.publicnode.com}"
 RECORD="${2:-broadcast/LiveFire.s.sol/11155111/run-latest.json}"
-HOOK=0xe478371d804EF56D8e84403F8D97F6184bdEc0C0
-EXECUTOR=0x338Faac2D716AEBFd265EBc8DDf46664155eba72
+HOOK=0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0
+EXECUTOR=0x044bc8a8773EC7b9B8de2467766636dFFCaC6210
 ROUTER=0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b
 PM=0xE03A1074c86CFeDd5C142C4F04F1a1536e203543
 SV=0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C
@@ -28,8 +28,8 @@ call() { cast call "$1" "$2" ${3:-} --rpc-url "$RPC" 2>/dev/null | head -1 | awk
 echo "# day-4 verification against $RPC, $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 chk "chain id is 11155111" "[ \"\$(cast chain-id --rpc-url $RPC)\" = 11155111 ]"
 hcode=$(cast code $HOOK --rpc-url "$RPC" 2>/dev/null); ecode=$(cast code $EXECUTOR --rpc-url "$RPC" 2>/dev/null)
-chk "hook has runtime code at $HOOK (10302 bytes)" "[ \$(( (\${#hcode}-2)/2 )) = 10302 ]"
-chk "executor has runtime code at $EXECUTOR (10606 bytes)" "[ \$(( (\${#ecode}-2)/2 )) = 10606 ]"
+chk "hook has runtime code at $HOOK (10634 bytes)" "[ \$(( (\${#hcode}-2)/2 )) = 10634 ]"
+chk "executor has runtime code at $EXECUTOR (11289 bytes)" "[ \$(( (\${#ecode}-2)/2 )) = 11289 ]"
 chk "hook.poolManager is the official PoolManager" "[ \"\$(call $HOOK 'poolManager()(address)')\" = $PM ]"
 chk "hook.UNIVERSAL_ROUTER is Uniswap's Sepolia Universal Router" "[ \"\$(call $HOOK 'UNIVERSAL_ROUTER()(address)')\" = $ROUTER ]"
 chk "hook.SETTLEMENT_EXECUTOR is the executor" "[ \"\$(call $HOOK 'SETTLEMENT_EXECUTOR()(address)')\" = $EXECUTOR ]"

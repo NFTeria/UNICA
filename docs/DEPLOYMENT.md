@@ -45,8 +45,8 @@ constructor arguments, and salt:
 There is no circular dependency: the executor's creation code embeds an interface, never the
 hook's code; the hook's creation code embeds the executor's, and the hook's own address is known
 to it at construction. Measured 2026-09-04 night, after the review fixes: the fork rehearsal
-deployed the hook at `0xe478371d804EF56D8e84403F8D97F6184bdEc0C0` and the executor at
-`0x338Faac2D716AEBFd265EBc8DDf46664155eba72`, both equal to their predictions, and the readback
+deployed the hook at `0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0` and the executor at
+`0x044bc8a8773EC7b9B8de2467766636dFFCaC6210`, both equal to their predictions, and the readback
 showed each naming the other. The hook address changes with every edit of the hook or the
 executor, which is why nothing is broadcast before the deploy day.
 
@@ -74,8 +74,8 @@ receipt counter 0 to 1, 2.003660 USDC to the recipient for 0.001 ETH against a 1
 
 | Contract | Runtime bytes | EIP-170 headroom |
 |---|---|---|
-| `V4SettlementHook` | 10,302 | 14,274 |
-| `SettlementExecutor` | 10,606 | 13,970 |
+| `V4SettlementHook` | 10,634 | 13,942 |
+| `SettlementExecutor` | 11,289 | 13,287 |
 
 Re-verify: `forge inspect src/V4SettlementHook.sol:V4SettlementHook deployedBytecode | wc -c`
 (divide by two, minus one for the `0x`). CI asserts both stay under 24,576.

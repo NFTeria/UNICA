@@ -72,7 +72,7 @@ bytecode cannot have its defence switched off.
 
 End to end, on 2026-09-04 night: `make rehearse` forked Sepolia with anvil, impersonated the
 deployer, and ran all four stages against the deployed Universal Router at its real address:
-the hook at its mined `0xC0` address, then the executor bound to it at its derived address, the
+the hook at its mined `0x20C0` address, then the executor bound to it at its derived address, the
 pool initialised and seeded, one order for 0.001 ETH with a 1.5 USDC minimum paid through
 `execute`, the hook's counter 0 to 1, the recipient credited 2.003660 USDC, seven transactions
 at status 1, none broadcast; the readback showed `executor.HOOK` and `hook.SETTLEMENT_EXECUTOR`

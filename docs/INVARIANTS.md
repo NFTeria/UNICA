@@ -18,7 +18,10 @@ against the router's deployed bytecode. All seven are TESTED against Uniswap's o
 PoolManager bytecode; the gate and order-check tests also run against the deployed Universal
 Router runtime. After the night's adversarial review: the executor is bound to the hook and
 refuses unguarded pools and router-sentinel recipients, verifies what the recipient received,
-and the hook refuses a second swap per order per transaction; each has its named test below. Nothing on this page is LIVE-FIRED yet: the day-1 live-fire was the
+and the hook refuses a second swap per order per transaction; each has its named test below.
+Day 5, after the attack review: a pool carrying this hook is native ETH against the chain's payout
+currency or it cannot be initialised (spec C2 and C4), and no settlement may name a contract on
+its own path as recipient. Nothing on this page is LIVE-FIRED yet: the day-1 live-fire was the
 scaffold hook, which has none of this; the gated hook is live-fired on day 4. Why the official
 router and not one of our own: `docs/EXECUTION-PATH.md`.
 
