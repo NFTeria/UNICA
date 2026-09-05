@@ -45,7 +45,8 @@ echo "chain id            $chain"
 # what is reviewed is what runs. A later fix gets a new candidate tag, never a moved one.
 git rev-parse -q --verify "$FREEZE_TAG^{commit}" >/dev/null || fail "no tag $FREEZE_TAG"
 test "$(git rev-parse HEAD)" = "$(git rev-parse "$FREEZE_TAG^{commit}")" || fail "HEAD $(git rev-parse --short HEAD) is not the frozen candidate $FREEZE_TAG ($(git rev-parse --short "$FREEZE_TAG^{commit}"))"
-test -z "$(git status --short)" || fail "the working tree is not clean"
+test -z "$(git status --short)" || fail "the working tree is not clean; these entries are not committed:
+$(git status --short)"
 FROZEN="src foundry.toml remappings.txt $(git ls-files 'script/*.sol')"
 git diff --quiet "$FREEZE_TAG" -- $FROZEN || fail "the Solidity or the compiler settings differ from $FREEZE_TAG"
 echo "frozen candidate    $FREEZE_TAG = $(git rev-parse --short HEAD), tree clean, Solidity and compiler settings identical"
