@@ -1,0 +1,66 @@
+name: pages
+
+# Publish web/ to GitHub Pages, and nothing else. web/ is already the whole surface (README.md's
+# own words: "no build step, no framework, no dependencies, no backend") so this workflow builds
+# nothing server-side — it uploads the directory as-is. Triggers only on a push to main that
+# touches the surface itself, plus a manual button to redeploy the current main without a code
+# change, and on an edit to this file itself, so a workflow change is exercised by itself before it can
+# publish anything. Publishing must be turned on once by hand first (docs/PUBLISHING.md: Settings > Pages >
+# Source: GitHub Actions) — this file alone does not make the site public.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# Read-only at the top, for every job that does not say otherwise. Only the deploy job below
+# raises anything further, and only the two scopes actions/deploy-pages requires.
+permissions:
+  contents: read
+
+# A push while a deploy is in flight must not race it: cancel the older run rather than let two
+# deploys interleave and leave the published site in whichever one lands last.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  # Fails closed: nothing downstream runs unless the file GitHub Pages would publish still says
+  # what it is pinned to say. Read-only — the checked-out tree only, no chain call, no network.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Verify the published surface (script/check-surface.sh)
+        run: bash script/check-surface.sh
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    # Job-level permissions replace the top-level block entirely, so contents: read is repeated
+    # here alongside the two scopes actions/deploy-pages needs — nowhere else in this workflow.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      # web/ uploaded exactly as committed: no install, no build, no transform.
+      - name: Upload web/ as the Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
