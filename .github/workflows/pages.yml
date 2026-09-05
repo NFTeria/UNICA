@@ -38,6 +38,10 @@ jobs:
         run: bash script/check-surface.sh
 
   deploy:
+    # Skipped, not failed, until the owner has enabled Pages and set the repository variable
+    # PAGES_ENABLED to true (docs/PUBLISHING.md). Before that, actions/configure-pages cannot find a
+    # Pages site and every push touching web/ would show a red run for a reason that is not a defect.
+    if: vars.PAGES_ENABLED == 'true'
     needs: check
     runs-on: ubuntu-latest
     # Job-level permissions replace the top-level block entirely, so contents: read is repeated
