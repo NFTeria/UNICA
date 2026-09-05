@@ -9,3 +9,4 @@ tests/.latest.json
 # describe that tooling, not this code (measured 2026-09-04).
 package-lock.json
 networks.local.json
+subgraph.local.yaml

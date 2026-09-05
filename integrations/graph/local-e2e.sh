@@ -53,10 +53,15 @@ python3 - "$HOOK" "$FORK_BLOCK" <<'PY'
 import json, sys
 json.dump({"sepolia": {"V4SettlementHook": {"address": sys.argv[1], "startBlock": int(sys.argv[2])}}}, open("networks.local.json", "w"), indent=2)
 PY
-npx graph codegen >/dev/null
-npx graph build --network sepolia --network-file networks.local.json >/dev/null
+# graph build --network rewrites the manifest it is given, so it is given a copy: the committed
+# subgraph.yaml keeps the zero placeholder, and subgraph.local.yaml (ignored) carries this fork's
+# address and start block.
+cp subgraph.yaml subgraph.local.yaml
+npx graph codegen subgraph.local.yaml >/dev/null
+npx graph build subgraph.local.yaml --network sepolia --network-file networks.local.json >/dev/null
 npx graph create --node "$NODE" "$NAME" >/dev/null
-npx graph deploy --node "$NODE" --ipfs "$IPFS" --version-label v0.1.0 --network sepolia --network-file networks.local.json "$NAME" 2>&1 | grep -E "Deployed|Build completed|error" | head -3
+npx graph deploy --node "$NODE" --ipfs "$IPFS" --version-label v0.1.0 --network sepolia --network-file networks.local.json "$NAME" subgraph.local.yaml 2>&1 | grep -E "Deployed|Build completed|error" | head -3
+git -C "$HERE" diff --quiet -- subgraph.yaml || { echo "FAIL: the committed manifest was modified by the build"; exit 1; }
 
 echo "== 5. one settlement through the executor and the official router"
 cd "$REPO"
