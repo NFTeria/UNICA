@@ -8,6 +8,7 @@ import {IERC20Minimal} from "@uniswap/v4-core/src/interfaces/external/IERC20Mini
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
+import {AddressConstants} from "hookmate/constants/AddressConstants.sol";
 import {UniswapDeployments} from "./libraries/UniswapDeployments.sol";
 
 /// @notice The one function of Uniswap's Universal Router this contract calls.
@@ -64,6 +65,8 @@ contract SettlementExecutor {
     address public immutable UNIVERSAL_ROUTER;
     /// @notice The settlement hook every order's pool must carry, and the only receipt this contract trusts.
     address public immutable HOOK;
+    /// @notice Uniswap's PoolManager on this chain. Read only to refuse it as a recipient.
+    address public immutable POOL_MANAGER;
 
     mapping(bytes32 orderId => Order) internal _orders;
     /// @notice Orders created so far. A statistic; ids come from the creator and a salt.
@@ -85,7 +88,11 @@ contract SettlementExecutor {
     );
 
     error ZeroRecipient();
-    /// @notice The router maps address(1) and address(2) to itself or its caller; neither can be a recipient.
+    /// @notice A recipient no settlement may name: the router's two sentinels (address(1) is its
+    ///         caller, address(2) is itself), and the contracts on the path. Output sent to the
+    ///         router is sweepable by the next caller; output sent to this executor, the hook or the
+    ///         PoolManager is stranded, because none of them can move a token out (the day-5 attack
+    ///         review). An order naming one is refused where it is created, not where it is paid.
     error ReservedRecipient(address recipient);
     /// @notice The order's pool is not guarded by this executor's hook (invariants I3 to I6 would not apply).
     error PoolNotGuarded(address hooks);
@@ -113,6 +120,7 @@ contract SettlementExecutor {
 
     constructor(address hook) {
         UNIVERSAL_ROUTER = UniswapDeployments.universalRouter(block.chainid);
+        POOL_MANAGER = AddressConstants.getPoolManagerAddress(block.chainid);
         HOOK = hook;
     }
 
@@ -131,7 +139,11 @@ contract SettlementExecutor {
         bytes32 salt
     ) external returns (bytes32 orderId) {
         if (recipient == address(0)) revert ZeroRecipient();
-        if (recipient == ActionConstants.MSG_SENDER || recipient == ActionConstants.ADDRESS_THIS) {
+        if (
+            recipient == ActionConstants.MSG_SENDER || recipient == ActionConstants.ADDRESS_THIS
+                || recipient == UNIVERSAL_ROUTER || recipient == address(this) || recipient == HOOK
+                || recipient == POOL_MANAGER
+        ) {
             revert ReservedRecipient(recipient);
         }
         if (address(key.hooks) != HOOK) revert PoolNotGuarded(address(key.hooks));
