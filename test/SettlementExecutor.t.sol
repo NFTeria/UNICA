@@ -287,12 +287,14 @@ contract SettlementExecutorTest is SettlementTestBase {
     ///         minimum at what actually arrives settles, and the executor's own event records the
     ///         delivered amount while the hook's receipt records the pool's credit.
     function test_RevertWhen_RecipientReceivesLessThanTheMinimum_FeeOnTransfer() public {
-        FeeOnTakeERC20 fot = new FeeOnTakeERC20(address(manager), 100);
-        fot.mint(address(this), 1_000_000 ether);
-        fot.approve(address(liquidityRouter), type(uint256).max);
+        // The payout currency is fixed by the chain (spec C2, C4), so a hostile token cannot be
+        // brought in as currency1 at all. The residual risk the allowlist does not remove is the
+        // sanctioned token itself behaving this way, so that is what is tested: the fee-on-take
+        // runtime is placed at the payout address, keeping the balances already there.
+        FeeOnTakeERC20 template = new FeeOnTakeERC20(address(manager), 100);
+        vm.etch(address(usdc), address(template).code);
+        FeeOnTakeERC20 fot = FeeOnTakeERC20(address(usdc));
         PoolKey memory fotKey = key;
-        fotKey.currency1 = Currency.wrap(address(fot));
-        initPoolWithLiquidity(fotKey, 10 ether);
 
         // Measure the pool's credit for this order size on a snapshot, then unwind.
         uint256 snapshot = vm.snapshotState();

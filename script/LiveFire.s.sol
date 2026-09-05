@@ -57,7 +57,7 @@ abstract contract SettlementScriptBase is Script {
     uint128 internal constant SETTLE_MIN_OUT = 1_500_000;
 
     // ---- the declared permission set, spec section 5 -----------------------------------------
-    uint160 internal constant FLAGS = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
+    uint160 internal constant FLAGS = Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
     /// @dev Must equal V4SettlementHook.EXECUTOR_SALT. Checked after every deploy: the hook's derived executor
     ///      address must be the address the executor landed on, or the deploy stage reverts.
     bytes32 internal constant EXECUTOR_SALT = bytes32(0);

@@ -14,4 +14,15 @@ library UniswapDeployments {
         if (chainId == 11155111) return 0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b;
         revert UnsupportedChainId(chainId);
     }
+
+    /// @notice The one currency a settlement may pay out on this chain: Circle's USDC.
+    /// @dev Resolved from the chain id, never configured, so the hook has no owner and no list to
+    ///      manage. This is spec C2 and C4 in one line: a pool carrying this hook can only ever be
+    ///      native ETH against this token, so nobody can stand up a pool of their own devising,
+    ///      settle through it, and mint a receipt naming a recipient who received something
+    ///      worthless. Adding a chain here changes the hook's creation code, and so its address.
+    function payoutCurrency(uint256 chainId) internal pure returns (address) {
+        if (chainId == 11155111) return 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
+        revert UnsupportedChainId(chainId);
+    }
 }

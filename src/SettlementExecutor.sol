@@ -89,6 +89,9 @@ contract SettlementExecutor {
     error ReservedRecipient(address recipient);
     /// @notice The order's pool is not guarded by this executor's hook (invariants I3 to I6 would not apply).
     error PoolNotGuarded(address hooks);
+    /// @notice The order's payout currency is not this chain's (spec C4). The hook refuses such a
+    ///         pool at initialisation; this is the same refusal one step earlier, with a clear name.
+    error PayoutCurrencyNotAllowed(address currency1);
     /// @notice The hook did not receipt exactly one settlement for this payment.
     error NoReceipt(bytes32 orderId);
     /// @notice The recipient's balance grew by less than the order's minimum: the pool credited enough,
@@ -132,6 +135,8 @@ contract SettlementExecutor {
             revert ReservedRecipient(recipient);
         }
         if (address(key.hooks) != HOOK) revert PoolNotGuarded(address(key.hooks));
+        address payout = UniswapDeployments.payoutCurrency(block.chainid);
+        if (Currency.unwrap(key.currency1) != payout) revert PayoutCurrencyNotAllowed(Currency.unwrap(key.currency1));
         if (amountIn == 0) revert ZeroAmount();
         if (minOut == 0) revert ZeroMinOut();
         if (deadline <= block.timestamp) revert DeadlineInPast(deadline);

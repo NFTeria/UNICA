@@ -48,8 +48,10 @@ abstract contract SettlementTestBase is Test {
     int24 internal constant TICK_SPACING = 60;
     bytes internal constant ZERO_BYTES = "";
 
-    /// @dev The declared permission set, spec section 5: beforeSwap | afterSwap = 0xC0.
-    uint160 internal constant DECLARED_MASK = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
+    /// @dev The declared permission set: beforeInitialize | beforeSwap | afterSwap = 0x20C0 (spec
+    ///      section 5, plus C2/C4 which needs the pool refused where it is born).
+    uint160 internal constant DECLARED_MASK =
+        Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
     /// @dev Namespaced so an etched address never lands on a precompile or a reserved prefix.
     address internal constant HOOK_ADDR = address(uint160(DECLARED_MASK) ^ (0x4444 << 144));
 
@@ -96,8 +98,13 @@ abstract contract SettlementTestBase is Test {
         vm.label(address(swapRouter), "PoolSwapTest");
         vm.label(address(liquidityRouter), "PoolModifyLiquidityTest");
 
-        usdc = new MockERC20("USD Coin (local mock)", "USDC", 18);
-        usdcCurrency = Currency.wrap(address(usdc));
+        // The mock stands at the address the hook's payout-currency check names, because that check
+        // is on the address (spec C2, C4). Eighteen decimals rather than USDC's six is deliberate and
+        // harmless: v4 never reads decimals, and it keeps a 1:1 pool price readable in the tests.
+        address payout = UniswapDeployments.payoutCurrency(block.chainid);
+        deployCodeTo("MockERC20.sol:MockERC20", abi.encode("USD Coin (local mock)", "USDC", uint8(18)), payout);
+        usdc = MockERC20(payout);
+        usdcCurrency = Currency.wrap(payout);
         usdc.mint(address(this), 1_000_000 ether);
         usdc.approve(address(swapRouter), type(uint256).max);
         usdc.approve(address(liquidityRouter), type(uint256).max);

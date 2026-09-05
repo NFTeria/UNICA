@@ -42,6 +42,8 @@ contract V4SettlementHook is BaseHook, IHookEvents {
 
     /// @notice Uniswap's Universal Router on this chain: the only `sender` a swap may carry.
     address public immutable UNIVERSAL_ROUTER;
+    /// @notice The only currency a pool carrying this hook may pay out (spec C2 and C4).
+    address public immutable PAYOUT_CURRENCY;
     /// @notice The SettlementExecutor at its CREATE2 address: the only caller the router may report.
     address public immutable SETTLEMENT_EXECUTOR;
 
@@ -75,6 +77,9 @@ contract V4SettlementHook is BaseHook, IHookEvents {
         bytes32 policyId
     );
 
+    /// @notice The pool is not the settlement shape: native ETH in, this chain's payout currency out.
+    ///         Refused at initialisation, so no such pool carrying this hook can exist (spec C2, C4).
+    error NotTheSettlementShape(address currency0, address currency1);
     /// @notice The swap did not arrive through the official router (invariant I1).
     error NotOfficialPath(address sender);
     /// @notice The router was driven by something other than the executor (invariant I1).
@@ -98,6 +103,7 @@ contract V4SettlementHook is BaseHook, IHookEvents {
 
     constructor() BaseHook(IPoolManager(AddressConstants.getPoolManagerAddress(block.chainid))) {
         UNIVERSAL_ROUTER = UniswapDeployments.universalRouter(block.chainid);
+        PAYOUT_CURRENCY = UniswapDeployments.payoutCurrency(block.chainid);
         SETTLEMENT_EXECUTOR = _computeExecutor();
     }
 
@@ -119,7 +125,7 @@ contract V4SettlementHook is BaseHook, IHookEvents {
     /// @inheritdoc BaseHook
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
-            beforeInitialize: false,
+            beforeInitialize: true,
             afterInitialize: false,
             beforeAddLiquidity: false,
             afterAddLiquidity: false,
@@ -134,6 +140,23 @@ contract V4SettlementHook is BaseHook, IHookEvents {
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
         });
+    }
+
+    /// @dev Spec C2 and C4, enforced where a pool is born rather than where it is used: a pool
+    ///      carrying this hook is native ETH against this chain's payout currency, or it does not
+    ///      exist. Without this, anyone could initialise a pool naming this hook against a token
+    ///      they printed, settle through it, and mint a receipt indistinguishable from a real one
+    ///      (the day-5 attack review, threat T2). Anyone may still create the sanctioned shape at
+    ///      any fee tier: the check is on the currencies, not on the caller, so the hook stays
+    ///      permissionless. Reached only through `BaseHook.beforeInitialize`, which is
+    ///      `onlyPoolManager` (threat T1).
+    function _beforeInitialize(address, PoolKey calldata key, uint160) internal override returns (bytes4) {
+        address currency0 = Currency.unwrap(key.currency0);
+        address currency1 = Currency.unwrap(key.currency1);
+        if (currency0 != address(0) || currency1 != PAYOUT_CURRENCY) {
+            revert NotTheSettlementShape(currency0, currency1);
+        }
+        return IHooks.beforeInitialize.selector;
     }
 
     /// @dev Invariant I1's gate, then the order's own terms. Reached only through `BaseHook.beforeSwap`,
