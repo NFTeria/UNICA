@@ -127,3 +127,9 @@ make readback && make proof && make verify && make proof
 `verify-live.sh` runs 31 checks. Before the settlement, on a fork of the chain as it stood, the
 deploy rows passed and the settlement rows failed (its control); after a fork settlement every row
 passed except the two Sourcify rows, which pass on Sepolia once `make verify` has run.
+
+**Settled, 2026-09-05 11:20:48 UTC.** `make settle-live` from `deploy-candidate-5`: createOrder at
+nonce 457 and pay at nonce 458, both in block 11640026, both status 1. The receipt carries
+`amountOut` 2,003,660 and the deployer's USDC grew by exactly that; `receiptCount` and `orderCount`
+went 0 to 1; both sources are `match` on Sourcify; `verify-live.sh` prints 31 of 31. Closing tag
+`live-green`.
