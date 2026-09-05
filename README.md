@@ -154,6 +154,11 @@ wrapping. Every row names the rung it has reached and carries the command that r
 between; nothing under `src/` did). Every row is read from the chain; `bash docs/proof/verify-live.sh`
 re-proves all of them without trusting this file. `RPC=https://ethereum-sepolia-rpc.publicnode.com`.
 
+Provenance: the tag `live-green` (commit `5e1d843`) identifies the audited live-contract state,
+the records and the verifier as they were when the chain was read. This table and the evidence
+index landed in the two commits after it (`4a67a5c`, `5417a0f`). The tag is not moved; the
+documentation HEAD is whatever this file's commit is.
+
 | Item | Value | Rung | Re-verify |
 |---|---|---|---|
 | Hook | `0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0`, salt `0xd76`, flags `0x20C0` (beforeInitialize, beforeSwap, afterSwap), 10,634 bytes of runtime code, zero-argument constructor | LIVE, [explorer](https://sepolia.etherscan.io/address/0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0) | `cast code 0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0 --rpc-url $RPC \| wc -c` prints 21271; `make predict` reproduces the address and salt |
