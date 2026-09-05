@@ -18,7 +18,7 @@ const NATIVE = Address.fromString("0x0000000000000000000000000000000000000000");
 const USDC = Address.fromString("0xF62849F9A0B5Bf2913b396098F7c7019b51A820a");
 const AMOUNT_IN = BigInt.fromString("1000000000000000");
 const AMOUNT_OUT = BigInt.fromString("996006981039903");
-const ZERO32 = Bytes.fromHexString("0x0000000000000000000000000000000000000000000000000000000000000000");
+const ZERO32 = Bytes.fromHexString("0x" + "00".repeat(32)); // the zero bytes32: no policy id applied
 
 function receipt(version: i32, orderId: Bytes, logIndex: i32): SettlementReceipt {
   const mock = newMockEvent();
