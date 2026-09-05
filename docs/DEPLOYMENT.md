@@ -132,9 +132,9 @@ passed except the two Sourcify rows, which pass on Sepolia once `make verify` ha
 nonce 457 and pay at nonce 458, both in block 11640026, both status 1. The receipt carries
 `amountOut` 2,003,660 and the deployer's USDC grew by exactly that; `receiptCount` and `orderCount`
 went 0 to 1; both sources are `match` on Sourcify; `verify-live.sh` prints 31 of 31. Closing tag
-`live-green` at commit `5e1d843`: the audited live-contract state, the records and the verifier.
+`live-green` at commit `5e1d843`: the reviewed live-contract state, the records and the verifier.
 The README's proof rows and the evidence index were committed after the tag (`4a67a5c`, `5417a0f`);
-the tag was not moved for them. Read the tag for what was audited, HEAD for how it is described.
+the tag was not moved for them. Read the tag for what was reviewed, HEAD for how it is described.
 
 ## Protecting the live pool
 

@@ -68,8 +68,8 @@ payer ─► SettlementExecutor.pay(orderId)          the order leaves Open befo
                       └─ take(USDC, order.recipient, everything)   the line the executor exists for (I1)
 ```
 
-The contract layout for the three partners this entry builds on, and which contracts are Vyper,
-is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The invariants land one slice at a time,
+The contract layout, and the partner seams built or not, are in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The invariants land one slice at a time,
 each with a negative test first; their rungs are in [`docs/INVARIANTS.md`](docs/INVARIANTS.md)
 and the threats in [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md).
 
@@ -154,7 +154,7 @@ wrapping. Every row names the rung it has reached and carries the command that r
 between; nothing under `src/` did). Every row is read from the chain; `bash docs/proof/verify-live.sh`
 re-proves all of them without trusting this file. `RPC=https://ethereum-sepolia-rpc.publicnode.com`.
 
-Provenance: the tag `live-green` (commit `5e1d843`) identifies the audited live-contract state,
+Provenance: the tag `live-green` (commit `5e1d843`) identifies the reviewed live-contract state,
 the records and the verifier as they were when the chain was read. This table and the evidence
 index landed in the two commits after it (`4a67a5c`, `5417a0f`). The tag is not moved; the
 documentation HEAD is whatever this file's commit is.
@@ -311,7 +311,7 @@ Sepolia on 2026-08-17), is cited as prior art in the spec and was not copied: it
 receipted without gating, and UNICA inverts each of those choices. The admission mechanic
 itself follows Uniswap's own guide "Access msg.sender Inside a Hook" and Uniswap Labs'
 `PermissionedHooks`; the closest third-party works, what is and is not new, and the sweep's blind
-spots are in [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md). NFTeria's private `.click` product is the first integrator: it settles customer
+spots are in [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md). NFTeria's private `.click` product is the integrator this hook is designed for: it settles customer
 payments and wants pay-in-X, receive-in-Y, atomically, with a receipt. The private product
 never enters this repository.
 

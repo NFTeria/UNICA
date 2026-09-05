@@ -166,3 +166,7 @@ works: the subgraph indexes schema v1 receipts, its handler has tests around a r
 payment leaves no entity. It is optional and removable in one commit; the hook and the executor
 do not know it exists. The published bar for the sponsor's track (live data from a Graph
 provider) is an owner action still to come, recorded in `docs/INTEGRATIONS.md` as pending.
+
+The day-1 tree above also lists `integrations/world/`, a subgraph read by `web/`, and Sentry. None of
+those exists: `integrations/` holds `graph/` alone, `web/` reads the chain directly and makes no request
+other than the RPC and the wallet (`web/README.md`), and none is claimed (`docs/DEMO.md`).

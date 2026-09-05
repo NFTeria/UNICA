@@ -41,9 +41,9 @@ in `specs/HOOK-SPEC.md` section 0. It is prior art in the ordinary sense: it inf
 design, and nothing from it, no file, no test, no helper, was brought into this repository.
 This one is written from the specification against the pinned interfaces.
 
-## The first integrator
+## The intended integrator
 
-NFTeria's private `.click` product is the first real integrator of this hook: a business that
+NFTeria's private `.click` product is the integrator this hook is designed for: a business that
 settles customer payments and wants a payer to pay in one asset while the business receives
 another, atomically, with a receipt. That relationship is why the hook exists and is stated
 here in prose only. The private product never enters this repository: no source,
