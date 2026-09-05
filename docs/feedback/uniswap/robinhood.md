@@ -1,5 +1,7 @@
 # Robinhood testnet: an observed encoding incompatibility
 
+**Public status, the only sentence to be said about this subject: Robinhood testnet is under compatibility investigation.** Nothing here claims support, deployment, or an official stack.
+
 Public sentence for this subject, verbatim: **Robinhood testnet is under compatibility
 investigation.**
 
