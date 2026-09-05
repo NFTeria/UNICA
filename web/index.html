@@ -52,6 +52,16 @@
   a { color: inherit; text-underline-offset: 2px; }
   .hidden { display: none; }
   code { background: var(--surface); padding: 1px 4px; border-radius: var(--radius); font-size: 13px; }
+  /* The readback panel: what was read from the chain, beside what this page pins. No accent here;
+     the panel reports, it does not act. */
+  #chain { margin-top: 16px; }
+  .scroll { overflow-x: auto; }
+  .rb { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .rb th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px 0; }
+  .rb td { padding: 6px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  .rb td:last-child { white-space: nowrap; }
+  .rb th + th, .rb td + td { padding-left: 12px; }
+  footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; margin-top: 24px; }
   @media (prefers-color-scheme: dark) {
     :root { --ink: #F2F2EF; --paper: #121212; --line: #2A2C30; --surface: #1C1E22; --muted: #9AA0A6;
             --accent: #35B888; --on-accent: #0B1F17; --bad: #E88; }
@@ -67,29 +77,61 @@
 
   <div id="view"><p class="sub">Reading the order from Ethereum Sepolia…</p></div>
 
+  <section id="chain" class="card" aria-live="polite">
+    <p class="sub">Reading chain state before enabling anything…</p>
+  </section>
+
   <p class="note">
     Testnet only (Ethereum Sepolia). The amount is settled through Uniswap's official Universal Router
     into a pool whose hook admits only this path, and the hook emits a receipt naming the order.
     <a href="https://github.com/NFTeria/UNICA">Source and proofs</a>.
   </p>
+  <footer id="links"></footer>
 </main>
 
 <script>
+// Everything this page believes about the chain, pinned from the live deploy (tag live-green,
+// commit 5e1d843, docs/DEPLOYMENT.md). Both contracts are CREATE2 addresses derived from their
+// creation code, so they change if the contracts change. The page reads all of it back before it
+// enables anything; a disagreement between the chain and this block is a stale configuration.
 const CFG = {
   chainIdHex: "0xaa36a7", chainId: 11155111, chainName: "Ethereum Sepolia",
   rpc: "https://ethereum-sepolia-rpc.publicnode.com",
   explorer: "https://sepolia.etherscan.io",
-  // Filled from the deploy. Both are CREATE2 addresses derived from the creation code, so they
-  // change if the contracts change; docs/DEPLOYMENT.md explains the derivation.
+  blockscout: "https://eth-sepolia.blockscout.com",
   executor: "0x044bc8a8773EC7b9B8de2467766636dFFCaC6210",
   hook: "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0",
+  poolManager: "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+  stateView: "0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C",
   usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+  poolId: "0xff4f4e2438f61817271cbd8399a925f5f99a1482f88c55419a2b69d0768e56db", // native ETH / USDC, fee 3000, spacing 60, this hook
   fee: 3000, tickSpacing: 60,
-  sel: { orders: "0x9c3f1e90", pay: "0x8609cad1", createOrder: "0x849d8c9f", orderCount: "0x2453ffa8" },
+  codeBytes: { hook: 10634, executor: 11289 }, // eth_getCode lengths at the deploy
+  deployBlock: 11639895,
+  release: { tag: "live-green", commit: "5e1d843" },
+  amountIn: 10n ** 15n, // the fixed 0.001 ETH input of every order this page registers
+  receiptTx: "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83", // the canonical receipt
+  // Function selectors, each computed with `cast sig "<signature>"` and pinned with its signature.
+  sel: {
+    orders: "0x9c3f1e90",             // orders(bytes32)                                  on the executor
+    pay: "0x8609cad1",                // pay(bytes32)                                     on the executor
+    createOrder: "0x849d8c9f",        // createOrder(address,(address,address,uint24,int24,address),uint128,uint128,uint64,bytes32)
+    orderCount: "0x2453ffa8",         // orderCount()                                     on the executor
+    hookOf: "0xa54eb242",             // HOOK()                                           on the executor
+    settlementExecutor: "0x8dec7ecc", // SETTLEMENT_EXECUTOR()                            on the hook
+    poolManagerOf: "0xdc4c90d3",      // poolManager()                                    on StateView
+    getSlot0: "0xc815641c",           // getSlot0(bytes32)                                on StateView
+    getLiquidity: "0xfa6793d5"        // getLiquidity(bytes32)                            on StateView
+  },
   topic: {
     receipt: "0xf9b834e9c2d7d0250251dfdb3c5fdc3f97d829dbe3402f45c89257ab4ec43563",
     orderCreated: "0xb44f69365ea9fe814655e6ffe1c0ba2e55cd0d2a6aa8ac7eb68db63fd5179cc0" // topic, keccak of OrderCreated
   }
+};
+const LINKS = {
+  sourcify: (a) => `https://sourcify.dev/server/v2/contract/${CFG.chainId}/${a}`,
+  blockscout: (a) => `${CFG.blockscout}/address/${a}?tab=contract`,
+  receipt: { blockscout: `${CFG.blockscout}/tx/${CFG.receiptTx}`, etherscan: `${CFG.explorer}/tx/${CFG.receiptTx}` }
 };
 const STATUS = ["none", "open", "paying", "settled"];
 const $ = (s) => document.querySelector(s);
@@ -149,53 +191,239 @@ function renderMissing(msg, detail) {
   view.innerHTML = `<div class="card"><p class="big">${esc(msg)}</p><p class="sub">${detail}</p></div>`;
 }
 
-async function main() {
-  const orderId = new URLSearchParams(location.search).get("order");
-  const deployed = (await rpc("eth_getCode", [CFG.executor, "latest"])) !== "0x";
-  if (!deployed) {
-    return renderMissing("Not deployed yet",
-      `The settlement executor is not on ${CFG.chainName} at <span class="mono">${short(CFG.executor)}</span> yet.
-       This page goes live with it. Everything it does is already tested and reproducible in the repository.`);
-  }
-  if (!orderId || !/^0x[0-9a-fA-F]{64}$/.test(orderId)) return renderNoLink();
-  await renderOrder(orderId);
+const iso = (ts) => new Date(ts * 1000).toISOString();
+const rel = (ts) => {
+  let d = Math.round(ts - Date.now() / 1000); const past = d < 0; d = Math.abs(d);
+  const h = Math.floor(d / 3600), m = Math.floor((d % 3600) / 60);
+  const s = h ? `${h} h ${m} min` : `${m} min`;
+  return past ? `${s} ago` : `in ${s}`;
+};
+const acct = (a) => `<a class="mono" href="${CFG.explorer}/address/${a}">${short(a)}</a>`;
+const cell = (x) => x ? `<span class="mono" title="${esc(x)}">${short(x)}</span>` : "(empty)";
+const same = (a, b) => typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
+const addrWord = (d) => d && d.length >= 66 ? addrOf(word(d, 0)) : null;
+const codeBytes = (code) => typeof code === "string" && code.length >= 2 ? (code.length - 2) / 2 : 0;
+
+// The quote, from chain state, in integers. The live pool holds one full-range position, so an
+// exact-input swap of x wei at fee f (in pips) stays on one curve and never crosses a tick:
+//   xf     = x * (1e6 - f) / 1e6                                    the fee comes off the input first
+//   sqrtP' = ceil( L * sqrtP * 2^96 / (L * 2^96 + xf * sqrtP) )    the next price, Q96, rounded up as v4 does
+//   out    = floor( L * (sqrtP - sqrtP') / 2^96 )                   token1 out, rounded down as v4 does
+// Control: sqrtPriceX96 3961408125713216879677197, L 204325880000, x 1e15, f 3000 gives 2003660, the
+// amountOut the canonical receipt paid (tx 0x1120af…ecb83). web/README.md records the check.
+const Q96 = 1n << 96n;
+function quoteExactIn(x, sqrtP, L, feePips) {
+  if (L <= 0n || sqrtP <= 0n) return 0n;
+  const xf = x * (1000000n - feePips) / 1000000n;
+  const num = L * Q96, den = num + xf * sqrtP;
+  const sqrtNext = (num * sqrtP + den - 1n) / den;
+  return L * (sqrtP - sqrtNext) / Q96;
 }
 
-async function renderNoLink() {
-  const count = numOf(await call(CFG.executor, CFG.sel.orderCount)).toString();
+// Read before anything is enabled. Each row is a live value beside the value it is compared with;
+// a "pin" row that disagrees is a stale configuration, a "pool" row that fails is an empty pool.
+async function readback() {
+  const [chainId, hookCode, execCode, execOfHook, hookOfExec, pmOfView, slot0, liq] = await Promise.all([
+    rpc("eth_chainId", []),
+    rpc("eth_getCode", [CFG.hook, "latest"]),
+    rpc("eth_getCode", [CFG.executor, "latest"]),
+    call(CFG.hook, CFG.sel.settlementExecutor),
+    call(CFG.executor, CFG.sel.hookOf),
+    call(CFG.stateView, CFG.sel.poolManagerOf),
+    call(CFG.stateView, CFG.sel.getSlot0 + pad(CFG.poolId)),
+    call(CFG.stateView, CFG.sel.getLiquidity + pad(CFG.poolId))
+  ]);
+  const slotOk = typeof slot0 === "string" && slot0.length >= 2 + 4 * 64;
+  const sqrtPriceX96 = slotOk ? numOf(word(slot0, 0)) : 0n;
+  const lpFee = slotOk ? Number(numOf(word(slot0, 3))) : null;
+  const liquidity = typeof liq === "string" && liq.length >= 66 ? numOf(liq) : 0n;
+  const execBytes = codeBytes(execCode);
+  const rows = [
+    ["pin", "eth_chainId", Number(chainId), CFG.chainId, Number(chainId) === CFG.chainId],
+    ["pin", "code at the hook, bytes", codeBytes(hookCode), CFG.codeBytes.hook, codeBytes(hookCode) === CFG.codeBytes.hook],
+    ["pin", "code at the executor, bytes", execBytes, CFG.codeBytes.executor, execBytes === CFG.codeBytes.executor],
+    ["pin", "hook.SETTLEMENT_EXECUTOR()", cell(addrWord(execOfHook)), cell(CFG.executor), same(addrWord(execOfHook), CFG.executor)],
+    ["pin", "executor.HOOK()", cell(addrWord(hookOfExec)), cell(CFG.hook), same(addrWord(hookOfExec), CFG.hook)],
+    ["pin", "StateView.poolManager()", cell(addrWord(pmOfView)), cell(CFG.poolManager), same(addrWord(pmOfView), CFG.poolManager)],
+    ["pin", "getSlot0(poolId).lpFee", lpFee === null ? "(empty)" : lpFee, CFG.fee, lpFee === CFG.fee],
+    ["pool", "getSlot0(poolId).sqrtPriceX96", sqrtPriceX96.toString(), "non-zero", sqrtPriceX96 > 0n],
+    ["pool", "getLiquidity(poolId)", liquidity.toString(), "&gt; 0", liquidity > 0n]
+  ].map(([kind, what, live, pinned, ok]) => ({ kind, what, live, pinned, ok }));
+  return { rows, sqrtPriceX96, liquidity, lpFee, execBytes,
+           stale: rows.filter((r) => r.kind === "pin" && !r.ok).length,
+           hasLiquidity: liquidity > 0n && sqrtPriceX96 > 0n };
+}
+
+// eth_chainId and eth_accounts prompt for nothing; they only say what the wallet is already on.
+async function walletState() {
+  if (!window.ethereum) return { present: false, chainId: null, account: null };
+  try {
+    const [chainId, accounts] = await Promise.all([
+      window.ethereum.request({ method: "eth_chainId" }),
+      window.ethereum.request({ method: "eth_accounts" })
+    ]);
+    return { present: true, chainId: Number(chainId), account: (accounts && accounts[0]) || null };
+  } catch (e) {
+    return { present: true, chainId: null, account: null, error: e && e.message ? e.message : String(e) };
+  }
+}
+
+// Page state. Nothing is enabled on a value older than the last reread().
+const S = { orderId: null, order: null, count: null, rb: null, rbError: null, wallet: { present: false }, quote: 0n, demo: null };
+
+async function reread() {
+  try { S.rb = await readback(); S.rbError = null; }
+  catch (e) { S.rb = null; S.rbError = e && e.message ? e.message : String(e); }
+  S.quote = S.rb ? quoteExactIn(CFG.amountIn, S.rb.sqrtPriceX96, S.rb.liquidity, BigInt(CFG.fee)) : 0n;
+  S.wallet = await walletState();
+  if (S.rb && S.rb.execBytes > 0) {
+    if (S.orderId) S.order = decodeOrder(await call(CFG.executor, CFG.sel.orders + pad(S.orderId)));
+    else { const c = await call(CFG.executor, CFG.sel.orderCount); S.count = c && c.length >= 66 ? numOf(c).toString() : null; }
+  }
+}
+
+// The conditions under which nothing is enabled, most fundamental first; each one is one sentence.
+function blockers() {
+  const out = [];
+  if (!S.rb) out.push(`The chain could not be read (${esc(S.rbError)}), so nothing is enabled.`);
+  else {
+    if (S.rb.stale) out.push(`Stale configuration: the chain disagrees with ${S.rb.stale} pinned value${S.rb.stale === 1 ? "" : "s"} in this page (marked below), so nothing is enabled until the page is corrected.`);
+    if (!S.rb.hasLiquidity) out.push("The pool has no liquidity, so no payment could settle.");
+  }
+  if (!S.wallet.present) out.push("No wallet was found in this browser, so nothing can be signed; the read-only checks still ran.");
+  else if (S.wallet.chainId !== CFG.chainId) out.push(`Your wallet is on chain ${S.wallet.chainId === null ? "unknown" : S.wallet.chainId}, not ${CFG.chainName} (${CFG.chainId}); switch it to continue.`);
+  return out;
+}
+
+const switchButton = () => S.wallet.present && S.wallet.chainId !== CFG.chainId
+  ? `<button class="secondary" id="switch">Switch the wallet to ${CFG.chainName}</button>` : "";
+function wireSwitch() {
+  const b = $("#switch"); if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true;
+    try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CFG.chainIdHex }] }); }
+    catch (e) { const m = $("#msg"); if (m) { m.textContent = e && e.message ? e.message : String(e); m.className = "note bad"; } }
+    await refresh();
+  };
+}
+async function connect() {
+  try { await window.ethereum.request({ method: "eth_requestAccounts" }); }
+  catch (e) { const m = $("#msg"); if (m) { m.textContent = e && e.message ? e.message : String(e); m.className = "note bad"; } return; }
+  await refresh();
+}
+
+function renderReadback() {
+  const el = $("#chain");
+  if (!S.rb) {
+    el.innerHTML = `<p class="sub bad">The chain could not be read over ${esc(CFG.rpc)}: ${esc(S.rbError)}. Nothing is enabled.</p>`;
+    return;
+  }
+  const pins = S.rb.rows.filter((r) => r.kind === "pin"), agree = pins.filter((r) => r.ok).length;
+  el.innerHTML = `
+    <p class="sub">Read from ${CFG.chainName} over the public RPC before anything was enabled:
+    ${pins.length} pinned values checked, ${agree} agree, ${pins.length - agree} disagree; pool liquidity ${S.rb.liquidity.toString()}.</p>
+    <div class="scroll"><table class="rb">
+      <thead><tr><th>Read</th><th>Live</th><th>Pinned</th><th></th></tr></thead>
+      <tbody>${S.rb.rows.map((r) =>
+        `<tr><td>${esc(r.what)}</td><td>${r.live}</td><td>${r.pinned}</td><td class="${r.ok ? "" : "bad"}">${r.ok ? "agrees" : "disagrees"}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <p class="note">Pinned from tag <code>${CFG.release.tag}</code> at commit <code>${CFG.release.commit}</code>, deployed in block ${CFG.deployBlock}:
+    hook ${cell(CFG.hook)}, executor ${cell(CFG.executor)}, PoolManager ${cell(CFG.poolManager)}, StateView ${cell(CFG.stateView)},
+    USDC ${cell(CFG.usdc)}, pool ${cell(CFG.poolId)}, fee ${CFG.fee}, tick spacing ${CFG.tickSpacing}.
+    Quote for 0.001 ETH from this state: ${fmt(S.quote, 6, 6)} USDC.</p>`;
+}
+
+function renderLinks() {
+  const c = (name, a) => `${name} <span class="mono">${short(a)}</span>
+    (<a href="${LINKS.sourcify(a)}">Sourcify</a>, <a href="${LINKS.blockscout(a)}">Blockscout</a>)`;
+  $("#links").innerHTML = `Verified sources: ${c("hook", CFG.hook)} · ${c("executor", CFG.executor)}.
+    Canonical receipt: tx <span class="mono">${short(CFG.receiptTx)}</span>
+    (<a href="${LINKS.receipt.blockscout}">Blockscout</a>, <a href="${LINKS.receipt.etherscan}">Etherscan</a>).
+    Release: tag <code>${CFG.release.tag}</code>, commit <code>${CFG.release.commit}</code>.`;
+}
+
+async function main() {
+  renderLinks();
+  const q = new URLSearchParams(location.search).get("order");
+  S.orderId = q && /^0x[0-9a-fA-F]{64}$/.test(q) ? q : null;
+  await refresh();
+  if (window.ethereum && typeof window.ethereum.on === "function") {
+    window.ethereum.on("chainChanged", () => refresh());
+    window.ethereum.on("accountsChanged", () => refresh());
+  }
+}
+
+// Read the chain and the wallet again, then draw everything from what was just read.
+async function refresh() {
+  await reread();
+  renderReadback();
+  if (S.rb && S.rb.execBytes === 0) {
+    return renderMissing("Not deployed yet",
+      `The settlement executor is not on ${CFG.chainName} at <span class="mono">${short(CFG.executor)}</span>.
+       This page goes live with it. Everything it does is already tested and reproducible in the repository.`);
+  }
+  if (S.orderId) renderOrder(); else renderNoLink();
+}
+
+function renderNoLink() {
+  const count = S.count, quote = S.quote, minOut = quote * 97n / 100n;
+  const deadline = Math.floor(Date.now() / 1000) + 3600;
+  const why = blockers();
+  if (!why.length && quote < 500000n) {
+    why.push(`The current quote for 0.001 ETH is ${fmt(quote, 6, 6)} USDC, under 0.5 USDC: the demo pool is too thin for a meaningful settlement.`);
+  }
+  const connected = S.wallet.present && S.wallet.account;
+  S.demo = { minOut, deadline, quote };
   view.innerHTML = `
     <div class="card">
       <p class="big">A payment link</p>
       <p class="sub">A merchant registers an order and shares a link ending in <code>?order=…</code>.
-      Opening it shows one button, and one click settles it. ${count} order${count === "1" ? " has" : "s have"}
-      been registered on ${CFG.chainName} so far.</p>
-      <button class="secondary" id="make">Register a demo order to my own address</button>
-      <p class="note" id="msg">That is the merchant's side, shown here so you can try the payer's side without one.
-      It costs a little test ETH and pays nothing.</p>
+      Opening it shows one button, and one click settles it. ${count === null ? "The order count could not be read"
+        : `${count} order${count === "1" ? " has" : "s have"} been registered on ${CFG.chainName}`} so far.</p>
+      ${rows([
+        ["Recipient", connected ? `${acct(S.wallet.account)} (you)` : "your connected account"],
+        ["Payer", connected ? `${acct(S.wallet.account)} (you, when you open the link and pay it)` : "the connected account, when the link is paid"],
+        ["Input", "0.001 ETH"],
+        ["Minimum output", `${fmt(minOut, 6, 6)} USDC — minimum = 97% of the current quote of ${fmt(quote, 6, 6)} USDC`],
+        ["Deadline", `${iso(deadline)} (${rel(deadline)})`],
+        ["Wallet prompts", "one confirmation of <code>createOrder</code>, carrying no ETH"],
+        ["When it is paid", "the hook refuses or the recipient is paid; nothing in between"]
+      ])}
+      <button class="secondary" id="make" ${why.length ? "disabled" : ""}>${connected
+        ? "Register a demo order to my own address" : "Connect a wallet to register a demo order"}</button>
+      ${switchButton()}
+      <p class="note${why.length ? " bad" : ""}" id="msg">${why.length ? why[0]
+        : "That is the merchant's side, shown here so you can try the payer's side without one. It costs a little test ETH and pays nothing."}</p>
     </div>`;
-  $("#make").onclick = createDemoOrder;
+  const btn = $("#make");
+  if (btn && !btn.disabled) btn.onclick = connected ? createDemoOrder : connect;
+  wireSwitch();
 }
 
 // The merchant's action, kept off the payment path on purpose: it registers an order to the
-// visitor's own address and then reloads the page as the payer would see it.
+// visitor's own address, with a minimum taken from the live quote, and then reloads the page as
+// the payer would see it.
 async function createDemoOrder() {
   const btn = $("#make"), msg = $("#msg");
   const say = (html, bad) => { msg.innerHTML = html; msg.className = "note" + (bad ? " bad" : ""); };
-  if (!window.ethereum) return say("No wallet found in this browser.", true);
   btn.disabled = true;
   try {
     const [from] = await window.ethereum.request({ method: "eth_requestAccounts" });
-    if (await window.ethereum.request({ method: "eth_chainId" }) !== CFG.chainIdHex) {
-      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CFG.chainIdHex }] });
+    say("Re-reading the pool…");
+    await reread();
+    const quote = S.quote, shown = S.demo;
+    if (blockers().length || quote < 500000n) { renderReadback(); return renderNoLink(); }
+    if (quote !== shown.quote || shown.deadline <= Math.floor(Date.now() / 1000) + 60) {
+      renderReadback(); renderNoLink();
+      return say(`The quote moved to ${fmt(quote, 6, 6)} USDC while you were reading; the minimum and the deadline above were refreshed. Look them over and click again.`);
     }
     const salt = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
       .map((b) => b.toString(16).padStart(2, "0")).join("");
-    const deadline = Math.floor(Date.now() / 1000) + 3600;
     const data = CFG.sel.createOrder + [
       from, "0x0", CFG.usdc, CFG.fee.toString(16), CFG.tickSpacing.toString(16), CFG.hook,
-      (10n ** 15n).toString(16), (1500000n).toString(16), deadline.toString(16), salt
+      CFG.amountIn.toString(16), shown.minOut.toString(16), shown.deadline.toString(16), salt
     ].map((v) => pad(typeof v === "string" && v.startsWith("0x") ? v : "0x" + v)).join("");
-    say("Confirm in your wallet…");
+    say("Confirm in your wallet: one prompt, <code>createOrder</code>, carrying no ETH…");
     const hash = await window.ethereum.request({
       method: "eth_sendTransaction", params: [{ from, to: CFG.executor, data }]
     });
@@ -212,48 +440,62 @@ async function createDemoOrder() {
   }
 }
 
-async function renderOrder(orderId) {
-  const order = decodeOrder(await call(CFG.executor, CFG.sel.orders + pad(orderId)));
+// The order's minimum is fixed on chain; the quote is read again every time this draws, and the
+// button is enabled only while the quote clears the minimum. Below it, the hook would refuse.
+const orderQuote = (order) => S.rb ? quoteExactIn(order.amountIn, S.rb.sqrtPriceX96, S.rb.liquidity, BigInt(CFG.fee)) : 0n;
+const belowMinimum = (order, quote) =>
+  `The quote for ${fmt(order.amountIn, 18, 6)} ETH is now ${fmt(quote, 6, 6)} USDC against a minimum of ${fmt(order.minOut, 6, 6)} USDC:
+   the pool has moved below this order's minimum; the hook would refuse the payment and you would keep your ETH.
+   <a href="${esc(location.pathname)}">Register a new order.</a>`;
+
+function renderOrder() {
+  const order = S.order;
   if (!order || order.status === 0) {
     return renderMissing("No such order", "This link names an order the executor does not know.");
   }
   const expired = order.deadline * 1000 < Date.now();
   const settled = order.status === 3;
+  const quote = orderQuote(order);
   const eth = fmt(order.amountIn, 18, 6), usdc = fmt(order.minOut, 6, 6);
+  const why = settled || expired ? [] : blockers();
+  if (!settled && !expired && !why.length && quote < order.minOut) why.push(belowMinimum(order, quote));
+  const connected = S.wallet.present && S.wallet.account;
+  const disabled = settled || expired || why.length > 0;
   view.innerHTML = `
     <div class="card">
       <p class="big">${eth} ETH</p>
       <p class="sub">to <span class="mono">${short(order.recipient)}</span>, who receives at least ${usdc} USDC</p>
       ${rows([
-        ["Recipient", `<a class="mono" href="${CFG.explorer}/address/${order.recipient}">${short(order.recipient)}</a>`],
-        ["You pay", `${eth} ETH`],
-        ["They receive", `at least ${usdc} USDC`],
-        ["Expires", new Date(order.deadline * 1000).toLocaleString()],
+        ["Payer", connected ? acct(S.wallet.account) : "your connected account"],
+        ["Recipient", acct(order.recipient)],
+        ["Input", `${eth} ETH`],
+        ["Minimum output", `${usdc} USDC — the current quote is ${fmt(quote, 6, 6)} USDC`],
+        ["Deadline", `${iso(order.deadline)} (${rel(order.deadline)})`],
+        ["Wallet prompts", `one confirmation of <code>pay(orderId)</code> carrying ${eth} ETH`],
+        ["Outcome", "the hook refuses or the recipient is paid; nothing in between"],
         ["Status", settled ? '<span class="ok">settled</span>' : (expired ? '<span class="bad">expired</span>' : STATUS[order.status])]
       ])}
-      <button class="pay" id="pay" ${settled || expired ? "disabled" : ""}>
-        ${settled ? "Already settled" : expired ? "Expired" : `Pay ${eth} ETH`}
+      <button class="${connected || disabled ? "pay" : "secondary"}" id="pay" ${disabled ? "disabled" : ""}>
+        ${settled ? "Already settled" : expired ? "Expired" : connected ? `Pay ${eth} ETH` : "Connect a wallet to pay"}
       </button>
-      <p class="note" id="msg"></p>
+      ${settled || expired ? "" : switchButton()}
+      <p class="note${why.length ? " bad" : ""}" id="msg">${why.length ? why[0] : ""}</p>
     </div>`;
   const btn = $("#pay");
-  if (btn && !btn.disabled) btn.onclick = () => pay(orderId, order);
+  if (btn && !btn.disabled) btn.onclick = connected ? pay : connect;
+  wireSwitch();
 }
 
-async function pay(orderId, order) {
-  const btn = $("#pay"), msg = $("#msg");
+async function pay() {
+  const order = S.order, orderId = S.orderId, btn = $("#pay"), msg = $("#msg");
   const say = (html, bad) => { msg.innerHTML = html; msg.className = "note" + (bad ? " bad" : ""); };
-  if (!window.ethereum) {
-    return say('No wallet found in this browser. Install a wallet, or settle from the repository with <code>make settle</code>.', true);
-  }
   btn.disabled = true;
   try {
     const [from] = await window.ethereum.request({ method: "eth_requestAccounts" });
-    if (await window.ethereum.request({ method: "eth_chainId" }) !== CFG.chainIdHex) {
-      say(`Switching to ${CFG.chainName}…`);
-      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CFG.chainIdHex }] });
-    }
-    say("Confirm in your wallet…");
+    say("Re-reading the pool…");
+    await reread();
+    if (blockers().length || orderQuote(order) < order.minOut) { renderReadback(); return renderOrder(); }
+    say(`Confirm in your wallet: one prompt, <code>pay(orderId)</code> carrying ${fmt(order.amountIn, 18, 6)} ETH…`);
     const hash = await window.ethereum.request({
       method: "eth_sendTransaction",
       params: [{ from, to: CFG.executor, data: CFG.sel.pay + pad(orderId), value: "0x" + order.amountIn.toString(16) }]
