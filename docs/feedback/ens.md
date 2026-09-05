@@ -7,7 +7,10 @@
 orders and receipts are addressed by raw addresses and order ids.
 
 **Published requirement** (Best Use of ENSv2, ethglobal.com/events/ethonline2026/prizes,
-retrieved 2026-09-05): "ENSv2 features should be central to the product."
+retrieved 2026-09-05): "Project must be built on ENSv2 (Sepolia). ENSv2 features should be central to the product,
+not a cosmetic add-on. Your demo must be functional and not just include hard-coded values."
+(This file previously quoted only the middle sentence, which dropped both the chain constraint
+and the no-hard-coded-values clause.)
 
 **What would have to be built:** an ENSv2 (Sepolia) integration where resolution or naming is
 central to the settlement flow, not decorative — for example, resolving an order's recipient

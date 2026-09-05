@@ -8,7 +8,7 @@ x402-gated service exposing settlement receipts, settled through a Hedera facili
 
 **Published requirement** (AI & Agentic Payments on Hedera,
 ethglobal.com/events/ethonline2026/prizes, retrieved 2026-09-05): "Host a live x402-gated
-service on Hedera testnet or mainnet, settled through Blocky402 facilitator."
+service on Hedera testnet or mainnet, settled through the Blocky402 facilitator."
 
 **What would have to be built:** a separate microservice, a facilitator integration, and a
 paying agent — a distinct system with no Uniswap surface involved at any point. This is a

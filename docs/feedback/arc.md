@@ -10,7 +10,10 @@ not an integration — it routes nothing through a v4 pool on Arc, and Arc mainn
 
 **Published requirement** (Best DeFi/Onchain Finance Application,
 ethglobal.com/events/ethonline2026/prizes, retrieved 2026-09-05): "Build stablecoin-native DeFi
-on Arc using Arc and USDC."
+on Arc." The published sentence after it, separate from that one, is "Build lending, borrowing,
+swaps, liquidity, FX, yield, payments, treasury or fintech infrastructure using Arc and USDC."
+Re-fetched 2026-09-05; this file previously ran the two together inside one pair of quotation
+marks.
 
 **What would have to be built:** an actual Arc-deployed contract with a working frontend and
 backend and an architecture diagram, per the track's own bar. Nothing toward this exists.

@@ -7,8 +7,9 @@
 was attempted.
 
 **Published requirement** (AI Agents x Ledger, ethglobal.com/events/ethonline2026/prizes,
-retrieved 2026-09-05): "Build on the Ledger Agent Stack, particularly on the Ledger Key Ring
-CLI (wallet-cli ring)."
+retrieved 2026-09-05): "Both must be built on the Ledger Agent Stack, and in particular on the
+Ledger Key Ring CLI (wallet-cli ring)." Re-fetched from the prize page on 2026-09-05; this file
+previously carried a paraphrase inside quotation marks.
 
 **What would have to be built:** an agent driving the Key Ring CLI as its signer — an entire
 integration surface absent from this project. Not attempted.

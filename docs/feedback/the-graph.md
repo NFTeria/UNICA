@@ -5,10 +5,10 @@
 
 **Touches UNICA today:** yes. `integrations/graph/` holds a manifest keyed by hook address per
 network, a schema with one immutable `Settlement` entity, a handler keyed on schema version
-one, three matchstick tests against a real local receipt, and `local-e2e.sh`, which reconstructs
+one, six matchstick tests against a real local receipt, and `local-e2e.sh`, which reconstructs
 a settlement from its log in a local graph-node and shows a refused payment yields no entity.
 The hook itself imports and inherits `IHookEvents` and emits `HookFee`
-(`src/V4SettlementHook.sol:5,36,202`).
+(`src/V4SettlementHook.sol:5,35,250`).
 
 **Published requirement** (Best Use of Composable or Standardized Graph Products,
 ethglobal.com/events/ethonline2026/prizes, retrieved 2026-09-05): "Mocked, local-only, or
