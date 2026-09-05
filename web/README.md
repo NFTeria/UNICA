@@ -17,6 +17,23 @@ serves a static file, which is the point.
   a stranger can register an order to their own address and then try the payer's side.
 - Before the contracts exist on chain it says so plainly rather than failing.
 
+## Proven against a real deployment
+
+2026-09-05, on an anvil fork of Ethereum Sepolia with the contracts deployed by this repository's
+own stages and one order registered through `createOrder`, the page was served and loaded in a
+browser. All three views were read from the chain, not from fixtures:
+
+| View | What the page showed |
+|---|---|
+| `?order=<the real id>` | `0.001 ETH`, the recipient, "at least 1.5 USDC", the deadline, status `open`, and the pay button enabled |
+| no `?order=` | the payment-link explanation and the live count, "1 order has been registered" |
+| `?order=0x…deadbeef` | "No such order: this link names an order the executor does not know" |
+
+The decoders were also exercised directly against a constructed order and returned the recipient,
+fee 3000, tick spacing 60, `0.001` ETH and `1.5` USDC. What is not yet proven here is the payment
+itself, which needs a browser wallet and a live deployment; the same path is proven in Solidity by
+`test/SettlementExecutor.t.sol` and end to end by `integrations/graph/local-e2e.sh`.
+
 ## Honest limits
 
 - Ethereum Sepolia only. Test money.
