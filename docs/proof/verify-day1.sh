@@ -29,9 +29,9 @@ chk "afterSwapCount is at least 1" "[ \"\$(cast call $HOOK \"$SIG_COUNT\" --rpc-
 topic=$(cast keccak 'AfterSwapObserved(address,bytes32,int256)')
 chk "swap receipt carries AfterSwapObserved from the hook" "[ \"\$(cast receipt $SWAP --rpc-url $RPC --json | python3 -c \"import sys,json;r=json.load(sys.stdin);print(any(l['address'].lower()=='$HOOK'.lower() and l['topics'][0]=='$topic' for l in r['logs']))\")\" = True ]"
 chk "swap receipt carries the PoolManager Swap event" "[ \"\$(cast receipt $SWAP --rpc-url $RPC --json | python3 -c \"import sys,json;r=json.load(sys.stdin);print(any(l['topics'][0]=='\$(cast keccak 'Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)')' for l in r['logs']))\")\" = True ]"
-if [ -f broadcast/LiveFire.s.sol/11155111/run-latest.json ]; then
-  chk "committed broadcast record: 5 receipts, all status 0x1" "[ \"\$(python3 -c \"import json;r=json.load(open('broadcast/LiveFire.s.sol/11155111/run-latest.json'));print(len(r['receipts']), sorted(set(x['status'] for x in r['receipts'])))\")\" = \"5 ['0x1']\" ]"
-  chk "broadcast record carries no secret-shaped field" "! grep -qiE 'PRIVATE_KEY|MNEMONIC|password|\"ciphertext\"' broadcast/LiveFire.s.sol/11155111/run-latest.json"
+if [ -f broadcast/LiveFire.s.sol/11155111/run-1788555540752.json ]; then
+  chk "committed broadcast record: 5 receipts, all status 0x1" "[ \"\$(python3 -c \"import json;r=json.load(open('broadcast/LiveFire.s.sol/11155111/run-1788555540752.json'));print(len(r['receipts']), sorted(set(x['status'] for x in r['receipts'])))\")\" = \"5 ['0x1']\" ]"
+  chk "broadcast record carries no secret-shaped field" "! grep -qiE 'PRIVATE_KEY|MNEMONIC|password|\"ciphertext\"' broadcast/LiveFire.s.sol/11155111/run-1788555540752.json"
 fi
 echo "checks run: $((ok+fail)), passed: $ok, failed: $fail"
 [ "$fail" = 0 ]
