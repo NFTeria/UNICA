@@ -26,7 +26,12 @@ cleanup() {
 trap cleanup EXIT
 
 echo "== 1. fork $(printf '%s' "$RPC" | cut -d/ -f3) on :$PORT"
-anvil --fork-url "$RPC" --port "$PORT" --auto-impersonate --silent &
+# Fork from the block BEFORE the live deploy (11639895), so the repository's own stages deploy,
+# initialise and seed a fresh pool on the fork. Forking the head after 2026-09-05 finds the live
+# pool already there, moved by its own settlement, and the init stage's price guard refuses it as
+# foreign, which is that guard doing its job (measured). Override with FORK_BLOCK_NUMBER.
+FORK_BLOCK_NUMBER="${FORK_BLOCK_NUMBER:-11639894}"
+anvil --fork-url "$RPC" --fork-block-number "$FORK_BLOCK_NUMBER" --port "$PORT" --auto-impersonate --silent &
 ANVIL=$!
 for _ in $(seq 1 60); do cast chain-id --rpc-url "$LOCAL" >/dev/null 2>&1 && break; sleep 0.5; done
 FORK_BLOCK=$(cast block-number --rpc-url "$LOCAL")
