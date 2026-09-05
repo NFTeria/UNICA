@@ -376,6 +376,48 @@ contract SettlementExecutorTest is SettlementTestBase {
         assertEq(executor.orderCount(), 2);
     }
 
+    // ------------------------------------------------------------------ T9, dust
+
+    /// @notice Threat T9, the control. The plan settles the whole debt and takes the whole credit
+    ///         (`OPEN_DELTA`), never a caller-typed amount a rounding could strand or a `clear()` could
+    ///         forfeit. An input small enough that the fee rounds up against it still settles, and
+    ///         every unit the pool credited reaches the recipient; nothing stays on the path.
+    function test_SmallSettlementReachesTheRecipientWhole() public {
+        bytes32 small = _order(1_000, 1);
+        uint256 merchantBefore = usdc.balanceOf(merchant);
+        vm.recordLogs();
+        vm.prank(payer);
+        executor.pay{value: 1_000}(small);
+
+        (uint256 receipts, uint256 credited) = receiptsEmitted();
+        assertEq(receipts, 1);
+        assertGt(credited, 0, "the control produced no output; it is not a control");
+        assertLt(credited, 1_000, "the control did not cross the fee; it is not small");
+        assertEq(usdc.balanceOf(merchant) - merchantBefore, credited, "the credit did not reach the recipient whole");
+        assertEq(usdc.balanceOf(universalRouter), 0, "output stayed on the router");
+        assertEq(usdc.balanceOf(address(executor)), 0, "output stayed on the executor");
+        assertEq(universalRouter.balance, 0);
+        assertEq(address(executor).balance, 0);
+    }
+
+    /// @notice Threat T9, the dust row. One wei of input is consumed whole by the fee and yields no
+    ///         output at all. The hook refuses the order below its minimum inside the swap, so the pool
+    ///         is never asked to settle a nothing: the payer keeps the wei, the order stays payable.
+    function test_RevertWhen_DustYieldsNoOutput_NothingMoves() public {
+        bytes32 dust = _order(1, 1);
+        uint256 payerBefore = payer.balance;
+        vm.recordLogs();
+        vm.expectRevert(
+            _wrapped(
+                IHooks.afterSwap.selector,
+                abi.encodeWithSelector(V4SettlementHook.OutputBelowMinimum.selector, dust, uint128(1), uint128(0))
+            )
+        );
+        vm.prank(payer);
+        executor.pay{value: 1}(dust);
+        _assertNothingMoved(dust, payerBefore);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     function _order(uint128 amountIn, uint128 minOut) internal returns (bytes32) {
