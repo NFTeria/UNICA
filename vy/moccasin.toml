@@ -1,0 +1,13 @@
+# The settlement model runs in exactly one place: Moccasin's in-process EVM.
+#
+# The scaffold ships four networks, three of them live. They are removed rather than left
+# unused, so this workspace has no section that could carry a key, a keystore name or an RPC
+# with a token in it, and no command here can be pointed at a chain by accident. The model is
+# arithmetic; it has nothing to say to a network.
+
+[project]
+src = "src"
+out = "out"
+
+[networks.pyevm]
+is_zksync = false
