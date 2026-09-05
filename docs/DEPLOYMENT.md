@@ -86,3 +86,44 @@ Re-verify: `forge inspect src/V4SettlementHook.sol:V4SettlementHook deployedByte
 fuzz count is 10,000. The tests deploy Uniswap's official PoolManager bytecode from hookmate's
 artifact and the deployed Universal Router runtime from `test/utils/artifacts/`, so one compiler
 serves tests, scripts, and verification.
+
+## The live deploy, 2026-09-05
+
+`make go-live` broadcast seven transactions in block 11639895 from nonce 450. Five landed and two
+failed. Read from the chain by hash, in nonce order:
+
+| nonce | to | what | status |
+|---|---|---|---|
+| 450 | CREATE2 factory | `V4SettlementHook` at `0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0`, 10,634 bytes | landed |
+| 451 | CREATE2 factory | `SettlementExecutor` at `0x044bc8a8773EC7b9B8de2467766636dFFCaC6210`, 11,289 bytes | landed |
+| 452 | PoolManager | `initialize`, native ETH / USDC, fee 3000, spacing 60, 2,500 USDC per ETH | landed |
+| 453 | USDC | `approve` for the liquidity router | landed |
+| 454 | liquidity router | `modifyLiquidity`, the seed | landed |
+| 455 | executor | `createOrder` | **failed**, `DeadlineInPast` |
+| 456 | executor | `pay` | **failed**, no order to pay |
+
+The cause, measured: forge simulates the whole run before it asks for the keystore password, and
+the script computed the order's deadline as `block.timestamp + 1 hours` during that simulation at
+06:31 UTC. The prompt was answered later and the block was mined at 10:53 UTC, 15,708 seconds past
+the deadline. The simulation had passed; the chain refused. Reproduced on a fork of the chain with
+Anvil's next-block timestamp: the old deadline fails under a five-hour gap and passes without one,
+the day-long deadline (`ORDER_DEADLINE`, `script/LiveFire.s.sol`) passes under both.
+
+Two more things the run taught. The console labels the toolchain printed beside the transaction
+hashes did not match the transactions (a `pay` label beside the hash of the USDC approve); the
+receipts, read by hash, are the record. And the first verifier held the pool id as a constant that
+named a pool which did not exist, so it reported the seeded pool as uninitialised; it now derives
+the id from the live key and was seen to fail, then pass, on a fork.
+
+**Finishing it.** The contracts are live and are never redeployed; `make go-live` now stops at its
+own pre-flight because the targets have code, which is correct. The missing stage runs alone:
+
+```sh
+make settle-check     # the pre-flight: frozen code, live contracts, seeded pool, unused order id
+make settle-live      # the same, then createOrder + pay on Sepolia; answer the keystore prompt within the day
+make readback && make proof && make verify && make proof
+```
+
+`verify-live.sh` runs 31 checks. Before the settlement, on a fork of the chain as it stood, the
+deploy rows passed and the settlement rows failed (its control); after a fork settlement every row
+passed except the two Sourcify rows, which pass on Sepolia once `make verify` has run.
