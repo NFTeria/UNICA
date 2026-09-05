@@ -157,3 +157,12 @@ settlement router" (ruled Solidity the same evening), and the order-of-work para
 scheduled I2 to I5 for day 3 (they landed on day 2 night). One correction to the appended
 execution-path table: the executor takes one constructor argument, the hook's address, so the
 pair is bound in both directions; the hook still takes none.
+
+## Appended 2026-09-05, the first seam directory
+
+`integrations/graph/` exists, under the rule that no directory exists before the thing in it
+works: the subgraph indexes schema v1 receipts, its handler has tests around a real receipt, and
+`local-e2e.sh` reconstructs a settlement from its log in a local graph-node and shows a refused
+payment leaves no entity. It is optional and removable in one commit; the hook and the executor
+do not know it exists. The published bar for the sponsor's track (live data from a Graph
+provider) is an owner action still to come, recorded in `docs/INTEGRATIONS.md` as pending.

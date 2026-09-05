@@ -235,6 +235,20 @@ Every item in this part carries a reproduced defect and a small artifact that cl
 
 ---
 
+
+**Status, 2026-09-05.** Implemented at the rung below the published bar, and said so:
+`integrations/graph/` carries the manifest (hook address per network, never hard-coded), the ABI
+generated from the compiled hook, the schema with one immutable `Settlement` entity, the handler
+keyed on schema version one, three matchstick tests around a real local receipt, and
+`local-e2e.sh`, which reconstructs one settlement from its log in a local graph-node and shows a
+refused payment yields no entity (measured: one entity, `amountOut` 2003660 in real USDC on a
+Sepolia fork). The requirement quoted in field 1 says "Mocked, local-only, or static datasets do
+not qualify" and asks for live data from a Graph provider: that is a Subgraph Studio deployment
+of this subgraph against the day-4 hook address, an owner action with an account, listed in the
+owner queue and not taken. **Qualification: pending** until it is, and until "what became easier
+because a shared schema was used" is shown with a second hook's receipts answering the same
+query. Nothing here claims priority over other schemas (see the title of this item).
+
 ## 14 — A hook-generator skill instructs the model to call an MCP tool the plugin neither ships nor names
 
 | Field | |

@@ -61,6 +61,10 @@ motivate a change. The controls exist to keep it that way.
 - The executor's own `Settled(orderId, payer, recipient, amountIn, amountOut)`, measured at the
   recipient's balance. A convenience for callers, not the canonical record.
 
+## Indexed by
+
+`integrations/graph/`: a subgraph for schema v1 with the hook address configured per network, a handler that ignores any other version, matchstick tests around a real local receipt, and a local end-to-end reconstruction (`local-e2e.sh`). One consumer among any; the settlement path does not depend on it.
+
 ## Re-verify
 
 ```sh
