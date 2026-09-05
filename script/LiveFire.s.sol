@@ -13,6 +13,7 @@ import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 import {IERC20Minimal} from "@uniswap/v4-core/src/interfaces/external/IERC20Minimal.sol";
@@ -62,6 +63,21 @@ abstract contract SettlementScriptBase is Script {
     ///      reverted DeadlineInPast on chain after passing in simulation. The order can only pay its
     ///      registered recipient, the deployer, so a long window costs nothing.
     uint64 internal constant ORDER_DEADLINE = 1 days;
+
+    // ---- stage 5: a bounded top-up of the live pool, at its current price ---------------------
+    /// @dev The hook admits swaps in one direction only: native ETH in, USDC out, through the executor.
+    ///      Nothing can move this pool's price back up: every settlement lowers the USDC per ETH it pays,
+    ///      and the pool's USDC is a reservoir that only new liquidity refills. A top-up adds full-range
+    ///      liquidity at whatever price the pool has reached; it lowers the price impact of each later
+    ///      settlement and cannot restore the price. Bounds: one faucet round of USDC, an ETH leg the
+    ///      router refunds the unused part of, and a floor below which the stage refuses.
+    uint256 internal constant TOPUP_ETH = 0.02 ether;
+    uint256 internal constant TOPUP_USDC = 20_000_000;
+    uint256 internal constant TOPUP_USDC_FLOOR = 5_000_000;
+    /// @dev Refuse to top up a pool below 1,000 USDC per ETH: the 0.001 ETH demo would pay under one
+    ///      USDC there, and liquidity added at that price buys nothing a demo can use. Derived, not
+    ///      typed: `python3 -c "from math import isqrt; print(isqrt(1000*10**6 * 2**192 // 10**18))"`.
+    uint160 internal constant TOPUP_MIN_SQRT_PRICE = 2505414483750479311864138;
 
     // ---- the declared permission set, spec section 5 -----------------------------------------
     uint160 internal constant FLAGS = Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
@@ -237,6 +253,92 @@ abstract contract SettlementScriptBase is Script {
         );
         vm.stopBroadcast();
         console.log("pool liquidity ", manager().getLiquidity(key.toId()));
+    }
+
+    // ---- stage 5: the top-up, and the plan it will follow -------------------------------------------
+
+    /// @notice The pool's price in USDC units (6 decimals) per whole ETH, from sqrtPriceX96.
+    function priceUsdcPerEth(uint160 sqrtPriceX96) public pure returns (uint256) {
+        uint256 priceX96 = FullMath.mulDiv(uint256(sqrtPriceX96), uint256(sqrtPriceX96), 1 << 96);
+        return FullMath.mulDiv(priceX96, 1e18, 1 << 96);
+    }
+
+    /// @notice Pure reads: what a top-up by the sender would add, at the pool's current price, within
+    ///         the bounds above. The pre-flight prints this before anyone is asked for a password.
+    function planTopup() public view returns (uint128 liquidityToAdd, uint256 ethNeeded, uint256 usdcNeeded) {
+        Chains.Config memory c = Chains.get(block.chainid);
+        PoolKey memory key = poolKey();
+        (uint160 sqrtPriceX96,,,) = manager().getSlot0(key.toId());
+        uint128 liquidityNow = manager().getLiquidity(key.toId());
+        uint256 usdcHeld = IERC20Minimal(c.usdc).balanceOf(msg.sender);
+        uint256 usdcBudget = usdcHeld < TOPUP_USDC ? usdcHeld : TOPUP_USDC;
+        liquidityToAdd = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtPriceAtTick(TICK_LOWER),
+            TickMath.getSqrtPriceAtTick(TICK_UPPER),
+            TOPUP_ETH,
+            usdcBudget
+        );
+        (ethNeeded, usdcNeeded) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtPriceX96,
+            TickMath.getSqrtPriceAtTick(TICK_LOWER),
+            TickMath.getSqrtPriceAtTick(TICK_UPPER),
+            liquidityToAdd
+        );
+        console.log("price now (USDC per ETH, 6 decimals)", priceUsdcPerEth(sqrtPriceX96));
+        console.log("liquidity now  ", liquidityNow);
+        console.log("USDC held      ", usdcHeld);
+        console.log("USDC budget    ", usdcBudget);
+        console.log("liquidity added", liquidityToAdd);
+        console.log("needs ETH (wei)", ethNeeded);
+        console.log("needs USDC (6) ", usdcNeeded);
+        console.log("liquidity after", uint256(liquidityNow) + liquidityToAdd);
+        console.log("transactions    2 (approve the USDC leg, then modifyLiquidity)");
+    }
+
+    /// @notice Adds full-range liquidity at the pool's current price, within the bounds, to the same
+    ///         position the seed stage opened (the liquidity router's, salt 0). Refuses a pool that is
+    ///         uninitialised, unseeded, above the price it opened at (no admitted swap can do that), or
+    ///         below the floor; refuses a sender below the USDC floor or the ETH leg plus gas.
+    function topup() public {
+        Chains.requireTestnet(block.chainid);
+        Chains.Config memory c = Chains.get(block.chainid);
+        PoolKey memory key = poolKey();
+        (uint160 sqrtPriceX96,,,) = manager().getSlot0(key.toId());
+        require(sqrtPriceX96 != 0, "initialise the pool first");
+        uint128 before = manager().getLiquidity(key.toId());
+        require(before != 0, "the pool has no liquidity; this is a top-up, seed it first");
+        require(
+            sqrtPriceX96 <= SQRT_PRICE_2500_USDC_PER_ETH,
+            "the pool is above the price it opened at, which no admitted swap can cause; refusing"
+        );
+        require(
+            sqrtPriceX96 >= TOPUP_MIN_SQRT_PRICE,
+            "the pool is below 1,000 USDC per ETH; a top-up there buys nothing a demo can use; refusing"
+        );
+        uint256 usdcHeld = IERC20Minimal(c.usdc).balanceOf(msg.sender);
+        uint256 usdcBudget = usdcHeld < TOPUP_USDC ? usdcHeld : TOPUP_USDC;
+        require(usdcBudget >= TOPUP_USDC_FLOOR, "deployer holds less USDC than the top-up floor; get USDC first");
+        require(msg.sender.balance >= TOPUP_ETH + 0.005 ether, "deployer ETH is below the ETH leg plus gas");
+        (uint128 liquidity, uint256 amount0, uint256 amount1) = planTopup();
+        require(amount0 <= TOPUP_ETH && amount1 <= usdcBudget, "amounts exceed the top-up bounds");
+
+        PoolModifyLiquidityTest router = PoolModifyLiquidityTest(c.poolModifyLiquidityTest);
+        vm.startBroadcast();
+        // Approve exactly the budget, never unlimited. v4 may owe one wei more than the estimate.
+        IERC20Minimal(c.usdc).approve(address(router), usdcBudget);
+        // The router refunds every unused wei of native value to the caller.
+        router.modifyLiquidity{value: TOPUP_ETH}(
+            key,
+            ModifyLiquidityParams({
+                tickLower: TICK_LOWER, tickUpper: TICK_UPPER, liquidityDelta: int256(uint256(liquidity)), salt: 0
+            }),
+            ""
+        );
+        vm.stopBroadcast();
+        uint128 after_ = manager().getLiquidity(key.toId());
+        require(after_ == before + liquidity, "liquidity did not grow by the planned amount");
+        console.log("pool liquidity ", before, "->", after_);
     }
 
     // ---- stage 4: a real settlement, through the executor and the official router ---------------

@@ -11,8 +11,8 @@
 # chain id (one address on every chain), and a bare chain 31337 has no PoolManager to resolve.
 -include .env
 
-.PHONY: help all deps doctor build test fuzz snapshot format fmt gate clean anvil predict simulate go-live go-live-check settle-live settle-check proof \
-        rehearse deploy init-pool seed settle live readback verify balances _need-deployer _need-signing
+.PHONY: help all deps doctor build test fuzz snapshot format fmt gate clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
+        rehearse deploy init-pool seed settle topup live readback verify balances _need-deployer _need-signing
 
 # ── configuration ─────────────────────────────────────────────────────────────
 SEPOLIA_RPC_URL  ?= https://ethereum-sepolia-rpc.publicnode.com
@@ -61,6 +61,7 @@ help:
 	@echo "    make init-pool        stage 2: the native-ETH / USDC pool at 2,500 USDC per ETH"
 	@echo "    make seed             stage 3: full-range liquidity from what the deployer holds"
 	@echo "    make settle           stage 4: create an order and pay it through the executor and the official router"
+	@echo "    make topup            stage 5: bounded full-range liquidity at the pool's current price (after the pool is live)"
 	@echo "    make live             all four stages in one run (deploy/init/seed skip if done; settle always sends)"
 	@echo "    make rehearse         the same, on a throwaway fork on :8546, with a readback, in one command"
 	@echo ""
@@ -69,6 +70,9 @@ help:
 	@echo "    make go-live          the pre-flight, then deploy + pool + liquidity + one settlement on Sepolia; closes with the tag live-green"
 	@echo "    make settle-check     the pre-flight for the settlement stage alone: frozen code, live contracts, seeded pool, unused order id. Sends nothing"
 	@echo "    make settle-live      the pre-flight, then the settlement stage alone on Sepolia (the stage the first run lost; go-live refuses once the targets have code)"
+	@echo "    make topup-check      the pre-flight for a bounded liquidity top-up of the live pool, with the plan it would follow. Sends nothing"
+	@echo "    make topup-live       the pre-flight, then approve + modifyLiquidity on Sepolia, within the bounds in script/LiveFire.s.sol"
+	@echo "    make tag-green TAG=<name> MSG=<file>   cut a milestone tag only after CI, proof and the docs that name it are all in"
 	@echo "    make proof            re-prove both deployments and the settlement from the chain (verify-day1, verify-live)"
 	@echo ""
 	@echo "  SEPOLIA, one stage at a time (real transactions; keystore password prompted)"
@@ -145,6 +149,16 @@ settle-live:
 settle-check:
 	DRY_RUN=1 bash script/settle-live.sh
 
+topup-live:
+	bash script/topup-live.sh
+
+topup-check:
+	DRY_RUN=1 bash script/topup-live.sh
+
+# A milestone tag, only when everything it claims is already in history and green (script/tag-green.sh).
+tag-green:
+	TAG=$(TAG) MSG=$(MSG) bash script/tag-green.sh
+
 proof:
 	bash docs/proof/verify-day1.sh
 	bash docs/proof/verify-live.sh
@@ -157,6 +171,7 @@ deploy    : _need-network ; $(RUN_ENV) forge script script/DeploySettlement.s.so
 init-pool : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:InitPool     $(NETWORK_ARGS)
 seed      : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:SeedLiquidity $(NETWORK_ARGS)
 settle    : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:Settle       $(NETWORK_ARGS)
+topup     : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:TopUp        $(NETWORK_ARGS)
 live      : _need-network ; $(RUN_ENV) forge script script/LiveFire.s.sol:LiveFire         $(NETWORK_ARGS)
 
 readback:

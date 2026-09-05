@@ -23,3 +23,10 @@ contract Settle is SettlementScriptBase {
         swap();
     }
 }
+
+/// @title TopUp, stage 5: bounded full-range liquidity at the pool's current price, after the pool is live
+contract TopUp is SettlementScriptBase {
+    function run() external {
+        topup();
+    }
+}
