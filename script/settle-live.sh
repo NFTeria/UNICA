@@ -66,7 +66,8 @@ echo "                    sqrtPriceX96 $price, liquidity $liq  (2,500 USDC per E
 # The order this run will create, computed the way the script computes it, and not yet used.
 salt=$(cast keccak "unica settle stage $ORDER_SALT")
 orderId=$(cast keccak "$(cast abi-encode 'f(uint256,address,address,bytes32)' 11155111 "$EXECUTOR" "$DEPLOYER" "$salt")")
-status=$(cast call "$EXECUTOR" 'orders(bytes32)' "$orderId" --rpc-url "$RPC" | tail -1 | awk '{print $1}')
+# orders() returns the Order struct, twelve static words; the status is the last word.
+status=$(python3 -c "print(int('$(cast call "$EXECUTOR" 'orders(bytes32)' "$orderId" --rpc-url "$RPC")'[-64:],16))")
 test "$status" = 0 || fail "the order for ORDER_SALT=$ORDER_SALT ($orderId) already exists with status $status; run with a new ORDER_SALT=<anything new>"
 echo "order               ORDER_SALT=$ORDER_SALT -> $orderId  (unused)"
 echo "counters            receiptCount $(call $HOOK 'receiptCount()(uint256)'), orderCount $(call $EXECUTOR 'orderCount()(uint256)')  (both move by one)"

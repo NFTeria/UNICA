@@ -98,7 +98,9 @@ chk "the settle transaction's swap was sent by the Universal Router (PoolManager
 rlog=$( [ -n "$settle" ] && cast receipt "$settle" --rpc-url "$RPC" --json 2>/dev/null | python3 -c "import sys,json;r=json.load(sys.stdin);l=[l for l in r['logs'] if l['address'].lower()=='$(lower $HOOK)' and l['topics'][0]=='$RTOPIC'];print(l[0]['topics'][1] if l else '');print(int(l[0]['data'][2:][64*6:64*7],16) if l else 0)" 2>/dev/null || printf '\n0')
 orderId=$(printf '%s' "$rlog" | sed -n 1p); receiptedOut=$(printf '%s' "$rlog" | sed -n 2p)
 chk "the receipt names an order" "[ -n \"$orderId\" ] && [ \"$orderId\" != 0x ]"
-chk "the order the receipt names is Settled and cannot be paid again (status 3)" "[ -n \"$orderId\" ] && [ \"\$(cast call $EXECUTOR \"$SIG_ORDER\" $orderId --rpc-url $RPC 2>/dev/null | tail -1 | awk '{print \$1}')\" = 3 ]"
+# orders() returns the Order struct, twelve static words; the status is the last word.
+ostatus=$( [ -n "$orderId" ] && python3 -c "print(int('$(cast call $EXECUTOR "$SIG_ORDER" "$orderId" --rpc-url $RPC 2>/dev/null)'[-64:],16))" 2>/dev/null || echo "")
+chk "the order the receipt names is Settled and cannot be paid again (status 3)" "[ \"$ostatus\" = 3 ]"
 chk "a replay of pay(orderId) is refused (eth_call reverts)" "[ -n \"$orderId\" ] && ! cast call $EXECUTOR \"$SIG_PAY\" $orderId --value 1000000000000000 --from $DEPLOYER --rpc-url $RPC >/dev/null 2>&1"
 chk "the recipient's USDC transfer in the settle transaction equals the receipted amountOut" "[ -n \"$settle\" ] && [ \"\$(cast receipt $settle --rpc-url $RPC --json | python3 -c \"import sys,json;r=json.load(sys.stdin);t=[l for l in r['logs'] if l['address'].lower()=='$(lower $USDC)' and l['topics'][0]=='$TTOPIC' and l['topics'][2][-40:].lower()=='$(lower ${DEPLOYER#0x})'];print(int(t[-1]['data'],16) if t else -1)\")\" = \"$receiptedOut\" ]"
 chk "the receipted amountOut is at least the 1.5 USDC minimum the order asked for" "[ -n \"$receiptedOut\" ] && [ \"$receiptedOut\" -ge 1500000 ]"
