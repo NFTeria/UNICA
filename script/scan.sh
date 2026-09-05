@@ -13,14 +13,16 @@ marks='unica-closet|claude-toolkit|SESSION-PROMPT|prize-watch/|/Users/'
 label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]]|swap|receipt|topic'
 
 # The controls, first: each pattern must catch a planted bad input and pass a planted good one.
-chk "control: a labelled key is caught"        "printf 'PRIVATE_KEY=0x%064d\n' 1 | grep -qE '$secrets'"
+chk "control: a labelled key is caught"        "printf 'PRIVATE_KEY=0x%064d\n' 1 | grep -qiE '$secrets'"
+chk "control: a lowercase key is caught"       "printf 'private_key=0x%064d\n' 1 | grep -qiE '$secrets'"
 chk "control: a private name anywhere is caught" "printf 'docs/notes/privatenotes.md\n' | grep -qE '$names'"
 chk "control: a private location is caught"    "printf 'see /Users/someone/notes\n' | grep -qE '$marks'"
 chk "control: an unlabelled 32-byte value is caught" "printf '| key | 0x%064d |\n' 2 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label'"
 chk "control: a labelled pool id is NOT caught" "! (printf 'pool id 0x%064d\n' 3 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label')"
 
 # Then the tree.
-chk "no labelled secret or token format" "! git grep -nE '$secrets' -- . ':!lib' ':!.github/workflows/ci.yml' ':!script/scan.sh'"
+# script/check-surface.sh carries this same pattern and a planted control key, as this file does; both are scanners.
+chk "no labelled secret or token format" "! git grep -niE '$secrets' -- . ':!lib' ':!.github/workflows/ci.yml' ':!script/scan.sh' ':!script/check-surface.sh'"
 chk "no private runtime file tracked"    "! git ls-files | grep -qE '$names'"
 chk "no private location mentioned"      "! git grep -nE '$marks' -- . ':!lib' ':!.github/workflows/ci.yml' ':!.gitignore' ':!script/scan.sh'"
 bare=$(git grep -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' ':!broadcast/' ':!script/scan.sh' | grep -viE "$label" || true)
