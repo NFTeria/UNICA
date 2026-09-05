@@ -18,14 +18,16 @@ form, and every purchase is the owner's own action, performed outside the assist
 
 | Tool | Version / model | What it was used for |
 |---|---|---|
-| Claude Code (Anthropic) | `claude-fable-5-1` | Drafting every file named in the table below, under the owner's direction; running `forge`, `cast`, and `git` locally; reading official documentation and on-chain state to verify facts before they were written down |
+| Claude Code (Anthropic) | `claude-fable-5-1`, and `claude-opus-5` from day 6 onward | Drafting every file named in the table below, under the owner's direction; running `forge`, `cast`, and `git` locally; reading official documentation and on-chain state to verify facts before they were written down |
 | Uniswap AI skills (`github.com/Uniswap/uniswap-ai`, plugin `uniswap-hooks` 1.6.0) | as installed in the same assistant | Consulted before the hook frame was written, as the track's own resources suggest. Its generator depends on an MCP tool the plugin does not ship, so it produced no code; the hook was hand-written from the spec. Logged in `FEEDBACK.md` the hour it happened |
 | Foundry | forge/cast `1.3.5-foundry-zksync-v0.1.9`, anvil `1.5.1-stable` | Build, test, fuzz, deploy. Not an AI tool; listed so the toolchain is on record with the rest |
 
 ## Files and directories each tool touched
 
 Updated with every commit that adds or changes a file. A path missing from this table
-was not AI-assisted.
+was not AI-assisted. Swept against the tracked tree on 2026-09-05, which is how the
+twenty-three paths below the broadcast row were found missing and added: the sentence above
+is a claim about every path, so it is only true if the sweep is run rather than assumed.
 
 | Path | Tool | Nature of assistance |
 |---|---|---|
@@ -59,6 +61,20 @@ was not AI-assisted.
 | `docs/proof/README.md`, `docs/proof/verify-day1.sh` | Claude Code | The manifest and the re-verification script, written from the receipts read back from Sepolia |
 | `docs/proof/01-…04-*.png` | none (captures) | Screenshots of public explorer pages, taken with macOS `screencapture` of a browser window, cropped to remove the browser toolbar. Not generated or altered by any tool beyond the crop |
 | `broadcast/LiveFire.s.sol/11155111/*.json` | none (Foundry output) | Written by `forge script --broadcast` when the owner ran the live-fire; committed unchanged as the deployment record |
+| `docs/PRIOR-ART.md` | Claude Code | A six-angle public sweep rendered by a workflow the assistant wrote, every kept claim opened by an independent refuter before it was kept; the assistant then checked the result against the tree. Read-only research: nothing in it was copied |
+| `SECURITY.md`, `test/attack/HostilePool.t.sol`, `test/utils/ReenteringERC20.sol` | Claude Code | Day 5, the attack review: the posture document, the hostile-pool suite, and a payout token that re-enters from inside the PoolManager's transfer. Each control was seen to fail against unfixed code before it was trusted |
+| `web/` | Claude Code | Day 5, the surface. One page, one action, no build step and no dependencies; it reads seven pinned values back from the chain and disables its action if any disagrees |
+| `script/scan.sh`, `script/check-surface.sh` | Claude Code | The secret and surface scanners. Each proves its patterns on planted inputs before judging the tree and prints a stated count, so a silent pass is distinguishable from a broken reporter |
+| `script/settle-live.sh`, `script/topup-live.sh`, `script/tag-green.sh` | Claude Code | The settlement, top-up and milestone-tag stages, each with its own pre-flight. None of them signs: every broadcast is the owner's own action at the owner's keystore |
+| `docs/PAYOUT-POLICY-SPEC.md`, `docs/ABI-MIGRATION-REPORT.md`, `docs/INPUT-POLICY-SPEC.md` | Claude Code | Day 6 specifications, written under the owner's freeze and opening with the line that they are not implemented. Every claim about current behaviour cites a file and line at the frozen commit |
+| `docs/DEMO.md`, `docs/DEMO-SHOTLIST.md` | Claude Code | The recording sequence and the exact narration, with the claims policy stating what may and may not be said on camera |
+| `docs/PUBLISHING.md`, `.github/workflows/pages.yml` | Claude Code | The publish path, prepared and not enabled: every action pinned to a commit SHA and the deploy job gated on a repository variable the owner sets, so it stays skipped until then |
+| `docs/feedback/*.md`, `docs/feedback/uniswap/` | Claude Code | A file per partner, with Robinhood nested under Uniswap. Entries are dated to the day the friction happened and carry the real error text |
+| `docs/upstream/` | Claude Code | Seven upstream reports drafted for the owner to file. None is filed; filing is the owner's action |
+| `integrations/graph/STUDIO-PREFLIGHT.md`, `integrations/graph/verify-hosted.sh` | Claude Code | Day 6: the pre-deployment checks and a hosted-query verifier. No subgraph is deployed |
+| `docs/proof/05-…09-*.png` | none (captures) | Screenshots of public explorer pages, cropped to remove the browser toolbar. Labelled convenience evidence, never proof; the proof is `docs/proof/verify-live.sh` |
+| `CHANGELOG.md`, `docs/versions/` | Claude Code | The versioning model: what a version heading means, the record of the live release with its boundary argued from three re-checkable commands, and a specification skeleton for the next generation |
+| `vy/` | Claude Code | A second, independent expression of the settlement arithmetic in Vyper under Moccasin and Titanoboa, so the maths can disagree with the Solidity. A model, never a deployment target. The workspace skeleton is `mox init`'s public starter-kit output, disclosed in `vy/README.md`; every module and test was written from the descriptions in `src/` and `docs/`, and the suite was validated by four planted faults before its green was trusted |
 
 ## Pre-existing work carried in
 
