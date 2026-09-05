@@ -117,8 +117,10 @@ gate     : _need-deps
 predict:
 	forge script script/LiveFire.s.sol:LiveFire --sig "predict()" -vv
 
+# A simulation still writes a run record; without this it lands in the committed broadcast/ directory
+# over the day-1 evidence and dirties the tree the go-live pre-flight requires clean (measured 2026-09-05).
 simulate: _need-deployer
-	forge script script/LiveFire.s.sol:LiveFire --rpc-url $(SEPOLIA_RPC_URL) --sender $(DEPLOYER) -vvv
+	FOUNDRY_BROADCAST=.rehearsal/simulate forge script script/LiveFire.s.sol:LiveFire --rpc-url $(SEPOLIA_RPC_URL) --sender $(DEPLOYER) -vvv
 
 balances: _need-deployer
 	@echo "ETH : $$(cast balance $(DEPLOYER) --rpc-url $(SEPOLIA_RPC_URL) --ether)"
