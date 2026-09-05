@@ -18,7 +18,9 @@ and the router reports the executor as its caller (invariant I1); the hook reads
 the order from the executor's storage and enforces it itself (I3, I4, I5), refuses a partial fill
 or a short output (I3, and I6 by reverting), and emits the versioned receipt beside OpenZeppelin's
 standard `HookFee` (I2); native settlement is proven as four rows against a switchable stand-in
-plus a fifth against the official router's own bytecode (I7). Thirty-nine tests, fuzz at 10,000,
+plus a fifth against the official router's own bytecode (I7). A pool carrying this hook is native
+ETH against the chain's payout currency or it cannot be initialised, so no pool of an attacker's
+devising can mint a receipt (spec C2 and C4), and no settlement may pay a contract on its own path. Thirty-nine tests, fuzz at 10,000,
 against Uniswap's official PoolManager bytecode and, for the gate and order checks, the deployed
 Universal Router runtime. The whole path was then rehearsed end to end on an anvil fork of Sepolia
 against the deployed Universal Router: hook and executor at their mined and derived addresses and
@@ -76,23 +78,25 @@ and the threats in [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md).
 | What | Where |
 |---|---|
 | The hook contract | [`src/V4SettlementHook.sol:35`](src/V4SettlementHook.sol#L35) |
-| The official router and the executor the hook trusts, both fixed at construction: the router from the chain id, the executor from its creation code plus this hook's address through the canonical CREATE2 factory, so the pair is bound both ways; nothing configurable after deploy | [`src/V4SettlementHook.sol:44`](src/V4SettlementHook.sol#L44), [`:46`](src/V4SettlementHook.sol#L46), [`:111`](src/V4SettlementHook.sol#L111), [`src/libraries/UniswapDeployments.sol:13`](src/libraries/UniswapDeployments.sol#L13), [`src/SettlementExecutor.sol:66`](src/SettlementExecutor.sol#L66) |
-| The hook's zero-argument constructor resolving the PoolManager and the router from the chain id (spec section 7d); the executor's one argument, the hook | [`src/V4SettlementHook.sol:99`](src/V4SettlementHook.sol#L99), [`src/SettlementExecutor.sol:111`](src/SettlementExecutor.sol#L111) |
-| Declared permissions, `beforeSwap` and `afterSwap`, no returns-delta flag (mask 0xC0) | [`src/V4SettlementHook.sol:120`](src/V4SettlementHook.sol#L120) |
-| **Invariant I1's gate**: the sender is the Universal Router, and the router's `msgSender()` is the executor | [`src/V4SettlementHook.sol:144`](src/V4SettlementHook.sol#L144), [`:150`](src/V4SettlementHook.sol#L150), [`:152`](src/V4SettlementHook.sol#L152) |
-| The order, read from the executor's storage and never from hook data: exactly one order id or malformed (spec C1), in flight (I5), unexpired (I4), the swap's direction, amount and pool are the order's (I3) | [`src/V4SettlementHook.sol:233`](src/V4SettlementHook.sol#L233), [`:238`](src/V4SettlementHook.sol#L238), [`:241`](src/V4SettlementHook.sol#L241), [`:156`](src/V4SettlementHook.sol#L156), [`:158`](src/V4SettlementHook.sol#L158), [`:160`](src/V4SettlementHook.sol#L160) |
-| **Invariant I6** after the swap: the pool consumed the whole input, the output is at least the order's minimum, or the whole payment reverts | [`src/V4SettlementHook.sol:167`](src/V4SettlementHook.sol#L167), [`:175`](src/V4SettlementHook.sol#L175), [`:178`](src/V4SettlementHook.sol#L178) |
-| **Invariant I2**: the receipt in schema v1 (order id, pool, recipient, version, payer, executor, currencies, amounts, fee, reserved policy id) and OpenZeppelin's standard `HookFee` beside it; the schema is documented in `docs/RECEIPT-SCHEMA.md` | [`src/V4SettlementHook.sol:209`](src/V4SettlementHook.sol#L209), [`:213`](src/V4SettlementHook.sol#L213), [`:227`](src/V4SettlementHook.sol#L227), [`:63`](src/V4SettlementHook.sol#L63), [`:56`](src/V4SettlementHook.sol#L56) |
-| The executor, the one thin contract between an application and the official router: its `Order` (the only source of recipient, amount, minimum, deadline), `createOrder` (ids from creator and salt; only pools the hook guards; never a router sentinel as recipient), and `pay` (the payer's single call; exactly one receipt and the recipient's balance verified afterwards) | [`src/SettlementExecutor.sol:37`](src/SettlementExecutor.sol#L37), [`:52`](src/SettlementExecutor.sol#L52), [`:122`](src/SettlementExecutor.sol#L122), [`:134`](src/SettlementExecutor.sol#L134), [`:132`](src/SettlementExecutor.sol#L132), [`:164`](src/SettlementExecutor.sol#L164), [`:181`](src/SettlementExecutor.sol#L181), [`:188`](src/SettlementExecutor.sol#L188) |
-| **Invariant I5** at the executor: the order leaves Open before any external call; at the hook: one swap per order per transaction | [`src/SettlementExecutor.sol:174`](src/SettlementExecutor.sol#L174), [`src/V4SettlementHook.sol:155`](src/V4SettlementHook.sol#L155), [`:200`](src/V4SettlementHook.sol#L200) |
-| The plan the executor composes for the official router: swap with only the order id as hook data (spec C1), settle the native input, take the whole output to the order's recipient (I1); then one call to `execute` | [`src/SettlementExecutor.sol:198`](src/SettlementExecutor.sol#L198), [`:212`](src/SettlementExecutor.sol#L212), [`:216`](src/SettlementExecutor.sol#L216), [`:218`](src/SettlementExecutor.sol#L218), [`:179`](src/SettlementExecutor.sol#L179) |
+| The official router and the executor the hook trusts, both fixed at construction: the router from the chain id, the executor from its creation code plus this hook's address through the canonical CREATE2 factory, so the pair is bound both ways; nothing configurable after deploy | [`src/V4SettlementHook.sol:44`](src/V4SettlementHook.sol#L44), [`:48`](src/V4SettlementHook.sol#L48), [`:117`](src/V4SettlementHook.sol#L117), [`src/libraries/UniswapDeployments.sol:13`](src/libraries/UniswapDeployments.sol#L13), [`src/SettlementExecutor.sol:67`](src/SettlementExecutor.sol#L67) |
+| The hook's zero-argument constructor resolving the PoolManager and the router from the chain id (spec section 7d); the executor's one argument, the hook | [`src/V4SettlementHook.sol:104`](src/V4SettlementHook.sol#L104), [`src/SettlementExecutor.sol:121`](src/SettlementExecutor.sol#L121) |
+| Declared permissions, `beforeSwap` and `afterSwap`, no returns-delta flag (mask 0xC0) | [`src/V4SettlementHook.sol:126`](src/V4SettlementHook.sol#L126) |
+| **Invariant I1's gate**: the sender is the Universal Router, and the router's `msgSender()` is the executor | [`src/V4SettlementHook.sol:167`](src/V4SettlementHook.sol#L167), [`:173`](src/V4SettlementHook.sol#L173), [`:175`](src/V4SettlementHook.sol#L175) |
+| **Spec C2 and C4**: a pool carrying this hook is native ETH against the chain's payout currency or it cannot be initialised, so no pool of an attacker's devising can mint a receipt; the executor refuses such an order too, and no settlement may pay a contract on its own path | [`src/V4SettlementHook.sol:153`](src/V4SettlementHook.sol#L153), [`:157`](src/V4SettlementHook.sol#L157), [`src/libraries/UniswapDeployments.sol:24`](src/libraries/UniswapDeployments.sol#L24), [`src/SettlementExecutor.sol:151`](src/SettlementExecutor.sol#L151), [`:147`](src/SettlementExecutor.sol#L147) |
+| The day-5 attack review's tests: the hostile pool refused, and every contract on the path refused as a recipient | [`test/attack/HostilePool.t.sol:35`](test/attack/HostilePool.t.sol#L35), [`:64`](test/attack/HostilePool.t.sol#L64), [`:93`](test/attack/HostilePool.t.sol#L93), [`test/SettlementExecutor.t.sol:335`](test/SettlementExecutor.t.sol#L335) |
+| The order, read from the executor's storage and never from hook data: exactly one order id or malformed (spec C1), in flight (I5), unexpired (I4), the swap's direction, amount and pool are the order's (I3) | [`src/V4SettlementHook.sol:256`](src/V4SettlementHook.sol#L256), [`:261`](src/V4SettlementHook.sol#L261), [`:264`](src/V4SettlementHook.sol#L264), [`:179`](src/V4SettlementHook.sol#L179), [`:181`](src/V4SettlementHook.sol#L181), [`:183`](src/V4SettlementHook.sol#L183) |
+| **Invariant I6** after the swap: the pool consumed the whole input, the output is at least the order's minimum, or the whole payment reverts | [`src/V4SettlementHook.sol:190`](src/V4SettlementHook.sol#L190), [`:198`](src/V4SettlementHook.sol#L198), [`:201`](src/V4SettlementHook.sol#L201) |
+| **Invariant I2**: the receipt in schema v1 (order id, pool, recipient, version, payer, executor, currencies, amounts, fee, reserved policy id) and OpenZeppelin's standard `HookFee` beside it; the schema is documented in `docs/RECEIPT-SCHEMA.md` | [`src/V4SettlementHook.sol:232`](src/V4SettlementHook.sol#L232), [`:236`](src/V4SettlementHook.sol#L236), [`:250`](src/V4SettlementHook.sol#L250), [`:65`](src/V4SettlementHook.sol#L65), [`:58`](src/V4SettlementHook.sol#L58) |
+| The executor, the one thin contract between an application and the official router: its `Order` (the only source of recipient, amount, minimum, deadline), `createOrder` (ids from creator and salt; only pools the hook guards; never a router sentinel as recipient), and `pay` (the payer's single call; exactly one receipt and the recipient's balance verified afterwards) | [`src/SettlementExecutor.sol:38`](src/SettlementExecutor.sol#L38), [`:53`](src/SettlementExecutor.sol#L53), [`:133`](src/SettlementExecutor.sol#L133), [`:149`](src/SettlementExecutor.sol#L149), [`:147`](src/SettlementExecutor.sol#L147), [`:181`](src/SettlementExecutor.sol#L181), [`:198`](src/SettlementExecutor.sol#L198), [`:205`](src/SettlementExecutor.sol#L205) |
+| **Invariant I5** at the executor: the order leaves Open before any external call; at the hook: one swap per order per transaction | [`src/SettlementExecutor.sol:191`](src/SettlementExecutor.sol#L191), [`src/V4SettlementHook.sol:178`](src/V4SettlementHook.sol#L178), [`:223`](src/V4SettlementHook.sol#L223) |
+| The plan the executor composes for the official router: swap with only the order id as hook data (spec C1), settle the native input, take the whole output to the order's recipient (I1); then one call to `execute` | [`src/SettlementExecutor.sol:215`](src/SettlementExecutor.sol#L215), [`:229`](src/SettlementExecutor.sol#L229), [`:233`](src/SettlementExecutor.sol#L233), [`:235`](src/SettlementExecutor.sol#L235), [`:196`](src/SettlementExecutor.sol#L196) |
 | T5 guard, asserted numerically before any deploy; the day-1 address shape refused; the derived executor address checked against where the executor lands; the router checked against its deployed runtime | [`test/V4SettlementHook.t.sol:33`](test/V4SettlementHook.t.sol#L33), [`:45`](test/V4SettlementHook.t.sol#L45), [`:61`](test/V4SettlementHook.t.sol#L61), [`:67`](test/V4SettlementHook.t.sol#L67), [`:86`](test/V4SettlementHook.t.sol#L86), [`:102`](test/V4SettlementHook.t.sol#L102) |
 | I1 negatives: a swap from the official test router is refused before the hook asks anyone anything; the official router driven by a stranger is refused with the stranger named, and the stranger keeps every wei | [`test/V4SettlementHook.t.sol:110`](test/V4SettlementHook.t.sol#L110), [`:125`](test/V4SettlementHook.t.sol#L125) |
 | The hook's own order checks, reached through a harness at the executor's address that drives the official router with plans the real executor never composes, including two swaps for one order | [`test/V4SettlementHook.t.sol:155`](test/V4SettlementHook.t.sol#L155), [`:180`](test/V4SettlementHook.t.sol#L180), [`:201`](test/V4SettlementHook.t.sol#L201), [`:233`](test/V4SettlementHook.t.sol#L233), [`:217`](test/V4SettlementHook.t.sol#L217), [`:249`](test/V4SettlementHook.t.sol#L249), [`:270`](test/V4SettlementHook.t.sol#L270) |
 | Reading permissions off the real runtime code | [`test/V4SettlementHook.t.sol:400`](test/V4SettlementHook.t.sol#L400) |
-| I1 positive through the official router, fuzzed at 10,000; I2 with both events decoded field by field against schema v1; I5, I4, I6 and the partial fill, each asserting nothing moved; the executor's missing door to the PoolManager | [`test/SettlementExecutor.t.sol:42`](test/SettlementExecutor.t.sol#L42), [`:73`](test/SettlementExecutor.t.sol#L73), [`:103`](test/SettlementExecutor.t.sol#L103), [`:130`](test/SettlementExecutor.t.sol#L130), [`:148`](test/SettlementExecutor.t.sol#L148), [`:160`](test/SettlementExecutor.t.sol#L160), [`:184`](test/SettlementExecutor.t.sol#L184), [`:214`](test/SettlementExecutor.t.sol#L214), [`:258`](test/SettlementExecutor.t.sol#L258), [`:274`](test/SettlementExecutor.t.sol#L274), [`:289`](test/SettlementExecutor.t.sol#L289), [`:357`](test/SettlementExecutor.t.sol#L357), [`:342`](test/SettlementExecutor.t.sol#L342) |
+| I1 positive through the official router, fuzzed at 10,000; I2 with both events decoded field by field against schema v1; I5, I4, I6 and the partial fill, each asserting nothing moved; the executor's missing door to the PoolManager | [`test/SettlementExecutor.t.sol:42`](test/SettlementExecutor.t.sol#L42), [`:73`](test/SettlementExecutor.t.sol#L73), [`:103`](test/SettlementExecutor.t.sol#L103), [`:130`](test/SettlementExecutor.t.sol#L130), [`:148`](test/SettlementExecutor.t.sol#L148), [`:160`](test/SettlementExecutor.t.sol#L160), [`:184`](test/SettlementExecutor.t.sol#L184), [`:214`](test/SettlementExecutor.t.sol#L214), [`:258`](test/SettlementExecutor.t.sol#L258), [`:335`](test/SettlementExecutor.t.sol#L335), [`:278`](test/SettlementExecutor.t.sol#L278), [`:363`](test/SettlementExecutor.t.sol#L363), [`:348`](test/SettlementExecutor.t.sol#L348) |
 | I7 as five rows: the control, the trap, the defect, the invariant, and the official router's own bytecode with a foreign settle leg before the native one | [`test/I7NativeSettle.t.sol:53`](test/I7NativeSettle.t.sol#L53), [`:61`](test/I7NativeSettle.t.sol#L61), [`:69`](test/I7NativeSettle.t.sol#L69), [`:99`](test/I7NativeSettle.t.sol#L99), [`:110`](test/I7NativeSettle.t.sol#L110) |
-| The test base: Uniswap's official PoolManager bytecode etched at the canonical address, its 24,009-byte runtime asserted; the official Universal Router's deployed runtime etched at its Sepolia address, its keccak asserted | [`test/utils/SettlementTestBase.sol:76`](test/utils/SettlementTestBase.sol#L76), [`:42`](test/utils/SettlementTestBase.sol#L42), [`:109`](test/utils/SettlementTestBase.sol#L109), [`test/utils/artifacts/UniversalRouterV2Sepolia.sol:12`](test/utils/artifacts/UniversalRouterV2Sepolia.sol#L12) |
+| The test base: Uniswap's official PoolManager bytecode etched at the canonical address, its 24,009-byte runtime asserted; the official Universal Router's deployed runtime etched at its Sepolia address, its keccak asserted | [`test/utils/SettlementTestBase.sol:78`](test/utils/SettlementTestBase.sol#L78), [`:42`](test/utils/SettlementTestBase.sol#L42), [`:116`](test/utils/SettlementTestBase.sol#L116), [`test/utils/artifacts/UniversalRouterV2Sepolia.sol:12`](test/utils/artifacts/UniversalRouterV2Sepolia.sol#L12) |
 | The two harnesses: the executor with its plan made arbitrary, and a stand-in at the router's address with I7's defence switchable | [`test/utils/ExecutorHarness.sol:15`](test/utils/ExecutorHarness.sol#L15), [`test/utils/RouterHarness.sol:53`](test/utils/RouterHarness.sol#L53), [`:78`](test/utils/RouterHarness.sol#L78) |
 | Deterministic salt mining and CREATE2 deploy, the executor at its derived address; pool initialisation, seeding, and the settlement stage (the day-1 scaffold's script, reworked for the gated hook before day 4) | [`script/LiveFire.s.sol:73`](script/LiveFire.s.sol#L73), [`:115`](script/LiveFire.s.sol#L115), [`:124`](script/LiveFire.s.sol#L124), [`:153`](script/LiveFire.s.sol#L153), [`:174`](script/LiveFire.s.sol#L174), [`:225`](script/LiveFire.s.sol#L225) |
 
@@ -142,6 +146,12 @@ Toolchain on the machine that produced the numbers in this file: forge/cast
 
 The pool is native ETH against Circle's USDC, a v4-only shape: `currency0 = address(0)`, no
 wrapping. Every row names the rung it has reached and carries the command that re-proves it.
+
+> **Historical day-1 observation-only scaffold; not the current gated implementation.** The
+> contract in these rows is `UnicaHook`, deployed and source-verified under that name on day 1
+> with `afterSwap` only; it observed swaps and gated nothing. Its evidence is not rewritten. The
+> current implementation, `V4SettlementHook` in `src/`, is mined fresh and live-fired on day 4
+> and gets its own rows then.
 
 > **Historical day-1 observation-only scaffold; not the current gated implementation.** The
 > contract in these rows is `UnicaHook`, deployed and source-verified under that name on day 1
@@ -223,6 +233,39 @@ the hook emitted inside the settling swap, and a refused settlement leaves no en
 does not prove: anything against a hosted Graph provider, which is the published bar for the
 sponsor's track and an owner action not yet taken.
 
+## The receipt, indexed (optional; The Graph as one consumer)
+
+The receipt is versioned and documented in [`docs/RECEIPT-SCHEMA.md`](docs/RECEIPT-SCHEMA.md)
+and frozen as a conformance suite in [`test/ReceiptSchema.t.sol`](test/ReceiptSchema.t.sol).
+[`integrations/graph/`](integrations/graph/) is one consumer of it: a subgraph whose data source
+takes the hook address and start block from a per-network file, a handler that keys on schema
+version one, three matchstick tests around a real local receipt, and a local end-to-end run.
+Nothing in the settlement path depends on it; a hook whose receipts nobody indexes settles the
+same. It claims no priority over other schemas; see `docs/INTEGRATIONS.md` for what was found.
+
+One command reconstructs a settlement from its log, locally, with no credentials and nothing
+broadcast (needs Docker, Node 22, and the pinned tooling installed by `npm install` in that
+directory):
+
+```sh
+DEPLOYER=0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73 bash integrations/graph/local-e2e.sh
+```
+
+It forks Sepolia, deploys and seeds through the repository's own stages, brings up a pinned
+graph-node against the fork, deploys the subgraph for that hook address, pays one order through
+the executor and Uniswap's official router, and queries:
+
+```graphql
+{ settlements { orderId recipient amountIn amountOut hook executor schemaVersion transactionHash logIndex } }
+```
+
+Measured 2026-09-05: one `Settlement` entity, `amountIn` 1000000000000000, `amountOut` 2003660 in
+real USDC, `hook` and `executor` equal to the deployment; then the same order paid again reverts
+on chain and the count stays at one. What that proves: the receipt an indexer reads is the one
+the hook emitted inside the settling swap, and a refused settlement leaves no entity. What it
+does not prove: anything against a hosted Graph provider, which is the published bar for the
+sponsor's track and an owner action not yet taken.
+
 ## Security limitations, stated
 
 - The hook keeps no state between callbacks: `beforeSwap` and `afterSwap` each read the order
@@ -269,6 +312,7 @@ it happens in [`FEEDBACK.md`](FEEDBACK.md).
 ## Licence
 
 MIT, see [`LICENSE`](LICENSE). Dependencies keep their own.
+
 
 
 

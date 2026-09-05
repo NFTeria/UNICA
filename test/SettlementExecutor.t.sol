@@ -268,6 +268,66 @@ contract SettlementExecutorTest is SettlementTestBase {
         assertEq(executor.orderCount(), 0, "a refused order was counted");
     }
 
+    /// @notice Invariant I3 where it is felt, at the recipient. A payout token that burns a share of
+    ///         every transfer out of the PoolManager (spec C4's hazard) leaves the recipient short of
+    ///         what the pool credited. The hook cannot see that: it enforces the minimum on the
+    ///         credit. The executor measures the recipient's balance and refuses the order, so the
+    ///         payer keeps the ETH and the order stays payable. The control: the same order with a
+    ///         minimum at what actually arrives settles, and the executor's own event records the
+    ///         delivered amount while the hook's receipt records the pool's credit.
+    function test_RevertWhen_RecipientReceivesLessThanTheMinimum_FeeOnTransfer() public {
+        // The payout currency is fixed by the chain (spec C2, C4), so a hostile token cannot be
+        // brought in as currency1 at all. The residual risk the allowlist does not remove is the
+        // sanctioned token itself behaving this way, so that is what is tested: the fee-on-take
+        // runtime is placed at the payout address, keeping the balances already there.
+        FeeOnTakeERC20 template = new FeeOnTakeERC20(address(manager), 100);
+        vm.etch(address(usdc), address(template).code);
+        FeeOnTakeERC20 fot = FeeOnTakeERC20(address(usdc));
+        PoolKey memory fotKey = key;
+
+        // Measure the pool's credit for this order size on a snapshot, then unwind.
+        uint256 snapshot = vm.snapshotState();
+        vm.prank(merchant);
+        bytes32 probe = executor.createOrder(merchant, fotKey, AMOUNT_IN, 1, uint64(block.timestamp + 1 hours), _salt());
+        vm.recordLogs();
+        vm.prank(payer);
+        executor.pay{value: AMOUNT_IN}(probe);
+        (, uint256 credit) = receiptsEmitted();
+        uint256 delivered = fot.balanceOf(merchant);
+        assertLt(delivered, credit, "the control token did not take a fee");
+        vm.revertToState(snapshot);
+
+        // The order asks for the full credit: the pool gives it, the token does not deliver it, refused.
+        vm.prank(merchant);
+        bytes32 orderId = executor.createOrder(
+            merchant, fotKey, AMOUNT_IN, uint128(credit), uint64(block.timestamp + 1 hours), _salt()
+        );
+        uint256 payerBefore = payer.balance;
+        vm.expectRevert(
+            abi.encodeWithSelector(SettlementExecutor.RecipientShort.selector, orderId, uint128(credit), delivered)
+        );
+        vm.prank(payer);
+        executor.pay{value: AMOUNT_IN}(orderId);
+        assertEq(payer.balance, payerBefore, "payer lost value on a refused payment");
+        assertEq(fot.balanceOf(merchant), 0, "recipient received output from a refused payment");
+        assertEq(uint8(executor.orders(orderId).status), uint8(SettlementExecutor.Status.Open));
+        assertEq(hook.receiptCount(), 0, "the hook receipted a refused settlement");
+
+        // The control: a minimum at what arrives settles, and the two records say what each measured.
+        vm.prank(merchant);
+        bytes32 ok = executor.createOrder(
+            merchant, fotKey, AMOUNT_IN, uint128(delivered), uint64(block.timestamp + 1 hours), _salt()
+        );
+        vm.recordLogs();
+        vm.prank(payer);
+        executor.pay{value: AMOUNT_IN}(ok);
+        (uint256 receipts, uint256 receiptedCredit) = receiptsEmitted();
+        assertEq(receipts, 1);
+        assertEq(receiptedCredit, credit, "the hook's receipt records the pool's credit");
+        assertEq(fot.balanceOf(merchant), delivered, "the recipient received the delivered amount");
+        assertEq(hook.receiptCount(), 1);
+    }
+
     /// @notice No settlement may name a contract on its own path as the recipient. Output sent to
     ///         the router is sweepable by whoever calls it next; output sent to the executor, the
     ///         hook or the PoolManager is stranded, since none of them can move a token out. All six
