@@ -23,10 +23,10 @@ chk "control: a labelled pool id is NOT caught" "! (printf 'pool id 0x%064d\n' 3
 # Then the tree.
 # script/check-surface.sh carries this same pattern and a planted control key, as this file does; both are scanners.
 chk "no labelled secret or token format" "! git grep -niE '$secrets' -- . ':!lib' ':!.github/workflows/ci.yml' ':!script/scan.sh' ':!script/check-surface.sh'"
-chk "no private runtime file tracked"    "! git ls-files | grep -qE '$names'"
+chk "no private runtime file tracked"    "! { git ls-files; git ls-files --others --exclude-standard; } | grep -qE '$names'"
 chk "no private location mentioned"      "! git grep -nE '$marks' -- . ':!lib' ':!.github/workflows/ci.yml' ':!.gitignore' ':!script/scan.sh'"
-bare=$(git grep -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' ':!broadcast/' ':!script/scan.sh' | grep -viE "$label" || true)
-chk "no bare 32-byte value without a label on its line" "[ -z \"\$(git grep -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' ':!broadcast/' ':!script/scan.sh' | grep -viE '$label')\" ]"
+bare=$(git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' ':!broadcast/' ':!script/scan.sh' | grep -viE "$label" || true)
+chk "no bare 32-byte value without a label on its line" "[ -z \"\$(git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' ':!broadcast/' ':!script/scan.sh' | grep -viE '$label')\" ]"
 [ -n "$bare" ] && echo "$bare"
 
 echo "checks run: $((ok+fail)), passed: $ok, failed: $fail"
