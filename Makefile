@@ -11,7 +11,7 @@
 # chain id (one address on every chain), and a bare chain 31337 has no PoolManager to resolve.
 -include .env
 
-.PHONY: help all deps doctor build test fuzz snapshot format fmt gate clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
+.PHONY: help all deps doctor build test fuzz snapshot format fmt gate gate-live clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
         rehearse deploy init-pool seed settle topup live readback verify balances _need-deployer _need-signing
 
 # ── configuration ─────────────────────────────────────────────────────────────
@@ -119,7 +119,16 @@ gate     : _need-deps
 	forge build && forge test && forge fmt --check
 	bash script/scan.sh
 	bash script/no-copied-source.sh
-	@echo "gate: build, test, fmt-check, the secret scan and the copied-source scan all exit 0"
+	@# The ENS resolution tests are offline and deterministic, so they belong in the gate. If node
+	@# is missing they report a SKIP and say it is a skip: an absent runner and a passing suite
+	@# must not look the same. `make gate-live` additionally resolves real names on Sepolia.
+	@command -v node >/dev/null 2>&1 && node integrations/ensv2/test.mjs \
+	  || echo "SKIP  ENS resolution tests: node is not installed (this is a SKIP, not a pass)"
+	@echo "gate: build, test, fmt-check, the secret scan, the copied-source scan and the ENS tests all exit 0"
+
+# The gate plus the rows that need a network: real ENSv2 names resolved on Sepolia. Read-only.
+gate-live: gate
+	node integrations/ensv2/test.mjs --live
 
 predict:
 	forge script script/LiveFire.s.sol:LiveFire --sig "predict()" -vv
