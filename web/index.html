@@ -66,6 +66,20 @@
     :root { --ink: #F2F2EF; --paper: #121212; --line: #2A2C30; --surface: #1C1E22; --muted: #9AA0A6;
             --accent: #35B888; --on-accent: #0B1F17; --bad: #E88; }
   }
+
+    /* The merchant field. It sits above the order rows because the name is where a checkout
+       starts: there is no order until something resolves. */
+    .ens { margin: 1.25rem 0; }
+    .ens label { display: block; font-size: .8rem; letter-spacing: .04em; text-transform: uppercase;
+                 color: var(--muted); margin-bottom: .4rem; }
+    .ens .row { display: flex; gap: .5rem; align-items: stretch; }
+    .ens input { flex: 1 1 auto; min-width: 0; padding: .6rem .7rem; border-radius: 6px;
+                 border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+                 font-size: .95rem; }
+    .ens input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .ens .row button { flex: 0 0 auto; margin: 0; width: auto; padding: .6rem 1rem; }
+    .ens .rows { margin-top: .75rem; }
+    @media (max-width: 30rem) { .ens .row { flex-direction: column; } .ens .row button { width: 100%; } }
 </style>
 </head>
 <body>
@@ -89,7 +103,11 @@
   <footer id="links"></footer>
 </main>
 
-<script>
+<script type="module">
+// ENSv2 merchant resolution. The module is served from this directory so the page can import it
+// with no build step, and is tested from integrations/ensv2/.
+import { resolveMerchant, ENSV2, EXPLAIN } from "./ensv2/resolve.mjs";
+
 // Everything this page believes about the chain, pinned from the live deploy (tag live-green,
 // commit 5e1d843, docs/DEPLOYMENT.md). Both contracts are CREATE2 addresses derived from their
 // creation code, so they change if the contracts change. The page reads all of it back before it
@@ -156,7 +174,16 @@ async function rpc(method, params) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })
   });
   const j = await r.json();
-  if (j.error) throw new Error(j.error.message);
+  if (j.error) {
+    // Carry the revert payload, not just the message. Without it a contract that reverted with a
+    // named error is indistinguishable from a network that was unreachable, and the page tells a
+    // payer the wrong thing: measured in a browser, an unresolvable name reported "could not
+    // reach the network" when the resolver had in fact answered ResolverNotFound.
+    const e = new Error(j.error.message);
+    e.data = j.error.data;
+    e.code = j.error.code;
+    throw e;
+  }
   return j.result;
 }
 const call = (to, data) => rpc("eth_call", [{ to, data }, "latest"]);
@@ -380,8 +407,11 @@ function renderNoLink() {
       <p class="sub">A merchant registers an order and shares a link ending in <code>?order=…</code>.
       Opening it shows one button, and one click settles it. ${count === null ? "The order count could not be read"
         : `${count} order${count === "1" ? " has" : "s have"} been registered on ${CFG.chainName}`} so far.</p>
+      ${merchantBlock()}
       ${rows([
-        ["Recipient", connected ? `${acct(S.wallet.account)} (you)` : "your connected account"],
+        ["Recipient", S.ens && S.ens.ok
+          ? `${acct(S.ens.recipient)} — resolved from <span class="mono">${esc(S.ens.name)}</span>`
+          : (connected ? `${acct(S.wallet.account)} (you)` : "your connected account")],
         ["Payer", connected ? `${acct(S.wallet.account)} (you, when you open the link and pay it)` : "the connected account, when the link is paid"],
         ["Input", "0.001 ETH"],
         ["Minimum output", `${fmt(minOut, 6, 6)} USDC — minimum = 97% of the current quote of ${fmt(quote, 6, 6)} USDC`],
@@ -389,15 +419,72 @@ function renderNoLink() {
         ["Wallet prompts", "one confirmation of <code>createOrder</code>, carrying no ETH"],
         ["When it is paid", "the hook refuses or the recipient is paid; nothing in between"]
       ])}
-      <button class="secondary" id="make" ${why.length ? "disabled" : ""}>${connected
-        ? "Register a demo order to my own address" : "Connect a wallet to register a demo order"}</button>
+      <button class="secondary" id="make" ${why.length ? "disabled" : ""}>${!connected
+        ? "Connect a wallet to register an order"
+        : (S.ens && S.ens.ok
+            ? `Register an order payable to ${esc(S.ens.name)}`
+            : "Register a demo order to my own address")}</button>
       ${switchButton()}
       <p class="note${why.length ? " bad" : ""}" id="msg">${why.length ? why[0]
-        : "That is the merchant's side, shown here so you can try the payer's side without one. It costs a little test ETH and pays nothing."}</p>
+        : (S.ens && S.ens.ok
+            ? `The order will name <span class="mono">${esc(S.ens.recipient)}</span>, the address shown above. If the name resolves to something else before you confirm, the registration is abandoned.`
+            : "Resolve a merchant name above to pay one, or register to your own address to try the payer's side without a merchant. Either costs a little test ETH.")}</p>
     </div>`;
   const btn = $("#make");
   if (btn && !btn.disabled) btn.onclick = connected ? createDemoOrder : connect;
+  wireMerchant();
   wireSwitch();
+}
+
+// ---- ENSv2 merchant discovery -------------------------------------------------------------
+//
+// A merchant is identified by a name, not an address. The name is resolved live on Sepolia
+// before an order exists, the payer is shown exactly what it resolved to, and that address —
+// the one on screen, not a re-resolved one — is what goes into the order. ENS is how the
+// merchant is found; the settlement contracts are what enforce the payment. Nothing here runs
+// inside a hook, and nothing here can alter an order that already exists.
+//
+// There is no fallback. If a name does not resolve to a real address, no order is built.
+
+function merchantBlock() {
+  const e = S.ens;
+  const status = !e ? "" : e.ok
+    ? `<div class="rows">${rows([
+        ["Merchant name", `<span class="mono">${esc(e.name)}</span>`],
+        ["Resolves to", acct(e.recipient)],
+        ["Network", `${ENSV2.chainName} (chain ${ENSV2.chainId})`],
+        ["Resolver", `<a class="mono" href="${CFG.explorer}/address/${e.resolver}">${short(e.resolver)}</a>`],
+        ["Read at", `block ${e.atBlock ?? "—"}, via ${short(ENSV2.entryPoint)}`]
+      ])}</div>`
+    : `<p class="note bad">${esc(EXPLAIN[e.status] || e.status)}</p>`;
+  return `
+    <div class="ens">
+      <label for="merchant">Merchant's ENS name</label>
+      <div class="row">
+        <input id="merchant" class="mono" placeholder="merchant.eth" value="${esc(S.ensInput || "")}"
+               autocomplete="off" spellcheck="false" />
+        <button class="secondary" id="resolve">${S.ensBusy ? "Resolving…" : "Resolve"}</button>
+      </div>
+      ${status}
+    </div>`;
+}
+
+async function resolveMerchantName() {
+  const input = $("#merchant");
+  if (!input) return;
+  S.ensInput = input.value;
+  S.ensBusy = true; S.ens = null; renderNoLink();
+  const at = await rpc("eth_blockNumber", []).catch(() => null);
+  const r = await resolveMerchant(S.ensInput, (to, data) => rpc("eth_call", [{ to, data }, "latest"]));
+  S.ensBusy = false;
+  S.ens = { ...r, atBlock: at ? parseInt(at, 16) : null };
+  renderNoLink();
+}
+
+function wireMerchant() {
+  const b = $("#resolve"), i = $("#merchant");
+  if (b) b.onclick = resolveMerchantName;
+  if (i) i.onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); resolveMerchantName(); } };
 }
 
 // The merchant's action, kept off the payment path on purpose: it registers an order to the
@@ -417,13 +504,30 @@ async function createDemoOrder() {
       renderReadback(); renderNoLink();
       return say(`The quote moved to ${fmt(quote, 6, 6)} USDC while you were reading; the minimum and the deadline above were refreshed. Look them over and click again.`);
     }
+    // The recipient is decided HERE and not re-read afterwards. If a merchant name was resolved,
+    // the order names the address the payer was shown; the snapshot is taken before the wallet
+    // opens and compared again after, so a resolution that changes underneath abandons the
+    // registration rather than quietly redirecting it. With no name resolved this stays the
+    // visitor's own address — the expert path, and never a fallback for a name that failed.
+    const bound = S.ens && S.ens.ok ? { name: S.ens.name, recipient: S.ens.recipient } : null;
+    const recipient = bound ? bound.recipient : from;
+    if (S.ens && !S.ens.ok) {
+      return say("That merchant name did not resolve, so there is nobody to pay. Resolve a name, or clear the field to register to your own address.", true);
+    }
+    if (bound && !/^0x[0-9a-fA-F]{40}$/.test(recipient)) return say("The resolved recipient is not an address.", true);
+
     const salt = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
       .map((b) => b.toString(16).padStart(2, "0")).join("");
     const data = CFG.sel.createOrder + [
-      from, "0x0", CFG.usdc, CFG.fee.toString(16), CFG.tickSpacing.toString(16), CFG.hook,
+      recipient, "0x0", CFG.usdc, CFG.fee.toString(16), CFG.tickSpacing.toString(16), CFG.hook,
       CFG.amountIn.toString(16), shown.minOut.toString(16), shown.deadline.toString(16), salt
     ].map((v) => pad(typeof v === "string" && v.startsWith("0x") ? v : "0x" + v)).join("");
-    say("Confirm in your wallet: one prompt, <code>createOrder</code>, carrying no ETH…");
+    if (bound && (!S.ens || !S.ens.ok || S.ens.name !== bound.name || S.ens.recipient !== bound.recipient)) {
+      return say("The merchant resolution changed while you were reading. Nothing was registered; resolve again and check the address.", true);
+    }
+    say(bound
+      ? `Confirm in your wallet: one prompt, <code>createOrder</code>, payable to <span class="mono">${esc(bound.recipient)}</span>, carrying no ETH…`
+      : "Confirm in your wallet: one prompt, <code>createOrder</code>, carrying no ETH…");
     const hash = await window.ethereum.request({
       method: "eth_sendTransaction", params: [{ from, to: CFG.executor, data }]
     });

@@ -14,8 +14,8 @@
 import {
   resolveMerchant, normalizeName, namehash, dnsEncode,
   encodeResolveCall, decodeResolveReturn, ENSV2, EXPLAIN,
-} from "./resolve.mjs";
-import { keccak256Hex } from "./keccak.mjs";
+} from "../../web/ensv2/resolve.mjs";
+import { keccak256Hex } from "../../web/ensv2/keccak.mjs";
 
 const LIVE = process.argv.includes("--live");
 let pass = 0, fail = 0;

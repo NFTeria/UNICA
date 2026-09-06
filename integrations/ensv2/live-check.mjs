@@ -5,7 +5,7 @@
 //
 // The RPC defaults to a public endpoint and is printed, so no private URL is ever exposed.
 
-import { resolveMerchant, normalizeName, namehash, dnsEncode, ENSV2, EXPLAIN } from "./resolve.mjs";
+import { resolveMerchant, normalizeName, namehash, dnsEncode, ENSV2, EXPLAIN } from "../../web/ensv2/resolve.mjs";
 
 const RPC = process.argv[2] || "https://ethereum-sepolia-rpc.publicnode.com";
 let calls = 0;
