@@ -162,7 +162,9 @@ contract ShortFillGateTest is Test, IUnlockCallback {
                 sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
             }),
             ""
-        ) returns (BalanceDelta d) {
+        ) returns (
+            BalanceDelta d
+        ) {
             last = Attempt({reverted: false, revertData: "", amount0: d.amount0(), amount1: d.amount1()});
             _pay(key.currency0, d.amount0());
             _pay(key.currency1, d.amount1());
