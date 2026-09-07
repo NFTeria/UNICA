@@ -247,6 +247,20 @@ FORK_MUTATIONS = [
      'if (_activeDigest != bytes32(0)) revert SettlementAlreadyInProgress(_activeDigest);', '',
      'test_ForkH_ATokenThatReentersDuringDeliveryIsRefused',
      'a settlement can begin inside another settlement'),
+    # The last three. The payer's currency can now misbehave too, and a hook that judges nothing
+    # can be deployed on the fork, so nothing in the local table is left without a fork twin.
+    ('F16', EXEC,
+     'if (credited != actualIn) revert SettlementDidNotClose(actualIn, credited);', '',
+     'test_ForkI_ATokenThatOverpaysTheVenueIsRefused',
+     'the PoolManager credit is not compared with what the swap said was owed'),
+    ('F17', EXEC,
+     'if (closing != opening.executorIn) revert ExecutorHeldTheInput(opening.executorIn, closing);', '',
+     'test_ForkI_ATokenThatQuietlyPaysTheExecutorIsRefused',
+     'the no-custody claim on the input is never measured'),
+    ('F18', EXEC,
+     'if (deliveredOut != q.amountOut) revert DeliveryIsNotTheInvoice(q.quoteId, q.amountOut, deliveredOut);', '',
+     'test_ForkN_TheExecutorRefusesAShortFillWithNoHookToHelp',
+     'the exact-output equality is dropped and the floor alone decides'),
 ]
 
 if FORK:
@@ -309,10 +323,9 @@ for mid, path, killer, status, note, desc in rows:
 killed = sum(1 for r in rows if r[3] == 'KILLED')
 print(f'\nmutations run: {len(rows)}, killed by their own row: {killed}, other: {len(rows) - killed}')
 if FORK:
-    print('NOT covered on the fork, and covered locally instead: the exact-output EQUALITY (which')
-    print('needs a hook that judges nothing) and the no-custody check on the INPUT and the')
-    print('PoolManager credit comparison (which need the PAYER to hold a misbehaving token, and')
-    print('the payer holds real WETH here). See `make mutants`.')
+    print('Every mutation in the local table now has a fork twin. Three of them needed a pool')
+    print('currency that misbehaves and one needed a hook that judges nothing; both are deployed')
+    print('into the fork, and the rest of the stack stays official.')
 
 # Restore anything a crash might have left behind, then confirm.
 final, _ = run_tests()

@@ -2,7 +2,7 @@
   "sepolia": {
     "QuoteSettlementExecutor": {
       "address": "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f",
-      "startBlock": 11656701
+      "startBlock": 11656955
     }
   }
 }

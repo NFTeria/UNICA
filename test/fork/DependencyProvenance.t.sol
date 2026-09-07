@@ -30,13 +30,21 @@ contract DependencyProvenanceForkTest is ForkPin {
 
     function test_ForkA_ThePinIsTheBlockThisSuiteClaims() public {
         assertEq(block.chainid, PINNED_CHAIN_ID, "chain id");
-        assertEq(block.number, PINNED_BLOCK, "block number");
-        assertEq(block.timestamp, PINNED_TIMESTAMP, "block timestamp");
+        assertEq(block.number, _forkBlock(), "block number");
 
+        if (!_atDefaultPin()) {
+            // Stated, never folded into a pass. An operator on a pruning endpoint moves the pin
+            // with UNICA_FORK_BLOCK, and the block identity below is then theirs to vouch for —
+            // but every code hash in this file is still asserted, and those are what matter.
+            emit log_named_uint("UNICA_FORK_BLOCK overrides the default pin; hash/timestamp NOT asserted", _forkBlock());
+            return;
+        }
+
+        assertEq(block.timestamp, DEFAULT_TIMESTAMP, "block timestamp");
         // The hash cannot be read from inside its own block, so read it from the next one. This is
         // the check that makes the pin a pin rather than a number in a comment.
-        vm.createSelectFork(_forkUrl(), PINNED_BLOCK + 1);
-        assertEq(blockhash(PINNED_BLOCK), PINNED_BLOCK_HASH, "the pinned block hash does not match");
+        vm.createSelectFork(_forkUrl(), DEFAULT_BLOCK + 1);
+        assertEq(blockhash(DEFAULT_BLOCK), DEFAULT_BLOCK_HASH, "the pinned block hash does not match");
     }
 
     function test_ForkA_EveryDependencyHoldsTheRecordedCode() public view {

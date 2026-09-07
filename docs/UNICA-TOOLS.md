@@ -467,18 +467,20 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   fork and do not exist on Sepolia. Nothing is broadcast. One pool shape, one currency pair, one
   block.
 - Dependencies: Foundry, `v4-core`, Permit2.
-- Networks: a read-only fork of Ethereum Sepolia at block 11656701.
+- Networks: a read-only fork of Ethereum Sepolia, default block 11656955, overridable with `UNICA_FORK_BLOCK`.
 - Status: IMPLEMENTED — FORK TESTS
-- Evidence: `make fork` — 39 rows: dependency provenance, a mined CREATE2 hook address, the
+- Evidence: `make fork` — 42 rows: dependency provenance, a mined CREATE2 hook address, the
   integrated path (merchant paid exactly 100.000000 USDC for 0.041792042795051823 WETH against a
-  1 WETH ceiling), 25 refusals each naming its own reason, and four rows against a hostile payout
-  token. `make fork-mutants` kills 15 of 15.
+  1 WETH ceiling), 26 refusals each naming its own reason, four rows against a hostile payout token
+  and three against a hostile input token. `make fork-mutants` kills 18 of 18 — every mutation in
+  the local table now has a fork twin.
 - Tests: it is the tests.
 - Deployment: none.
 - Limitations: excluded from `make gate`, because a gate that depends on a third party's uptime is a
-  status page rather than a gate. And a public node PRUNES: the first pin stopped resolving within
-  the hour, so the block resolves from an archive endpoint or a warm Foundry RPC cache (about 212 KB
-  for this block) and not from the public default indefinitely.
+  status page rather than a gate. And a public node PRUNES — the first pin died within the hour, the
+  second within minutes — so the block is overridable with `UNICA_FORK_BLOCK`, and at a non-default
+  pin the block-hash and timestamp rows say out loud that they are not asserted. Every dependency
+  code hash is asserted either way, and those are unchanged across all three pins.
 - Sponsor relevance: Uniswap.
 - Last verified commit: `82c7dcb44038`
 
@@ -693,11 +695,12 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Dependencies: Foundry, Python 3.
 - Networks: none.
 - Status: IMPLEMENTED — LOCAL TESTS
-- Evidence: `make mutants` — 30 mutations, 30 killed by their own row, control green before and
-  after.
+- Evidence: `make mutants` — 30 mutations, 30 killed by their own row. `make fork-mutants` — 18
+  against pinned live dependencies, 18 killed. Control green before and after each.
 - Tests: `script/mutation-suite.sh` is its own control: it fails if the unmutated tree is not green.
 - Deployment: none.
-- Limitations: recompiles thirty times, so it is not in `make gate`.
+- Limitations: a fixed list, not a generator, and it recompiles once per mutation, so it is not in
+  `make gate`.
 - Sponsor relevance: none.
 - Last verified commit: `51e8e471acda`
 

@@ -562,15 +562,14 @@
       "evidence": [
         {"kind": "command", "value": "make mutants"},
         {"kind": "command", "value": "make fork-mutants"},
-        {"kind": "measurement", "value": "30 local mutations killed by their own row; 12 fork mutations killed by their own row"}
+        {"kind": "measurement", "value": "30 local mutations and 18 fork mutations, each killed by the row that names it"}
       ],
       "limitations": [
         "a fixed list, not a generator; it proves those defects are caught and nothing more",
-        "four local mutations cannot be reproduced on the fork because real USDC and WETH behave; the runner prints which",
         "recompiles once per mutation, so it is not in make gate"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
+      "lastVerifiedCommit": "b27cb5a0f0a7d0668f968395de900db0776ef398"
     },
     {
       "id": "web-checkout-surface",
@@ -720,6 +719,7 @@
         "test/fork/V2ForkSettlement.t.sol",
         "test/fork/V2ForkRefusals.t.sol",
         "test/fork/V2ForkHostileToken.t.sol",
+        "test/fork/V2ForkHostileInput.t.sol",
         "test/fork/CaptureReceipt.t.sol"
       ],
       "networks": [
@@ -734,24 +734,25 @@
         "test/fork/DependencyProvenance.t.sol",
         "test/fork/V2ForkSettlement.t.sol",
         "test/fork/V2ForkRefusals.t.sol",
-        "test/fork/V2ForkHostileToken.t.sol"
+        "test/fork/V2ForkHostileToken.t.sol",
+        "test/fork/V2ForkHostileInput.t.sol"
       ],
       "evidence": [
         {"kind": "command", "value": "make fork"},
-        {"kind": "measurement", "value": "39 rows at pinned block 11656701, hash 0xceedf3c0…f64428fb"},
-        {"kind": "command", "value": "make fork-mutants — 15 mutations, 15 killed by their own row"},
+        {"kind": "measurement", "value": "42 rows at pinned block 11656955, hash 0xd92c7168…e8cd1da5"},
+        {"kind": "command", "value": "make fork-mutants — 18 mutations, 18 killed by their own row"},
         {"kind": "address", "chainId": 11155111, "value": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543"}
       ],
       "limitations": [
         "FORK-LOCAL: the V2 hook, executor and pool are created inside the fork and do not exist on Sepolia",
         "nothing is broadcast; the suite is read-only against the chain",
-        "a public node prunes state, so the pin resolves only from an archive endpoint or a warm Foundry RPC cache",
+        "a public node prunes within minutes, so the block is overridable with UNICA_FORK_BLOCK; at a non-default pin the block hash and timestamp rows state that they are not asserted",
         "excluded from make gate, because a gate that depends on a third party's uptime is a status page"
       ],
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
+      "lastVerifiedCommit": "b27cb5a0f0a7d0668f968395de900db0776ef398"
     },
     {
       "id": "interface-freeze-verifier",

@@ -19,25 +19,26 @@ import {Test} from "forge-std/Test.sol";
 ///      fork test that quietly ran against nothing would be worse than no fork test.
 abstract contract ForkPin is Test {
     uint256 internal constant PINNED_CHAIN_ID = 11155111;
-    uint256 internal constant PINNED_BLOCK = 11656701;
+    uint256 internal constant DEFAULT_BLOCK = 11656955;
     /// @dev Block hash of the pinned block, read with `cast block` on 2026-09-07.
     ///
-    ///      RE-PINNED ONCE, and the reason is a fact about public infrastructure rather than about
-    ///      this code. The first pin — 11656449 — stopped resolving within the hour: the public
-    ///      node answered `historical state ... is not available` for a storage slot no earlier run
-    ///      had warmed. Suites that had already cached their reads kept passing, which is the
-    ///      dangerous shape of the failure: the pin looks reproducible right up until a new row
-    ///      touches an uncached slot.
+    ///      RE-PINNED TWICE, and the second time settled the design. Block 11656449 stopped
+    ///      resolving within the hour and 11656701 within minutes: the public node answers
+    ///      `historical state ... is not available` for any storage slot no earlier run had warmed.
+    ///      Suites with warm caches keep passing, which is the dangerous shape — the pin looks
+    ///      reproducible right up until a new row touches an uncached slot.
     ///
-    ///      Two durable answers, in order of preference. Point SEPOLIA_RPC_URL at an archive
-    ///      endpoint, which serves any block. Or run the suite while the pin is still inside the
-    ///      public node's retention window and let Foundry's RPC cache hold it — that cache is
-    ///      about 212 KB for this block, so a warm machine keeps working offline.
+    ///      Chasing the head with a new constant every time is not engineering, so the block is
+    ///      OVERRIDABLE. `UNICA_FORK_BLOCK` moves it; the default below is a block that worked when
+    ///      it was written. On a pruning endpoint an operator sets the variable; on an archive
+    ///      endpoint the default resolves forever.
     ///
-    ///      Every dependency's code hash below is UNCHANGED across the re-pin, which is the useful
-    ///      part: the pin moved, the dependencies did not.
-    bytes32 internal constant PINNED_BLOCK_HASH = 0xceedf3c0a73d0e69093e98ddeac8cf7dbfc96bce61cda3f8742e3f8df64428fb;
-    uint256 internal constant PINNED_TIMESTAMP = 1788815532;
+    ///      What that costs is honest and small: the block-hash and timestamp rows only assert when
+    ///      running at the DEFAULT block, and say so out loud when they do not. Every dependency's
+    ///      CODE HASH is asserted either way, and those are unchanged across all three pins — which
+    ///      is the substantive claim. The pin moved; the dependencies did not.
+    bytes32 internal constant DEFAULT_BLOCK_HASH = 0xd92c7168e4ba7017d3081fada61d3c20dc807187fc3767f3fc83325ce8cd1da5;
+    uint256 internal constant DEFAULT_TIMESTAMP = 1788818688;
 
     /// @dev A public endpoint with no API key. Recorded rather than hidden, precisely because it
     ///      carries no secret; a private endpoint may be supplied through the environment instead.
@@ -94,10 +95,23 @@ abstract contract ForkPin is Test {
         return vm.envOr("SEPOLIA_RPC_URL", PUBLIC_SEPOLIA);
     }
 
+    /// @notice The block this run pins to: the default, or whatever `UNICA_FORK_BLOCK` names.
+    function _forkBlock() internal view returns (uint256) {
+        return vm.envOr("UNICA_FORK_BLOCK", DEFAULT_BLOCK);
+    }
+
+    /// @notice True when this run is at the recorded default, and the block hash and timestamp
+    ///         below can therefore be asserted rather than skipped.
+    function _atDefaultPin() internal view returns (bool) {
+        return _forkBlock() == DEFAULT_BLOCK;
+    }
+
     function _selectPinnedFork() internal {
-        vm.createSelectFork(_forkUrl(), PINNED_BLOCK);
+        vm.createSelectFork(_forkUrl(), _forkBlock());
         require(block.chainid == PINNED_CHAIN_ID, "fork: wrong chain");
-        require(block.number == PINNED_BLOCK, "fork: wrong block");
-        require(block.timestamp == PINNED_TIMESTAMP, "fork: wrong timestamp");
+        require(block.number == _forkBlock(), "fork: wrong block");
+        if (_atDefaultPin()) {
+            require(block.timestamp == DEFAULT_TIMESTAMP, "fork: wrong timestamp for the default pin");
+        }
     }
 }

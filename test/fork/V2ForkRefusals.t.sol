@@ -11,6 +11,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IQuoteSettlement} from "../../src/v2/interfaces/IQuoteSettlement.sol";
 import {QuoteSettlementExecutor} from "../../src/v2/QuoteSettlementExecutor.sol";
 import {IPermit2Transfer} from "../../src/v2/interfaces/IPermit2Transfer.sol";
+import {FloorlessInvoiceHook} from "../v2/util/SettlementFixture.sol";
 import {V2ForkFixture, StrangerSwapper} from "./util/V2ForkFixture.sol";
 
 interface IPermit2Errors {
@@ -315,6 +316,50 @@ contract V2ForkRefusalsTest is V2ForkFixture, IPermit2Errors {
         _assertNothingSurvived(q);
     }
 
+    /// @dev THE EXECUTOR'S EQUALITY, ALONE, AGAINST THE REAL STACK. The pool below carries a hook
+    ///      that admits everything and judges nothing — no floor, no pool match, no direction —
+    ///      while still reporting this executor, so this executor will swap through it. The pool
+    ///      short-fills exactly as Gate 0 measured, the hook shrugs, and the executor refuses. Two
+    ///      layers only ever tested together are one layer with two names.
+    function test_ForkN_TheExecutorRefusesAShortFillWithNoHookToHelp() public {
+        address addr = address(uint160(DECLARED_FLAGS) ^ (0x7777 << 144));
+        assertEq(addr.code.length, 0, "the namespaced address already holds code on this chain");
+        deployCodeTo("SettlementFixture.sol:FloorlessInvoiceHook", abi.encode(address(executor)), addr);
+
+        PoolKey memory floorless = PoolKey({
+            currency0: Currency.wrap(payoutCurrency),
+            currency1: Currency.wrap(inputCurrency),
+            fee: POOL_FEE,
+            tickSpacing: POOL_TICK_SPACING,
+            hooks: IHooks(addr)
+        });
+        manager.initialize(floorless, POOL_SQRT_PRICE);
+        lp.add(floorless, 5e13, rangeLower, rangeUpper);
+
+        uint256 asked = 1_000_000e6;
+        IQuoteSettlement.Quote memory q = _quote(bytes32("floorless"), asked, type(uint128).max);
+        q.pool = floorless;
+        q.hook = addr;
+
+        vm.prank(relayer);
+        try executor.settle(q, _signQuoteAs(q, merchantKey), _auth(q, 60)) returns (uint256, uint256) {
+            fail();
+            emit log_string("a short fill settled through a hook that judges nothing");
+        } catch (bytes memory err) {
+            assertEq(
+                bytes4(err),
+                IQuoteSettlement.DeliveryIsNotTheInvoice.selector,
+                "refused, but not by the executor's own exact-output equality"
+            );
+            (, uint256 required, uint256 delivered) = abi.decode(_body(err), (bytes32, uint256, uint256));
+            assertEq(required, asked, "the executor named the wrong required amount");
+            assertLt(delivered, asked, "this row needs an actual short fill");
+            emit log_named_uint("invoice required", required);
+            emit log_named_uint("pool delivered  ", delivered);
+        }
+        assertEq(IERC20(payoutCurrency).balanceOf(recipient), 0, "a refused settlement paid the merchant");
+    }
+
     // ---- the pool refuses everyone else ------------------------------------------------------
 
     function test_ForkN_AStrangerCannotSwapThroughTheInvoicePool() public {
@@ -397,6 +442,13 @@ contract V2ForkRefusalsTest is V2ForkFixture, IPermit2Errors {
                 logs[i].topics.length == 0 || logs[i].topics[0] != RECEIPT_TOPIC,
                 "a refused settlement emitted a receipt"
             );
+        }
+    }
+
+    function _body(bytes memory err) internal pure returns (bytes memory out) {
+        out = new bytes(err.length - 4);
+        for (uint256 i = 0; i < out.length; i++) {
+            out[i] = err[i + 4];
         }
     }
 
