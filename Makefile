@@ -116,9 +116,12 @@ format   :; forge fmt
 fmt      :; forge fmt
 clean    :; forge clean
 gate     : _need-deps
-	forge build && forge test && forge fmt --check
+	@# The fork suites are excluded on purpose. They need a Sepolia endpoint, and a gate that
+	@# depends on a third party's uptime is not a gate — it is a status page. `make fork` runs them.
+	forge build && forge test --no-match-path 'test/fork/*' && forge fmt --check
 	bash script/scan.sh
 	bash script/no-copied-source.sh
+	bash script/size-budget.sh
 	@# The ENS resolution tests are offline and deterministic, so they belong in the gate. If node
 	@# is missing they report a SKIP and say it is a skip: an absent runner and a passing suite
 	@# must not look the same. `make gate-live` additionally resolves real names on Sepolia.
@@ -141,6 +144,15 @@ gate     : _need-deps
 # by somebody else's row is a finding, not a pass.
 mutants:
 	bash script/mutation-suite.sh
+
+# The fork suites: the same V2 code against pinned live Sepolia dependencies, read-only. Nothing
+# here broadcasts. Needs a Sepolia endpoint; SEPOLIA_RPC_URL overrides the public default.
+fork:
+	forge test --match-path 'test/fork/*'
+
+# And the highest-value mutations re-run under fork conditions.
+fork-mutants:
+	bash script/mutation-suite.sh --fork
 
 # The gate plus the rows that need a network: real ENSv2 names resolved on Sepolia. Read-only.
 gate-live: gate
