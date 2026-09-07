@@ -36,9 +36,16 @@
 # libraries are BUSL-1.1, non-production use only. This repository is MIT and public, and a
 # push is permanent.
 #
-# It validates itself before it judges, twice over: a real vendored body statement must be
-# caught, and a sentence of ordinary prose must not. Run --self-test to also plant a real
-# vendored statement in a scratch file and watch the scan go red on it.
+# IT READS UNTRACKED FILES TOO, and that is not a nicety. It did not, and on 2026-09-07 the local
+# gate passed while CI failed on the same commit: the file the scan objected to was still untracked
+# when the gate ran locally, and `git ls-files` cannot see an untracked file. A gate whose verdict
+# depends on whether `git add` has happened yet is not a gate — it is a coin toss that CI resolves
+# after the push. `script/scan.sh` had already learned this; this file had not.
+#
+# It validates itself before it judges, three times over: a real vendored body statement must be
+# caught, a sentence of ordinary prose must not, and an UNTRACKED file carrying a vendored statement
+# must be caught. Run --self-test to also plant a real vendored statement in a scratch file and
+# watch the scan go red on it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 exec python3 - "${1:-}" <<'PY'
@@ -91,8 +98,16 @@ for root in ROOTS:
             except OSError:
                 pass
 
+def repo_files():
+    """Tracked files AND untracked-but-not-ignored ones, which is what CI will see after a push."""
+    tracked = subprocess.run(['git', 'ls-files'], capture_output=True, text=True).stdout.split()
+    untracked = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard'],
+                               capture_output=True, text=True).stdout.split()
+    return tracked + untracked
+
+
 def scan(extra=None):
-    files = subprocess.run(['git', 'ls-files'], capture_output=True, text=True).stdout.split()
+    files = repo_files()
     if extra:
         files = files + [extra]
     hits, n = [], 0
@@ -128,6 +143,17 @@ checks.append(('control: a quoted sentence is NOT treated as a wire constant',
 checks.append(('control: a quoted call expression is NOT treated as a wire constant',
                not forced('require(balanceOf(msg.sender) >= amount, "not enough of the token here");')))
 
+# The blind spot that let a green local gate meet a red CI: an untracked file must be scanned.
+with tempfile.NamedTemporaryFile('w', suffix='.sol', dir='.', delete=False) as fh:
+    fh.write('// planted, untracked\n' + probe + '\n')
+    untracked_probe = os.path.basename(fh.name)
+try:
+    h, _ = scan()  # NOT passed as `extra` — it must be found by the file walk itself
+    checks.append(('control: an UNTRACKED file carrying a vendored statement is caught',
+                   any(x[0] == untracked_probe for x in h)))
+finally:
+    os.unlink(untracked_probe)
+
 if SELF_TEST:
     with tempfile.NamedTemporaryFile('w', suffix='.sol', dir='.', delete=False) as fh:
         fh.write('// planted\n' + probe + '\n')
@@ -140,8 +166,9 @@ if SELF_TEST:
         os.unlink(planted)
 
 hits, nfiles = scan()
-checks.append((f'no tracked line reproduces a vendored body statement '
-               f'({nfiles} files against {len(vendored)} vendored statements)', not hits))
+checks.append((f'no line in this working tree reproduces a vendored body statement '
+               f'({nfiles} files, tracked and untracked, against {len(vendored)} vendored statements)',
+               not hits))
 
 for name, good in checks:
     print(('PASS  ' if good else 'FAIL  ') + name)

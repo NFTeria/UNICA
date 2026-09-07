@@ -494,28 +494,32 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Purpose: enforce that nothing is copied into this repository from a vendored dependency.
 - Product role: a licence guard as much as a credit one — `PoolManager.sol` and seven core
   libraries are BUSL-1.1, this repository is MIT and public, and a push is permanent.
-- Version: 0.2.0
+- Version: 0.3.0
 - Location: `script/no-copied-source.sh`
 - Inputs: the tracked tree and the vendored sources.
 - Outputs: a stated count, and every hit with its source file.
 - Trust boundary: none.
 - Security guarantees: none; it is a scan.
 - Explicit non-guarantees: it compares line identity, so a paraphrase or a reflow defeats it. It
-  exempts wire constants — a whole line that is one string literal opening as `Name(` — because an
+  reads untracked files as well as tracked ones — it did not, and on 2026-09-07 a green local gate
+  met a red CI on the same commit, because the file it objected to was still untracked when the
+  gate ran and `git ls-files` cannot see one. A gate whose verdict depends on whether `git add` has
+  happened yet is a coin toss that CI resolves after the push. It exempts wire constants — a whole line that is one string literal opening as `Name(` — because an
   EIP-712 type string has exactly one correct spelling and a signature over any other is rejected
   by the deployed contract. That exemption is a hole a determined paste could use one line at a
   time, and it is recorded here rather than hidden.
 - Dependencies: Python 3, git.
 - Networks: none.
 - Status: IMPLEMENTED — LOCAL TESTS
-- Evidence: 142 tracked files against 1,963 vendored body statements, zero reproduced; five
-  controls including two proving the wire-constant exemption stayed narrow; and `--self-test`
-  plants a real vendored statement and watches the scan go red.
+- Evidence: 157 files — tracked AND untracked — against 1,963 vendored body statements, zero
+  reproduced; six controls, including two proving the wire-constant exemption stayed narrow and one
+  proving an untracked file is scanned; and `--self-test` plants a real vendored statement and
+  watches the scan go red.
 - Tests: `script/no-copied-source.sh --self-test`
 - Deployment: none; it runs in `make gate` and in CI.
 - Limitations: as above.
 - Sponsor relevance: none.
-- Last verified commit: `a8aac3442449`
+- Last verified commit: `fcfe151a83d4`
 
 ### Private-Leak Heuristic
 

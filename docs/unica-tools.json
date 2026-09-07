@@ -465,7 +465,7 @@
     {
       "id": "copied-source-guard",
       "name": "Copied-Source Guard",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "status": "IMPLEMENTED — LOCAL TESTS",
       "paths": [
         "script/no-copied-source.sh"
@@ -480,14 +480,14 @@
       ],
       "evidence": [
         {"kind": "command", "value": "bash script/no-copied-source.sh --self-test"},
-        {"kind": "measurement", "value": "142 tracked files against 1963 vendored body statements, zero reproduced"}
+        {"kind": "measurement", "value": "157 files, tracked and untracked, against 1963 vendored body statements, zero reproduced"}
       ],
       "limitations": [
         "line identity only; a paraphrase or a reflow defeats it",
         "exempts wire constants, which is a hole a determined paste could use one line at a time"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "a8aac3442449089dedb93e402a764ff22ac17f97"
+      "lastVerifiedCommit": "fcfe151a83d49234cd732c96d4002e190afc49d3"
     },
     {
       "id": "private-leak-heuristic",
