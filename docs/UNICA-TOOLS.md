@@ -1,0 +1,587 @@
+# UNICA — what it contains, and what each part can actually be claimed to do
+
+This is the living inventory. It exists because a project that cannot say precisely what it has
+built will eventually say something it cannot back up, and the moment that happens it has spent
+trust that is hard to buy back.
+
+**Read the Status line before anything else.** Only these values are used, and
+`script/validate-tools.mjs` fails the build if any other appears:
+
+| Status | What it means |
+|---|---|
+| `LIVE AND VERIFIED` | deployed on a public chain, source verified, and a transaction proves it ran |
+| `IMPLEMENTED — LOCAL TESTS` | the code exists and named tests exercise it locally; nothing is deployed |
+| `IMPLEMENTED — FORK TESTS` | the above, plus tests against forked chain state |
+| `PROTOTYPE` | it runs, and it is not the thing that ships |
+| `SPECIFIED, NOT IMPLEMENTED` | written down; no code |
+| `BLOCKED` | cannot proceed until something outside this repository happens |
+| `UNSUPPORTED` | deliberately out of scope |
+| `RETIRED` | was real, is not maintained |
+
+The machine-readable twin is [`docs/unica-tools.json`](unica-tools.json). The two must agree on
+every id and every status, and `make gate` checks it. **A tool's evidence points at a test, a
+script, a transaction or an artifact — never back at this file.** A document that cites itself is
+not evidence, it is a rumour with a footnote.
+
+**Last verified commit** is the commit at which someone checked the row's claims. The validator
+enforces the rule that makes it meaningful: any commit that changes a tool's code must change the
+manifest in the same commit, or the build fails. That is how a status stops drifting.
+
+Nothing in V2 is deployed. **No part of UNICA has been audited**, and no part of this document
+should be read as saying otherwise.
+
+---
+
+## V1 — the live generation
+
+### V1 Settlement Hook
+
+- Id: `v1-settlement-hook`
+- Purpose: refuse any swap through its pool that does not fully settle a registered order.
+- Product role: the guarantee V1 makes. It is the reason V1 is a hook and not a script.
+- Version: 1.0.0
+- Location: `src/V4SettlementHook.sol`
+- Inputs: a `PoolKey`, the swap's parameters, and an order id carried in `hookData`.
+- Outputs: a callback selector, and the `SettlementReceipt` event on a successful settlement.
+- Trust boundary: it trusts the order registry it owns, and nothing that arrives in calldata. The
+  payee is resolved from storage written by an authenticated call, never from `hookData`.
+- Security guarantees: the recipient of a settlement is the registered merchant; a settlement that
+  under-delivers reverts; an order settles once.
+- Explicit non-guarantees: it does not price anything, does not custody anything, and does not
+  know who the payer is.
+- Dependencies: `v4-core`, OpenZeppelin's `uniswap-hooks`.
+- Networks: Ethereum Sepolia.
+- Status: LIVE AND VERIFIED
+- Evidence: `0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0`; deploy tx
+  `0xc76bc0a3…4108a014`; the settlement tx `0x1120af18…ee0ecb83` at block 11640026; Sourcify
+  reports `match`. `make readback` reproduces all of it.
+- Tests: `test/V4SettlementHook.t.sol`, `test/I7NativeSettle.t.sol`, `test/ReceiptSchema.t.sol`
+- Deployment: Ethereum Sepolia, CREATE2 salt `0xd76`, flags `0x20C0`, 10,634 bytes of runtime.
+- Limitations: USDC only, and the payout table is compiled into the address, so widening it moves
+  the contract. **Not audited.** Exactly one settlement has run through it.
+- Sponsor relevance: Uniswap. It is a v4 hook doing something a v4 hook is needed for.
+- Last verified commit: `6f99fe98c5ce`
+
+### V1 Settlement Executor
+
+- Id: `v1-settlement-executor`
+- Purpose: drive one settlement through Uniswap's Universal Router and hand the output to the hook.
+- Product role: the caller the hook admits. Nothing else may settle.
+- Version: 1.0.0
+- Location: `src/SettlementExecutor.sol`
+- Inputs: an order id and the native ETH being paid.
+- Outputs: a router call, and the credit the hook then judges.
+- Trust boundary: it trusts the hook's registry for the recipient and the minimum.
+- Security guarantees: it holds nothing after the call; the recipient's balance is checked against
+  what the order requires before it returns.
+- Explicit non-guarantees: it does not verify a merchant's identity and does not choose a price.
+- Dependencies: `v4-periphery`, Uniswap's Universal Router.
+- Networks: Ethereum Sepolia.
+- Status: LIVE AND VERIFIED
+- Evidence: `0x044bc8a8773EC7b9B8de2467766636dFFCaC6210`; deploy tx `0x8c067692…b0c57ebb`;
+  `cast call … 'HOOK()(address)'` returns the hook and the hook returns it.
+- Tests: `test/SettlementExecutor.t.sol`
+- Deployment: Ethereum Sepolia, 11,289 bytes of runtime.
+- Limitations: native ETH input only. **Not audited.**
+- Sponsor relevance: Uniswap — it is the Universal Router integration.
+- Last verified commit: `87f9ecae7038`
+
+### V1 Canonical Receipt
+
+- Id: `v1-canonical-receipt`
+- Purpose: make one settlement reconstructible from logs alone.
+- Product role: what an indexer, an accountant, or a merchant reads afterwards.
+- Version: 1.0.0
+- Location: `docs/RECEIPT-SCHEMA.md`, emitted from `src/V4SettlementHook.sol`
+- Inputs: none; it is an event.
+- Outputs: `SettlementReceipt(orderId, amountIn, amountOut, fee)` beside OpenZeppelin's `HookFee`.
+- Trust boundary: the emitting contract is the hook, so the log's own address is the authority.
+- Security guarantees: emitted only on a settlement that completed.
+- Explicit non-guarantees: it does not name the payer, and it does not carry a quote digest.
+- Dependencies: OpenZeppelin's `IHookEvents`.
+- Networks: Ethereum Sepolia.
+- Status: LIVE AND VERIFIED
+- Evidence: tx `0x1120af18…ee0ecb83` carries `amountIn` 1000000000000000, `amountOut` 2003660,
+  `fee` 0, and the recipient's USDC grew by exactly 2.003660.
+- Tests: `test/ReceiptSchema.t.sol`
+- Deployment: emitted by the live hook.
+- Limitations: exactly one exists on chain. **Not audited.**
+- Sponsor relevance: Uniswap, The Graph.
+- Last verified commit: `e6aeea934ffc`
+
+### V1 Live Verification Scripts
+
+- Id: `v1-live-verification`
+- Purpose: re-prove every claim the README makes about the live deployment, from the chain.
+- Product role: the reason a reader does not have to take this repository's word for anything.
+- Version: 1.0.0
+- Location: `docs/proof/verify-live.sh`, `docs/proof/verify-day1.sh`, `script/readback.sh`
+- Inputs: an RPC URL.
+- Outputs: a stated count — "36 checks run, 36 passed, 0 failed" — never a blank pass.
+- Trust boundary: it trusts the RPC endpoint it is given, and says so.
+- Security guarantees: none; it is a reader.
+- Explicit non-guarantees: a network failure and a false claim are different, and the reader must
+  look at the count to tell them apart.
+- Dependencies: `cast`.
+- Networks: Ethereum Sepolia.
+- Status: LIVE AND VERIFIED
+- Evidence: `make proof` prints 36 of 36 against `0x11202071…0Ea0C0` and tx `0x1120af18…ee0ecb83`.
+- Tests: `docs/proof/verify-live.sh` is its own test; it fails loudly on a wrong value.
+- Deployment: none; it runs locally against the live chain.
+- Limitations: needs a public RPC.
+- Sponsor relevance: Uniswap.
+- Last verified commit: `316df1c6f89c`
+
+### V1 Graph Indexer
+
+- Id: `v1-graph-indexer`
+- Purpose: turn V1 receipts into queryable settlement history.
+- Product role: the "what happened" surface.
+- Version: 0.1.0
+- Location: `integrations/graph/subgraph.yaml`, `integrations/graph/schema.graphql`,
+  `integrations/graph/src`
+- Inputs: the hook's `SettlementReceipt` logs.
+- Outputs: `Settlement` entities with a deterministic id.
+- Trust boundary: it trusts the chain and the ABI compiled from this repository's own artifact.
+- Security guarantees: none; it is an observer.
+- Explicit non-guarantees: it indexes V1 only and knows nothing about the V2 invoice path.
+- Dependencies: `graph-cli`, `matchstick`.
+- Networks: Ethereum Sepolia.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: `bash integrations/graph/local-e2e.sh` reconstructs a settlement end to end;
+  `integrations/graph/STUDIO-PREFLIGHT.md` records what a Studio deploy would need.
+- Tests: `integrations/graph/tests`
+- Deployment: none. Deploying to Subgraph Studio is an owner action and has not been taken.
+- Limitations: not deployed; V1 only. **Not audited.**
+- Sponsor relevance: The Graph — and qualification is on HOLD until a composition that actually
+  meets their published requirement is found. No claim is made that it qualifies.
+- Last verified commit: `5e1d8436fc76`
+
+---
+
+## V2 — the invoice generation
+
+Nothing here is deployed. Everything here is implemented and locally tested against the official
+PoolManager runtime and the official Permit2 runtime, both constructed at their canonical addresses.
+
+### V2 Invoice-Only Hook
+
+- Id: `v2-invoice-hook`
+- Purpose: make a v4 pool one that cannot be traded through — every swap crossing it discharges a
+  merchant-signed invoice, or it reverts.
+- Product role: the claim V2 rests on, and the reason it is a hook. An executor alone cannot make
+  it, because anyone may call `PoolManager.swap`; only the hook sees every swap.
+- Version: 0.1.0
+- Location: `src/v2/QuoteSettlementHook.sol`
+- Inputs: the callback arguments, and one view call to its bound executor asking what invoice is
+  live in this transaction.
+- Outputs: callback selectors, or a refusal.
+- Trust boundary: it trusts its executor for the invoice's TERMS and nothing about whether the pool
+  then delivered them — which is the part it can see for itself.
+- Security guarantees: only the bound executor may swap; a swap with no live invoice is refused; an
+  invoice is discharged once; the pool and the direction must match the invoice; the swap must be
+  exact-output; the delivery must meet the invoice's floor. A pool with a native currency or a
+  dynamic fee cannot carry this hook at all.
+- Explicit non-guarantees: **it enforces a floor, not the exact amount**, and it never witnesses a
+  payment. The merchant is paid by a `take` after the swap frame has returned, so a `balanceOf`
+  read inside `afterSwap` would return the pre-delivery balance and look like a check while proving
+  nothing. Delivery is the executor's obligation.
+- Dependencies: `v4-core`, OpenZeppelin's `uniswap-hooks`.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 13 admission rows and 5 fill rows green; `make mutants` deletes each of its ten guards
+  in turn and each turns the row that names it red; 8,317 bytes of runtime code.
+- Tests: `test/v2/HookAdmission.t.sol`, `test/v2/InvoiceFill.t.sol`
+- Deployment: none.
+- Limitations: not deployed, **not audited**, no fork tests yet.
+- Sponsor relevance: Uniswap.
+- Last verified commit: `1faf6b6bb480`
+
+### V2 Quote Settlement Executor
+
+- Id: `v2-quote-settlement-executor`
+- Purpose: turn a merchant-signed invoice and a payer's Permit2 authorisation into an exact payment.
+- Product role: the contract that proves the PAYMENT. The hook proves the swap; atomicity binds them.
+- Version: 0.1.0
+- Location: `src/v2/QuoteSettlementExecutor.sol`, `src/v2/interfaces/IPermit2Transfer.sol`
+- Inputs: a `Quote`, the merchant's EIP-712 signature, and the payer's Permit2 authorisation.
+- Outputs: `actualIn` and `deliveredOut`, and exactly one `QuoteSettled` receipt.
+- Trust boundary: it trusts two signatures and the PoolManager. It trusts a relayer with nothing:
+  not the Permit2 destination, not the PoolManager, not the hook, not the recipient, not the
+  actions. Every one is a constructor immutable or inside a signature.
+- Security guarantees: the merchant's balance rises by exactly `amountOut`, measured on their own
+  address across the whole settlement; the payer is debited what the swap cost and never more than
+  the ceiling they signed; the executor's own balance in both tokens is unchanged, measured; one
+  settlement at a time; no receipt without a verified delivery.
+- Explicit non-guarantees: it does not vet the pool a merchant names beyond structural checks — the
+  payer's protection is the signed ceiling and the measured delivery. It does not accept EIP-1271
+  contract signatures. It does not support an output token whose transfer cannot deliver an exact
+  amount; such a token is refused, not accommodated.
+- Dependencies: `v4-core`, Permit2 (deployed runtime, never compiled here), OpenZeppelin `ECDSA`.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: the integrated path is green against the official PoolManager and the official Permit2
+  runtime; 24 refusal rows each asserting a whole revert payload; adversarial rows for a token that
+  skims on delivery, one that overpays the venue, one that pays the executor, and one that reenters
+  during delivery; 30 of 30 mutations killed by the row that names them; 17,272 bytes of runtime.
+- Tests: `test/v2/Settlement.t.sol`, `test/v2/SettlementRefusals.t.sol`,
+  `test/v2/SettlementAdversarial.t.sol`, `test/v2/SettlementAdversarialInput.t.sol`,
+  `test/v2/SettlementLayers.t.sol`
+- Deployment: none.
+- Limitations: not deployed, **not audited**, no fork tests yet, single-hop pools only.
+- Sponsor relevance: Uniswap.
+- Last verified commit: `51e8e471acda`
+
+### V2 Merchant Quote
+
+- Id: `v2-merchant-quote`
+- Purpose: state, in one signed object, everything a settlement is allowed to do.
+- Product role: the merchant's half of the agreement.
+- Version: 1
+- Location: `src/v2/interfaces/IQuoteSettlement.sol`
+- Inputs: the merchant's signer.
+- Outputs: an EIP-712 digest, and a signature over it.
+- Trust boundary: every security-relevant field is inside the digest. A field outside it is a field
+  a relayer can change on the way in.
+- Security guarantees: sixteen fields are enumerated in a test that alters each one and requires the
+  digest to move.
+- Explicit non-guarantees: the payer is bound rather than open — a bearer quote that also names a
+  price is a front-running target, and that is a deliberate narrowing, not an oversight.
+- Dependencies: EIP-712.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: `test_Refuse_EverySignedFieldIsInsideTheDigest` moves every field;
+  `test_Settle_TheQuoteDigestIsDerivedTheSameWayTwice` derives the digest from the type strings a
+  second time and requires agreement.
+- Tests: `test/v2/Settlement.t.sol`, `test/v2/SettlementRefusals.t.sol`
+- Deployment: none.
+- Limitations: the second derivation is in Solidity, not in another language as the payer's digest
+  is. An offline derivation is owed. **Not audited.**
+- Sponsor relevance: Uniswap.
+- Last verified commit: `51e8e471acda`
+
+### V2 Permit2 Payment Witness
+
+- Id: `v2-permit2-witness`
+- Purpose: derive, offline and independently, the exact digest a payer's wallet must sign.
+- Product role: the payer's half of the agreement, and the thing most likely to be silently wrong.
+- Version: 0.1.0
+- Location: `integrations/permit2/digest.mjs`, `integrations/permit2/test.mjs`
+- Inputs: a quote's terms, a nonce, a deadline, a spender.
+- Outputs: a domain separator, a witness hash, and a signing digest.
+- Trust boundary: none — it is arithmetic. Its value is being written from the specification rather
+  than from the Solidity it is compared against.
+- Security guarantees: none; it is a derivation.
+- Explicit non-guarantees: **Permit2 does not enforce the transfer destination.** That was measured
+  here: a transfer to an attacker was accepted and the payer's signature did not object. The
+  executor fixes the destination in code and the witness records it.
+- Dependencies: Permit2's deployed runtime, EIP-712.
+- Networks: Ethereum Sepolia (the canonical Permit2 address).
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 20 offline rows; the same vector recomputed in Solidity and required to match; and the
+  deployed Permit2 runtime accepting a signature over the OFFLINE digest. Four sabotages — a field
+  renamed on either side, a spurious `version` in the domain, and a Permit2 copied by code-etch —
+  each turn rows red.
+- Tests: `integrations/permit2/test.mjs`, `test/v2/Permit2Witness.t.sol`
+- Deployment: none.
+- Limitations: measured against an etched runtime rather than a live Sepolia transaction.
+- Sponsor relevance: Uniswap.
+- Last verified commit: `17836cc42533`
+
+### V2 Receipt
+
+- Id: `v2-receipt`
+- Purpose: record one settlement completely enough to audit it from logs alone.
+- Product role: what an indexer and a merchant read afterwards.
+- Version: 1
+- Location: `src/v2/interfaces/IQuoteSettlement.sol`, emitted from
+  `src/v2/QuoteSettlementExecutor.sol`
+- Inputs: none; it is an event.
+- Outputs: quote id, quote digest, recipient, payer, merchant signer, hook, pool id, both tokens,
+  the ceiling, what the swap actually cost, what was requested, what was delivered, and the policy
+  version.
+- Trust boundary: the log's own address is the executor, which is why there is no `executor` field —
+  a field restating the emitter is a field that can disagree with it.
+- Security guarantees: emitted once, after the unlock returned and after the delivery was verified.
+- Explicit non-guarantees: `amountOut` is what was asked for and `deliveredOut` is what was
+  measured. They are separate fields because an indexer that cannot tell a request from a
+  measurement cannot audit anything.
+- Dependencies: none.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: decoded from the log field by field in the happy-path row, and a separate row proves no
+  refusal emits one.
+- Tests: `test/v2/Settlement.t.sol`, `test/v2/SettlementRefusals.t.sol`
+- Deployment: none.
+- Limitations: never emitted on a public chain; no indexer reads it yet.
+- Sponsor relevance: The Graph.
+- Last verified commit: `51e8e471acda`
+
+### V2 Settlement Indexer
+
+- Id: `v2-settlement-indexer`
+- Purpose: query settlements by invoice, by merchant, by payer, and by version.
+- Product role: the "what happened" surface for V2.
+- Version: 0.0.0
+- Location: this document; nothing is written.
+- Inputs: `QuoteSettled` logs.
+- Outputs: intended — invoice by quote digest, paid state, merchant and payer histories, volume by
+  asset, and a V1/V2 distinction.
+- Trust boundary: would trust the chain and the executor's ABI.
+- Security guarantees: none.
+- Explicit non-guarantees: none yet, because nothing exists.
+- Dependencies: `graph-cli`.
+- Networks: none.
+- Status: SPECIFIED, NOT IMPLEMENTED
+- Evidence: this specification.
+- Tests: none.
+- Deployment: none.
+- Limitations: nothing is written. The frozen V1 manifest and schema are not to be edited for it; a
+  V2 indexer gets its own namespace.
+- Sponsor relevance: The Graph. Qualification remains HOLD.
+- Last verified commit: `51e8e471acda`
+
+---
+
+## Measurement harnesses
+
+### B1 No-Custody Accounting Harness
+
+- Id: `b1-no-custody-harness`
+- Purpose: establish that a PoolManager `settle()` credits a transfer the lock holder never made.
+- Product role: the measurement the whole B1 funding path was built on.
+- Version: 0.1.0
+- Location: `test/v2/B1Settlement.t.sol`
+- Inputs: none.
+- Outputs: measured balances before and after a third-party transfer.
+- Trust boundary: the official PoolManager runtime.
+- Security guarantees: none; it is a measurement.
+- Explicit non-guarantees: it uses a stand-in mover, not Permit2. The Permit2 leg is measured
+  separately, and the two are only joined in the integrated settlement test.
+- Dependencies: `v4-core`.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: `settle()` credited 1,003,010,030,091,275 from a transfer the lock holder never made,
+  and the lock holder's balance was identical before and after.
+- Tests: `test/v2/B1Settlement.t.sol`
+- Deployment: none.
+- Limitations: one liquidity shape, one token pair.
+- Sponsor relevance: Uniswap.
+- Last verified commit: `bbf9b6ee3251`
+
+### Short-Fill Reproduction Harness
+
+- Id: `short-fill-harness`
+- Purpose: reproduce the defect V2's hook exists to refuse.
+- Product role: the evidence behind the whole V2 thesis.
+- Version: 0.1.0
+- Location: `test/v2/ShortFill.t.sol`
+- Inputs: none.
+- Outputs: requested versus delivered, and whether anything reverted.
+- Trust boundary: the official PoolManager runtime.
+- Security guarantees: none; it is a measurement.
+- Explicit non-guarantees: measured at one liquidity shape. It shows the defect exists, not that it
+  occurs under every configuration.
+- Dependencies: `v4-core`, `v4-periphery`.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 1e18 requested, 2,995,354,955,910 delivered, no revert. The control row requests a
+  fillable amount and is served exactly.
+- Tests: `test/v2/ShortFill.t.sol`
+- Deployment: none.
+- Limitations: as above.
+- Sponsor relevance: Uniswap.
+- Last verified commit: `878436e80d3d`
+
+### ERC-7751 Hook Error Decoder
+
+- Id: `erc7751-decoder`
+- Purpose: read a hook's own refusal out of the ERC-7751 wrapper v4 puts around every one of them.
+- Product role: the instrument every V2 refusal row reads its result from.
+- Version: 0.1.0
+- Location: `test/v2/util/HookRevertDecoder.sol`, `test/v2/util/HookRevertAsserts.sol`
+- Inputs: raw revert data.
+- Outputs: a kind, the reverting contract, the failed callback, and the hook's own error selector.
+- Trust boundary: none; it parses bytes and never calls anything.
+- Security guarantees: none; it is a reader. Its value is that it REJECTS four near-misses — the
+  right reason under the wrong callback, the right reason from the wrong contract, a damaged
+  wrapper, and an unwrapped error.
+- Explicit non-guarantees: it unwraps one layer, not a nest of them. It is test-tree only; no
+  contract depends on it.
+- Dependencies: `v4-core` (for the wrapper's declaration, compared against).
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 11 rows, five of them rejections, each validated by deleting the corresponding
+  comparison. Measured: a 292-byte wrapper needs only its first 200 bytes to be identified; 93 cuts
+  still identify it and 196 are rejected.
+- Tests: `test/v2/HookRevertDecoder.t.sol`
+- Deployment: none.
+- Limitations: as above.
+- Sponsor relevance: Uniswap — this is a friction finding worth reporting upstream.
+- Last verified commit: `74a691bd965e`
+
+### Mutation/Sabotage Suite
+
+- Id: `mutation-suite`
+- Purpose: prove the tests would notice if the code were wrong.
+- Product role: the reason any other row in this document can be believed.
+- Version: 0.1.0
+- Location: `script/mutation-suite.sh`
+- Inputs: none.
+- Outputs: one line per mutation — killed, survived, misattributed, or stale.
+- Trust boundary: it edits the tree and restores it, and it refuses to report anything if the
+  control is not green first.
+- Security guarantees: none; it is a check on the checks. A mutation counts as killed only when the
+  row that NAMES that guard fails; a mutation that turns some other row red is reported as
+  MISATTRIBUTED, which is a finding rather than a pass.
+- Explicit non-guarantees: it is a fixed list, not a generator. It proves those thirty defects are
+  caught and says nothing about any other.
+- Dependencies: Foundry, Python 3.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: `make mutants` — 30 mutations, 30 killed by their own row, control green before and
+  after.
+- Tests: `script/mutation-suite.sh` is its own control: it fails if the unmutated tree is not green.
+- Deployment: none.
+- Limitations: recompiles thirty times, so it is not in `make gate`.
+- Sponsor relevance: none.
+- Last verified commit: `51e8e471acda`
+
+---
+
+## Guards
+
+### Copied-Source Guard
+
+- Id: `copied-source-guard`
+- Purpose: enforce that nothing is copied into this repository from a vendored dependency.
+- Product role: a licence guard as much as a credit one — `PoolManager.sol` and seven core
+  libraries are BUSL-1.1, this repository is MIT and public, and a push is permanent.
+- Version: 0.2.0
+- Location: `script/no-copied-source.sh`
+- Inputs: the tracked tree and the vendored sources.
+- Outputs: a stated count, and every hit with its source file.
+- Trust boundary: none.
+- Security guarantees: none; it is a scan.
+- Explicit non-guarantees: it compares line identity, so a paraphrase or a reflow defeats it. It
+  exempts wire constants — a whole line that is one string literal opening as `Name(` — because an
+  EIP-712 type string has exactly one correct spelling and a signature over any other is rejected
+  by the deployed contract. That exemption is a hole a determined paste could use one line at a
+  time, and it is recorded here rather than hidden.
+- Dependencies: Python 3, git.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 142 tracked files against 1,963 vendored body statements, zero reproduced; five
+  controls including two proving the wire-constant exemption stayed narrow; and `--self-test`
+  plants a real vendored statement and watches the scan go red.
+- Tests: `script/no-copied-source.sh --self-test`
+- Deployment: none; it runs in `make gate` and in CI.
+- Limitations: as above.
+- Sponsor relevance: none.
+- Last verified commit: `a8aac3442449`
+
+### Private-Leak Heuristic
+
+- Id: `private-leak-heuristic`
+- Purpose: catch private working material about to be committed to a public repository.
+- Product role: an OPSEC backstop, not a gate.
+- Version: 0.1.0
+- Location: `script/no-private-leak.sh`
+- Inputs: designated private files and the tracked tree.
+- Outputs: matched phrase windows, redacted.
+- Trust boundary: it reads private material, which is exactly why it is not in `make gate`.
+- Security guarantees: none; it is a heuristic.
+- Explicit non-guarantees: it will miss a paraphrase, and it can still cry wolf. It subtracts
+  phrases that are already public, because private notes quote the public repository and a raw
+  overlap implicated sixteen tracked files that were fine.
+- Dependencies: Python 3, git.
+- Networks: none.
+- Status: PROTOTYPE
+- Evidence: `bash script/no-private-leak.sh`
+- Tests: the script carries its own controls.
+- Deployment: none.
+- Limitations: **deliberately not in `make gate`** — a gate must not depend on files that are not
+  in the repository, or it cannot run on a clone.
+- Sponsor relevance: none.
+- Last verified commit: `ea079ec316cc`
+
+---
+
+## Surfaces and models
+
+### ENSv2 Merchant Resolver
+
+- Id: `ensv2-merchant-resolver`
+- Purpose: turn a merchant's name into an address, once, before an order exists.
+- Product role: how a payer identifies who they are paying without typing an address.
+- Version: 0.1.0
+- Location: `web/ensv2/resolve.mjs`, `web/ensv2/keccak.mjs`, `integrations/ensv2/test.mjs`,
+  `integrations/ensv2/live-check.mjs`
+- Inputs: a name.
+- Outputs: a classified result — resolved, not found, no resolver, no address, unreachable — never
+  a bare address.
+- Trust boundary: the ENSv2 Universal Resolver at
+  `0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe` on Sepolia, and the RPC endpoint.
+- Security guarantees: it never falls back to a hard-coded address, and it distinguishes "could not
+  reach the network" from "this name has no address".
+- Explicit non-guarantees: **resolution is not identity.** A name resolving proves who controls the
+  name and nothing whatever about the merchant behind it. It does not verify legitimacy, does not
+  execute a swap, and does not prove a payment. Two of three failure shapes return success with
+  `address(0)` rather than reverting, which is why every one is classified explicitly.
+- Dependencies: the ENSv2 Universal Resolver.
+- Networks: Ethereum Sepolia (read-only).
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 36 offline rows in `make gate`; 7 live rows in `make gate-live`; the keccak is validated
+  against three published FIPS-202 vectors and seven `cast keccak` cross-checks.
+- Tests: `integrations/ensv2/test.mjs`
+- Deployment: none.
+- Limitations: ASCII names only — it refuses non-ASCII rather than approximating ENSIP-15. It is
+  not yet bound into a V2 quote's `merchantConfigHash`, which is the next ENS slice.
+- Sponsor relevance: ENS. No claim is made that it qualifies for anything.
+- Last verified commit: `0845dec9ea01`
+
+### Web Checkout Surface
+
+- Id: `web-checkout-surface`
+- Purpose: let a person pay a merchant by name, seeing the resolved address before they commit.
+- Product role: the operable surface. Two of the five published judging criteria are unreachable
+  without one.
+- Version: 0.1.0
+- Location: `web/index.html`, `web/README.md`
+- Inputs: a merchant name and an amount.
+- Outputs: a resolution, a review step, and a settlement call.
+- Trust boundary: the browser, the RPC, and the resolver.
+- Security guarantees: none of its own; it shows what it resolved and asks before acting.
+- Explicit non-guarantees: it is V1 only and knows nothing about the V2 invoice path.
+- Dependencies: the ENSv2 resolver module.
+- Networks: Ethereum Sepolia.
+- Status: PROTOTYPE
+- Evidence: `bash script/check-surface.sh`
+- Tests: `integrations/ensv2/test.mjs` covers the resolution it depends on.
+- Deployment: none. GitHub Pages is disarmed and publishing is an owner action.
+- Limitations: not published; no stranger has completed a payment through it. **Not audited.**
+- Sponsor relevance: ENS, Uniswap.
+- Last verified commit: `0845dec9ea01`
+
+### Vyper Settlement Math Model
+
+- Id: `vyper-settlement-model`
+- Purpose: model the settlement arithmetic in a second language, where a different compiler and a
+  different property-testing tool have to agree with it.
+- Product role: a cross-check on the maths, not a deployment target.
+- Version: 0.1.0
+- Location: `vy/src`, `vy/tests`, `vy/moccasin.toml`
+- Inputs: amounts and bounds.
+- Outputs: the same numbers, or a disagreement worth reading.
+- Trust boundary: none.
+- Security guarantees: none.
+- Explicit non-guarantees: no Vyper contract is part of the product, and none is intended to be.
+- Dependencies: Vyper, Titanoboa, Moccasin.
+- Networks: none.
+- Status: PROTOTYPE
+- Evidence: `cd vy && mox test` — 33 tests pass under Titanoboa 0.2.8.
+- Tests: `vy/tests`
+- Deployment: none.
+- Limitations: not in `make gate`, because the gate does not require a Python toolchain.
+- Sponsor relevance: none.
+- Last verified commit: `28c82b75f36c`

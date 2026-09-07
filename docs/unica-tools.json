@@ -1,0 +1,630 @@
+{
+  "schemaVersion": 1,
+  "project": "UNICA",
+  "allowedStatus": [
+    "LIVE AND VERIFIED",
+    "IMPLEMENTED — LOCAL TESTS",
+    "IMPLEMENTED — FORK TESTS",
+    "PROTOTYPE",
+    "SPECIFIED, NOT IMPLEMENTED",
+    "BLOCKED",
+    "UNSUPPORTED",
+    "RETIRED"
+  ],
+  "tools": [
+    {
+      "id": "v1-settlement-hook",
+      "name": "V1 Settlement Hook",
+      "version": "1.0.0",
+      "status": "LIVE AND VERIFIED",
+      "paths": [
+        "src/V4SettlementHook.sol"
+      ],
+      "networks": [
+        "ethereum-sepolia"
+      ],
+      "dependencies": [
+        "uniswap-v4-core",
+        "openzeppelin-uniswap-hooks"
+      ],
+      "tests": [
+        "test/V4SettlementHook.t.sol",
+        "test/I7NativeSettle.t.sol",
+        "test/ReceiptSchema.t.sol"
+      ],
+      "evidence": [
+        {"kind": "address", "chainId": 11155111, "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"},
+        {"kind": "transaction", "chainId": 11155111, "value": "0xc76bc0a3ef3cf659fc3c8eb0e76febd2006801b1e0e3fbca4f51bfea4108a014"},
+        {"kind": "transaction", "chainId": 11155111, "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"},
+        {"kind": "command", "value": "make readback"}
+      ],
+      "limitations": [
+        "USDC only; the payout table is compiled in and widening it moves the address",
+        "no external review of any kind",
+        "one settlement has run on it"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "6f99fe98c5cedff499476e21fd78011c78cdb412"
+    },
+    {
+      "id": "v1-settlement-executor",
+      "name": "V1 Settlement Executor",
+      "version": "1.0.0",
+      "status": "LIVE AND VERIFIED",
+      "paths": [
+        "src/SettlementExecutor.sol"
+      ],
+      "networks": [
+        "ethereum-sepolia"
+      ],
+      "dependencies": [
+        "uniswap-v4-periphery",
+        "universal-router"
+      ],
+      "tests": [
+        "test/SettlementExecutor.t.sol"
+      ],
+      "evidence": [
+        {"kind": "address", "chainId": 11155111, "value": "0x044bc8a8773EC7b9B8de2467766636dFFCaC6210"},
+        {"kind": "transaction", "chainId": 11155111, "value": "0x8c06769270297e2794593dfc5084a628e31582492c135419535d3ddcb0c57ebb"},
+        {"kind": "command", "value": "make readback"}
+      ],
+      "limitations": [
+        "native ETH input only",
+        "the recipient is the order's, and the order is the hook's storage"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "87f9ecae703809ea68cf055646202e416392784c"
+    },
+    {
+      "id": "v1-canonical-receipt",
+      "name": "V1 Canonical Receipt",
+      "version": "1.0.0",
+      "status": "LIVE AND VERIFIED",
+      "paths": [
+        "docs/RECEIPT-SCHEMA.md",
+        "src/V4SettlementHook.sol"
+      ],
+      "networks": [
+        "ethereum-sepolia"
+      ],
+      "dependencies": [
+        "openzeppelin-uniswap-hooks"
+      ],
+      "tests": [
+        "test/ReceiptSchema.t.sol"
+      ],
+      "evidence": [
+        {"kind": "transaction", "chainId": 11155111, "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"},
+        {"kind": "address", "chainId": 11155111, "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"}
+      ],
+      "limitations": [
+        "one receipt exists on chain",
+        "amountIn/amountOut/fee only; no payer field"
+      ],
+      "sponsorRoles": [
+        "uniswap",
+        "the-graph"
+      ],
+      "lastVerifiedCommit": "e6aeea934ffcc76c79602cf9e5e168540eb67265"
+    },
+    {
+      "id": "v1-live-verification",
+      "name": "V1 Live Verification Scripts",
+      "version": "1.0.0",
+      "status": "LIVE AND VERIFIED",
+      "paths": [
+        "docs/proof/verify-live.sh",
+        "docs/proof/verify-day1.sh",
+        "script/readback.sh"
+      ],
+      "networks": [
+        "ethereum-sepolia"
+      ],
+      "dependencies": [
+        "foundry-cast"
+      ],
+      "tests": [
+        "docs/proof/verify-live.sh"
+      ],
+      "evidence": [
+        {"kind": "address", "chainId": 11155111, "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"},
+        {"kind": "transaction", "chainId": 11155111, "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"},
+        {"kind": "command", "value": "make proof"}
+      ],
+      "limitations": [
+        "needs a public RPC; a network failure and a false claim look different but must be read"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "316df1c6f89cabc1d486c3cbe493bafb9eaa22f3"
+    },
+    {
+      "id": "v1-graph-indexer",
+      "name": "V1 Graph Indexer",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/graph/subgraph.yaml",
+        "integrations/graph/schema.graphql",
+        "integrations/graph/src"
+      ],
+      "networks": [
+        "ethereum-sepolia"
+      ],
+      "dependencies": [
+        "graph-cli",
+        "matchstick"
+      ],
+      "tests": [
+        "integrations/graph/tests"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "bash integrations/graph/local-e2e.sh"},
+        {"kind": "artifact", "value": "integrations/graph/STUDIO-PREFLIGHT.md"}
+      ],
+      "limitations": [
+        "not deployed to Subgraph Studio; that is an owner action and has not been taken",
+        "indexes the V1 receipt only"
+      ],
+      "sponsorRoles": [
+        "the-graph"
+      ],
+      "lastVerifiedCommit": "5e1d8436fc76b3dae20431255fefb81c7f12fa91"
+    },
+    {
+      "id": "ensv2-merchant-resolver",
+      "name": "ENSv2 Merchant Resolver",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "web/ensv2/resolve.mjs",
+        "web/ensv2/keccak.mjs",
+        "integrations/ensv2/test.mjs",
+        "integrations/ensv2/live-check.mjs"
+      ],
+      "networks": [
+        "ethereum-sepolia"
+      ],
+      "dependencies": [
+        "ensv2-universal-resolver"
+      ],
+      "tests": [
+        "integrations/ensv2/test.mjs"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/ensv2/test.mjs"},
+        {"kind": "command", "value": "make gate-live"},
+        {"kind": "address", "chainId": 11155111, "value": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe"}
+      ],
+      "limitations": [
+        "ASCII names only; it refuses non-ASCII rather than approximating ENSIP-15",
+        "resolution is not identity: a name resolving proves who controls the name and nothing about the merchant",
+        "not yet bound into a V2 quote's merchantConfigHash"
+      ],
+      "sponsorRoles": [
+        "ens"
+      ],
+      "lastVerifiedCommit": "0845dec9ea015d6febed2cfbbcc641c1754ee28d"
+    },
+    {
+      "id": "v2-invoice-hook",
+      "name": "V2 Invoice-Only Hook",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "src/v2/QuoteSettlementHook.sol"
+      ],
+      "networks": [],
+      "dependencies": [
+        "uniswap-v4-core",
+        "openzeppelin-uniswap-hooks"
+      ],
+      "tests": [
+        "test/v2/HookAdmission.t.sol",
+        "test/v2/InvoiceFill.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "forge test --match-path 'test/v2/HookAdmission.t.sol'"},
+        {"kind": "command", "value": "bash script/mutation-suite.sh"},
+        {"kind": "measurement", "value": "8317 bytes of runtime code"}
+      ],
+      "limitations": [
+        "not deployed anywhere",
+        "no external review",
+        "it enforces a FLOOR on delivery, not the exact amount; the exact amount is the executor's",
+        "it authenticates a swap and never witnesses a payment"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "1faf6b6bb480183a8b9ef69bc550c90861548639"
+    },
+    {
+      "id": "v2-quote-settlement-executor",
+      "name": "V2 Quote Settlement Executor",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "src/v2/QuoteSettlementExecutor.sol",
+        "src/v2/interfaces/IPermit2Transfer.sol"
+      ],
+      "networks": [],
+      "dependencies": [
+        "uniswap-v4-core",
+        "permit2",
+        "openzeppelin-contracts"
+      ],
+      "tests": [
+        "test/v2/Settlement.t.sol",
+        "test/v2/SettlementRefusals.t.sol",
+        "test/v2/SettlementAdversarial.t.sol",
+        "test/v2/SettlementAdversarialInput.t.sol",
+        "test/v2/SettlementLayers.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "forge test --match-path 'test/v2/Settlement*.t.sol'"},
+        {"kind": "command", "value": "bash script/mutation-suite.sh"},
+        {"kind": "measurement", "value": "17272 bytes of runtime code"}
+      ],
+      "limitations": [
+        "not deployed anywhere",
+        "no external review",
+        "EOA merchant signatures only; no EIP-1271 contract signatures",
+        "it does not vet the pool a merchant names beyond structural checks; the payer's protection is the signed ceiling and the measured delivery",
+        "output tokens whose transfer cannot deliver an exact amount are refused, not supported"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+    },
+    {
+      "id": "v2-merchant-quote",
+      "name": "V2 Merchant Quote",
+      "version": "1",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "src/v2/interfaces/IQuoteSettlement.sol"
+      ],
+      "networks": [],
+      "dependencies": [
+        "eip-712"
+      ],
+      "tests": [
+        "test/v2/Settlement.t.sol",
+        "test/v2/SettlementRefusals.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "forge test --match-test test_Refuse_EverySignedFieldIsInsideTheDigest"},
+        {"kind": "command", "value": "forge test --match-test test_Settle_TheQuoteDigestIsDerivedTheSameWayTwice"}
+      ],
+      "limitations": [
+        "the payer is bound, not open; a bearer quote that also names a price is a front-running target",
+        "no offline derivation of this digest yet, unlike the payer's — owed"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+    },
+    {
+      "id": "v2-permit2-witness",
+      "name": "V2 Permit2 Payment Witness",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/permit2/digest.mjs",
+        "integrations/permit2/test.mjs"
+      ],
+      "networks": [
+        "ethereum-sepolia"
+      ],
+      "dependencies": [
+        "permit2",
+        "eip-712"
+      ],
+      "tests": [
+        "integrations/permit2/test.mjs",
+        "test/v2/Permit2Witness.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/permit2/test.mjs"},
+        {"kind": "command", "value": "forge test --match-path 'test/v2/Permit2Witness.t.sol'"},
+        {"kind": "address", "chainId": 11155111, "value": "0x000000000022D473030F116dDEE9F6B43aC78BA3"}
+      ],
+      "limitations": [
+        "Permit2 does not enforce the transfer destination; the executor fixes it in code and the witness records it",
+        "measured against an etched runtime, not against a live Sepolia transaction"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "17836cc4253350d9484a78e6b7eed7c11b756bb1"
+    },
+    {
+      "id": "v2-receipt",
+      "name": "V2 Receipt",
+      "version": "1",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "src/v2/interfaces/IQuoteSettlement.sol",
+        "src/v2/QuoteSettlementExecutor.sol"
+      ],
+      "networks": [],
+      "dependencies": [],
+      "tests": [
+        "test/v2/Settlement.t.sol",
+        "test/v2/SettlementRefusals.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "forge test --match-test test_Settle_TheMerchantIsPaidExactlyAndNobodyElseHoldsAnything"}
+      ],
+      "limitations": [
+        "no indexer reads it yet",
+        "never emitted on a public chain",
+        "the emitting contract IS the executor, so the schema carries no executor field"
+      ],
+      "sponsorRoles": [
+        "the-graph"
+      ],
+      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+    },
+    {
+      "id": "b1-no-custody-harness",
+      "name": "B1 No-Custody Accounting Harness",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "test/v2/B1Settlement.t.sol"
+      ],
+      "networks": [],
+      "dependencies": [
+        "uniswap-v4-core"
+      ],
+      "tests": [
+        "test/v2/B1Settlement.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "forge test --match-path 'test/v2/B1Settlement.t.sol'"},
+        {"kind": "measurement", "value": "settle() credited 1003010030091275 from a transfer the lock holder never made"}
+      ],
+      "limitations": [
+        "a stand-in mover, not Permit2; the Permit2 leg is measured separately"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "bbf9b6ee32516395bdde156469aa41ac3060c39e"
+    },
+    {
+      "id": "short-fill-harness",
+      "name": "Short-Fill Reproduction Harness",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "test/v2/ShortFill.t.sol"
+      ],
+      "networks": [],
+      "dependencies": [
+        "uniswap-v4-core",
+        "uniswap-v4-periphery"
+      ],
+      "tests": [
+        "test/v2/ShortFill.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "forge test --match-path 'test/v2/ShortFill.t.sol'"},
+        {"kind": "measurement", "value": "1e18 requested, 2995354955910 delivered, no revert"}
+      ],
+      "limitations": [
+        "measured against the official PoolManager runtime at one liquidity shape, not proven for all"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "878436e80d3da577334ada0b3cd88755853581b3"
+    },
+    {
+      "id": "erc7751-decoder",
+      "name": "ERC-7751 Hook Error Decoder",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "test/v2/util/HookRevertDecoder.sol",
+        "test/v2/util/HookRevertAsserts.sol"
+      ],
+      "networks": [],
+      "dependencies": [
+        "uniswap-v4-core"
+      ],
+      "tests": [
+        "test/v2/HookRevertDecoder.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "forge test --match-path 'test/v2/HookRevertDecoder.t.sol'"},
+        {"kind": "measurement", "value": "292-byte wrapper, 200 bytes needed to identify it; 93 cuts readable, 196 rejected"}
+      ],
+      "limitations": [
+        "test-tree only; no contract depends on it",
+        "unwraps one layer, not a nest of them"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "74a691bd965e508741164be96d9118dfe3f51351"
+    },
+    {
+      "id": "copied-source-guard",
+      "name": "Copied-Source Guard",
+      "version": "0.2.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "script/no-copied-source.sh"
+      ],
+      "networks": [],
+      "dependencies": [
+        "python3",
+        "git"
+      ],
+      "tests": [
+        "script/no-copied-source.sh"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "bash script/no-copied-source.sh --self-test"},
+        {"kind": "measurement", "value": "142 tracked files against 1963 vendored body statements, zero reproduced"}
+      ],
+      "limitations": [
+        "line identity only; a paraphrase or a reflow defeats it",
+        "exempts wire constants, which is a hole a determined paste could use one line at a time"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "a8aac3442449089dedb93e402a764ff22ac17f97"
+    },
+    {
+      "id": "private-leak-heuristic",
+      "name": "Private-Leak Heuristic",
+      "version": "0.1.0",
+      "status": "PROTOTYPE",
+      "paths": [
+        "script/no-private-leak.sh"
+      ],
+      "networks": [],
+      "dependencies": [
+        "python3",
+        "git"
+      ],
+      "tests": [
+        "script/no-private-leak.sh"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "bash script/no-private-leak.sh"}
+      ],
+      "limitations": [
+        "deliberately NOT in make gate: it reads designated private files and a gate must not depend on them",
+        "a phrase-window heuristic; it will miss a paraphrase and can still cry wolf"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "ea079ec316cc5cb6b1e92b3dbeeb4e1051c2c16e"
+    },
+    {
+      "id": "mutation-suite",
+      "name": "Mutation/Sabotage Suite",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "script/mutation-suite.sh"
+      ],
+      "networks": [],
+      "dependencies": [
+        "foundry",
+        "python3"
+      ],
+      "tests": [
+        "script/mutation-suite.sh"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "make mutants"},
+        {"kind": "measurement", "value": "30 mutations, 30 killed by the row that names them"}
+      ],
+      "limitations": [
+        "a fixed list, not a generator; it proves those thirty defects are caught and nothing more",
+        "recompiles thirty times, so it is not in make gate"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+    },
+    {
+      "id": "web-checkout-surface",
+      "name": "Web Checkout Surface",
+      "version": "0.1.0",
+      "status": "PROTOTYPE",
+      "paths": [
+        "web/index.html",
+        "web/README.md"
+      ],
+      "networks": [
+        "ethereum-sepolia"
+      ],
+      "dependencies": [
+        "ensv2-universal-resolver"
+      ],
+      "tests": [
+        "integrations/ensv2/test.mjs"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "bash script/check-surface.sh"}
+      ],
+      "limitations": [
+        "not published; GitHub Pages is disarmed and publication is an owner action",
+        "V1 only; it does not know about the V2 invoice path",
+        "no stranger has completed a payment through it"
+      ],
+      "sponsorRoles": [
+        "ens",
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "0845dec9ea015d6febed2cfbbcc641c1754ee28d"
+    },
+    {
+      "id": "v2-settlement-indexer",
+      "name": "V2 Settlement Indexer",
+      "version": "0.0.0",
+      "status": "SPECIFIED, NOT IMPLEMENTED",
+      "paths": [
+        "docs/UNICA-TOOLS.md"
+      ],
+      "networks": [],
+      "dependencies": [
+        "graph-cli"
+      ],
+      "tests": [],
+      "evidence": [
+        {"kind": "artifact", "value": "docs/UNICA-TOOLS.md#v2-settlement-indexer"}
+      ],
+      "limitations": [
+        "nothing is written",
+        "the V1 manifest and schema are frozen and are not to be edited for this"
+      ],
+      "sponsorRoles": [
+        "the-graph"
+      ],
+      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+    },
+    {
+      "id": "vyper-settlement-model",
+      "name": "Vyper Settlement Math Model",
+      "version": "0.1.0",
+      "status": "PROTOTYPE",
+      "paths": [
+        "vy/src",
+        "vy/tests",
+        "vy/moccasin.toml"
+      ],
+      "networks": [],
+      "dependencies": [
+        "vyper",
+        "titanoboa",
+        "moccasin"
+      ],
+      "tests": [
+        "vy/tests"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "cd vy && mox test"},
+        {"kind": "measurement", "value": "33 tests pass under titanoboa 0.2.8"}
+      ],
+      "limitations": [
+        "a model of the arithmetic, not a deployment target; no Vyper contract is part of the product",
+        "not in make gate: it needs a Python toolchain the gate does not require"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "28c82b75f36c09a73ed16a734034a75c238fc466"
+    }
+  ]
+}

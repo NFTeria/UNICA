@@ -129,7 +129,11 @@ gate     : _need-deps
 	@# running only one of the two proves that one side is self-consistent and nothing else.
 	@command -v node >/dev/null 2>&1 && node integrations/permit2/test.mjs \
 	  || echo "SKIP  Permit2 digest vectors: node is not installed (this is a SKIP, not a pass)"
-	@echo "gate: build, test, fmt-check, both scans, and the ENS + Permit2 offline vectors all exit 0"
+	@# The tool ledger. Its last check is the one that keeps it honest: a commit that changes a
+	@# tool's code without updating docs/unica-tools.json fails the build, so a status cannot drift.
+	@command -v node >/dev/null 2>&1 && node script/validate-tools.mjs \
+	  || echo "SKIP  tool ledger validation: node is not installed (this is a SKIP, not a pass)"
+	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors and the tool ledger all exit 0"
 
 # The V2 mutation suite: thirty specific defects, each applied to the real tree and each required
 # to turn the row that NAMES it red. Not in `make gate` because it recompiles thirty times; run it
