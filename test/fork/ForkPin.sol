@@ -19,10 +19,25 @@ import {Test} from "forge-std/Test.sol";
 ///      fork test that quietly ran against nothing would be worse than no fork test.
 abstract contract ForkPin is Test {
     uint256 internal constant PINNED_CHAIN_ID = 11155111;
-    uint256 internal constant PINNED_BLOCK = 11656449;
-    /// @dev block hash of the pinned block, read with `cast block 11656449` on 2026-09-07.
-    bytes32 internal constant PINNED_BLOCK_HASH = 0xc65f2caec96d92265a9309ab4b510205b6eaac813e6069c3c0b09326cf1f0707;
-    uint256 internal constant PINNED_TIMESTAMP = 1788812388;
+    uint256 internal constant PINNED_BLOCK = 11656701;
+    /// @dev Block hash of the pinned block, read with `cast block` on 2026-09-07.
+    ///
+    ///      RE-PINNED ONCE, and the reason is a fact about public infrastructure rather than about
+    ///      this code. The first pin — 11656449 — stopped resolving within the hour: the public
+    ///      node answered `historical state ... is not available` for a storage slot no earlier run
+    ///      had warmed. Suites that had already cached their reads kept passing, which is the
+    ///      dangerous shape of the failure: the pin looks reproducible right up until a new row
+    ///      touches an uncached slot.
+    ///
+    ///      Two durable answers, in order of preference. Point SEPOLIA_RPC_URL at an archive
+    ///      endpoint, which serves any block. Or run the suite while the pin is still inside the
+    ///      public node's retention window and let Foundry's RPC cache hold it — that cache is
+    ///      about 212 KB for this block, so a warm machine keeps working offline.
+    ///
+    ///      Every dependency's code hash below is UNCHANGED across the re-pin, which is the useful
+    ///      part: the pin moved, the dependencies did not.
+    bytes32 internal constant PINNED_BLOCK_HASH = 0xceedf3c0a73d0e69093e98ddeac8cf7dbfc96bce61cda3f8742e3f8df64428fb;
+    uint256 internal constant PINNED_TIMESTAMP = 1788815532;
 
     /// @dev A public endpoint with no API key. Recorded rather than hidden, precisely because it
     ///      carries no secret; a private endpoint may be supplied through the environment instead.

@@ -5,11 +5,13 @@ import { handleQuoteSettled } from "../src/mapping";
 
 // THE FIXTURE IS A CAPTURED RECEIPT, not an invented one. Every value below was printed by
 // test/fork/CaptureReceipt.t.sol from a real settlement against the pinned Sepolia fork at block
-// 11656449 — the official PoolManager, the official Permit2, Circle's USDC and canonical WETH9.
+// 11656701 — the official PoolManager, the official Permit2, Circle's USDC and canonical WETH9.
+// The quote's deadline is an ABSOLUTE constant on the fork side, so re-pinning the block does not
+// move the digest and this fixture does not rot every time the public node prunes.
 // A subgraph tested against somebody's idea of a receipt is a subgraph tested against nothing.
 const EXECUTOR = Address.fromString("0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f");
 const QUOTE_ID = Bytes.fromHexString("0x666f726b2d310000000000000000000000000000000000000000000000000000");
-const QUOTE_DIGEST = Bytes.fromHexString("0x6306d518eab0421741e32412670005319fd41da1437e9ee3d1ea60d4387e5a88");
+const QUOTE_DIGEST = Bytes.fromHexString("0x7c5a616652fc5d2067f150e69830662e07e73bb30e5d8d459b2c6b82fbbc3869");
 const RECIPIENT = Address.fromString("0xa50802FBcAfc5aF3D0093026d301a82ec341652a");
 const PAYER = Address.fromString("0x14aa1c8aEB544A744624a5B9956F3318b468dC94");
 const MERCHANT = Address.fromString("0xd1948520eCC70CFD26c23D2528272c017dAAA256");

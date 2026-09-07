@@ -13,6 +13,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {QuoteSettlementHook} from "../../../src/v2/QuoteSettlementHook.sol";
 import {QuoteSettlementExecutor} from "../../../src/v2/QuoteSettlementExecutor.sol";
 import {IPermit2Transfer} from "../../../src/v2/interfaces/IPermit2Transfer.sol";
@@ -78,6 +79,10 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
     ForkLiquidityProvider internal lp;
 
     PoolKey internal key;
+    /// @dev The pool's two currencies, so a suite can substitute a misbehaving one for a real one
+    ///      and still run against the real PoolManager, the real Permit2 and one real token.
+    address internal payoutCurrency;
+    address internal inputCurrency;
     bytes32 internal minedSalt;
     int24 internal initialTick;
     int24 internal rangeLower;
@@ -99,6 +104,11 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
     ///      So the fork actors are derived from phrases, and `_setUpForkV2` asserts each has no
     ///      code. An assumption that holds in a fresh EVM and not on a real chain is precisely what
     ///      a fork test is for.
+    /// @dev An absolute deadline, not `block.timestamp + 1 hours`. A relative one makes every
+    ///      quote digest a function of the pinned block, so re-pinning would silently invalidate
+    ///      the receipt fixture the V2 indexer's tests are built from. 2033.
+    uint256 internal constant FORK_QUOTE_DEADLINE = 2_000_000_000;
+
     uint256 internal merchantKey = uint256(keccak256("unica.v2.fork.merchant"));
     uint256 internal payerKey = uint256(keccak256("unica.v2.fork.payer"));
     address internal merchantSigner;
@@ -129,9 +139,11 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
 
         // USDC sorts below WETH, so the merchant's payout currency is currency0 and the swap runs
         // one-for-zero — the opposite direction to every local suite.
+        (payoutCurrency, inputCurrency) = _poolCurrencies();
+        require(payoutCurrency < inputCurrency, "the payout currency must be currency0 in this fixture");
         key = PoolKey({
-            currency0: Currency.wrap(USDC),
-            currency1: Currency.wrap(WETH9),
+            currency0: Currency.wrap(payoutCurrency),
+            currency1: Currency.wrap(inputCurrency),
             fee: POOL_FEE,
             tickSpacing: POOL_TICK_SPACING,
             hooks: IHooks(deployed)
@@ -142,18 +154,34 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
         rangeUpper = _align(initialTick + 12000);
 
         lp = new ForkLiquidityProvider(manager);
-        deal(USDC, address(lp), 5_000_000e6);
-        deal(WETH9, address(lp), 5_000e18);
-        uint256 usdcBefore = IERC20(USDC).balanceOf(address(lp));
-        uint256 wethBefore = IERC20(WETH9).balanceOf(address(lp));
+        _fund(payoutCurrency, address(lp), 5_000_000e6);
+        _fund(inputCurrency, address(lp), 5_000e18);
+        uint256 usdcBefore = IERC20(payoutCurrency).balanceOf(address(lp));
+        uint256 wethBefore = IERC20(inputCurrency).balanceOf(address(lp));
         lp.add(key, 5e13, rangeLower, rangeUpper);
-        seededUsdc = usdcBefore - IERC20(USDC).balanceOf(address(lp));
-        seededWeth = wethBefore - IERC20(WETH9).balanceOf(address(lp));
+        seededUsdc = usdcBefore - IERC20(payoutCurrency).balanceOf(address(lp));
+        seededWeth = wethBefore - IERC20(inputCurrency).balanceOf(address(lp));
 
-        // The payer holds only WETH and has authorised only Permit2.
-        deal(WETH9, payer, 10e18);
+        // The payer holds only the input currency and has authorised only Permit2.
+        _fund(inputCurrency, payer, 10e18);
         vm.prank(payer);
-        IERC20(WETH9).approve(PERMIT2, type(uint256).max);
+        IERC20(inputCurrency).approve(PERMIT2, type(uint256).max);
+    }
+
+    /// @dev The pool's currencies, currency0 first. Overridden by the suite that needs one of them
+    ///      to misbehave; the other stays real, as does everything they are traded through.
+    function _poolCurrencies() internal virtual returns (address, address) {
+        return (USDC, WETH9);
+    }
+
+    /// @dev `deal` for a real token, `mint` for one this suite deployed. Both end with the balance
+    ///      the row needs and neither pretends to be the other.
+    function _fund(address token, address to, uint256 amount) internal {
+        if (token == USDC || token == WETH9) {
+            deal(token, to, amount);
+        } else {
+            MockERC20(token).mint(to, amount);
+        }
     }
 
     /// @dev Mines a real address carrying the declared permission bits and deploys through the
@@ -196,13 +224,13 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
             merchantSigner: merchantSigner,
             payer: payer,
             recipient: recipient,
-            tokenIn: WETH9,
+            tokenIn: inputCurrency,
             maxIn: maxIn,
-            tokenOut: USDC,
+            tokenOut: payoutCurrency,
             amountOut: amountOut,
             pool: key,
             zeroForOne: false,
-            deadline: block.timestamp + 1 hours,
+            deadline: FORK_QUOTE_DEADLINE,
             hook: address(hook),
             executor: address(executor),
             merchantConfigHash: keccak256("fork merchant config"),
@@ -227,7 +255,7 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
         view
         returns (QuoteSettlementExecutor.PayerAuthorization memory)
     {
-        return _authFull(q, nonce, block.timestamp + 1 hours, payerKey);
+        return _authFull(q, nonce, FORK_QUOTE_DEADLINE, payerKey);
     }
 
     function _authFull(IQuoteSettlement.Quote memory q, uint256 nonce, uint256 deadline, uint256 key_)

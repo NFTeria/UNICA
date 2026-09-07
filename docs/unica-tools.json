@@ -249,7 +249,7 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
     },
     {
       "id": "v2-quote-settlement-executor",
@@ -296,7 +296,7 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
     },
     {
       "id": "v2-merchant-quote",
@@ -331,7 +331,7 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
     },
     {
       "id": "v2-permit2-witness",
@@ -368,7 +368,7 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
     },
     {
       "id": "v2-receipt",
@@ -401,7 +401,7 @@
       "sponsorRoles": [
         "the-graph"
       ],
-      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
     },
     {
       "id": "b1-no-custody-harness",
@@ -567,7 +567,7 @@
         "recompiles once per mutation, so it is not in make gate"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
     },
     {
       "id": "web-checkout-surface",
@@ -639,7 +639,7 @@
       "sponsorRoles": [
         "the-graph"
       ],
-      "lastVerifiedCommit": "22747b818f2f893aa838e80959797826d0e602a5"
+      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
     },
     {
       "id": "vyper-settlement-model",
@@ -715,7 +715,9 @@
         "test/fork/DependencyProvenance.t.sol",
         "test/fork/util/V2ForkFixture.sol",
         "test/fork/V2ForkSettlement.t.sol",
-        "test/fork/V2ForkRefusals.t.sol"
+        "test/fork/V2ForkRefusals.t.sol",
+        "test/fork/V2ForkHostileToken.t.sol",
+        "test/fork/CaptureReceipt.t.sol"
       ],
       "networks": [
         "ethereum-sepolia-fork"
@@ -728,23 +730,25 @@
       "tests": [
         "test/fork/DependencyProvenance.t.sol",
         "test/fork/V2ForkSettlement.t.sol",
-        "test/fork/V2ForkRefusals.t.sol"
+        "test/fork/V2ForkRefusals.t.sol",
+        "test/fork/V2ForkHostileToken.t.sol"
       ],
       "evidence": [
         {"kind": "command", "value": "make fork"},
-        {"kind": "measurement", "value": "32 rows at pinned block 11656449, hash 0xc65f2cae…cf1f0707"},
+        {"kind": "measurement", "value": "39 rows at pinned block 11656701, hash 0xceedf3c0…f64428fb"},
+        {"kind": "command", "value": "make fork-mutants — 15 mutations, 15 killed by their own row"},
         {"kind": "address", "chainId": 11155111, "value": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543"}
       ],
       "limitations": [
         "FORK-LOCAL: the V2 hook, executor and pool are created inside the fork and do not exist on Sepolia",
         "nothing is broadcast; the suite is read-only against the chain",
-        "one pool shape, one currency pair, one block",
+        "a public node prunes state, so the pin resolves only from an archive endpoint or a warm Foundry RPC cache",
         "excluded from make gate, because a gate that depends on a third party's uptime is a status page"
       ],
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
     },
     {
       "id": "interface-freeze-verifier",

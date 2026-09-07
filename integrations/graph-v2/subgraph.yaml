@@ -15,7 +15,7 @@ dataSources:
     source:
       address: "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f"
       abi: QuoteSettlementExecutor
-      startBlock: 11656449
+      startBlock: 11656701
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9

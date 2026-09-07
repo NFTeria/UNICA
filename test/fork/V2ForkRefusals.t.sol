@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {Vm} from "forge-std/Vm.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -177,6 +178,48 @@ contract V2ForkRefusalsTest is V2ForkFixture, IPermit2Errors {
         IQuoteSettlement.Quote memory q = _quote(bytes32("direction"), AMOUNT_OUT, MAX_IN);
         q.zeroForOne = true; // the merchant is paid in currency0, so this is backwards
         _expectRefusal(q, _signQuoteAs(q, merchantKey), 29, IQuoteSettlement.CurrenciesDoNotMatchPool.selector);
+    }
+
+    /// @dev WRONG POOL MANAGER, isolated. Everything is structurally valid — a real hook, mined and
+    ///      deployed, bound to a real executor, and a real pool on the canonical PoolManager that
+    ///      names that hook — except that the executor was constructed pointing somewhere else. Its
+    ///      `unlock` goes to an address with no code, so the settlement cannot even begin.
+    function test_ForkN_AnExecutorPointedAtAnotherPoolManager() public {
+        address notAManager = address(0xDEAD00);
+        assertEq(notAManager.code.length, 0, "this row needs an address with no PoolManager at it");
+
+        QuoteSettlementExecutor stray =
+            new QuoteSettlementExecutor(IPoolManager(notAManager), IPermit2Transfer(PERMIT2));
+        (address strayHook,) = _mineHook(address(stray));
+        PoolKey memory strayPool = PoolKey({
+            currency0: Currency.wrap(payoutCurrency),
+            currency1: Currency.wrap(inputCurrency),
+            fee: POOL_FEE,
+            tickSpacing: POOL_TICK_SPACING,
+            hooks: IHooks(strayHook)
+        });
+        // The pool is created on the REAL manager. Only the executor is looking elsewhere.
+        manager.initialize(strayPool, POOL_SQRT_PRICE);
+
+        IQuoteSettlement.Quote memory q = _quote(bytes32("straypm"), AMOUNT_OUT, MAX_IN);
+        q.pool = strayPool;
+        q.hook = strayHook;
+        q.executor = address(stray);
+
+        vm.prank(relayer);
+        vm.expectRevert();
+        stray.settle(q, _signQuoteFor(address(stray), q, merchantKey), _authFull(q, 50, FORK_QUOTE_DEADLINE, payerKey));
+
+        assertEq(IERC20(payoutCurrency).balanceOf(recipient), 0, "a settlement happened through the wrong manager");
+        assertEq(IERC20(inputCurrency).balanceOf(address(stray)), 0, "the stray executor held the payer's token");
+    }
+
+    /// @dev And the structural half: this executor names the canonical PoolManager and the
+    ///      canonical Permit2, both immutable.
+    function test_ForkN_TheExecutorNamesTheCanonicalDependencies() public view {
+        assertEq(address(executor.POOL_MANAGER()), POOL_MANAGER, "the executor points at another PoolManager");
+        assertEq(address(executor.PERMIT2()), PERMIT2, "the executor points at another Permit2");
+        assertEq(hook.EXECUTOR(), address(executor), "the hook is bound to another executor");
     }
 
     // ---- the payer's authorisation -------------------------------------------------------------

@@ -233,6 +233,20 @@ FORK_MUTATIONS = [
      'if (IInvoiceHook(q.hook).consumed(digest)) revert QuoteAlreadySettled(q.quoteId);', '',
      'test_ForkD_AReplayChangesNothing',
      'the executor does not ask whether the invoice is already spent'),
+    # The three that used to be fork-uncoverable. One currency of the pool is now a token the
+    # suite deploys and arms; everything else stays real, including the payer's WETH.
+    ('F13', EXEC,
+     'if (received != q.amountOut) revert MerchantNotPaidExactly(q.quoteId, q.amountOut, received);', '',
+     'test_ForkH_ATokenThatSkimsOnDeliveryIsRefused',
+     'the merchant delivery is never verified'),
+    ('F14', EXEC,
+     'if (closing != opening.executorOut) revert ExecutorHeldTheOutput(opening.executorOut, closing);', '',
+     'test_ForkH_ATokenThatQuietlyPaysTheExecutorIsRefused',
+     'the no-custody claim on the output is never measured'),
+    ('F15', EXEC,
+     'if (_activeDigest != bytes32(0)) revert SettlementAlreadyInProgress(_activeDigest);', '',
+     'test_ForkH_ATokenThatReentersDuringDeliveryIsRefused',
+     'a settlement can begin inside another settlement'),
 ]
 
 if FORK:
@@ -295,9 +309,10 @@ for mid, path, killer, status, note, desc in rows:
 killed = sum(1 for r in rows if r[3] == 'KILLED')
 print(f'\nmutations run: {len(rows)}, killed by their own row: {killed}, other: {len(rows) - killed}')
 if FORK:
-    print('NOT covered on the fork, and covered locally instead: the exact-output equality, the')
-    print('PoolManager credit comparison, and both no-custody checks. Each needs a MISBEHAVING')
-    print('token to make two numbers disagree, and USDC and WETH behave. See `make mutants`.')
+    print('NOT covered on the fork, and covered locally instead: the exact-output EQUALITY (which')
+    print('needs a hook that judges nothing) and the no-custody check on the INPUT and the')
+    print('PoolManager credit comparison (which need the PAYER to hold a misbehaving token, and')
+    print('the payer holds real WETH here). See `make mutants`.')
 
 # Restore anything a crash might have left behind, then confirm.
 final, _ = run_tests()
