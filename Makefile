@@ -145,6 +145,10 @@ gate     : _need-deps
 	@# indexes nothing and reports no error, so THAT check belongs in the gate.
 	@command -v node >/dev/null 2>&1 && node integrations/graph-v2/check.mjs \
 	  || echo "SKIP  V2 indexer consistency: node is not installed (this is a SKIP, not a pass)"
+	@# The client signing tool. Its vectors are re-derived in test/v2/SigningVectors.t.sol, so
+	@# running only one of the two proves that one side is self-consistent and nothing else.
+	@command -v node >/dev/null 2>&1 && node tools/unica-sign/test.mjs \
+	  || echo "SKIP  signing tool vectors: node is not installed (this is a SKIP, not a pass)"
 	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors and the tool ledger all exit 0"
 
 # The V2 mutation suite: thirty specific defects, each applied to the real tree and each required

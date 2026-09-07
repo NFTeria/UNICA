@@ -322,8 +322,8 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   second time and requires agreement.
 - Tests: `test/v2/Settlement.t.sol`, `test/v2/SettlementRefusals.t.sol`
 - Deployment: none.
-- Limitations: the second derivation is in Solidity, not in another language as the payer's digest
-  is. An offline derivation is owed. **Not audited.**
+- Limitations: **not audited.** The offline derivation that was owed here now exists in
+  `tools/unica-sign/`, and its digest equals the one a real fork settlement produced.
 - Sponsor relevance: Uniswap.
 - Last verified commit: `51e8e471acda`
 
@@ -354,6 +354,39 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Limitations: measured against an etched runtime rather than a live Sepolia transaction.
 - Sponsor relevance: Uniswap.
 - Last verified commit: `17836cc42533`
+
+### V2 Quote and Signing Tool
+
+- Id: `unica-sign`
+- Purpose: build, hash, display and read back everything a merchant or a payer signs.
+- Product role: the client half of the frozen interface. Two signatures make a settlement, and until
+  this existed both could only be produced by a test harness.
+- Version: 0.1.0
+- Location: `tools/unica-sign/`
+- Inputs: a quote, an environment (chain, PoolManager, Permit2, nonce, deadline), and a
+  caller-supplied signer.
+- Outputs: the two digests, the witness, the calldata, and a reviewable summary whose two loudest
+  fields are where the money goes and the most it can be.
+- Trust boundary: **it holds no keys.** Every signing entry point takes a `sign(digest)` callback,
+  so the key stays wherever the caller keeps it. A row asserts the module never reads the
+  environment.
+- Security guarantees: none of its own. Its value is being a SECOND implementation — written from
+  the EIP-712 specification in JavaScript, not from the Solidity it is checked against.
+- Explicit non-guarantees: the ABI codec handles only the shapes `settle()` uses and refuses
+  anything else rather than guessing. It constructs and verifies; it does not broadcast.
+- Dependencies: EIP-712, Permit2's type strings. No package dependencies.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 81 JavaScript rows and 10 Solidity rows over one vector. Its quote digest equals the
+  digest a real settlement produced on the pinned fork, and its hand-written ABI encoder produces
+  calldata byte-identical to `abi.encodeCall` — 1,060 bytes, same hash. Four sabotages red: a
+  renamed field on either side, a swapped pair of encoded words, and a calldata head shifted by one
+  word.
+- Tests: `tools/unica-sign/test.mjs`, `test/v2/SigningVectors.t.sol`
+- Deployment: none. Not published as a package.
+- Limitations: as above. **Not audited.**
+- Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
+- Last verified commit: `b9d9116b5890`
 
 ### V2 Receipt
 

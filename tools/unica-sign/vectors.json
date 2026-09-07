@@ -1,0 +1,52 @@
+{
+  "note": "Golden vectors for the UNICA V2 signing tool. The quote below is the one settled in test/fork/V2ForkSettlement.t.sol, so quoteDigest here is the digest a REAL settlement against the pinned Sepolia fork produced. Every value is re-derived independently in Solidity by test/v2/SigningVectors.t.sol and by this file's own suite. No key appears here and none is needed: these are digests.",
+  "environment": {
+    "chainId": 11155111,
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "poolManager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+    "permit2Nonce": "0",
+    "permit2Deadline": "2000000000"
+  },
+  "quote": {
+    "version": 1,
+    "quoteId": "0x666f726b2d310000000000000000000000000000000000000000000000000000",
+    "merchantSigner": "0xd1948520eCC70CFD26c23D2528272c017dAAA256",
+    "payer": "0x14aa1c8aEB544A744624a5B9956F3318b468dC94",
+    "recipient": "0xa50802FBcAfc5aF3D0093026d301a82ec341652a",
+    "tokenIn": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+    "maxIn": "1000000000000000000",
+    "tokenOut": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    "amountOut": "100000000",
+    "pool": {
+      "currency0": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "currency1": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "hooks": "0xdD1FD0c33FEF7434443df2031f1E5e2e80dA60c0"
+    },
+    "zeroForOne": false,
+    "deadline": "2000000000",
+    "hook": "0xdD1FD0c33FEF7434443df2031f1E5e2e80dA60c0",
+    "executor": "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f",
+    "merchantConfigHash": "0x3bb52b86fe98b105da3be02385dc3d3eea709a8975a2b7d972c7dfbda5a6ff36",
+    "policyVersion": 1
+  },
+  "expected": {
+    "poolKeyHash": "0x47ee6fdc24658bdb15909b92c42242aebcf1272dbb4ead31ff085c1e4bfa5455",
+    "quoteStructHash": "0x7cc3ecd91754305236f7d27084d5b1bad79d04c614ed6bbf94d7539d032002d4",
+    "unicaDomainSeparator": "0x39d622e8be85aa5546ae7ac84fbd4a18be5d05fe9036f2236abaceea726fae1d",
+    "quoteDigest": "0x7c5a616652fc5d2067f150e69830662e07e73bb30e5d8d459b2c6b82fbbc3869",
+    "paymentWitness": "0x352b8c1d3512cd0181e0ceccf26afb1023c3818b9e1d56a57b6cc402ea1669d7",
+    "permit2DomainSeparator": "0x94c1dec87927751697bfc9ebf6fc4ca506bed30308b518f0e9d6c5f74bbafdb8",
+    "permitDigest": "0xb50e8ef95e170463737fd74c5ea510c605388a6ba19b9f7581a50c91ad3afe07",
+    "settleSelector": "0x7b65b825",
+    "hookData": "0x",
+    "calldataLength": 1060,
+    "calldataHash": "0x642949680e443d032d67fd02e3c93c6e3141fb1ff201835a809ab4f3f9b3db34"
+  },
+  "placeholderSignatures": {
+    "note": "Not signatures. Fixed-length filler so the calldata encoding is deterministic and no key is involved anywhere in this repository's test material.",
+    "merchant": "0xababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab",
+    "payer": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+  }
+}

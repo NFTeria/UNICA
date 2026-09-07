@@ -316,7 +316,9 @@
         "test/fork/V2ForkRefusals.t.sol",
         "test/fork/V2ForkSettlement.t.sol",
         "test/v2/Settlement.t.sol",
-        "test/v2/SettlementRefusals.t.sol"
+        "test/v2/SettlementRefusals.t.sol",
+        "test/v2/SigningVectors.t.sol",
+        "tools/unica-sign/test.mjs"
       ],
       "evidence": [
         {"kind": "command", "value": "forge test --match-test test_Refuse_EverySignedFieldIsInsideTheDigest"},
@@ -325,13 +327,12 @@
       ],
       "limitations": [
         "the payer is bound, not open; a bearer quote that also names a price is a front-running target",
-        "no offline derivation of this digest yet, unlike the payer's — owed",
         "the merchant configuration commitment it carries is opaque to the contracts; only its hash reaches the chain"
       ],
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
+      "lastVerifiedCommit": "b9d9116b5890be23296ef044ad087f7f7c4399c5"
     },
     {
       "id": "v2-permit2-witness",
@@ -353,7 +354,9 @@
         "integrations/permit2/test.mjs",
         "test/fork/V2ForkRefusals.t.sol",
         "test/fork/V2ForkSettlement.t.sol",
-        "test/v2/Permit2Witness.t.sol"
+        "test/v2/Permit2Witness.t.sol",
+        "test/v2/SigningVectors.t.sol",
+        "tools/unica-sign/test.mjs"
       ],
       "evidence": [
         {"kind": "command", "value": "node integrations/permit2/test.mjs"},
@@ -368,7 +371,7 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
+      "lastVerifiedCommit": "b9d9116b5890be23296ef044ad087f7f7c4399c5"
     },
     {
       "id": "v2-receipt",
@@ -828,6 +831,41 @@
       ],
       "sponsorRoles": [],
       "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+    },
+    {
+      "id": "unica-sign",
+      "name": "V2 Quote and Signing Tool",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "tools/unica-sign/abi.mjs",
+        "tools/unica-sign/unica.mjs",
+        "tools/unica-sign/vectors.json"
+      ],
+      "networks": [],
+      "dependencies": [
+        "eip-712",
+        "permit2"
+      ],
+      "tests": [
+        "tools/unica-sign/test.mjs",
+        "test/v2/SigningVectors.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "node tools/unica-sign/test.mjs — 81 rows"},
+        {"kind": "command", "value": "forge test --match-path 'test/v2/SigningVectors.t.sol' — 10 rows"},
+        {"kind": "measurement", "value": "its quote digest equals the one a real settlement produced on the pinned fork: 0x7c5a6166...fbbc3869"},
+        {"kind": "measurement", "value": "its hand-written ABI encoder produces calldata byte-identical to abi.encodeCall, 1060 bytes"}
+      ],
+      "limitations": [
+        "it holds no keys and never will: every signing entry point takes a caller-supplied sign(digest) callback",
+        "the ABI codec handles only the shapes settle() uses and refuses anything else rather than guessing",
+        "it constructs and verifies; it does not broadcast and has no network access"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "b9d9116b5890be23296ef044ad087f7f7c4399c5"
     }
   ]
 }

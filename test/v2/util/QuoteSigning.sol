@@ -136,11 +136,10 @@ abstract contract QuoteSigning is Test {
         uint256 signerKey;
     }
 
-    function _authorizeFor(AuthContext memory ctx, IQuoteSettlement.Quote memory q)
-        internal
-        view
-        returns (QuoteSettlementExecutor.PayerAuthorization memory)
-    {
+    /// @dev The digest a payer's wallet is asked to sign, on its own. Split out of `_authorizeFor`
+    ///      so a vector row can assert the DIGEST without producing a signature — a suite that can
+    ///      only check a signature cannot tell a wrong digest from a wrong key.
+    function _permitDigestFor(AuthContext memory ctx, IQuoteSettlement.Quote memory q) internal view returns (bytes32) {
         bytes32 typeHash = keccak256(
             abi.encodePacked(
                 "PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline,",
@@ -158,8 +157,15 @@ abstract contract QuoteSigning is Test {
                 _witnessFor(ctx.manager, ctx.executor, q)
             )
         );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _permit2DomainFor(ctx.permit2), structHash));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ctx.signerKey, digest);
+        return keccak256(abi.encodePacked("\x19\x01", _permit2DomainFor(ctx.permit2), structHash));
+    }
+
+    function _authorizeFor(AuthContext memory ctx, IQuoteSettlement.Quote memory q)
+        internal
+        view
+        returns (QuoteSettlementExecutor.PayerAuthorization memory)
+    {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ctx.signerKey, _permitDigestFor(ctx, q));
         return QuoteSettlementExecutor.PayerAuthorization({
             nonce: ctx.nonce, deadline: ctx.deadline, signature: abi.encodePacked(r, s, v)
         });
