@@ -57,14 +57,15 @@ contract InterfaceFreezeTest is SettlementFixture {
     ///      that cannot be changed after deployment. Freezing them is freezing the address space
     ///      the deployment will be mined in.
     function test_Freeze_TheHookPermissionFlagsAre0x20C0() public view {
-        uint160 declared =
-            uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
+        uint160 declared = uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
         assertEq(uint256(declared), 0x20C0, "the declared flag mask moved");
         assertEq(uint256(uint160(address(hook)) & Hooks.ALL_HOOK_MASK), 0x20C0, "the hook's address carries other bits");
 
         Hooks.Permissions memory p = hook.getHookPermissions();
         assertTrue(p.beforeInitialize && p.beforeSwap && p.afterSwap, "a declared permission is missing");
-        assertFalse(p.afterInitialize || p.beforeAddLiquidity || p.afterAddLiquidity, "an undeclared permission crept in");
+        assertFalse(
+            p.afterInitialize || p.beforeAddLiquidity || p.afterAddLiquidity, "an undeclared permission crept in"
+        );
         assertFalse(p.beforeRemoveLiquidity || p.afterRemoveLiquidity, "an undeclared permission crept in");
         assertFalse(p.beforeDonate || p.afterDonate, "an undeclared permission crept in");
         assertFalse(
@@ -72,8 +73,7 @@ contract InterfaceFreezeTest is SettlementFixture {
             "a returned-delta permission appeared; that is the NoOp attack surface"
         );
         assertFalse(
-            p.afterAddLiquidityReturnDelta || p.afterRemoveLiquidityReturnDelta,
-            "a returned-delta permission appeared"
+            p.afterAddLiquidityReturnDelta || p.afterRemoveLiquidityReturnDelta, "a returned-delta permission appeared"
         );
     }
 
