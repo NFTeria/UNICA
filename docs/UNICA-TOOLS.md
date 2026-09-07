@@ -78,7 +78,7 @@ a claim and a wish.
 | ENSv2 merchant discovery | **local**, with live read-only rows behind `make gate-live` |
 | ENS binding into the signed quote | **local** |
 | Graph receipt indexing, V1 | **local** |
-| Graph receipt indexing, V2 | **specified** |
+| Graph receipt indexing, V2 | **local** — implemented, 13 mapping rows + 17 consistency checks, not deployed |
 | wallet / oracle / payment-request adapters | **specified** — see the sponsor backlog |
 | Robinhood tokenized assets | **blocked** — compatibility research only |
 | chains without a canonical v4 deployment | **unsupported** |
@@ -525,26 +525,39 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 ### V2 Settlement Indexer
 
 - Id: `v2-settlement-indexer`
-- Purpose: query settlements by invoice, by merchant, by payer, and by version.
-- Product role: the "what happened" surface for V2.
-- Version: 0.0.0
-- Location: this document; nothing is written.
-- Inputs: `QuoteSettled` logs.
-- Outputs: intended — invoice by quote digest, paid state, merchant and payer histories, volume by
-  asset, and a V1/V2 distinction.
-- Trust boundary: would trust the chain and the executor's ABI.
-- Security guarantees: none.
-- Explicit non-guarantees: none yet, because nothing exists.
-- Dependencies: `graph-cli`.
+- Purpose: turn V2 receipts into queryable invoice-settlement history.
+- Product role: the "what happened" surface for V2. A payment system that cannot answer "was this
+  invoice paid" is not finished.
+- Version: 0.1.0
+- Location: `integrations/graph-v2/`
+- Inputs: `QuoteSettled` logs at the frozen topic `0x1317a113…7b0cbd4`.
+- Outputs: `InvoiceSettlement` and `Deployment` entities, and eight product queries.
+- Trust boundary: the chain, and an ABI generated from the compiled contract rather than written by
+  hand — `check.mjs` fails if the two ever differ.
+- Security guarantees: none; it is an observer. What it does guarantee is identity:
+  `keccak(network) ++ executor ++ transactionHash ++ logIndex`, every component fixed width, so the
+  concatenation is injective and two settlements cannot share an id.
+- Explicit non-guarantees: **a returned row proves a matching receipt was INDEXED. An empty result
+  proves nothing** — the invoice may be unpaid, unknown, expired, settled on another deployment, or
+  not yet indexed. Answering in the negative needs a source of invoices, and a receipt indexer is
+  not one. The quote digest is deliberately not the entity id: a digest identifies an invoice, and
+  an invoice is not an event.
+- Dependencies: `graph-cli`, `matchstick`, `graph-ts`.
 - Networks: none.
-- Status: SPECIFIED, NOT IMPLEMENTED
-- Evidence: this specification.
-- Tests: none.
-- Deployment: none.
-- Limitations: nothing is written. The frozen V1 manifest and schema are not to be edited for it; a
-  V2 indexer gets its own namespace.
-- Sponsor relevance: The Graph. Qualification remains HOLD.
-- Last verified commit: `51e8e471acda`
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 13 matchstick rows against a fixture CAPTURED from the pinned fork by
+  `test/fork/CaptureReceipt.t.sol`, plus 17 manifest, ABI and query checks — four of them sabotaged
+  and seen red: a manifest subscribing to a different event shape, a renamed schema field, an
+  edited V1 manifest, and a hand-edited ABI.
+- Tests: `integrations/graph-v2/tests/invoice-settlement.test.ts`, `integrations/graph-v2/check.mjs`
+- Deployment: none. No Studio deployment has been made and none is authorised.
+- Limitations: the manifest's address is the fork-local executor, because V2 is not deployed
+  anywhere. The receipt carries no `merchantConfigHash` — see
+  [`docs/v2/COMPATIBILITY-001.md`](v2/COMPATIBILITY-001.md); no interface was changed to work around
+  it. A reverted settlement cannot be tested, because reverted logs never reach an indexer.
+- Sponsor relevance: The Graph. Qualification remains **HOLD**, and no claim of hosted status is
+  made.
+- Last verified commit: `22747b818f2f`
 
 ---
 

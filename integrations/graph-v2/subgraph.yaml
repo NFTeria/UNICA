@@ -1,0 +1,33 @@
+specVersion: 1.0.0
+description: >-
+  UNICA V2 invoice settlements (receipt schema v1) from a QuoteSettlementExecutor. SEPARATE from the
+  V1 subgraph in integrations/graph, whose manifest and schema are frozen and are not edited for
+  this. The address below is the FORK-LOCAL executor from test/fork — V2 is not deployed to any
+  public chain, and `graph build --network-file networks.json` is where a real deployment's address
+  and start block would go.
+repository: https://github.com/NFTeria/UNICA
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: QuoteSettlementExecutor
+    network: sepolia
+    source:
+      address: "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f"
+      abi: QuoteSettlementExecutor
+      startBlock: 11656449
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - InvoiceSettlement
+        - Deployment
+      abis:
+        - name: QuoteSettlementExecutor
+          file: ./abis/QuoteSettlementExecutor.json
+      eventHandlers:
+        - event: QuoteSettled(indexed bytes32,indexed address,indexed
+            address,uint16,bytes32,address,address,bytes32,address,uint256,uint256,address,uint256,uint256,uint32)
+          handler: handleQuoteSettled
+      file: ./src/mapping.ts

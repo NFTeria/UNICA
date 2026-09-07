@@ -140,6 +140,11 @@ gate     : _need-deps
 	@# not built from the sources now on disk it refuses to report rather than validating yesterday.
 	@command -v node >/dev/null 2>&1 && node script/verify-freeze.mjs \
 	  || echo "SKIP  interface freeze: node is not installed (this is a SKIP, not a pass)"
+	@# The V2 indexer's manifest, ABI and queries. Needs no node_modules: the matchstick suite does,
+	@# and lives behind `make graph-v2-test`, but a subgraph that subscribes to the wrong topic
+	@# indexes nothing and reports no error, so THAT check belongs in the gate.
+	@command -v node >/dev/null 2>&1 && node integrations/graph-v2/check.mjs \
+	  || echo "SKIP  V2 indexer consistency: node is not installed (this is a SKIP, not a pass)"
 	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors and the tool ledger all exit 0"
 
 # The V2 mutation suite: thirty specific defects, each applied to the real tree and each required
@@ -153,6 +158,11 @@ mutants:
 # here broadcasts. Needs a Sepolia endpoint; SEPOLIA_RPC_URL overrides the public default.
 fork:
 	forge test --match-path 'test/fork/*'
+
+# The V2 indexer's mapping tests. Separate from the gate because matchstick needs node_modules,
+# which a fresh clone does not have; the manifest and ABI checks that do not are in the gate.
+graph-v2-test:
+	cd integrations/graph-v2 && npx graph codegen && npx graph test
 
 # And the highest-value mutations re-run under fork conditions.
 fork-mutants:

@@ -108,6 +108,9 @@ web/.env*
 integrations/graph/build/
 integrations/graph/generated/
 integrations/graph/node_modules/
+integrations/graph-v2/build/
+integrations/graph-v2/generated/
+integrations/graph-v2/node_modules/
 # the Studio deploy key and query keys are secrets; the subgraph.yaml is not
 integrations/graph/.graphclientrc*
 integrations/graph/*.key

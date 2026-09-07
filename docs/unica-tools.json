@@ -604,27 +604,42 @@
     {
       "id": "v2-settlement-indexer",
       "name": "V2 Settlement Indexer",
-      "version": "0.0.0",
-      "status": "SPECIFIED, NOT IMPLEMENTED",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
       "paths": [
-        "docs/UNICA-TOOLS.md"
+        "integrations/graph-v2/subgraph.yaml",
+        "integrations/graph-v2/schema.graphql",
+        "integrations/graph-v2/src/mapping.ts",
+        "integrations/graph-v2/queries.graphql",
+        "integrations/graph-v2/check.mjs",
+        "integrations/graph-v2/abis/QuoteSettlementExecutor.json"
       ],
       "networks": [],
       "dependencies": [
-        "graph-cli"
+        "graph-cli",
+        "matchstick",
+        "graph-ts"
       ],
-      "tests": [],
+      "tests": [
+        "integrations/graph-v2/tests/invoice-settlement.test.ts",
+        "integrations/graph-v2/check.mjs"
+      ],
       "evidence": [
-        {"kind": "artifact", "value": "docs/UNICA-TOOLS.md#v2-settlement-indexer"}
+        {"kind": "command", "value": "make graph-v2-test — 13 matchstick rows"},
+        {"kind": "command", "value": "node integrations/graph-v2/check.mjs — 17 manifest, ABI and query checks"},
+        {"kind": "measurement", "value": "the fixture is a receipt captured from the pinned fork by test/fork/CaptureReceipt.t.sol"}
       ],
       "limitations": [
-        "nothing is written",
-        "the V1 manifest and schema are frozen and are not to be edited for this"
+        "not deployed; no Subgraph Studio deployment has been made and none is authorised",
+        "a returned row proves a settlement receipt was INDEXED; an empty result proves nothing, because a receipt indexer is not a source of invoices",
+        "the receipt carries no merchantConfigHash — see docs/v2/COMPATIBILITY-001.md; no interface was changed to work around it",
+        "the manifest's address is the fork-local executor, because V2 is not deployed anywhere",
+        "a reverted settlement cannot be tested: reverted logs never reach an indexer"
       ],
       "sponsorRoles": [
         "the-graph"
       ],
-      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+      "lastVerifiedCommit": "22747b818f2f893aa838e80959797826d0e602a5"
     },
     {
       "id": "vyper-settlement-model",

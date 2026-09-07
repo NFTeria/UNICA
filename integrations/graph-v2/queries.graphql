@@ -1,0 +1,151 @@
+# UNICA V2 — the queries this indexer exists to answer.
+#
+# Every field referenced below is checked against schema.graphql by `check.mjs`, so a query that
+# drifts from the schema fails the gate rather than failing a demo.
+#
+# WHAT THESE PROVE. A returned row proves a matching settlement receipt was INDEXED. An empty
+# result proves nothing on its own: the invoice may be unpaid, unknown to this subgraph, expired,
+# settled on another deployment, or simply not indexed yet. "The V2 indexer can prove that a
+# matching settlement receipt was indexed" is the approved wording; "The Graph proves every
+# invoice's paid or unpaid status" is not, and answering in the negative needs a source of
+# invoices, which a receipt indexer is not.
+
+# 1. Invoice by quote digest — the identifier that covers every signed term.
+query InvoiceByQuoteDigest($quoteDigest: Bytes!) {
+  invoiceSettlements(where: { quoteDigest: $quoteDigest }) {
+    id
+    quoteId
+    quoteDigest
+    payer
+    merchantSigner
+    recipient
+    tokenIn
+    actualIn
+    maxIn
+    tokenOut
+    amountOut
+    deliveredOut
+    poolId
+    hook
+    executor
+    policyVersion
+    transactionHash
+    logIndex
+    blockNumber
+    blockTimestamp
+  }
+}
+
+# 2. One settlement by transaction and log — the exact event, not "a settlement in this transaction".
+query SettlementByTransactionAndLog($transactionHash: Bytes!, $logIndex: BigInt!) {
+  invoiceSettlements(where: { transactionHash: $transactionHash, logIndex: $logIndex }) {
+    id
+    quoteDigest
+    recipient
+    amountOut
+    deliveredOut
+    executor
+  }
+}
+
+# 3. A merchant's settlement history. `recipient` is who was PAID; `merchantSigner` is who signed.
+#    They are usually the same party and are not the same field, so both are queryable.
+query MerchantHistory($recipient: Bytes!, $first: Int = 50, $skip: Int = 0) {
+  invoiceSettlements(
+    where: { recipient: $recipient }
+    orderBy: blockNumber
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    quoteId
+    quoteDigest
+    payer
+    tokenOut
+    amountOut
+    deliveredOut
+    blockNumber
+    blockTimestamp
+    transactionHash
+  }
+}
+
+# 4. A payer's settlement history, with what each one actually cost them.
+query PayerHistory($payer: Bytes!, $first: Int = 50, $skip: Int = 0) {
+  invoiceSettlements(
+    where: { payer: $payer }
+    orderBy: blockNumber
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    recipient
+    tokenIn
+    actualIn
+    maxIn
+    tokenOut
+    amountOut
+    blockNumber
+    transactionHash
+  }
+}
+
+# 5. Settlements by input token — what payers actually spent.
+query SettlementsByInputToken($tokenIn: Bytes!, $first: Int = 100) {
+  invoiceSettlements(where: { tokenIn: $tokenIn }, orderBy: blockNumber, orderDirection: desc, first: $first) {
+    id
+    actualIn
+    maxIn
+    payer
+    recipient
+    blockNumber
+  }
+}
+
+# 6. Settlements by payout token — what merchants were actually paid in.
+query SettlementsByPayoutToken($tokenOut: Bytes!, $first: Int = 100) {
+  invoiceSettlements(where: { tokenOut: $tokenOut }, orderBy: blockNumber, orderDirection: desc, first: $first) {
+    id
+    amountOut
+    deliveredOut
+    recipient
+    blockNumber
+  }
+}
+
+# 7. Requested versus delivered, side by side. Both are stored because the executor requires them
+#    equal and an auditor should be able to CHECK that rather than take it on trust.
+query RequestedVersusDelivered($first: Int = 100) {
+  invoiceSettlements(orderBy: blockNumber, orderDirection: desc, first: $first) {
+    id
+    quoteDigest
+    tokenOut
+    amountOut
+    deliveredOut
+    tokenIn
+    actualIn
+    maxIn
+  }
+}
+
+# 8. Filter by deployment, so two executors — or one executor on two chains — never blur together.
+query ByDeployment($network: String!, $executor: Bytes!) {
+  deployments(where: { network: $network, executor: $executor }) {
+    id
+    network
+    executor
+    unicaVersion
+    settlementCount
+    firstBlock
+    lastBlock
+    settlements(orderBy: blockNumber, orderDirection: desc, first: 100) {
+      id
+      quoteDigest
+      recipient
+      amountOut
+      deliveredOut
+    }
+  }
+}

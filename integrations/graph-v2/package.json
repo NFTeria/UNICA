@@ -1,0 +1,17 @@
+{
+  "name": "unica-invoice-settlement-subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Indexes UNICA V2 invoice settlements (receipt schema v1) emitted by a QuoteSettlementExecutor. A separate namespace from the frozen V1 subgraph; the executor address is configured per deployment and never assumed.",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build --network sepolia --network-file networks.json",
+    "test": "graph test"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "0.98.1",
+    "@graphprotocol/graph-ts": "0.38.2",
+    "matchstick-as": "0.6.0"
+  }
+}

@@ -1,0 +1,83 @@
+"""
+One V2 invoice settlement, exactly as the executor emitted it, plus the indexing context.
+
+Immutable: a receipt is never edited. Exactly one exists per (deployment, transaction, log), and
+the id below is built so that is true by construction rather than by convention.
+
+WHAT THIS ENTITY PROVES AND DOES NOT PROVE. Its presence proves a matching settlement receipt was
+indexed. Its ABSENCE proves nothing on its own — an invoice may be unpaid, unknown to this
+subgraph, expired, settled on another deployment, or simply not yet indexed. Answering "was this
+invoice paid" in the negative needs a source of invoices, which a receipt indexer is not.
+"""
+type InvoiceSettlement @entity(immutable: true) {
+  "keccak(network) ++ executor ++ transactionHash ++ logIndex — all fixed width, so distinct settlements cannot share an id"
+  id: Bytes!
+
+  "the receipt schema this row was decoded under; a row of another version is not created at all"
+  schemaVersion: Int!
+
+  "the merchant's own label for the invoice. NOT unique: two merchants may choose the same one"
+  quoteId: Bytes!
+  "the EIP-712 digest of the whole signed quote. Unique per invoice, and the key the hook consumes on"
+  quoteDigest: Bytes!
+
+  payer: Bytes!
+  merchantSigner: Bytes!
+  recipient: Bytes!
+
+  tokenIn: Bytes!
+  "what the swap actually cost the payer"
+  actualIn: BigInt!
+  "the ceiling the payer signed; actualIn is never above it"
+  maxIn: BigInt!
+
+  tokenOut: Bytes!
+  "what the invoice asked for"
+  amountOut: BigInt!
+  "what the merchant actually received. The executor requires these to be equal; both are stored so an auditor can check rather than trust"
+  deliveredOut: BigInt!
+
+  poolId: Bytes!
+  hook: Bytes!
+  "the contract that emitted the receipt. There is no executor FIELD in the event — the log's own address is the executor"
+  executor: Bytes!
+
+  """
+  The policy VERSION the quote named. There is deliberately no `merchantConfigHash` field here,
+  and its absence is a finding rather than an oversight: the frozen v2.0.0-rc1 receipt does not
+  carry the merchant's configuration commitment. `quoteDigest` COVERS it — the commitment is a
+  field of the quote, and the digest is over the whole quote — so a verifier holding the quote can
+  check it, and an indexer alone cannot surface it. See docs/v2/COMPATIBILITY-001.md.
+
+  BigInt, not Int: policyVersion is a uint32 on chain and GraphQL's Int is a SIGNED 32-bit integer,
+  so the top half of the range would truncate. A version number is unlikely to reach it, and
+  "unlikely" is not a reason to store a value in a type that cannot hold it.
+  """
+  policyVersion: BigInt!
+
+  "the deployment this settlement belongs to"
+  deployment: Deployment!
+
+  transactionHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+}
+
+"""
+One V2 executor on one network. Exists so that a query can filter by deployment rather than assume
+a subgraph only ever watches one, and so that two settlements sharing a transaction hash across
+chains are visibly different rows.
+"""
+type Deployment @entity(immutable: false) {
+  "network ++ executor address"
+  id: Bytes!
+  network: String!
+  executor: Bytes!
+  "the UNICA generation this executor belongs to. V1 receipts live in a different subgraph entirely"
+  unicaVersion: String!
+  settlementCount: BigInt!
+  firstBlock: BigInt!
+  lastBlock: BigInt!
+  settlements: [InvoiceSettlement!]! @derivedFrom(field: "deployment")
+}
