@@ -90,6 +90,27 @@ interface IQuoteSettlement {
     error PoolDoesNotMatchQuote();
     error DirectionDoesNotMatchQuote();
     error NotAnInvoiceDischarge();
+    /// @notice Someone other than the bound executor tried to swap through an invoice pool.
+    /// @dev This is what makes "every swap through this pool discharges an invoice" a property of
+    ///      the POOL rather than a habit of one caller: anyone may call `PoolManager.swap`, and the
+    ///      hook is the only party present at every one of those calls.
+    error SwapperIsNotTheExecutor(address expected, address got);
+    /// @notice A pool with a native currency cannot carry this hook.
+    /// @dev The delivery statement V2 makes is "the recipient's balance increases by exactly
+    ///      `amountOut` standard token units". Native currency has no `balanceOf`, and `take`
+    ///      delivers it by a call the recipient can reject or exhaust. Refused at initialisation
+    ///      rather than weakened into an ambiguous minimum at settlement.
+    error NativeCurrencyNotSettleable();
+    /// @notice A dynamic-fee pool cannot carry this hook.
+    /// @dev A dynamic fee is a fee its hook sets. This hook never sets one and has no function to,
+    ///      so such a pool would trade at whatever fee it was left at. A venue this contract cannot
+    ///      price is a venue it refuses to police.
+    error DynamicFeeNotSettleable();
+    /// @notice An invoice is an exact-output instrument, so the swap that discharges one must be
+    ///         an exact-output swap.
+    /// @dev Under exact input the POOL chooses the output. Such a swap can satisfy an invoice's
+    ///      floor by luck, and a venue whose admission depends on luck is not a payment venue.
+    error ExactOutputRequired();
     error MalformedHookData();
     error UnknownHookDataVersion(uint8 version);
 }

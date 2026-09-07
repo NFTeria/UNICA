@@ -6,7 +6,9 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
@@ -39,12 +41,14 @@ interface IActiveQuote {
 ///         `test/v2/ShortFill.t.sol`. Exact-output full-fill enforcement therefore exists in a
 ///         hook or it exists nowhere, and that refusal is this contract's core function.
 ///
-/// @dev SCAFFOLDING. The guards named in the red controls are DELIBERATELY ABSENT so those
-///      controls fail for the reasons they name before any of them is made to pass. What is here
-///      is the shape: the permission bits, the callbacks, and the evidence each one may use.
-///      Do not read this as the implementation.
+/// @dev IMPLEMENTED AND LOCALLY TESTED, NOT DEPLOYED. Every guard below was written after the
+///      control that constrains it was seen to fail, and each is validated by sabotage: deleted,
+///      watched to turn a named row red, restored. The rows live in `test/v2/HookAdmission.t.sol`
+///      and `test/v2/InvoiceFill.t.sol`.
 contract QuoteSettlementHook is BaseHook, IQuoteSettlement {
     using PoolIdLibrary for PoolKey;
+    using CurrencyLibrary for Currency;
+    using LPFeeLibrary for uint24;
 
     /// @notice The settlement path this hook admits. Set once, at construction, so no key and no
     ///         owner can widen it afterwards.
@@ -84,9 +88,13 @@ contract QuoteSettlementHook is BaseHook, IQuoteSettlement {
         });
     }
 
-    /// @dev SCAFFOLDING: admits every pool. The real guard refuses a shape this hook cannot
-    ///      police, so that a pool carrying this hook is the settlement shape or does not exist.
-    function _beforeInitialize(address, PoolKey calldata, uint160) internal pure override returns (bytes4) {
+    /// @dev Refuses at creation any pool this contract could not honestly police, so that a pool
+    ///      carrying this hook is the settlement shape or does not exist. Both refusals narrow the
+    ///      venue rather than patch a symptom: what cannot be initialised never needs a runtime
+    ///      guard, and the address is immutable so the narrowing cannot be widened later.
+    function _beforeInitialize(address, PoolKey calldata key, uint160) internal pure override returns (bytes4) {
+        if (key.currency0.isAddressZero() || key.currency1.isAddressZero()) revert NativeCurrencyNotSettleable();
+        if (key.fee.isDynamicFee()) revert DynamicFeeNotSettleable();
         return IHooks.beforeInitialize.selector;
     }
 
@@ -95,19 +103,25 @@ contract QuoteSettlementHook is BaseHook, IQuoteSettlement {
     ///      and is refused here — which is what makes "every swap through this pool discharges an
     ///      invoice" a property of the pool rather than a habit of one caller.
     ///
-    ///      SCAFFOLDING REMAINS: the caller is not yet required to be the executor, and the hook
-    ///      data is not yet parsed. Those are separate red controls.
-    function _beforeSwap(address, PoolKey calldata key, SwapParams calldata params, bytes calldata)
+    ///      The swapper check is here and NOT repeated in `_afterSwap` on purpose. Both callbacks
+    ///      are handed `msg.sender` of the same `PoolManager.swap` call, so a second copy would be
+    ///      a branch no test could ever reach — and an unreachable guard is indistinguishable from
+    ///      an absent one the day someone deletes it.
+    function _beforeSwap(address sender, PoolKey calldata key, SwapParams calldata params, bytes calldata)
         internal
         view
         override
         returns (bytes4, BeforeSwapDelta, uint24)
     {
+        if (sender != EXECUTOR) revert SwapperIsNotTheExecutor(EXECUTOR, sender);
         (bytes32 digest,, bytes32 poolId, bool zeroForOne) = IActiveQuote(EXECUTOR).activeQuote();
         if (digest == bytes32(0)) revert NotAnInvoiceDischarge();
         if (consumed[digest]) revert QuoteAlreadySettled(digest);
         if (PoolId.unwrap(key.toId()) != poolId) revert PoolDoesNotMatchQuote();
         if (params.zeroForOne != zeroForOne) revert DirectionDoesNotMatchQuote();
+        // In v4 a positive `amountSpecified` is exact output. An invoice names the output, so the
+        // swap that discharges it must name the output too.
+        if (params.amountSpecified <= 0) revert ExactOutputRequired();
         return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
 
@@ -128,15 +142,18 @@ contract QuoteSettlementHook is BaseHook, IQuoteSettlement {
         override
         returns (bytes4, int128)
     {
+        // No re-check that an invoice is live: `_beforeSwap` already refused if one was not, both
+        // callbacks read the same executor inside the same swap frame, and nothing between them can
+        // call out to change it. A branch no test can reach is indistinguishable from a missing one
+        // the day somebody deletes it, so it is not written.
         (bytes32 digest, uint256 requiredOut,,) = IActiveQuote(EXECUTOR).activeQuote();
-        if (digest == bytes32(0)) revert NotAnInvoiceDischarge();
 
-        // The output side is the currency the swapper did NOT specify. Under exact output that is
-        // a credit, and its sign says which side of the key it is.
+        // The output side is the currency the swapper did NOT specify. The sign test is the
+        // precondition of the cast below rather than a guard of its own: a negative int128 cast to
+        // uint128 becomes an enormous number that would sail past the comparison.
         int128 delivered = params.zeroForOne ? delta.amount1() : delta.amount0();
-        if (delivered < 0) revert InvoiceNotFilled(digest, requiredOut, 0);
-        if (uint256(uint128(delivered)) < requiredOut) {
-            revert InvoiceNotFilled(digest, requiredOut, uint256(uint128(delivered)));
+        if (delivered < 0 || uint256(uint128(delivered)) < requiredOut) {
+            revert InvoiceNotFilled(digest, requiredOut, delivered < 0 ? 0 : uint256(uint128(delivered)));
         }
 
         // One authority for consumption, marked only on the path that actually delivered. A later
