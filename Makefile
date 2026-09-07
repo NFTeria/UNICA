@@ -124,7 +124,12 @@ gate     : _need-deps
 	@# must not look the same. `make gate-live` additionally resolves real names on Sepolia.
 	@command -v node >/dev/null 2>&1 && node integrations/ensv2/test.mjs \
 	  || echo "SKIP  ENS resolution tests: node is not installed (this is a SKIP, not a pass)"
-	@echo "gate: build, test, fmt-check, the secret scan, the copied-source scan and the ENS tests all exit 0"
+	@# The offline half of the Permit2 digest gate. Its whole value is being a SECOND derivation:
+	@# the vector it pins is recomputed in Solidity and presented to the real Permit2 runtime, so
+	@# running only one of the two proves that one side is self-consistent and nothing else.
+	@command -v node >/dev/null 2>&1 && node integrations/permit2/test.mjs \
+	  || echo "SKIP  Permit2 digest vectors: node is not installed (this is a SKIP, not a pass)"
+	@echo "gate: build, test, fmt-check, both scans, and the ENS + Permit2 offline vectors all exit 0"
 
 # The gate plus the rows that need a network: real ENSv2 names resolved on Sepolia. Read-only.
 gate-live: gate
