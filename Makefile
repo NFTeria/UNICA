@@ -131,6 +131,13 @@ gate     : _need-deps
 	  || echo "SKIP  Permit2 digest vectors: node is not installed (this is a SKIP, not a pass)"
 	@echo "gate: build, test, fmt-check, both scans, and the ENS + Permit2 offline vectors all exit 0"
 
+# The V2 mutation suite: thirty specific defects, each applied to the real tree and each required
+# to turn the row that NAMES it red. Not in `make gate` because it recompiles thirty times; run it
+# before pushing a change to the hook or the executor, and read the note column — a mutation killed
+# by somebody else's row is a finding, not a pass.
+mutants:
+	bash script/mutation-suite.sh
+
 # The gate plus the rows that need a network: real ENSv2 names resolved on Sepolia. Read-only.
 gate-live: gate
 	node integrations/ensv2/test.mjs --live

@@ -138,9 +138,12 @@ interface IQuoteSettlement {
     /// @notice The swap's input side was not a debit, so the sign convention this code relies on
     ///         did not hold. A cast precondition, stated rather than assumed.
     error InputIsNotADebit(int256 amount);
-    /// @notice The pool delivered more than the invoice. Refused rather than given a policy: the
-    ///         excess belongs to nobody this contract is entitled to choose for.
-    error DeliveredMoreThanTheInvoice(bytes32 quoteId, uint256 required, uint256 delivered);
+    /// @notice The swap did not deliver the invoice exactly.
+    /// @dev The hook enforces a FLOOR and this enforces the EQUALITY, and they are two judges
+    ///      rather than one judge consulted twice: `test/v2/SettlementLayers.t.sol` settles through
+    ///      a hook with no floor at all and this is the error that speaks. Over-delivery is refused
+    ///      rather than given a policy — the excess belongs to nobody this contract may choose for.
+    error DeliveryIsNotTheInvoice(bytes32 quoteId, uint256 required, uint256 delivered);
     /// @notice The PoolManager credited a different amount than the swap said was owed.
     error SettlementDidNotClose(uint256 owed, uint256 credited);
     /// @notice THE PAYMENT CHECK. Measured on the recipient's own balance, across the whole

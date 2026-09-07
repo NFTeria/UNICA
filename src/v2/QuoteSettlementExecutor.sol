@@ -385,9 +385,10 @@ contract QuoteSettlementExecutor is IUnlockCallback, IQuoteSettlement {
 
         // THE PAYER'S CEILING, against what the swap really cost rather than what was requested.
         if (actualIn > q.maxIn) revert InputCeilingExceeded(q.quoteId, q.maxIn, actualIn);
-        // The hook enforced a floor. This is the equality, and it is here because the exact amount
-        // is the executor's obligation, not the hook's.
-        if (deliveredOut != q.amountOut) revert DeliveredMoreThanTheInvoice(q.quoteId, q.amountOut, deliveredOut);
+        // The hook enforced a floor. This is the EQUALITY, and it is here because the exact amount
+        // is the executor's obligation, not the hook's. It is not a passenger: `SettlementLayers`
+        // settles through a hook that judges nothing and this is the line that refuses.
+        if (deliveredOut != q.amountOut) revert DeliveryIsNotTheInvoice(q.quoteId, q.amountOut, deliveredOut);
 
         // B1: the payer's token goes from the payer to the PoolManager. It is never here.
         POOL_MANAGER.sync(Currency.wrap(q.tokenIn));

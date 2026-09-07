@@ -7,7 +7,7 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -127,8 +127,7 @@ abstract contract SettlementFixture is HookRevertAsserts {
         deployCodeTo("QuoteSettlementHook.sol:QuoteSettlementHook", abi.encode(manager, address(executor)), HOOK_ADDR);
         hook = QuoteSettlementHook(HOOK_ADDR);
 
-        MockERC20 a = new MockERC20("In", "IN", 18);
-        MockERC20 b = new MockERC20("Out", "OUT", 6);
+        (MockERC20 a, MockERC20 b) = _deployTokens();
         (tokenIn, tokenOut) = address(a) < address(b) ? (a, b) : (b, a);
 
         key = PoolKey({
@@ -148,6 +147,14 @@ abstract contract SettlementFixture is HookRevertAsserts {
         tokenIn.mint(payer, 1_000 ether);
         vm.prank(payer);
         tokenIn.approve(PERMIT2, type(uint256).max);
+    }
+
+    /// @dev Overridden by the adversarial suite, which needs an output token that misbehaves.
+    ///      Deployed here rather than passed in, so the ordinary fixture stays the ordinary case
+    ///      and a hostile token is something a test has to ask for on purpose.
+    function _deployTokens() internal virtual returns (MockERC20 a, MockERC20 b) {
+        a = new MockERC20("In", "IN", 18);
+        b = new MockERC20("Out", "OUT", 6);
     }
 
     function _poolId(IQuoteSettlement.Quote memory q) internal pure returns (bytes32) {
@@ -294,5 +301,128 @@ abstract contract SettlementFixture is HookRevertAsserts {
         return QuoteSettlementExecutor.PayerAuthorization({
             nonce: nonce, deadline: deadline, signature: abi.encodePacked(r, s, v)
         });
+    }
+}
+
+/// @notice A token that does not behave. Every mode below is something a real ERC-20 does.
+/// @dev Deployed inert and armed only AFTER the pool is seeded, so the liquidity every suite trades
+///      against was provided by an ordinary token and only the settlement itself misbehaves. A
+///      token that misbehaved during setup would make every row a test of the setup.
+///
+///      The donation modes exist because of a measured gap: the V2 mutation ledger showed that
+///      deleting the PoolManager credit check and both no-custody checks turned NO row red, since
+///      nothing in the suite could make those numbers disagree. A token that quietly pays extra
+///      into the venue, or quietly pays the executor, is how they disagree in the world.
+contract MisbehavingToken is MockERC20 {
+    enum Mode {
+        Honest,
+        /// @dev The recipient's balance rises by less than the number the sender passed.
+        SkimOnDelivery,
+        /// @dev Calls back into a contract while the PoolManager's unlock is still open.
+        ReenterOnDelivery,
+        /// @dev An extra unit appears at the destination during the pull, so the manager is
+        ///      credited more than the swap said was owed.
+        DonateToVictimOnPull,
+        /// @dev An extra unit appears at the BENEFICIARY during the pull.
+        DonateToBeneficiaryOnPull,
+        /// @dev An extra unit appears at the BENEFICIARY during delivery.
+        DonateToBeneficiaryOnDelivery
+    }
+
+    Mode public mode;
+    address public victim;
+    address public beneficiary;
+    address public reentryTarget;
+    bytes public reentryCalldata;
+    bytes public lastReentryRevert;
+    bool public reentryAttempted;
+    bool public reentrySucceeded;
+
+    constructor(string memory name_, string memory symbol_, uint8 decimals_) MockERC20(name_, symbol_, decimals_) {}
+
+    function arm(Mode m, address victim_, address beneficiary_) external {
+        mode = m;
+        victim = victim_;
+        beneficiary = beneficiary_;
+    }
+
+    function armReentry(address target, bytes calldata call_) external {
+        reentryTarget = target;
+        reentryCalldata = call_;
+    }
+
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        if (mode == Mode.ReenterOnDelivery && to == victim && !reentryAttempted) {
+            reentryAttempted = true;
+            // Swallowed on purpose: a propagating revert would take the whole settlement with it,
+            // and the row could not tell "the guard fired" from "the token broke the transfer".
+            // Whether it succeeded is the assertion, not a precondition of the harness.
+            (bool ok, bytes memory ret) = reentryTarget.call(reentryCalldata);
+            reentrySucceeded = ok;
+            lastReentryRevert = ret;
+        }
+        bool result = super.transfer(to, amount);
+        if (to == victim) {
+            if (mode == Mode.SkimOnDelivery) {
+                balanceOf[to] -= 1;
+                totalSupply -= 1;
+            } else if (mode == Mode.DonateToBeneficiaryOnDelivery) {
+                balanceOf[beneficiary] += 1;
+                totalSupply += 1;
+            }
+        }
+        return result;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        bool result = super.transferFrom(from, to, amount);
+        if (to == victim) {
+            if (mode == Mode.DonateToVictimOnPull) {
+                balanceOf[to] += 1;
+                totalSupply += 1;
+            } else if (mode == Mode.DonateToBeneficiaryOnPull) {
+                balanceOf[beneficiary] += 1;
+                totalSupply += 1;
+            }
+        }
+        return result;
+    }
+}
+
+/// @notice A hook that ADMITS and judges nothing: no floor, no pool match, no direction, no
+///         consumption. It reports a chosen executor so that executor will swap through it.
+/// @dev Exists so the executor's own guarantees can be tested WITHOUT the hook's. A layered defence
+///      whose layers are only ever tested together is one layer with two names — and a mutation
+///      that deletes the executor's equality check survives a whole suite, which is exactly what
+///      the V2 mutation ledger measured before this contract existed.
+contract FloorlessInvoiceHook {
+    address public immutable EXECUTOR;
+
+    constructor(address executor_) {
+        EXECUTOR = executor_;
+    }
+
+    function consumed(bytes32) external pure returns (bool) {
+        return false;
+    }
+
+    function beforeInitialize(address, PoolKey calldata, uint160) external pure returns (bytes4) {
+        return IHooks.beforeInitialize.selector;
+    }
+
+    function beforeSwap(address, PoolKey calldata, SwapParams calldata, bytes calldata)
+        external
+        pure
+        returns (bytes4, int256, uint24)
+    {
+        return (IHooks.beforeSwap.selector, 0, 0);
+    }
+
+    function afterSwap(address, PoolKey calldata, SwapParams calldata, BalanceDelta, bytes calldata)
+        external
+        pure
+        returns (bytes4, int128)
+    {
+        return (IHooks.afterSwap.selector, 0);
     }
 }
