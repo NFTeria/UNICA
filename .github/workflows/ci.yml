@@ -50,13 +50,7 @@ jobs:
           test "$(git -C lib/uniswap-hooks rev-parse HEAD)" = "bd5287c4a9f5c22c2393f7587a9b357662916115"
           echo "uniswap-hooks pinned at v1.1.1 = bd5287c"
 
-      # Not --sizes: that flag fails the build when ANY compiled contract exceeds EIP-170, and
-      # v4-core's PoolManager, compiled here without via_ir for the local tests, does. The
-      # contract this repository ships is checked on its own.
-      - name: forge build
-        run: forge build
-
-      - name: Assert both contracts are under the EIP-170 runtime limit
+      - name: Assert both V1 contracts are under the EIP-170 runtime limit
         run: |
           for c in src/V4SettlementHook.sol:V4SettlementHook src/SettlementExecutor.sol:SettlementExecutor; do
             hex=$(forge inspect "$c" deployedBytecode)
@@ -65,20 +59,33 @@ jobs:
             test "$bytes" -le 24576
           done
 
-      # A lane that ran fewer tests than the tree declares is not a green lane. The expected count is
-      # read from the test sources, so a test that stops running (a typo in its name, a file that
-      # stops compiling into the suite) turns this red instead of vanishing.
-      - name: forge test
+      # ONE DEFINITION OF THE GATE. This job used to run `forge build`, `forge test` and
+      # `forge fmt --check` itself, which meant CI and `make gate` were two descriptions of the
+      # same thing — and on 2026-09-07 they disagreed: the Makefile learned to exclude the fork
+      # suites and CI did not, so a push went red on tests the local gate never ran. The repository
+      # had already recorded this lesson once, about the secret scan, and this job was the place it
+      # had not been applied.
+      - name: make gate
         run: |
           set -o pipefail
-          forge test -vvv 2>&1 | tee test.log
-          total=$(grep -oE '\(([0-9]+) total tests\)' test.log | grep -oE '[0-9]+')
-          expected=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | wc -l | tr -d ' ')
-          echo "tests run: ${total:-0}, declared in test/: $expected"
+          make gate 2>&1 | tee gate.log
+          total=$(grep -oE '\(([0-9]+) total tests\)' gate.log | grep -oE '[0-9]+')
+          expected=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | grep -c . | tr -d ' ')
+          fork=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test/fork --include='*.t.sol' | grep -c . | tr -d ' ')
+          expected=$(( expected - fork ))
+          echo "tests run: ${total:-0}, declared outside test/fork: $expected (fork suites: $fork)"
           test "${total:-0}" -eq "$expected"
 
-      - name: forge fmt --check
-        run: forge fmt --check
+      # The fork suites are NOT run here, and the reason is not squeamishness. They read historical
+      # state at a pinned block, and a public RPC node does not serve archive state indefinitely —
+      # this job failed on exactly that ("historical state ... is not available") before the
+      # exclusion existed. A lane that goes red because somebody else's node pruned a block is a
+      # lane that teaches people to ignore red. `make fork` runs them, deliberately by hand.
+      - name: Note the suites this lane does not run
+        run: |
+          echo "test/fork/ is excluded from CI: it needs archive state at a pinned block."
+          echo "Run it with: make fork   (and make fork-mutants)"
+          grep -rhoE 'function test[A-Za-z0-9_]*\(' test/fork --include='*.t.sol' | wc -l
 
   # A stranger's path, exactly: clone the public repository without submodules, fetch them
   # with the Makefile, run the gate. If this lane is red, the README's setup is a lie.
@@ -102,8 +109,10 @@ jobs:
           set -o pipefail
           make gate 2>&1 | tee gate.log
           total=$(grep -oE '\(([0-9]+) total tests\)' gate.log | grep -oE '[0-9]+')
-          expected=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | wc -l | tr -d ' ')
-          echo "tests run on the fresh clone: ${total:-0}, declared: $expected"
+          expected=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | grep -c . | tr -d ' ')
+          fork=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test/fork --include='*.t.sol' | grep -c . | tr -d ' ')
+          expected=$(( expected - fork ))
+          echo "tests run on the fresh clone: ${total:-0}, declared outside test/fork: $expected"
           test "${total:-0}" -eq "$expected"
 
   provenance:
