@@ -13,6 +13,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IQuoteSettlement} from "./interfaces/IQuoteSettlement.sol";
 import {IPermit2Transfer, IInvoiceHook} from "./interfaces/IPermit2Transfer.sol";
+import {MerchantConfig} from "./MerchantConfig.sol";
 
 /// @title QuoteSettlementExecutor — a payment terminal, not a router
 /// @notice The hook proves the SWAP. This contract proves the PAYMENT, and the two are bound by the
@@ -339,6 +340,16 @@ contract QuoteSettlementExecutor is IUnlockCallback, IQuoteSettlement {
         return keccak256(
             abi.encode(PAYMENT_TYPEHASH, q.quoteId, q.payer, q.tokenIn, q.maxIn, address(POOL_MANAGER), address(this))
         );
+    }
+
+    /// @notice The commitment a quote's `merchantConfigHash` is supposed to equal.
+    /// @dev Exposed here so the merchant's signer, the checkout surface and any later verifier all
+    ///      derive it from one place. This contract does NOT check that a quote's
+    ///      `merchantConfigHash` equals this — it cannot, because it never sees the preimage. What
+    ///      it does is put that word inside the digest the merchant signs, so a resolution that
+    ///      differs in any component produces a signature that no longer fits.
+    function hashMerchantConfig(MerchantConfig.Config calldata c) external pure returns (bytes32) {
+        return MerchantConfig.hash(c);
     }
 
     /// @notice The string Permit2 concatenates onto its own type stub.

@@ -186,7 +186,8 @@
         "web/ensv2/resolve.mjs",
         "web/ensv2/keccak.mjs",
         "integrations/ensv2/test.mjs",
-        "integrations/ensv2/live-check.mjs"
+        "integrations/ensv2/live-check.mjs",
+        "integrations/ensv2/config.mjs"
       ],
       "networks": [
         "ethereum-sepolia"
@@ -200,12 +201,12 @@
       "evidence": [
         {"kind": "command", "value": "node integrations/ensv2/test.mjs"},
         {"kind": "command", "value": "make gate-live"},
-        {"kind": "address", "chainId": 11155111, "value": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe"}
+        {"kind": "address", "chainId": 11155111, "value": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe"},
+        {"kind": "command", "value": "node integrations/ensv2/test.mjs — 61 rows"}
       ],
       "limitations": [
         "ASCII names only; it refuses non-ASCII rather than approximating ENSIP-15",
-        "resolution is not identity: a name resolving proves who controls the name and nothing about the merchant",
-        "not yet bound into a V2 quote's merchantConfigHash"
+        "resolution is not identity: a name resolving proves who controls the name and nothing about the merchant"
       ],
       "sponsorRoles": [
         "ens"
@@ -252,7 +253,8 @@
       "status": "IMPLEMENTED — LOCAL TESTS",
       "paths": [
         "src/v2/QuoteSettlementExecutor.sol",
-        "src/v2/interfaces/IPermit2Transfer.sol"
+        "src/v2/interfaces/IPermit2Transfer.sol",
+        "src/v2/MerchantConfig.sol"
       ],
       "networks": [],
       "dependencies": [
@@ -270,7 +272,7 @@
       "evidence": [
         {"kind": "command", "value": "forge test --match-path 'test/v2/Settlement*.t.sol'"},
         {"kind": "command", "value": "bash script/mutation-suite.sh"},
-        {"kind": "measurement", "value": "17272 bytes of runtime code"}
+        {"kind": "measurement", "value": "18369 bytes of runtime code"}
       ],
       "limitations": [
         "not deployed anywhere",
@@ -306,7 +308,8 @@
       ],
       "limitations": [
         "the payer is bound, not open; a bearer quote that also names a price is a front-running target",
-        "no offline derivation of this digest yet, unlike the payer's — owed"
+        "no offline derivation of this digest yet, unlike the payer's — owed",
+        "the merchant configuration commitment it carries is opaque to the contracts; only its hash reaches the chain"
       ],
       "sponsorRoles": [
         "uniswap"
@@ -625,6 +628,40 @@
       ],
       "sponsorRoles": [],
       "lastVerifiedCommit": "28c82b75f36c09a73ed16a734034a75c238fc466"
+    },
+    {
+      "id": "v2-merchant-config-commitment",
+      "name": "V2 Merchant Configuration Commitment",
+      "version": "1",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "src/v2/MerchantConfig.sol",
+        "integrations/ensv2/config.mjs"
+      ],
+      "networks": [],
+      "dependencies": [
+        "eip-712",
+        "ensv2-universal-resolver"
+      ],
+      "tests": [
+        "test/v2/MerchantConfig.t.sol",
+        "integrations/ensv2/test.mjs"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "forge test --match-path 'test/v2/MerchantConfig.t.sol'"},
+        {"kind": "command", "value": "node integrations/ensv2/test.mjs"},
+        {"kind": "measurement", "value": "three derivations of one commitment agree: JavaScript, Solidity, and the executor"}
+      ],
+      "limitations": [
+        "the expiry window is enforced off chain only; a settlement never sees the struct, only its hash",
+        "resolution is not identity, and this commitment records a reading rather than verifying a merchant",
+        "not deployed, and not audited"
+      ],
+      "sponsorRoles": [
+        "ens",
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "48a07e710ef77a3128108fdc47f0a71241033c36"
     }
   ]
 }

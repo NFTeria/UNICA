@@ -11,6 +11,7 @@
 // here: the status is the intended one, no recipient is carried, `ok` is false, and the message
 // shown to a payer is not blank.
 
+import {merchantConfigHash, isFresh, commitResolution} from "./config.mjs";
 import {
   resolveMerchant, normalizeName, namehash, dnsEncode,
   encodeResolveCall, decodeResolveReturn, ENSV2, EXPLAIN,
@@ -131,6 +132,72 @@ console.log("\n— no fallback, ever —");
   check(`no failure shape carries a recipient (${shapes.length} shapes)`, clean);
 }
 
+// ---- the merchant configuration commitment ---------------------------------------------------
+//
+// The value pinned below is recomputed in `test/v2/MerchantConfig.t.sol` by Solidity written from
+// the same EIP-712 specification and not from this file, and by the deployed executor's own
+// `hashMerchantConfig`. Three derivations of one word, because a commitment a wallet computes
+// differently from the contract is rejected in the wallet.
+
+console.log("\n— the merchant configuration commitment —");
+{
+  const n = normalizeName("merchant.eth");
+  check("the vector's name normalises", n.ok, n.status);
+  const nh = namehash(n.name);
+  check("namehash of merchant.eth", nh === "0x4899a704a642409872099476ec1fb6ea80e9bcab30bf25152e9741136c413653", nh);
+
+  const base = {
+    version: 1,
+    namehash: nh,
+    name: n.name,
+    recipient: "0x9E11000000000000000000000000000000000001",
+    payoutCurrency: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    chainId: 11155111,
+    resolvedAtBlock: 11640026,
+    validForBlocks: 300,
+  };
+  const wantConfigHash = "0x95b1d38dea10da6126bc066c3ecfb41ba3c151800b94404bf0f4f800143d8f73";
+  const got = merchantConfigHash(base);
+  check("the commitment matches the pinned vector", got === wantConfigHash, got);
+
+  // Every component, one at a time. A component outside the hash is a component somebody can
+  // change between the screen a payer read and the invoice a merchant signed.
+  const moves = {
+    "the configuration version": {version: 2},
+    "the namehash": {namehash: namehash("another.eth")},
+    "the normalised name": {name: "merchant2.eth"},
+    "THE RESOLVED RECIPIENT": {recipient: "0x0000000000000000000000000000000000000BAD"},
+    "the payout currency": {payoutCurrency: "0x0000000000000000000000000000000000000BAD"},
+    "the chain": {chainId: 1},
+    "the resolution block": {resolvedAtBlock: 11640027},
+    "the expiry policy": {validForBlocks: 301},
+  };
+  for (const [label, over] of Object.entries(moves)) {
+    check(`${label} moves the commitment`, merchantConfigHash({...base, ...over}) !== wantConfigHash,
+          "this component is not inside the commitment");
+  }
+
+  // A missing component must be refused rather than silently hashed as undefined.
+  for (const f of Object.keys(base)) {
+    const broken = {...base};
+    delete broken[f];
+    let threw = false;
+    try { merchantConfigHash(broken); } catch { threw = true; }
+    check(`a config missing ${f} is refused`, threw, "it was hashed anyway");
+  }
+
+  // The expiry window, which is the ONLY place it is enforced — nothing on chain sees this struct.
+  check("fresh at the block it was read", isFresh(base, 11640026));
+  check("fresh at the last block of the window", isFresh(base, 11640326));
+  check("stale one block later", !isFresh(base, 11640327));
+  check("not fresh before it was read", !isFresh(base, 11640025));
+
+  let refused = false;
+  try { commitResolution(base, 11640327); } catch { refused = true; }
+  check("a stale checkout cannot be committed", refused, "an expired reading became a commitment");
+  check("a fresh checkout can be committed", commitResolution(base, 11640300) === wantConfigHash);
+}
+
 if (LIVE) {
   console.log("\n— live, against ENSv2 on Sepolia —");
   const RPC = "https://ethereum-sepolia-rpc.publicnode.com";
@@ -147,10 +214,10 @@ if (LIVE) {
     ["ens.eth", "ZERO_ADDRESS"],
     ["premm.eth", "RESOLVER_NOT_FOUND"],
   ];
-  for (const [n, want] of live) {
+  for (const [n, wantConfigHash] of live) {
     const r = await resolveMerchant(n, rpc);
-    check(`live ${n} → ${want}`, r.status === want, `got ${r.status}`);
-    if (want !== "RESOLVED") check(`live ${n} carries no recipient`, r.recipient == null);
+    check(`live ${n} → ${wantConfigHash}`, r.status === wantConfigHash, `got ${r.status}`);
+    if (wantConfigHash !== "RESOLVED") check(`live ${n} carries no recipient`, r.recipient == null);
   }
 }
 

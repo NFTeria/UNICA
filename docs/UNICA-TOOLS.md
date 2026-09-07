@@ -23,9 +23,11 @@ every id and every status, and `make gate` checks it. **A tool's evidence points
 script, a transaction or an artifact — never back at this file.** A document that cites itself is
 not evidence, it is a rumour with a footnote.
 
-**Last verified commit** is the commit at which someone checked the row's claims. The validator
-enforces the rule that makes it meaningful: any commit that changes a tool's code must change the
-manifest in the same commit, or the build fails. That is how a status stops drifting.
+**Last verified commit** is the commit at which someone last re-derived the row's claims. It is
+set by hand, so on its own it would be a promise rather than a fact — which is why the validator
+adds the rule that makes it binding: any commit that changes a tool's code must change the manifest
+in the same commit, or the build fails. A row can therefore be older than its code, but only if
+somebody revisited the row when the code moved.
 
 Nothing in V2 is deployed. **No part of UNICA has been audited**, and no part of this document
 should be read as saying otherwise.
@@ -203,7 +205,8 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Purpose: turn a merchant-signed invoice and a payer's Permit2 authorisation into an exact payment.
 - Product role: the contract that proves the PAYMENT. The hook proves the swap; atomicity binds them.
 - Version: 0.1.0
-- Location: `src/v2/QuoteSettlementExecutor.sol`, `src/v2/interfaces/IPermit2Transfer.sol`
+- Location: `src/v2/QuoteSettlementExecutor.sol`, `src/v2/interfaces/IPermit2Transfer.sol`,
+  `src/v2/MerchantConfig.sol`
 - Inputs: a `Quote`, the merchant's EIP-712 signature, and the payer's Permit2 authorisation.
 - Outputs: `actualIn` and `deliveredOut`, and exactly one `QuoteSettled` receipt.
 - Trust boundary: it trusts two signatures and the PoolManager. It trusts a relayer with nothing:
@@ -223,7 +226,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Evidence: the integrated path is green against the official PoolManager and the official Permit2
   runtime; 24 refusal rows each asserting a whole revert payload; adversarial rows for a token that
   skims on delivery, one that overpays the venue, one that pays the executor, and one that reenters
-  during delivery; 30 of 30 mutations killed by the row that names them; 17,272 bytes of runtime.
+  during delivery; 30 of 30 mutations killed by the row that names them; 18,369 bytes of runtime.
 - Tests: `test/v2/Settlement.t.sol`, `test/v2/SettlementRefusals.t.sol`,
   `test/v2/SettlementAdversarial.t.sol`, `test/v2/SettlementAdversarialInput.t.sol`,
   `test/v2/SettlementLayers.t.sol`
@@ -316,6 +319,40 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Limitations: never emitted on a public chain; no indexer reads it yet.
 - Sponsor relevance: The Graph.
 - Last verified commit: `51e8e471acda`
+
+### V2 Merchant Configuration Commitment
+
+- Id: `v2-merchant-config-commitment`
+- Purpose: put the resolution a payer was shown inside what the merchant signed.
+- Product role: the join between ENS discovery and the invoice. Without it, `recipient` in a quote
+  is an address a payer was shown and has to trust.
+- Version: 1
+- Location: `src/v2/MerchantConfig.sol`, `integrations/ensv2/config.mjs`
+- Inputs: a normalised name, its namehash, the address it resolved to, the payout currency, the
+  chain id, the block the reading was taken at, and how long that reading may be relied on.
+- Outputs: one `bytes32`, carried in the quote as `merchantConfigHash`.
+- Trust boundary: it records a reading; it does not perform one. Resolution happens off chain,
+  before an invoice exists.
+- Security guarantees: every component is inside the hash, and the hash is inside the merchant's
+  digest — so changing any of them makes the merchant's signature stop fitting. **Nothing in a
+  settlement calls the resolver**, and that is proven rather than asserted: a contract that reverts
+  on every call is etched at the ENSv2 Universal Resolver's address and a full settlement runs
+  anyway.
+- Explicit non-guarantees: **resolution is not identity.** A name resolving proves who controls the
+  name and nothing about the merchant behind it. The expiry window is enforced off chain only — a
+  settlement never sees this struct, only its hash — so what protects a payer on chain is that a
+  fresh reading produces a different commitment and therefore a different digest.
+- Dependencies: EIP-712, the ENSv2 Universal Resolver.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: three derivations of one commitment agree — JavaScript, Solidity, and the executor's own
+  `hashMerchantConfig`. Eight component rows on each side, and three sabotages (a field renamed on
+  either side, and the name dropped from the hash) each turn rows red.
+- Tests: `test/v2/MerchantConfig.t.sol`, `integrations/ensv2/test.mjs`
+- Deployment: none.
+- Limitations: not deployed. **Not audited.**
+- Sponsor relevance: ENS, Uniswap.
+- Last verified commit: `48a07e710ef7`
 
 ### V2 Settlement Indexer
 
@@ -531,12 +568,11 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Dependencies: the ENSv2 Universal Resolver.
 - Networks: Ethereum Sepolia (read-only).
 - Status: IMPLEMENTED — LOCAL TESTS
-- Evidence: 36 offline rows in `make gate`; 7 live rows in `make gate-live`; the keccak is validated
+- Evidence: 61 offline rows in `make gate`; 7 live rows in `make gate-live`; the keccak is validated
   against three published FIPS-202 vectors and seven `cast keccak` cross-checks.
 - Tests: `integrations/ensv2/test.mjs`
 - Deployment: none.
-- Limitations: ASCII names only — it refuses non-ASCII rather than approximating ENSIP-15. It is
-  not yet bound into a V2 quote's `merchantConfigHash`, which is the next ENS slice.
+- Limitations: ASCII names only — it refuses non-ASCII rather than approximating ENSIP-15.
 - Sponsor relevance: ENS. No claim is made that it qualifies for anything.
 - Last verified commit: `0845dec9ea01`
 
