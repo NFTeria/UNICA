@@ -34,6 +34,65 @@ should be read as saying otherwise.
 
 ---
 
+## The product map
+
+One product, three layers. Every line says which of `live` · `fork` · `local` · `specified` ·
+`blocked` · `unsupported` it is, because the difference between them is the whole difference between
+a claim and a wish.
+
+**The central claim, written as three sentences because collapsing it produces something false:**
+
+> The hook proves that the pool swap is an authorised, exact invoice-discharge swap.
+> The executor proves that the merchant was paid exactly.
+> Atomic execution makes those two outcomes inseparable.
+
+### UNICA V1
+
+| | |
+|---|---|
+| native-input settlement | **live** — Ethereum Sepolia |
+| USDC payout | **live** |
+| canonical V1 receipt | **live** — one on chain |
+| live verification scripts | **live** — `make proof`, 36 of 36 |
+| Graph indexer | **local** — implemented, matchstick-tested, not deployed |
+
+### UNICA V2
+
+| | |
+|---|---|
+| merchant-signed invoice | **fork** |
+| payer Permit2 witness | **fork** |
+| invoice-only v4 hook | **fork** |
+| direct payer-to-PoolManager funding | **fork** |
+| exact merchant payout, enforced by the executor | **fork** |
+| single-use quote | **fork** |
+| canonical V2 receipt | **fork** |
+| no executor custody | **fork** — measured on closing balances |
+| merchant configuration commitment | **local** |
+| deployment | **none.** V2 is not live anywhere, and `fork` means a read-only local fork of Sepolia |
+
+### Integrations
+
+| | |
+|---|---|
+| ENSv2 merchant discovery | **local**, with live read-only rows behind `make gate-live` |
+| ENS binding into the signed quote | **local** |
+| Graph receipt indexing, V1 | **local** |
+| Graph receipt indexing, V2 | **specified** |
+| wallet / oracle / payment-request adapters | **specified** — see the sponsor backlog |
+| Robinhood tokenized assets | **blocked** — compatibility research only |
+| chains without a canonical v4 deployment | **unsupported** |
+
+**`fork` is not `live`.** A fork test creates the V2 contracts inside a local copy of Sepolia at a
+pinned block. They do not exist on Sepolia; nothing was broadcast. What is real in those rows is
+everything they talk to — the official PoolManager, the official Permit2, Circle's USDC proxy and
+canonical WETH9, each checked against a recorded code hash.
+
+The claims this product may make in public, with their evidence and their limits, are in
+[`docs/CLAIMS.md`](CLAIMS.md). Public wording may not outrun that table.
+
+---
+
 ## V1 — the live generation
 
 ### V1 Settlement Hook
@@ -190,12 +249,12 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   nothing. Delivery is the executor's obligation.
 - Dependencies: `v4-core`, OpenZeppelin's `uniswap-hooks`.
 - Networks: none.
-- Status: IMPLEMENTED — LOCAL TESTS
+- Status: IMPLEMENTED — FORK TESTS
 - Evidence: 13 admission rows and 5 fill rows green; `make mutants` deletes each of its ten guards
   in turn and each turns the row that names it red; 8,317 bytes of runtime code.
 - Tests: `test/v2/HookAdmission.t.sol`, `test/v2/InvoiceFill.t.sol`
 - Deployment: none.
-- Limitations: not deployed, **not audited**, no fork tests yet.
+- Limitations: not deployed and **not audited**.
 - Sponsor relevance: Uniswap.
 - Last verified commit: `1faf6b6bb480`
 
@@ -222,16 +281,21 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   amount; such a token is refused, not accommodated.
 - Dependencies: `v4-core`, Permit2 (deployed runtime, never compiled here), OpenZeppelin `ECDSA`.
 - Networks: none.
-- Status: IMPLEMENTED — LOCAL TESTS
+- Status: IMPLEMENTED — FORK TESTS
 - Evidence: the integrated path is green against the official PoolManager and the official Permit2
   runtime; 24 refusal rows each asserting a whole revert payload; adversarial rows for a token that
   skims on delivery, one that overpays the venue, one that pays the executor, and one that reenters
-  during delivery; 30 of 30 mutations killed by the row that names them; 18,369 bytes of runtime.
+  during delivery; 30 of 30 local mutations and 12 of 12 fork mutations killed by the row that names
+  them; 18,369 bytes of runtime; a fork settlement costs 302,948 gas and paid a merchant exactly
+  100.000000 USDC.
 - Tests: `test/v2/Settlement.t.sol`, `test/v2/SettlementRefusals.t.sol`,
   `test/v2/SettlementAdversarial.t.sol`, `test/v2/SettlementAdversarialInput.t.sol`,
   `test/v2/SettlementLayers.t.sol`
 - Deployment: none.
-- Limitations: not deployed, **not audited**, no fork tests yet, single-hop pools only.
+- Limitations: not deployed and **not audited**; single-hop pools only; **merchant signers are
+  EOAs** — `ECDSA.recover` only, so smart-contract wallets and multisigs cannot issue a V2 quote,
+  while PAYERS may use contract wallets because Permit2 supports EIP-1271. See
+  [`docs/v2/EIP1271-BACKLOG.md`](v2/EIP1271-BACKLOG.md).
 - Sponsor relevance: Uniswap.
 - Last verified commit: `51e8e471acda`
 
@@ -252,7 +316,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   price is a front-running target, and that is a deliberate narrowing, not an oversight.
 - Dependencies: EIP-712.
 - Networks: none.
-- Status: IMPLEMENTED — LOCAL TESTS
+- Status: IMPLEMENTED — FORK TESTS
 - Evidence: `test_Refuse_EverySignedFieldIsInsideTheDigest` moves every field;
   `test_Settle_TheQuoteDigestIsDerivedTheSameWayTwice` derives the digest from the type strings a
   second time and requires agreement.
@@ -280,7 +344,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   executor fixes the destination in code and the witness records it.
 - Dependencies: Permit2's deployed runtime, EIP-712.
 - Networks: Ethereum Sepolia (the canonical Permit2 address).
-- Status: IMPLEMENTED — LOCAL TESTS
+- Status: IMPLEMENTED — FORK TESTS
 - Evidence: 20 offline rows; the same vector recomputed in Solidity and required to match; and the
   deployed Permit2 runtime accepting a signature over the OFFLINE digest. Four sabotages — a field
   renamed on either side, a spurious `version` in the domain, and a Permit2 copied by code-etch —
@@ -311,7 +375,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   measurement cannot audit anything.
 - Dependencies: none.
 - Networks: none.
-- Status: IMPLEMENTED — LOCAL TESTS
+- Status: IMPLEMENTED — FORK TESTS
 - Evidence: decoded from the log field by field in the happy-path row, and a separate row proves no
   refusal emits one.
 - Tests: `test/v2/Settlement.t.sol`, `test/v2/SettlementRefusals.t.sol`
@@ -353,6 +417,110 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Limitations: not deployed. **Not audited.**
 - Sponsor relevance: ENS, Uniswap.
 - Last verified commit: `48a07e710ef7`
+
+### V2 Fork Qualification Suite
+
+- Id: `v2-fork-qualification`
+- Purpose: run the whole product against the dependencies as they are actually deployed.
+- Product role: the step between "the code works" and "the code works with the real thing".
+- Version: 0.1.0
+- Location: `test/fork/`
+- Inputs: a Sepolia endpoint, from `SEPOLIA_RPC_URL` or a public default that needs no key.
+- Outputs: 32 rows, and every measured number in the fork section of the claim ledger.
+- Trust boundary: the pinned block and the recorded code hashes. Nothing is taken on trust that is
+  not asserted first.
+- Security guarantees: none of its own; it measures the ones the contracts make.
+- Explicit non-guarantees: **FORK-LOCAL.** The V2 hook, executor and pool are created inside the
+  fork and do not exist on Sepolia. Nothing is broadcast. One pool shape, one currency pair, one
+  block.
+- Dependencies: Foundry, `v4-core`, Permit2.
+- Networks: a read-only fork of Ethereum Sepolia at block 11656449.
+- Status: IMPLEMENTED — FORK TESTS
+- Evidence: `make fork` — dependency provenance, a mined CREATE2 hook address, the integrated path
+  (merchant paid exactly 100.000000 USDC for 0.041792042795051823 WETH against a 1 WETH ceiling),
+  and 23 refusals each naming its own reason.
+- Tests: it is the tests.
+- Deployment: none.
+- Limitations: excluded from `make gate`, because a gate that depends on a third party's uptime is a
+  status page rather than a gate.
+- Sponsor relevance: Uniswap.
+- Last verified commit: `82c7dcb44038`
+
+### Release-Candidate Interface Freeze
+
+- Id: `interface-freeze-verifier`
+- Purpose: make the V2 external surface something a change has to be a decision about.
+- Product role: what a deployment would be a deployment OF.
+- Version: 1.0.0
+- Location: `script/verify-freeze.mjs`, `docs/v2/release-candidate.json`,
+  `docs/v2/RELEASE-CANDIDATE-FREEZE.md`
+- Inputs: the compiled artifacts.
+- Outputs: a pass, or the name of the thing that moved.
+- Trust boundary: it refuses to report at all if the artifacts were not built from the sources now
+  on disk.
+- Security guarantees: none; it is a comparison. Its value is that it rejects renames, retypes,
+  reorderings and additions, and that it checks its own input first.
+- Explicit non-guarantees: it freezes a SURFACE, not behaviour. A function can change what it does
+  without changing its selector.
+- Dependencies: Node, Foundry.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 17 checks over 71 error selectors, 2 event topics and 30 function selectors. Two
+  sabotages red — a renamed error and a flipped permission bit — and one finding: the FIRST rename
+  sabotage passed, because the build had failed and the verifier was reading yesterday's artifacts.
+  It now recomputes every source hash from Foundry's own metadata before it reports anything.
+- Tests: `script/verify-freeze.mjs`, `test/v2/InterfaceFreeze.t.sol`
+- Deployment: none.
+- Limitations: additions are reported as changes on purpose, which makes it noisy by design.
+- Sponsor relevance: none.
+- Last verified commit: `82c7dcb44038`
+
+### Contract Size Budget
+
+- Id: `size-budget`
+- Purpose: state the size headroom every run, not only when it runs out.
+- Product role: the thing that makes an integration's cost visible before it is paid.
+- Version: 1.0.0
+- Location: `script/size-budget.sh`
+- Inputs: `forge build --sizes`.
+- Outputs: four numbers and a verdict.
+- Trust boundary: none.
+- Security guarantees: none.
+- Explicit non-guarantees: 90% is a WARNING per the owner's threshold, not a failure. What IS fatal
+  is a missing measurement, because a blank report and a clean one look identical.
+- Dependencies: Foundry.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: hook 8,317 of 24,576 runtime (33%), executor 18,369 (74%); both initcodes under 40% of
+  EIP-3860. Validated by pointing it at a contract that does not exist and watching it fail.
+- Tests: `script/size-budget.sh` carries its own controls.
+- Deployment: none.
+- Limitations: two contracts, named explicitly. A new contract must be added by hand.
+- Sponsor relevance: none.
+- Last verified commit: `82c7dcb44038`
+
+### Claim Ledger
+
+- Id: `claim-ledger`
+- Purpose: hold every public claim to an evidence row, a scope and a network.
+- Product role: the thing a README, a demo script and a submission are checked against.
+- Version: 1.0.0
+- Location: `docs/CLAIMS.md`
+- Inputs: the tests, the fork runs, the live proof.
+- Outputs: 18 rows, three of which say a thing is FALSE and must never be said.
+- Trust boundary: it is prose, and it binds by being read.
+- Security guarantees: none.
+- Explicit non-guarantees: the automated banned-wording check covers the tool ledger, not every
+  document. A claim can be true and still be said in a misleading place.
+- Dependencies: none.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: `docs/CLAIMS.md`
+- Tests: `script/validate-tools.mjs` enforces a subset of the banned wording.
+- Deployment: none.
+- Limitations: as above.
+- Sponsor relevance: all of them — it is what stops a sponsor submission overstating.
+- Last verified commit: `82c7dcb44038`
 
 ### V2 Settlement Indexer
 

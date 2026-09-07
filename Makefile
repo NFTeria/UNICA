@@ -136,6 +136,10 @@ gate     : _need-deps
 	@# tool's code without updating docs/unica-tools.json fails the build, so a status cannot drift.
 	@command -v node >/dev/null 2>&1 && node script/validate-tools.mjs \
 	  || echo "SKIP  tool ledger validation: node is not installed (this is a SKIP, not a pass)"
+	@# The release-candidate interface freeze. It checks its own input first: if the artifacts were
+	@# not built from the sources now on disk it refuses to report rather than validating yesterday.
+	@command -v node >/dev/null 2>&1 && node script/verify-freeze.mjs \
+	  || echo "SKIP  interface freeze: node is not installed (this is a SKIP, not a pass)"
 	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors and the tool ledger all exit 0"
 
 # The V2 mutation suite: thirty specific defects, each applied to the real tree and each required

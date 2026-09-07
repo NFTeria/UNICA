@@ -99,11 +99,17 @@ for root in ROOTS:
                 pass
 
 def repo_files():
-    """Tracked files AND untracked-but-not-ignored ones, which is what CI will see after a push."""
-    tracked = subprocess.run(['git', 'ls-files'], capture_output=True, text=True).stdout.split()
-    untracked = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard'],
-                               capture_output=True, text=True).stdout.split()
-    return tracked + untracked
+    """Tracked files AND untracked-but-not-ignored ones, which is what CI will see after a push.
+
+    NUL-delimited. Splitting git's output on whitespace loses any path containing a space or a
+    newline, and a scanner that silently skips a file is the same defect as one that cannot see
+    untracked files: its input is not what it thinks it is.
+    """
+    def enumerate_with(*args):
+        out = subprocess.run(['git'] + list(args) + ['-z'], capture_output=True, text=True).stdout
+        return [f for f in out.split('\0') if f]
+
+    return enumerate_with('ls-files') + enumerate_with('ls-files', '--others', '--exclude-standard')
 
 
 def scan(extra=None):
@@ -142,6 +148,19 @@ checks.append(('control: a quoted sentence is NOT treated as a wire constant',
                not forced('"the recipient receives at least the minimum the order names, always";')))
 checks.append(('control: a quoted call expression is NOT treated as a wire constant',
                not forced('require(balanceOf(msg.sender) >= amount, "not enough of the token here");')))
+
+# The second blind spot in the same family: a path with a space in it must be scanned too. Both
+# controls plant a real vendored statement and require the file WALK to find it — not a path handed
+# in — because what is being tested is the enumeration, not the comparison.
+with tempfile.NamedTemporaryFile('w', suffix='.sol', dir='.', delete=False, prefix='a name with spaces ') as fh:
+    fh.write('// planted, spaced\n' + probe + '\n')
+    spaced_probe = os.path.basename(fh.name)
+try:
+    h, _ = scan()
+    checks.append(('control: a file whose NAME CONTAINS SPACES is caught',
+                   any(x[0] == spaced_probe for x in h)))
+finally:
+    os.unlink(spaced_probe)
 
 # The blind spot that let a green local gate meet a red CI: an untracked file must be scanned.
 with tempfile.NamedTemporaryFile('w', suffix='.sol', dir='.', delete=False) as fh:

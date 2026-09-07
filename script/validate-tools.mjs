@@ -16,6 +16,14 @@
 // Run: node script/validate-tools.mjs
 
 import {readFileSync, existsSync} from "node:fs";
+import {chdir} from "node:process";
+import {dirname, resolve} from "node:path";
+import {fileURLToPath} from "node:url";
+
+// Anchor to the repository root. Every path below is relative, and a check that reads whatever
+// happens to be in the caller's working directory is a check that can quietly pass against the
+// wrong tree — the same defect class as reading a stale artifact or missing an untracked file.
+chdir(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 import {execFileSync} from "node:child_process";
 
 const JSON_PATH = "docs/unica-tools.json";

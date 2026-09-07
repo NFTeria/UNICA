@@ -217,23 +217,28 @@
       "id": "v2-invoice-hook",
       "name": "V2 Invoice-Only Hook",
       "version": "0.1.0",
-      "status": "IMPLEMENTED — LOCAL TESTS",
+      "status": "IMPLEMENTED — FORK TESTS",
       "paths": [
         "src/v2/QuoteSettlementHook.sol"
       ],
-      "networks": [],
+      "networks": [
+        "ethereum-sepolia-fork"
+      ],
       "dependencies": [
         "uniswap-v4-core",
         "openzeppelin-uniswap-hooks"
       ],
       "tests": [
+        "test/fork/V2ForkRefusals.t.sol",
+        "test/fork/V2ForkSettlement.t.sol",
         "test/v2/HookAdmission.t.sol",
         "test/v2/InvoiceFill.t.sol"
       ],
       "evidence": [
         {"kind": "command", "value": "forge test --match-path 'test/v2/HookAdmission.t.sol'"},
         {"kind": "command", "value": "bash script/mutation-suite.sh"},
-        {"kind": "measurement", "value": "8317 bytes of runtime code"}
+        {"kind": "measurement", "value": "8317 bytes of runtime code"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"}
       ],
       "limitations": [
         "not deployed anywhere",
@@ -244,67 +249,79 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "1faf6b6bb480183a8b9ef69bc550c90861548639"
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
     },
     {
       "id": "v2-quote-settlement-executor",
       "name": "V2 Quote Settlement Executor",
       "version": "0.1.0",
-      "status": "IMPLEMENTED — LOCAL TESTS",
+      "status": "IMPLEMENTED — FORK TESTS",
       "paths": [
         "src/v2/QuoteSettlementExecutor.sol",
         "src/v2/interfaces/IPermit2Transfer.sol",
         "src/v2/MerchantConfig.sol"
       ],
-      "networks": [],
+      "networks": [
+        "ethereum-sepolia-fork"
+      ],
       "dependencies": [
         "uniswap-v4-core",
         "permit2",
         "openzeppelin-contracts"
       ],
       "tests": [
+        "test/fork/V2ForkRefusals.t.sol",
+        "test/fork/V2ForkSettlement.t.sol",
         "test/v2/Settlement.t.sol",
-        "test/v2/SettlementRefusals.t.sol",
         "test/v2/SettlementAdversarial.t.sol",
         "test/v2/SettlementAdversarialInput.t.sol",
-        "test/v2/SettlementLayers.t.sol"
+        "test/v2/SettlementLayers.t.sol",
+        "test/v2/SettlementRefusals.t.sol"
       ],
       "evidence": [
         {"kind": "command", "value": "forge test --match-path 'test/v2/Settlement*.t.sol'"},
         {"kind": "command", "value": "bash script/mutation-suite.sh"},
-        {"kind": "measurement", "value": "18369 bytes of runtime code"}
+        {"kind": "measurement", "value": "18369 bytes of runtime code"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"},
+        {"kind": "measurement", "value": "fork settlement gas 302948; merchant received exactly 100.000000 USDC"}
       ],
       "limitations": [
         "not deployed anywhere",
         "no external review",
         "EOA merchant signatures only; no EIP-1271 contract signatures",
         "it does not vet the pool a merchant names beyond structural checks; the payer's protection is the signed ceiling and the measured delivery",
-        "output tokens whose transfer cannot deliver an exact amount are refused, not supported"
+        "output tokens whose transfer cannot deliver an exact amount are refused, not supported",
+        "merchant signers are EOAs; ECDSA.recover only, no EIP-1271 (payers may use contract wallets through Permit2)"
       ],
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
     },
     {
       "id": "v2-merchant-quote",
       "name": "V2 Merchant Quote",
       "version": "1",
-      "status": "IMPLEMENTED — LOCAL TESTS",
+      "status": "IMPLEMENTED — FORK TESTS",
       "paths": [
         "src/v2/interfaces/IQuoteSettlement.sol"
       ],
-      "networks": [],
+      "networks": [
+        "ethereum-sepolia-fork"
+      ],
       "dependencies": [
         "eip-712"
       ],
       "tests": [
+        "test/fork/V2ForkRefusals.t.sol",
+        "test/fork/V2ForkSettlement.t.sol",
         "test/v2/Settlement.t.sol",
         "test/v2/SettlementRefusals.t.sol"
       ],
       "evidence": [
         {"kind": "command", "value": "forge test --match-test test_Refuse_EverySignedFieldIsInsideTheDigest"},
-        {"kind": "command", "value": "forge test --match-test test_Settle_TheQuoteDigestIsDerivedTheSameWayTwice"}
+        {"kind": "command", "value": "forge test --match-test test_Settle_TheQuoteDigestIsDerivedTheSameWayTwice"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"}
       ],
       "limitations": [
         "the payer is bound, not open; a bearer quote that also names a price is a front-running target",
@@ -314,19 +331,19 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
     },
     {
       "id": "v2-permit2-witness",
       "name": "V2 Permit2 Payment Witness",
       "version": "0.1.0",
-      "status": "IMPLEMENTED — LOCAL TESTS",
+      "status": "IMPLEMENTED — FORK TESTS",
       "paths": [
         "integrations/permit2/digest.mjs",
         "integrations/permit2/test.mjs"
       ],
       "networks": [
-        "ethereum-sepolia"
+        "ethereum-sepolia-fork"
       ],
       "dependencies": [
         "permit2",
@@ -334,12 +351,15 @@
       ],
       "tests": [
         "integrations/permit2/test.mjs",
+        "test/fork/V2ForkRefusals.t.sol",
+        "test/fork/V2ForkSettlement.t.sol",
         "test/v2/Permit2Witness.t.sol"
       ],
       "evidence": [
         {"kind": "command", "value": "node integrations/permit2/test.mjs"},
         {"kind": "command", "value": "forge test --match-path 'test/v2/Permit2Witness.t.sol'"},
-        {"kind": "address", "chainId": 11155111, "value": "0x000000000022D473030F116dDEE9F6B43aC78BA3"}
+        {"kind": "address", "chainId": 11155111, "value": "0x000000000022D473030F116dDEE9F6B43aC78BA3"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"}
       ],
       "limitations": [
         "Permit2 does not enforce the transfer destination; the executor fixes it in code and the witness records it",
@@ -348,25 +368,30 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "17836cc4253350d9484a78e6b7eed7c11b756bb1"
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
     },
     {
       "id": "v2-receipt",
       "name": "V2 Receipt",
       "version": "1",
-      "status": "IMPLEMENTED — LOCAL TESTS",
+      "status": "IMPLEMENTED — FORK TESTS",
       "paths": [
         "src/v2/interfaces/IQuoteSettlement.sol",
         "src/v2/QuoteSettlementExecutor.sol"
       ],
-      "networks": [],
+      "networks": [
+        "ethereum-sepolia-fork"
+      ],
       "dependencies": [],
       "tests": [
+        "test/fork/V2ForkRefusals.t.sol",
+        "test/fork/V2ForkSettlement.t.sol",
         "test/v2/Settlement.t.sol",
         "test/v2/SettlementRefusals.t.sol"
       ],
       "evidence": [
-        {"kind": "command", "value": "forge test --match-test test_Settle_TheMerchantIsPaidExactlyAndNobodyElseHoldsAnything"}
+        {"kind": "command", "value": "forge test --match-test test_Settle_TheMerchantIsPaidExactlyAndNobodyElseHoldsAnything"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"}
       ],
       "limitations": [
         "no indexer reads it yet",
@@ -376,7 +401,7 @@
       "sponsorRoles": [
         "the-graph"
       ],
-      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
     },
     {
       "id": "b1-no-custody-harness",
@@ -465,7 +490,7 @@
     {
       "id": "copied-source-guard",
       "name": "Copied-Source Guard",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "status": "IMPLEMENTED — LOCAL TESTS",
       "paths": [
         "script/no-copied-source.sh"
@@ -480,14 +505,14 @@
       ],
       "evidence": [
         {"kind": "command", "value": "bash script/no-copied-source.sh --self-test"},
-        {"kind": "measurement", "value": "157 files, tracked and untracked, against 1963 vendored body statements, zero reproduced"}
+        {"kind": "measurement", "value": "166 files, tracked and untracked, against 1963 vendored body statements, zero reproduced"}
       ],
       "limitations": [
         "line identity only; a paraphrase or a reflow defeats it",
         "exempts wire constants, which is a hole a determined paste could use one line at a time"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "fcfe151a83d49234cd732c96d4002e190afc49d3"
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
     },
     {
       "id": "private-leak-heuristic",
@@ -533,14 +558,16 @@
       ],
       "evidence": [
         {"kind": "command", "value": "make mutants"},
-        {"kind": "measurement", "value": "30 mutations, 30 killed by the row that names them"}
+        {"kind": "command", "value": "make fork-mutants"},
+        {"kind": "measurement", "value": "30 local mutations killed by their own row; 12 fork mutations killed by their own row"}
       ],
       "limitations": [
-        "a fixed list, not a generator; it proves those thirty defects are caught and nothing more",
-        "recompiles thirty times, so it is not in make gate"
+        "a fixed list, not a generator; it proves those defects are caught and nothing more",
+        "four local mutations cannot be reproduced on the fork because real USDC and WETH behave; the runner prints which",
+        "recompiles once per mutation, so it is not in make gate"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "51e8e471acda8a283b9f9bcb9baecd90830c762f"
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
     },
     {
       "id": "web-checkout-surface",
@@ -662,6 +689,126 @@
         "uniswap"
       ],
       "lastVerifiedCommit": "48a07e710ef77a3128108fdc47f0a71241033c36"
+    },
+    {
+      "id": "v2-fork-qualification",
+      "name": "V2 Fork Qualification Suite",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — FORK TESTS",
+      "paths": [
+        "test/fork/ForkPin.sol",
+        "test/fork/DependencyProvenance.t.sol",
+        "test/fork/util/V2ForkFixture.sol",
+        "test/fork/V2ForkSettlement.t.sol",
+        "test/fork/V2ForkRefusals.t.sol"
+      ],
+      "networks": [
+        "ethereum-sepolia-fork"
+      ],
+      "dependencies": [
+        "foundry",
+        "uniswap-v4-core",
+        "permit2"
+      ],
+      "tests": [
+        "test/fork/DependencyProvenance.t.sol",
+        "test/fork/V2ForkSettlement.t.sol",
+        "test/fork/V2ForkRefusals.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "make fork"},
+        {"kind": "measurement", "value": "32 rows at pinned block 11656449, hash 0xc65f2cae…cf1f0707"},
+        {"kind": "address", "chainId": 11155111, "value": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543"}
+      ],
+      "limitations": [
+        "FORK-LOCAL: the V2 hook, executor and pool are created inside the fork and do not exist on Sepolia",
+        "nothing is broadcast; the suite is read-only against the chain",
+        "one pool shape, one currency pair, one block",
+        "excluded from make gate, because a gate that depends on a third party's uptime is a status page"
+      ],
+      "sponsorRoles": [
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+    },
+    {
+      "id": "interface-freeze-verifier",
+      "name": "Release-Candidate Interface Freeze",
+      "version": "1.0.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "script/verify-freeze.mjs",
+        "docs/v2/release-candidate.json",
+        "docs/v2/RELEASE-CANDIDATE-FREEZE.md"
+      ],
+      "networks": [],
+      "dependencies": [
+        "node",
+        "foundry"
+      ],
+      "tests": [
+        "script/verify-freeze.mjs",
+        "test/v2/InterfaceFreeze.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "node script/verify-freeze.mjs"},
+        {"kind": "measurement", "value": "17 checks: 71 error selectors, 2 event topics, 30 function selectors, plus artifact freshness"}
+      ],
+      "limitations": [
+        "it freezes a SURFACE, not behaviour; a function may change what it does without changing its selector",
+        "additions are reported as changes on purpose, which makes it noisy by design"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+    },
+    {
+      "id": "size-budget",
+      "name": "Contract Size Budget",
+      "version": "1.0.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "script/size-budget.sh"
+      ],
+      "networks": [],
+      "dependencies": [
+        "foundry"
+      ],
+      "tests": [
+        "script/size-budget.sh"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "bash script/size-budget.sh"},
+        {"kind": "measurement", "value": "hook 8317/24576 runtime, executor 18369/24576; both initcodes under 40% of EIP-3860"}
+      ],
+      "limitations": [
+        "90% is a WARNING, per the owner's threshold, not a failure",
+        "what IS fatal is a missing measurement, because a blank report and a clean one look identical"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+    },
+    {
+      "id": "claim-ledger",
+      "name": "Claim Ledger",
+      "version": "1.0.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "docs/CLAIMS.md"
+      ],
+      "networks": [],
+      "dependencies": [],
+      "tests": [
+        "script/validate-tools.mjs"
+      ],
+      "evidence": [
+        {"kind": "artifact", "value": "docs/CLAIMS.md — 18 rows, each with evidence, scope, network and approved wording"}
+      ],
+      "limitations": [
+        "prose, not code: the banned-wording check covers the tool ledger and not every document",
+        "a claim can be true and still be said in a misleading place; the ledger constrains wording, not judgement"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
     }
   ]
 }
