@@ -55,17 +55,22 @@ interface IQuoteSettlement {
     /// @dev `actualIn` and `deliveredOut` are MEASURED; `amountOut` is what the invoice asked for.
     ///      They are separate fields because they can differ, and an indexer that cannot tell a
     ///      request from a measurement cannot audit anything.
+    /// @dev `executor` is NOT a field: the log's own `address` is the executor, and a field that
+    ///      restates the emitter is a field that can disagree with it. `quoteDigest` is, because it
+    ///      is the key the hook consumes on and the only identifier that covers every signed term —
+    ///      `quoteId` is the merchant's label and two merchants may choose the same one.
     event QuoteSettled(
         bytes32 indexed quoteId,
         address indexed recipient,
         address indexed payer,
         uint16 schemaVersion,
+        bytes32 quoteDigest,
         address merchantSigner,
-        address executor,
         address hook,
         bytes32 poolId,
         address tokenIn,
         uint256 actualIn,
+        uint256 maxIn,
         address tokenOut,
         uint256 amountOut,
         uint256 deliveredOut,
@@ -113,4 +118,36 @@ interface IQuoteSettlement {
     error ExactOutputRequired();
     error MalformedHookData();
     error UnknownHookDataVersion(uint8 version);
+
+    // ---- the executor's refusals ----------------------------------------------------------
+    error UnknownQuoteVersion(uint8 version);
+    /// @notice A settlement is already live in this transaction.
+    /// @dev The reentrancy guard AND the active-context guard, in one condition. A hostile token
+    ///      with a transfer callback is the realistic way in.
+    error SettlementAlreadyInProgress(bytes32 liveDigest);
+    error NotThePoolManager(address expected, address got);
+    /// @notice The quote names a hook that is not bound to this executor.
+    /// @dev Mutual binding without a circular constructor: the hook is built knowing its executor,
+    ///      and the executor asks the hook. Either half alone can be forged by a merchant signing a
+    ///      quote for a venue of their choosing.
+    error HookIsNotBoundToThisExecutor(address hook, address boundTo);
+    /// @notice The quote's tokens do not sit where its direction says they sit in the pool key.
+    error CurrenciesDoNotMatchPool(address expectedIn, address expectedOut);
+    error RecipientIsTheExecutor();
+    error RecipientIsThePoolManager();
+    /// @notice The swap's input side was not a debit, so the sign convention this code relies on
+    ///         did not hold. A cast precondition, stated rather than assumed.
+    error InputIsNotADebit(int256 amount);
+    /// @notice The pool delivered more than the invoice. Refused rather than given a policy: the
+    ///         excess belongs to nobody this contract is entitled to choose for.
+    error DeliveredMoreThanTheInvoice(bytes32 quoteId, uint256 required, uint256 delivered);
+    /// @notice The PoolManager credited a different amount than the swap said was owed.
+    error SettlementDidNotClose(uint256 owed, uint256 credited);
+    /// @notice THE PAYMENT CHECK. Measured on the recipient's own balance, across the whole
+    ///         settlement, and required to be exact — not a minimum.
+    error MerchantNotPaidExactly(bytes32 quoteId, uint256 required, uint256 delivered);
+    /// @notice The executor's balance moved. It is a conduit; if it held anything, the no-custody
+    ///         claim is false for this transaction and the transaction does not happen.
+    error ExecutorHeldTheInput(uint256 opening, uint256 closing);
+    error ExecutorHeldTheOutput(uint256 opening, uint256 closing);
 }

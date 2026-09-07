@@ -14,6 +14,14 @@
 #     `unlockCallback`, `msgSender`, `_beforeSwap` and every other override.
 #   * `return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);` is the value
 #     the protocol demands, not a sentence someone chose.
+#   * `"PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256
+#     deadline,"` is a WIRE CONSTANT. It is not a statement; it is the exact byte string that goes
+#     into an EIP-712 hash, and a signature computed over any other spelling is rejected by the
+#     deployed contract. Added 2026-09-07 after this scan fired on the UNICA V2 payer digest and
+#     the honest answer was "there is one correct spelling and this is it". The exemption is
+#     narrow on purpose: a line that is ENTIRELY a string literal whose content opens as a type
+#     signature — `Name(` — and nothing else. A copied error message or a copied sentence in
+#     quotes is still caught, and there is a control below that proves it.
 #
 # Conformance REQUIRES byte-identity, so a line-identity scan cannot tell it from copying. Run
 # wide, this check produced 69 hits against this tree and every one was language-forced — a
@@ -46,6 +54,9 @@ ROOTS = [
     'lib/hookmate/src',
 ]
 DECL = re.compile(r'^(function |constructor|modifier |event |error |struct |enum |interface |contract |library |abstract )')
+# A whole line that is one string literal opening as `Name(` — an EIP-712 or ABI type signature.
+# Nothing else qualifies: the content must start with an identifier immediately followed by `(`.
+TYPE_STRING = re.compile(r'^"[A-Za-z_][A-Za-z0-9_]*\([^"]*"[;,]?$')
 
 def forced(s):
     """True when the language, the compiler or an interface dictates this line's exact text."""
@@ -60,6 +71,8 @@ def forced(s):
     if re.match(r'^returns? ?\(', s):
         return True
     if re.match(r'^return \(?[A-Za-z0-9_.]+\.selector', s):
+        return True
+    if TYPE_STRING.match(s):
         return True
     return False
 
@@ -105,6 +118,15 @@ probe = next((l for l in vendored if len(l) > 55), None)
 checks.append(('control: a real vendored body statement is recognised', probe is not None))
 checks.append(('control: an ordinary sentence is not recognised',
                'The recipient receives at least the minimum the order names.' not in vendored))
+# The two halves of the wire-constant exemption, unit-tested against `forced` directly so the
+# widening cannot be believed without evidence that it stayed narrow.
+checks.append(('control: an EIP-712 type string is treated as a wire constant',
+               forced('"PermitWitnessTransferFrom(TokenPermissions permitted,address spender,'
+                      'uint256 nonce,uint256 deadline,";')))
+checks.append(('control: a quoted sentence is NOT treated as a wire constant',
+               not forced('"the recipient receives at least the minimum the order names, always";')))
+checks.append(('control: a quoted call expression is NOT treated as a wire constant',
+               not forced('require(balanceOf(msg.sender) >= amount, "not enough of the token here");')))
 
 if SELF_TEST:
     with tempfile.NamedTemporaryFile('w', suffix='.sol', dir='.', delete=False) as fh:
