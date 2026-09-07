@@ -20,6 +20,7 @@ import {QuoteSettlementExecutor} from "../../../src/v2/QuoteSettlementExecutor.s
 import {IPermit2Transfer} from "../../../src/v2/interfaces/IPermit2Transfer.sol";
 import {IQuoteSettlement} from "../../../src/v2/interfaces/IQuoteSettlement.sol";
 import {HookRevertAsserts} from "./HookRevertAsserts.sol";
+import {QuoteSigning} from "./QuoteSigning.sol";
 
 /// @notice Adds the pool's liquidity. Not the executor: the executor holds no tokens and must never
 ///         learn how to, and `beforeAddLiquidity` is not one of this hook's permissions, so any
@@ -64,7 +65,7 @@ contract LiquidityProvider is IUnlockCallback {
 ///         constructed AT its canonical address rather than deployed elsewhere and copied — a
 ///         distinction that cost this repository a day, because immutables live in runtime code and
 ///         a copied Permit2 carries a domain separator for the wrong verifyingContract.
-abstract contract SettlementFixture is HookRevertAsserts {
+abstract contract SettlementFixture is HookRevertAsserts, QuoteSigning {
     using PoolIdLibrary for PoolKey;
 
     uint160 internal constant DECLARED_MASK =
@@ -88,23 +89,9 @@ abstract contract SettlementFixture is HookRevertAsserts {
     address internal payer;
     address internal recipient = address(0x9E11);
     address internal relayer = address(0x5E1AB);
-
-    /// @dev What the merchant's own signer computes. Written out here rather than read from the
-    ///      contract, so the test derives the digest a second time and a one-sided change to either
-    ///      description is a failure rather than an agreement.
-    bytes32 internal constant LOCAL_QUOTE_TYPEHASH = keccak256(
-        "Quote(uint8 version,bytes32 quoteId,address merchantSigner,address payer,address recipient,"
-        "address tokenIn,uint256 maxIn,address tokenOut,uint256 amountOut,PoolKey pool,bool zeroForOne,"
-        "uint256 deadline,address hook,address executor,bytes32 merchantConfigHash,uint32 policyVersion)"
-        "PoolKey(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)"
-    );
-    bytes32 internal constant LOCAL_POOL_KEY_TYPEHASH =
-        keccak256("PoolKey(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)");
-    bytes32 internal constant LOCAL_PAYMENT_TYPEHASH = keccak256(
-        "Payment(bytes32 quoteId,address payer,address tokenIn,uint256 maxIn,address destination,address executor)"
-    );
-    bytes32 internal constant LOCAL_TOKEN_PERMISSIONS_TYPEHASH =
-        keccak256("TokenPermissions(address token,uint256 amount)");
+    // The EIP-712 type hashes and the digest construction live in `QuoteSigning`, written from
+    // the specification and shared with the fork suite, so the local and fork fixtures cannot
+    // drift into two descriptions of one encoding.
 
     function _setUpSettlement() internal {
         vm.chainId(CHAIN_ID);
@@ -188,98 +175,22 @@ abstract contract SettlementFixture is HookRevertAsserts {
         });
     }
 
-    /// @dev The quote's EIP-712 struct hash, derived here from the type strings rather than by
-    ///      calling the executor. Two descriptions that must agree, not one description consulted
-    ///      twice.
-    function _localHashQuote(IQuoteSettlement.Quote memory q) internal pure returns (bytes32) {
-        return keccak256(
-            bytes.concat(
-                abi.encode(
-                    LOCAL_QUOTE_TYPEHASH,
-                    q.version,
-                    q.quoteId,
-                    q.merchantSigner,
-                    q.payer,
-                    q.recipient,
-                    q.tokenIn,
-                    q.maxIn
-                ),
-                abi.encode(
-                    q.tokenOut,
-                    q.amountOut,
-                    keccak256(
-                        abi.encode(
-                            LOCAL_POOL_KEY_TYPEHASH,
-                            Currency.unwrap(q.pool.currency0),
-                            Currency.unwrap(q.pool.currency1),
-                            q.pool.fee,
-                            q.pool.tickSpacing,
-                            address(q.pool.hooks)
-                        )
-                    ),
-                    q.zeroForOne,
-                    q.deadline,
-                    q.hook,
-                    q.executor,
-                    q.merchantConfigHash,
-                    q.policyVersion
-                )
-            )
-        );
-    }
-
+    /// @dev Thin wrappers over `QuoteSigning`, which owns the encoding. They exist only to supply
+    ///      this fixture's own addresses; nothing about a digest is decided here.
     function _localDomain() internal view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                keccak256("UNICA"),
-                keccak256("2"),
-                block.chainid,
-                address(executor)
-            )
-        );
+        return _domainFor(address(executor));
     }
 
     function _quoteDigest(IQuoteSettlement.Quote memory q) internal view returns (bytes32) {
-        return keccak256(abi.encodePacked("\x19\x01", _localDomain(), _localHashQuote(q)));
-    }
-
-    function _signQuoteWithDigest(bytes32 digest, uint256 key_) internal pure returns (bytes memory) {
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key_, digest);
-        return abi.encodePacked(r, s, v);
+        return _quoteDigestFor(address(executor), q);
     }
 
     function _signQuoteAs(IQuoteSettlement.Quote memory q, uint256 key_) internal view returns (bytes memory) {
-        return _signQuoteWithDigest(_quoteDigest(q), key_);
+        return _signQuoteFor(address(executor), q, key_);
     }
-
-    // ---- the payer's Permit2 authorisation ---------------------------------------------------
 
     function _witness(IQuoteSettlement.Quote memory q) internal view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                LOCAL_PAYMENT_TYPEHASH, q.quoteId, q.payer, q.tokenIn, q.maxIn, address(manager), address(executor)
-            )
-        );
-    }
-
-    function _witnessTypeString() internal pure returns (string memory) {
-        return string.concat(
-            "Payment witness)",
-            "Payment(bytes32 quoteId,address payer,address tokenIn,uint256 maxIn,address destination,address executor)",
-            "TokenPermissions(address token,uint256 amount)"
-        );
-    }
-
-    function _permit2Domain() internal view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)"),
-                keccak256("Permit2"),
-                block.chainid,
-                PERMIT2
-            )
-        );
+        return _witnessFor(address(manager), address(executor), q);
     }
 
     function _authorize(IQuoteSettlement.Quote memory q, uint256 nonce, uint256 deadline, uint256 key_)
@@ -287,20 +198,17 @@ abstract contract SettlementFixture is HookRevertAsserts {
         view
         returns (QuoteSettlementExecutor.PayerAuthorization memory)
     {
-        bytes32 typeHash = keccak256(
-            abi.encodePacked(
-                "PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline,",
-                _witnessTypeString()
-            )
+        return _authorizeFor(
+            AuthContext({
+                permit2: PERMIT2,
+                manager: address(manager),
+                executor: address(executor),
+                nonce: nonce,
+                deadline: deadline,
+                signerKey: key_
+            }),
+            q
         );
-        bytes32 tokenPermissions = keccak256(abi.encode(LOCAL_TOKEN_PERMISSIONS_TYPEHASH, q.tokenIn, q.maxIn));
-        bytes32 structHash =
-            keccak256(abi.encode(typeHash, tokenPermissions, address(executor), nonce, deadline, _witness(q)));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _permit2Domain(), structHash));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key_, digest);
-        return QuoteSettlementExecutor.PayerAuthorization({
-            nonce: nonce, deadline: deadline, signature: abi.encodePacked(r, s, v)
-        });
     }
 }
 
