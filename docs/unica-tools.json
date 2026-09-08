@@ -903,13 +903,13 @@
       "evidence": [
         {"kind": "command", "value": "node tools/unica-verify/test.mjs"},
         {"kind": "command", "value": "make verify-online"},
-        {"kind": "measurement", "value": "100 offline rows and 109 with the online rows: one positive control, 30 negatives altering exactly one field each, and 10 sabotages"},
-        {"kind": "measurement", "value": "50 of 50 checks pass online against a settlement fetched by hash, 5 dependency code hashes compared against live Sepolia code"},
+        {"kind": "measurement", "value": "113 rows with no endpoint at all, 113 passed, 0 failed: one positive control, 30 negatives altering exactly one field each, 10 sabotages, and 13 rows driving online mode against a stub node, ten of which go red against the code before daec8f6"},
+        {"kind": "measurement", "value": "online mode emits 57 check rows against a settlement fetched by hash, including 5 dependency code hashes; the nine rows needing a real endpoint were not run in the slice that last measured this"},
         {"kind": "artifact", "value": "tools/unica-verify/fixtures/fork-settlement.json, a real transaction receipt captured off a local anvil fork of Ethereum Sepolia"}
       ],
       "limitations": [
         "the settlement it verifies exists only inside a local fork, because V2 is not deployed to any public chain",
-        "offline mode believes the receipt it is handed; only online mode establishes that a transaction is in a chain",
+        "offline mode believes the receipt it is handed; only online mode establishes that a transaction is in a chain, and since daec8f6 online mode fetches it by hash rather than believing a copy the caller supplied",
         "EOA merchant signers only: ERC-1271 contract signers are outside V2 and are not checked",
         "it never states that a payment is final, irreversible or owed, and reports confirmations without declaring any depth final",
         "absence of a settlement proves nothing about whether an invoice was paid by another route",
@@ -920,7 +920,7 @@
         "ens",
         "the-graph"
       ],
-      "lastVerifiedCommit": "c15f6607b06657a65a34781b99ac672758d777f1"
+      "lastVerifiedCommit": "daec8f6565c59d49b87c1552759bd4600b27fde9"
     },
     {
       "id": "namemath-art",
