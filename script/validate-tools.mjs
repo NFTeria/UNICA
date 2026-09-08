@@ -69,6 +69,24 @@ function chk(name, ok, detail) {
 
 // ---- the checks, each a pure function over a manifest so a control can feed it a broken one ----
 
+/// TRACKED paths under `paths` with uncommitted content changes, staged or not.
+///
+/// Untracked files are deliberately excluded, and the exclusion is load-bearing rather than
+/// convenient: `vy/src/unica/` carries two contracts the owner keeps out of the tree on purpose,
+/// so counting `??` entries would make this rule fire on every run forever, and a guard that is
+/// always red is a guard everyone learns to ignore. The rule's claim is about HISTORY — a change
+/// to a tool must move the manifest — and a file git is not tracking has not changed the tool.
+function dirty(paths) {
+  let out = "";
+  try {
+    out = execFileSync("git", ["status", "--porcelain", "--", ...paths], {encoding: "utf8"});
+  } catch {
+    return []; // not a git checkout, or git is unavailable: the commit half already handled that
+  }
+  return out.split("\n").filter(Boolean).filter((l) => !l.startsWith("??"))
+    .map((l) => l.slice(3).trim()).filter(Boolean);
+}
+
 const CHECKS = {
   status: (m) => m.tools.filter((t) => !ALLOWED_STATUS.includes(t.status)).map((t) => `${t.id}: "${t.status}"`),
 
@@ -200,6 +218,15 @@ const CHECKS = {
         if (!files.includes(JSON_PATH)) {
           bad.push(`${t.id}: commit ${c.slice(0, 8)} changed the tool without updating ${JSON_PATH}`);
         }
+      }
+
+      // And the same rule against the WORKING TREE, which is the half that was missing. Looking
+      // only at commits means the rule cannot possibly fire until the offending commit exists, so
+      // it guarantees at least one red gate on a commit that is already written and, if the push
+      // was quick, already public. It fired that way four times before this line was added. Asked
+      // of uncommitted changes as well, it says the same thing while the fix is still free.
+      if (dirty(t.paths).length > 0 && dirty([JSON_PATH]).length === 0) {
+        bad.push(`${t.id}: uncommitted changes to ${dirty(t.paths).join(", ")} without touching ${JSON_PATH}`);
       }
     }
     return bad;
