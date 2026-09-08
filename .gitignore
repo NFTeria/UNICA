@@ -202,3 +202,7 @@ integrations/graph-v2/tests/.bin/
 # lines above was already ignored by name — this ignores the directory that holds it, so a stray
 # `git add .` cannot pull the rest of it into a public history.
 vypersetup/
+
+# CRE workflow: private policy values. The .example is committed, the real one never is.
+integrations/chainlink-cre-guardian/workflow/.env
+integrations/chainlink-cre-guardian/workflow/node_modules/

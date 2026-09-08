@@ -1,0 +1,23 @@
+# CRE workflow settings for the UNICA treasury guardian.
+#
+# The staging target is the one this repository exercises: `cre workflow simulate` against it
+# runs the confidential handler locally and needs no CRE account and no Early Access. The
+# production block is written out so the shape is complete, but nothing here deploys it —
+# a DON deployment is an owner action and is not claimed anywhere in this repository.
+staging-settings:
+  user-workflow:
+    workflow-name: "unica-treasury-guardian-staging"
+    deployment-registry: "private"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.staging.json"
+    secrets-path: "./secret-names.yaml"
+
+production-settings:
+  user-workflow:
+    workflow-name: "unica-treasury-guardian"
+    deployment-registry: "private"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.staging.json"
+    secrets-path: "./secret-names.yaml"

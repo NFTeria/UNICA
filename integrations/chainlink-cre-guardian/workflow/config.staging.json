@@ -1,0 +1,17 @@
+{
+  "schedule": "0 */5 * * * *",
+  "rpc_url": "https://ethereum-sepolia-rpc.publicnode.com",
+  "chain_id": 11155111,
+  "settlement_token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+  "merchant": "0xa50802FBcAfc5aF3D0093026d301a82ec341652a",
+  "permitted_target": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+  "permitted_selector": "0xa9059cbb",
+  "policy_version": 1,
+  "secrets_ids": {
+    "min_reserve_id": "unica_min_reserve",
+    "target_allocation_bps_id": "unica_target_allocation_bps",
+    "max_action_units_id": "unica_max_action_units",
+    "risk_threshold_bps_id": "unica_risk_threshold_bps",
+    "cooldown_seconds_id": "unica_cooldown_seconds"
+  }
+}

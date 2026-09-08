@@ -1,0 +1,17 @@
+{
+  "name": "unica-treasury-guardian-workflow",
+  "version": "1.0.0",
+  "main": "main.ts",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@chainlink/cre-sdk": "1.18.0",
+    "viem": "^2.17.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

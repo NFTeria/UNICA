@@ -179,6 +179,10 @@ gate     : _need-deps
 	@# The Arc nanopayments integration. Offline by construction: it verifies a vector Circle's own
 	@# SDK signed, without importing that SDK and without an endpoint or a key.
 	@$(call run_row,node,node integrations/arc-nanopayments/test.mjs,Arc nanopayments)
+	@# The Chainlink CRE Confidential Workflow's decision logic. Runs under bun because the
+	@# workflow is TypeScript against @chainlink/cre-sdk; the CRE runtime is what carries these
+	@# functions into an enclave, not what makes them correct, so they are testable here.
+	@$(call run_row,bun,cd integrations/chainlink-cre-guardian/workflow && bun test,CRE confidential workflow)
 	@# The Vyper workspace. It ran green for weeks without being gated, which meant nothing
 	@# would have said so the day it stopped. Moccasin's in-process EVM needs no network.
 	@$(call run_row,mox,(cd vy && mox test -q),vy model and art)
