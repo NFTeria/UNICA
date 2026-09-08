@@ -570,6 +570,45 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   qualification is claimed.
 - Last verified commit: `3582eb5350e3`
 
+### ENS Merchant Identity Chain
+
+- Id: `ens-identity-chain`
+- Purpose: take a name a person typed and produce a V2 quote a merchant could sign, checking every
+  hand-off rather than assuming it.
+- Product role: the join between discovery, merchant policy and settlement. `resolve.mjs` answers
+  which address a name points at, `build.mjs` decides whether that answer may become a
+  configuration, and this binds both to a numeric merchant identity and a policy.
+- Version: 0.1.0
+- Location: `integrations/ensv2/{merchant-id,policy,identity,demo}.mjs`
+- **The merchant id had to be defined here.** `merchant_policy.vy` takes `merchant_id` as an
+  *argument* and derives nothing, so whoever calls `register` picks the number and two callers can
+  pick the same one. The derivation binds the normalised name, its namehash, the chain and the
+  policy version — and **not the operator**, because an operator is a key and a key is rotated.
+  Deriving identity from it would make a key rotation a new merchant.
+- Trust boundary: **a failed read is not an empty policy.** A timeout, a wrong address, a revert
+  and an unregistered merchant are four different things and three of them must not resemble
+  "this merchant takes nothing to the bank". No address can enter through any argument, and a
+  caller who passes one is refused by name rather than ignored.
+- Field authority, with an equality check wherever two sources could disagree: ENS supplies the
+  recipient, the name and the namehash; the deployment supplies the hook, executor, chain and
+  payout currency; the payer supplies only the input side; the policy governs routing **after**
+  settlement and reaches the quote as evidence, never as a value.
+- Security guarantees: 95 rows and ten mutations. The policy decoder is hand-written and checked
+  against wire bytes from `cast abi-encode` that decode to values captured from the real Vyper
+  contract — three implementations agreeing on one policy. No field was added to the frozen
+  `Quote`: the resolution a payer saw is bound through `merchantConfigHash`, which V2 already
+  carries inside the merchant's signature.
+- Explicit non-guarantees: every stage is a local fixture or a local computation. The policy is
+  read from committed bytes, not a deployed registry — `merchant_policy.vy` is deployed nowhere.
+  **V2 is not deployed to any public chain**, so no settlement can follow a quote this builds, and
+  nothing is signed: the artifact is a digest.
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 95 rows, `node integrations/ensv2/identity-test.mjs`; the end-to-end command is
+  `node integrations/ensv2/demo.mjs` and runs in the gate for its exit status.
+- Sponsor relevance: ENS and Uniswap.
+- Last verified commit: `407b1db680fc`
+
 ### ENSv2 Configuration Builder
 
 - Id: `ensv2-config-builder`

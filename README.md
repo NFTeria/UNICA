@@ -52,7 +52,7 @@ carried forward from an earlier one.
 | V2 hook + executor | **FROZEN RELEASE CANDIDATE** `v2.0.0-rc1` at `82c7dcb4` | 167 Solidity tests, 44 fork rows against pinned live dependencies, `script/verify-freeze.mjs` 17/17 | **not deployed to any public chain**; EOA merchant signers only |
 | V2 receipt verifier | locally demonstrated + fork-tested | `tools/unica-verify`, 100 rows offline / 109 with RPC | the settlement it verifies exists only inside a local fork |
 | V2 signing tool | locally demonstrated | `tools/unica-sign`, 81 rows | builds and reads; never broadcasts |
-| ENSv2 resolver + config + builder | locally demonstrated | `integrations/ensv2`, 136 rows | not yet wired to `merchant_policy.vy` |
+| ENSv2 identity chain | **locally demonstrated end-to-end** | `integrations/ensv2`, 136 + 95 rows, `node integrations/ensv2/demo.mjs` | every stage is a local fixture or computation; the policy registry is deployed nowhere |
 | V2 Graph indexer | locally demonstrated | 13 matchstick + 17 manifest checks | **not deployed to Subgraph Studio** — owner gate |
 | Chainlink CRE policy | locally demonstrated | `integrations/chainlink-cre-guardian`, 88 rows, 9 mutations | **LOCAL SIMULATION only**; no workflow deployed |
 | Chainlink CRE adapter | locally demonstrated | 86 rows, 10 mutations | **deployment BLOCKED** — see the Chainlink section |
