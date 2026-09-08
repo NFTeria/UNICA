@@ -192,3 +192,7 @@ scratchpad/
 .rehearsal/
 
 privatenotes.md
+
+# matchstick build output. It is a compiled binary whose bytes change with every fixture
+# edit, and it landed in history twice before anybody noticed.
+integrations/graph-v2/tests/.bin/
