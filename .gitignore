@@ -196,3 +196,9 @@ privatenotes.md
 # matchstick build output. It is a compiled binary whose bytes change with every fixture
 # edit, and it landed in history twice before anybody noticed.
 integrations/graph-v2/tests/.bin/
+
+# The owner's staging directory: pasted contracts, private notes, and a readme that is not this
+# project's. Nothing in it is a dependency of anything tracked here, and `privatenotes.md` two
+# lines above was already ignored by name — this ignores the directory that holds it, so a stray
+# `git add .` cannot pull the rest of it into a public history.
+vypersetup/
