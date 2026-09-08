@@ -162,3 +162,50 @@ version of this module and are now covered.
 ## Owner actions
 
 Everything that costs money or signs anything is the owner's. See `OWNER-ACTION.md`.
+
+## The merchant split, derived twice
+
+`vy/src/unica/merchant_policy.vy` divides a merchant's takings between the bank leg and the coins
+they chose to hold. That Vyper is what would run on chain, so it is the truth. `split.mjs` is a
+second derivation of the same arithmetic, so this console can show a merchant where their money is
+about to go without standing up a node.
+
+Two descriptions of one arithmetic is a mismatch waiting to happen, so nothing here is trusted on
+its own. `vy/tests/test_arc_split_parity.py` runs the real contract in Moccasin's in-process EVM
+over seven policy shapes and thirteen amounts chosen to sit **on** the rounding edges, and writes
+the 78 results to `fixtures/split-vectors.json`. `split-test.mjs` checks the JavaScript against
+every one.
+
+**The rounding is the whole point.** Every leg but the last truncates; the last is
+`amount − everything already allocated`, so it absorbs what the truncations lost and the parts sum
+exactly. Three equal thirds of 33333 come back **9999, 9999, 10002** — not three equal numbers.
+
+| Command | Rows |
+|---|---|
+| `node integrations/arc-treasury/split-test.mjs` | 26, including the control, the sweep and the sabotage |
+| `cd vy && mox test -k arc_split` | the capture, which asserts the sum invariant on every row before writing it |
+
+**Measured, and stated because a number nobody re-derives is a number nobody should believe.** A
+port that computes every leg the same way — the mistake a careful reader makes, since the formula
+reads that way — agrees with Vyper on **38 of the 78 vectors** and differs on **40**. Roughly half
+looking right is exactly why it would ship. Reverting the last-leg line turns four rows of
+`split-test.mjs` red and exits 1.
+
+> **Correction, 2026-09-08.** The commit that introduced this file said "46 of the 78 rows are
+> identical either way". That number is wrong; it is **38**, re-derived from the fixture by the
+> command below. The argument it was supporting is unchanged — about half the table agrees either
+> way — but the figure was not checked before it was written, and it is in the history now, so the
+> correction lives here rather than in a rewritten commit.
+>
+> ```sh
+> python3 -c "
+> import json; d=json.load(open('integrations/arc-treasury/fixtures/split-vectors.json'))
+> same=sum(1 for v in d['vectors']
+>          if ((int(v['amount']) if not v['holdBps'] else int(v['amount'])*v['bankBps']//10000) == int(v['bank'])
+>              and [int(v['amount'])*h//10000 for h in v['holdBps']] == [int(x) for x in v['parts']]))
+> print(same, 'of', len(d['vectors']))"
+> ```
+
+The contract's own constraint is captured too, by exercising it rather than asserting it in prose:
+shares must total exactly 10000 basis points, so "no bank and no holds" is not a policy it accepts.
+`split.mjs` refuses the same shape, with the same reason.
