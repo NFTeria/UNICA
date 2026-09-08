@@ -1071,6 +1071,38 @@
       ],
       "sponsorRoles": ["uniswap", "chainlink"],
       "lastVerifiedCommit": "86a402ed68bccb152114bb58bf440d65989d2aaa"
+    },
+    {
+      "id": "cre-guardian-policy",
+      "name": "CRE Liquidation-Protection Policy",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/chainlink-cre-guardian/policy.mjs",
+        "integrations/chainlink-cre-guardian/strategy.mjs",
+        "integrations/chainlink-cre-guardian/simulate.mjs",
+        "integrations/chainlink-cre-guardian/fixtures/scenarios.json"
+      ],
+      "networks": [],
+      "dependencies": [],
+      "tests": ["integrations/chainlink-cre-guardian/test.mjs"],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/chainlink-cre-guardian/test.mjs"},
+        {"kind": "measurement", "value": "88 offline rows and nine mutations, every one killed by its own named row"},
+        {"kind": "measurement", "value": "all five published scenarios survive every tick with the whole loan kept open, spending between 89 and 231 vETH units of the 500 available and zero vUSD"},
+        {"kind": "measurement", "value": "the untouched starting position is liquidatable at any price at or below 1812.82, which is 9.4 percent below the start"},
+        {"kind": "artifact", "value": "challenge pinned at solangegueiros/cf-liquidation-protection-challenge 58b24604, MIT, inspected 2026-09-08"}
+      ],
+      "limitations": [
+        "a policy engine only: it decides, and does not observe a chain, sign, send, or run inside a TEE",
+        "the simulation assumes one observation per price update and that every action lands before the organiser's liquidation sweep, neither of which is guaranteed",
+        "gas, transaction failure and DON latency are not modelled",
+        "no CRE CLI is installed, no workflow is deployed, and join() has not been called",
+        "scoring weights are deliberately NOT compiled in: how continuity and capital efficiency trade off is unanswered by the organisers, so the selector stays configurable",
+        "not audited"
+      ],
+      "sponsorRoles": ["chainlink"],
+      "lastVerifiedCommit": "63a815a5c818f265b079f5464045ac149616e385"
     }
   ]
 }

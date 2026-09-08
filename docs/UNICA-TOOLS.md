@@ -388,6 +388,48 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
 - Last verified commit: `b9d9116b5890`
 
+### CRE Liquidation-Protection Policy
+
+- Id: `cre-guardian-policy`
+- Purpose: decide, from a lending position and a private policy, whether to do nothing, warn,
+  add collateral or repay debt — and to do it in integers the contract would agree with.
+- Product role: the offline core of the Chainlink CRE challenge entry, and the reusable risk
+  policy behind UNICA Guardian.
+- Version: 0.1.0
+- Location: `integrations/chainlink-cre-guardian/`
+- Upstream: `solangegueiros/cf-liquidation-protection-challenge` at `58b24604`, MIT, inspected
+  2026-09-08. Nothing is vendored.
+- **The finding that inverts the naive strategy.** An untouched starting position is liquidatable
+  at any price at or below **1812.82** — only 9.4% below the start. Every one of the five published
+  scenarios crosses that line, **including the one called "safe volatility"**, where the health
+  factor floors to exactly 100 at $1800 and the contract liquidates at `hf <= 100`. "Avoid
+  unnecessary interventions" therefore loses that scenario if read as "do nothing".
+- Trust boundary: it decides and nothing else. It does not observe a chain, sign, send, or run
+  inside a TEE. Thresholds arrive as arguments because in deployment they live in CRE secrets; what
+  is public here is the decision procedure, and that split is what lets it be tested at all.
+- Security guarantees: every number is an integer and every rounding direction is chosen toward
+  safety — a deposit rounds **up** because the contract floors when it recomputes, a surviving debt
+  rounds **down** for the same reason. Both are checked across 270-odd cases for reaching the target
+  *and* for being minimal. Every projected health factor is **recomputed** with the contract's own
+  formula after the action is applied, never asserted.
+- **Scoring weights are deliberately not compiled in.** How loan continuity and capital efficiency
+  trade off is unanswered by the organisers, so both candidate actions are always computed and a
+  configurable selector chooses. Guessing the weights and hiding the guess inside the safety engine
+  would make it wrong in a way no test could later find.
+- Explicit non-guarantees: the simulation assumes one observation per price update and that every
+  action lands before the organiser's liquidation sweep — that sweep is an admin call, so survival
+  depends on a window whose length nobody has stated. Gas, transaction failure and DON latency are
+  not modelled. **No CRE CLI is installed, no workflow is deployed, and `join()` has not been
+  called.**
+- Networks: none.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 88 offline rows; nine mutations, all killed by their own named row. All five published
+  scenarios survive every tick with the whole loan kept open, spending 89–231 vETH units of 500 and
+  **zero** vUSD.
+- Tests: `integrations/chainlink-cre-guardian/test.mjs`
+- Sponsor relevance: Chainlink.
+- Last verified commit: `63a815a5c818`
+
 ### PayAny Router (Vyper)
 
 - Id: `payany-router-vy`
