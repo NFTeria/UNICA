@@ -4,7 +4,8 @@ Every row is either **official** (a Circle- or Arc-published page, named) or **o
 read-only RPC call made from this repository). Nothing here is remembered or inferred, and the
 distinction is kept because the brief that commissioned it forbids repeating an unverified claim.
 
-Retrieved 2026-09-08. Row 1 corrected 2026-09-08 after re-derivation; see that row.
+Retrieved 2026-09-08. Rows 1 and 2 were corrected twice on 2026-09-08; the row itself says how, because a
+fact this repository got wrong twice is worth leaving visible.
 
 ## Network
 
@@ -26,31 +27,47 @@ Retrieved 2026-09-08. Row 1 corrected 2026-09-08 after re-derivation; see that r
 From `docs.arc.io` — *"EVM differences is the canonical reference"*. These are not trivia; each one
 would produce a wrong number or a silent failure in code written for Ethereum.
 
-1. **The NATIVE gas currency is carried at 18 decimals. That is not a statement about any ERC-20
-   USDC.** Arc's native asset is USDC, and like every EVM native currency its `eth_getBalance` and
-   `msg.value` are a wei-like 18-decimal fixed-point quantity. Observed:
-   `eth_getBalance(0x0)` returns `865034306417121744253729820`, which reads as **865,034,306.42**
-   at 18 decimals and as an absurd 8.65 × 10²⁰ at 6 — that magnitude is how the 18 is established,
-   and it establishes it *only for the native representation*.
+1. **The same USDC is reported at TWO different scales on this one chain, at the same instant.**
+   This is the row that breaks a naive port, and it is measured, not reasoned:
 
-   **It does not follow that a token contract reports 18.** USDC's ERC-20 deployments report **6**
-   on Ethereum and its L2s, and UNICA's settlement paths, fixtures and verifier correctly assume 6
-   there. The rule this repository now enforces in code is: **an ERC-20 amount's scale is read from
-   that contract's own `decimals()`, never inferred from the chain.** A global "USDC is 18 on Arc"
-   would silently corrupt every cross-chain amount by 10¹² in one direction or the other, and the
-   earlier version of this document said exactly that. It was wrong, and this row is the
-   correction.
+   | Interface | Call | Raw | Scale | USDC |
+   |---|---|---|---|---|
+   | native gas asset | `eth_getBalance(0x0)` | `865034306417121744253729820` | **18** | 865,034,306.4171218 |
+   | ERC-20 contract | `balanceOf(0x0)` on `0x3600…0000` | `865034306417121` | **6** | 865,034,306.417121 |
 
-   `integrations/arc-treasury/units.mjs` makes the two representations structurally
-   non-interchangeable, so the mistake cannot be made again by accident rather than merely being
-   warned against.
+   Same account, same block. They mirror exactly — `native // 10¹² == erc20_raw` — which is what
+   makes the trap so quiet: both readings are *correct*, and neither is convertible to the other
+   without knowing which interface produced it.
+
+   Assume 18 for the ERC-20 amount and 865 million USDC reads as **0.000865**. Assume 6 for the
+   native amount and it reads as **8.65 × 10²⁰**. Wrong by a factor of 10¹² in either direction,
+   with no error raised anywhere.
+
+   **The rule, therefore: an amount's scale is a property of the interface it was read from, never
+   of the chain it was read on.** A native amount comes back 18-decimal because that is how every
+   EVM carries `eth_getBalance` and `msg.value`. An ERC-20 amount's scale is whatever that
+   contract's own `decimals()` returns and must be read from it. `integrations/arc-treasury/units.mjs`
+   makes the two representations structurally non-interchangeable, so this cannot be got wrong by
+   accident rather than merely being warned against.
+
+   *Provenance of the token address:* `0x3600000000000000000000000000000000000000` comes from
+   Circle's own SDK configuration, already recorded at `integrations/arc-nanopayments/protocol.mjs:45`
+   in an earlier pass, and was then confirmed on chain here — **1798 bytes of code**,
+   `decimals()` → `6`, `symbol()` → `"USDC"`. It has **not** been confirmed against an official
+   Circle documentation page in this pass, so treat it as corroborated rather than officially
+   sourced.
+
+   *Two earlier versions of this row were wrong and both are worth recording.* The first said
+   flatly "USDC is 18 decimals natively on Arc, not 6", which invites exactly the global inference
+   that corrupts every ERC-20 amount. The second — written the same day — over-corrected to "on Arc
+   there is not even an ERC-20 to ask for a scale", which is false: there is one, and it answers 6.
+   The table above is the measurement that settles it.
 
 2. **A system emitter at `0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE` logs all USDC Transfer
    events.** Observed: that address holds **0 bytes of code**, and `eth_call` of `decimals()`
-   against it returns an **empty result**, not a number. It emits; it is not a contract to call.
-   So on Arc there is not even an ERC-20 to ask for a scale — which is the sharpest possible form
-   of row 1. Any indexer built for Arc must subscribe to this emitter rather than to a token
-   contract.
+   against it returns an **empty result**, not a number. It emits; it is not a contract to call,
+   and it is not where a scale comes from — the ERC-20 in row 1 is. Any indexer built for Arc must
+   subscribe to this emitter rather than to a token contract.
 3. **The mempool enforces a 20 Gwei `maxFeePerGas` floor.** Observed: `eth_gasPrice` returned
    `0x4b0ff87d0` = 20.13 Gwei, consistent with the documented floor.
 4. **Blocklist reverts consume gas without producing a receipt.** A "no receipt" is not the same as
