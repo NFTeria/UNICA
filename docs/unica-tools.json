@@ -1201,6 +1201,43 @@
       "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
     },
     {
+      "id": "arc-usdc-treasury",
+      "name": "Arc USDC Treasury",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/arc-treasury/units.mjs",
+        "integrations/arc-treasury/arc.mjs",
+        "integrations/arc-treasury/treasury.mjs",
+        "integrations/arc-treasury/preview.mjs",
+        "integrations/arc-treasury/split.mjs",
+        "integrations/arc-treasury/server.mjs",
+        "integrations/arc-treasury/test.mjs",
+        "integrations/arc-treasury/split-test.mjs",
+        "integrations/arc-treasury/live-check.mjs"
+      ],
+      "networks": ["arc-testnet"],
+      "dependencies": ["merchant-policy-vy"],
+      "tests": ["integrations/arc-treasury/test.mjs", "integrations/arc-treasury/split-test.mjs"],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/arc-treasury/test.mjs"},
+        {"kind": "measurement", "value": "177 rows, 177 passed, 0 failed, offline"},
+        {"kind": "command", "value": "node integrations/arc-treasury/split-test.mjs"},
+        {"kind": "measurement", "value": "26 rows against 78 vectors captured from the real merchant_policy.vy"},
+        {"kind": "command", "value": "node integrations/arc-treasury/live-check.mjs"},
+        {"kind": "measurement", "value": "20 live rows against Arc testnet; native reads 18 decimals and the ERC-20 reads 6, at the same block"},
+        {"kind": "address", "chainId": 5042002, "value": "0x3600000000000000000000000000000000000000"}
+      ],
+      "limitations": [
+        "no transaction has ever been broadcast and no UNICA contract runs on Arc",
+        "there is no swap path: Uniswap is not deployed on Arc and none is invented here",
+        "the 20 Gwei mempool floor is an observation of eth_gasPrice, never an observed rejection",
+        "the blocklist-revert-without-receipt divergence is taken from documentation and was never observed"
+      ],
+      "sponsorRoles": ["circle"],
+      "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
+    },
+    {
       "id": "graph-treasury-copilot",
       "name": "Graph Live Provider and Treasury Copilot",
       "version": "0.1.0",

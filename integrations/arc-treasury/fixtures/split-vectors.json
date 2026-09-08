@@ -1,0 +1,981 @@
+{
+  "note": "Captured from the real merchant_policy.vy running in Moccasin's in-process EVM. integrations/arc-treasury/split.mjs is a SECOND derivation of the same arithmetic and is checked against these numbers, so a JavaScript rounding difference is caught here rather than in front of a merchant.",
+  "contract": "vy/src/unica/merchant_policy.vy",
+  "function": "split(uint256,uint256)",
+  "compiler": "0.4.3",
+  "capturedBy": "vy/tests/test_arc_split_parity.py",
+  "bps": 10000,
+  "maxHold": 4,
+  "vectors": [
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "0",
+      "bank": "0",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "1",
+      "bank": "1",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "3",
+      "bank": "3",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "7",
+      "bank": "7",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "9999",
+      "bank": "9999",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "10000",
+      "bank": "10000",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "10001",
+      "bank": "10001",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "33333",
+      "bank": "33333",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "999999",
+      "bank": "999999",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "1000000",
+      "bank": "1000000",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "1000001",
+      "bank": "1000001",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "123456789",
+      "bank": "123456789",
+      "parts": []
+    },
+    {
+      "policy": "no holds, all bank",
+      "bankBps": 10000,
+      "holdBps": [],
+      "amount": "999999999999",
+      "bank": "999999999999",
+      "parts": []
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "0",
+      "bank": "0",
+      "parts": [
+        "0"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "1",
+      "bank": "0",
+      "parts": [
+        "1"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "3",
+      "bank": "1",
+      "parts": [
+        "2"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "7",
+      "bank": "4",
+      "parts": [
+        "3"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "9999",
+      "bank": "5999",
+      "parts": [
+        "4000"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "10000",
+      "bank": "6000",
+      "parts": [
+        "4000"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "10001",
+      "bank": "6000",
+      "parts": [
+        "4001"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "33333",
+      "bank": "19999",
+      "parts": [
+        "13334"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "999999",
+      "bank": "599999",
+      "parts": [
+        "400000"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "1000000",
+      "bank": "600000",
+      "parts": [
+        "400000"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "1000001",
+      "bank": "600000",
+      "parts": [
+        "400001"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "123456789",
+      "bank": "74074073",
+      "parts": [
+        "49382716"
+      ]
+    },
+    {
+      "policy": "one hold",
+      "bankBps": 6000,
+      "holdBps": [
+        4000
+      ],
+      "amount": "999999999999",
+      "bank": "599999999999",
+      "parts": [
+        "400000000000"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "0",
+      "bank": "0",
+      "parts": [
+        "0",
+        "0"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "1",
+      "bank": "0",
+      "parts": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "3",
+      "bank": "1",
+      "parts": [
+        "0",
+        "2"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "7",
+      "bank": "4",
+      "parts": [
+        "2",
+        "1"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "9999",
+      "bank": "5999",
+      "parts": [
+        "2999",
+        "1001"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "10000",
+      "bank": "6000",
+      "parts": [
+        "3000",
+        "1000"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "10001",
+      "bank": "6000",
+      "parts": [
+        "3000",
+        "1001"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "33333",
+      "bank": "19999",
+      "parts": [
+        "9999",
+        "3335"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "999999",
+      "bank": "599999",
+      "parts": [
+        "299999",
+        "100001"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "1000000",
+      "bank": "600000",
+      "parts": [
+        "300000",
+        "100000"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "1000001",
+      "bank": "600000",
+      "parts": [
+        "300000",
+        "100001"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "123456789",
+      "bank": "74074073",
+      "parts": [
+        "37037036",
+        "12345680"
+      ]
+    },
+    {
+      "policy": "two holds",
+      "bankBps": 6000,
+      "holdBps": [
+        3000,
+        1000
+      ],
+      "amount": "999999999999",
+      "bank": "599999999999",
+      "parts": [
+        "299999999999",
+        "100000000001"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "0",
+      "bank": "0",
+      "parts": [
+        "0",
+        "0",
+        "0"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "1",
+      "bank": "0",
+      "parts": [
+        "0",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "3",
+      "bank": "0",
+      "parts": [
+        "0",
+        "0",
+        "3"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "7",
+      "bank": "0",
+      "parts": [
+        "2",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "9999",
+      "bank": "999",
+      "parts": [
+        "2999",
+        "2999",
+        "3002"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "10000",
+      "bank": "1000",
+      "parts": [
+        "3000",
+        "3000",
+        "3000"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "10001",
+      "bank": "1000",
+      "parts": [
+        "3000",
+        "3000",
+        "3001"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "33333",
+      "bank": "3333",
+      "parts": [
+        "9999",
+        "9999",
+        "10002"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "999999",
+      "bank": "99999",
+      "parts": [
+        "299999",
+        "299999",
+        "300002"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "1000000",
+      "bank": "100000",
+      "parts": [
+        "300000",
+        "300000",
+        "300000"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "1000001",
+      "bank": "100000",
+      "parts": [
+        "300000",
+        "300000",
+        "300001"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "123456789",
+      "bank": "12345678",
+      "parts": [
+        "37037036",
+        "37037036",
+        "37037039"
+      ]
+    },
+    {
+      "policy": "three holds, thirds",
+      "bankBps": 1000,
+      "holdBps": [
+        3000,
+        3000,
+        3000
+      ],
+      "amount": "999999999999",
+      "bank": "99999999999",
+      "parts": [
+        "299999999999",
+        "299999999999",
+        "300000000002"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "0",
+      "bank": "0",
+      "parts": [
+        "0"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "1",
+      "bank": "0",
+      "parts": [
+        "1"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "3",
+      "bank": "0",
+      "parts": [
+        "3"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "7",
+      "bank": "0",
+      "parts": [
+        "7"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "9999",
+      "bank": "0",
+      "parts": [
+        "9999"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "10000",
+      "bank": "0",
+      "parts": [
+        "10000"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "10001",
+      "bank": "0",
+      "parts": [
+        "10001"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "33333",
+      "bank": "0",
+      "parts": [
+        "33333"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "999999",
+      "bank": "0",
+      "parts": [
+        "999999"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "1000000",
+      "bank": "0",
+      "parts": [
+        "1000000"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "1000001",
+      "bank": "0",
+      "parts": [
+        "1000001"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "123456789",
+      "bank": "0",
+      "parts": [
+        "123456789"
+      ]
+    },
+    {
+      "policy": "all to one hold",
+      "bankBps": 0,
+      "holdBps": [
+        10000
+      ],
+      "amount": "999999999999",
+      "bank": "0",
+      "parts": [
+        "999999999999"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "0",
+      "bank": "0",
+      "parts": [
+        "0"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "1",
+      "bank": "0",
+      "parts": [
+        "1"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "3",
+      "bank": "0",
+      "parts": [
+        "3"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "7",
+      "bank": "0",
+      "parts": [
+        "7"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "9999",
+      "bank": "0",
+      "parts": [
+        "9999"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "10000",
+      "bank": "1",
+      "parts": [
+        "9999"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "10001",
+      "bank": "1",
+      "parts": [
+        "10000"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "33333",
+      "bank": "3",
+      "parts": [
+        "33330"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "999999",
+      "bank": "99",
+      "parts": [
+        "999900"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "1000000",
+      "bank": "100",
+      "parts": [
+        "999900"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "1000001",
+      "bank": "100",
+      "parts": [
+        "999901"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "123456789",
+      "bank": "12345",
+      "parts": [
+        "123444444"
+      ]
+    },
+    {
+      "policy": "one bp to bank",
+      "bankBps": 1,
+      "holdBps": [
+        9999
+      ],
+      "amount": "999999999999",
+      "bank": "99999999",
+      "parts": [
+        "999900000000"
+      ]
+    }
+  ],
+  "refusals": [
+    {
+      "why": "shares must total exactly 10000 bps",
+      "bankBps": 0,
+      "holdBps": [],
+      "expect": "REFUSED"
+    }
+  ]
+}

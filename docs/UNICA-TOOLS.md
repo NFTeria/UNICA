@@ -1234,6 +1234,39 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   observed named the name-level resource.
 - Sponsor relevance: ENS. No claim is made that it qualifies for anything.
 
+### Arc USDC Treasury
+
+- Id: `arc-usdc-treasury`
+- Purpose: hold, observe and bound a merchant's USDC on a chain where the money and the gas are the
+  same asset, and stop in front of the signature.
+- Product role: the leg that needs no DEX. A merchant's takings sit somewhere between settlements,
+  and this is where the rules about that live.
+- Version: 0.1.0
+- Location: `integrations/arc-treasury/`
+- Inputs: an Arc endpoint, a merchant address, a reserve floor, a per-action cap and a cooldown.
+- Outputs: an observed position, one bounded action from a closed vocabulary with the reason it
+  fired, and a transaction preview marked `REQUIRES_OWNER_SIGNATURE`.
+- Trust boundary: the Arc testnet RPC, and the ERC-20 USDC at
+  `0x3600000000000000000000000000000000000000` whose `decimals()` is read rather than assumed.
+- Security guarantees: a native 18-decimal gas amount and a 6-decimal ERC-20 amount are separate
+  types that refuse to meet; a token amount whose decimals were never read cannot be constructed;
+  the module refuses a wrong chain id, an address with no code, and an unreachable endpoint rather
+  than falling back to a fixture; and it holds no signer, so it cannot broadcast.
+- Explicit non-guarantees: **no transaction has ever been broadcast and no UNICA contract runs on
+  Arc.** There is no swap path, because Uniswap is not deployed there and inventing one would be a
+  fake. The 20 Gwei floor is an observation of `eth_gasPrice`, not an observed rejection.
+- Dependencies: `merchant_policy.vy`, whose `split()` is the on-chain truth this module's
+  JavaScript is checked against.
+- Networks: Arc testnet, chain id 5042002 (read-only).
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 177 offline rows plus 26 parity rows against 78 vectors captured from the real Vyper
+  contract, both in `make gate`; 20 live rows in `make gate-live`.
+- Tests: `integrations/arc-treasury/test.mjs`, `integrations/arc-treasury/split-test.mjs`
+- Deployment: none.
+- Limitations: the preview is verified as far as its bytes and their decode; that a wallet and the
+  Arc mempool accept it is an owner action away.
+- Sponsor relevance: Circle / Arc. No claim is made that it qualifies for anything.
+
 ### Graph Live Provider and Treasury Copilot
 
 - Id: `graph-treasury-copilot`

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arc treasury — merchant position</title>
+<!--
+  One page, one job: show the merchant's Arc position, the policy's decision about it, and the
+  transaction that decision would hand to a wallet.
+
+  WHAT IT DELIBERATELY DOES NOT DO. There is no connect button, no signer, and no send. The page
+  cannot broadcast anything, because nothing it talks to can. The preview ends at
+  REQUIRES_OWNER_SIGNATURE and so does the page.
+
+  The two balances are shown as two separate figures with their decimals printed, never summed and
+  never placed in one total, because on Arc they are both called USDC and they are not the same
+  quantity. That layout is the argument.
+
+  No build step, no CDN, no framework, no web font. Plain HTML, CSS and one script tag.
+-->
+<style>
+  /* Neutral ink on paper, one accent used only where a decision needs to be found. 4px grid. */
+  :root {
+    --paper: #fbfbfa;
+    --card: #ffffff;
+    --ink: #1a1a19;
+    --ink-2: #55524d;
+    --ink-3: #86827b;
+    --rule: #e3e0da;
+    --rule-2: #f0eee9;
+    --accent: #b3541e;          /* the one accent */
+    --accent-soft: #fdf3ec;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #16171a; --card: #1d1f23; --ink: #ececea; --ink-2: #b0aca6; --ink-3: #7e7a74;
+      --rule: #32353b; --rule-2: #26282d; --accent: #e0834a; --accent-soft: #2a1f18;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 64px;
+    background: var(--paper); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 24px; line-height: 1.25; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-3); margin: 32px 0 8px; font-weight: 600;
+  }
+  .sub { color: var(--ink-2); margin: 0 0 8px; font-size: 15px; }
+  .chain { color: var(--ink-3); font-size: 13px; font-family: var(--mono); margin: 0 0 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 16px; margin-bottom: 12px;
+  }
+
+  /* The two balances, side by side and never summed. */
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  /* A grid item defaults to min-width:auto, which stops it shrinking below its content and pushes
+     the 28-character 18-decimal figure past the card edge. This is the line that prevents that. */
+  .pair > div { min-width: 0; }
+  @media (max-width: 560px) { .pair { grid-template-columns: 1fr; } }
+  .amount {
+    font-family: var(--mono); letter-spacing: -0.02em; margin: 4px 0;
+    /* Fluid, because the two figures differ by twelve digits and the wider one must still fit. */
+    font-size: clamp(17px, 2.4vw, 24px);
+    overflow-wrap: anywhere;
+  }
+  .kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); font-weight: 600; }
+  .scale-note { font-size: 12px; color: var(--ink-2); margin-top: 8px; line-height: 1.45; overflow-wrap: anywhere; }
+  .divider-note {
+    grid-column: 1 / -1; font-size: 12px; color: var(--ink-2);
+    border-left: 2px solid var(--accent); padding: 8px 12px; background: var(--accent-soft);
+    border-radius: 0 4px 4px 0;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 0; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+  th { color: var(--ink-3); font-weight: 500; width: 200px; }
+  td { font-family: var(--mono); word-break: break-all; }
+  tr:last-child th, tr:last-child td { border-bottom: 0; }
+
+  .verdict { border-left: 3px solid var(--accent); padding-left: 16px; margin: 8px 0 0; }
+  .verdict .action { font-family: var(--mono); font-size: 18px; color: var(--accent); font-weight: 600; }
+  .verdict .reason { font-family: var(--mono); font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+  .verdict .why { font-size: 14px; color: var(--ink-2); margin-top: 8px; }
+
+  .owner {
+    border: 1px dashed var(--rule); border-radius: 8px; padding: 16px; margin-top: 12px;
+    font-size: 14px; color: var(--ink-2);
+  }
+  .owner strong { font-family: var(--mono); color: var(--ink); font-size: 13px; }
+  .err { border-left: 3px solid var(--accent); padding-left: 16px; }
+  .err code { font-family: var(--mono); color: var(--accent); }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 13px; color: var(--ink-3); }
+  .calldata { font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Arc treasury</h1>
+  <p class="sub">A merchant's USDC position on Arc, one bounded policy decision, and the transaction it would hand to a wallet.</p>
+  <p class="chain" id="chain">loading…</p>
+
+  <div id="content"></div>
+
+  <footer>
+    Read-only. This page cannot sign or broadcast anything, and neither can the server behind it.
+    No UNICA contract is deployed on Arc, and there is no swap path on Arc to build one.
+  </footer>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const rows = (pairs) => "<table>" + pairs.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join("") + "</table>";
+
+function renderPosition(r) {
+  const e = r.position.erc20, n = r.position.native;
+  return `
+  <h2>Position</h2>
+  <div class="card pair">
+    <div>
+      <div class="kind">ERC-20 balance</div>
+      <div class="amount">${esc(e.display)}</div>
+      <div class="scale-note">
+        <strong>${esc(e.decimals)} decimals</strong>, read from the token contract itself.<br>
+        ${esc(e.token)}<br>
+        <span style="color:var(--ink-3)">${esc(e.scale.source)}</span>
+      </div>
+    </div>
+    <div>
+      <div class="kind">Native balance (gas)</div>
+      <div class="amount">${esc(n.display)}</div>
+      <div class="scale-note">
+        <strong>18 decimals</strong>, the EVM native-value width.<br>
+        Arc's gas currency, which is also called USDC.
+      </div>
+    </div>
+    <div class="divider-note">
+      These two figures are never added. On Arc both are called USDC and they are different
+      quantities: the native one is 18-decimal wei, the ERC-20 one is at whatever
+      <code>decimals()</code> returns — ${esc(e.decimals)} here, read at block
+      ${esc(e.scale.blockNumber)}. Gas is payable only from the right-hand figure.
+    </div>
+  </div>`;
+}
+
+function renderPolicy(r) {
+  return `
+  <h2>Policy</h2>
+  <div class="card">${rows([
+    ["reserve floor", esc(r.policy.reserveFloor.display) + " <span style='color:var(--ink-3)'>ERC-20</span>"],
+    ["per-action cap", esc(r.policy.perActionCap.display) + " <span style='color:var(--ink-3)'>ERC-20</span>"],
+    ["cooldown", esc(r.policy.cooldownSeconds) + "s"],
+    ["approved counterparties", r.policy.approvedCounterparties.map(esc).join("<br>")],
+    ["gas budget", esc(r.policy.gasBudget.display) + " <span style='color:var(--ink-3)'>native, 18dp</span>"],
+    ["requested payment", esc(r.request.amount.display) + " &rarr; " + esc(r.request.recipient)],
+  ])}</div>`;
+}
+
+function renderDecision(r) {
+  const d = r.decision;
+  return `
+  <h2>Decision</h2>
+  <div class="card">
+    <div class="verdict">
+      <div class="action">${esc(d.action)}</div>
+      <div class="reason">${esc(d.reason)}</div>
+      <div class="why">${esc(d.explanation)}</div>
+    </div>
+  </div>`;
+}
+
+function renderPreview(r) {
+  if (!r.preview) {
+    return `<h2>Transaction preview</h2><div class="card"><p style="margin:0;color:var(--ink-2);font-size:14px">
+      This decision corresponds to no transaction, so there is nothing for a wallet to sign.
+      ${r.previewError ? "<br><code>" + esc(r.previewError.code) + "</code> " + esc(r.previewError.message) : ""}
+    </p></div>`;
+  }
+  const t = r.preview.transaction, dd = r.preview.decoded, g = r.preview.gasEstimate;
+  return `
+  <h2>Transaction preview &mdash; unsigned</h2>
+  <div class="card">${rows([
+    ["chainId", esc(t.chainId)],
+    ["to", esc(t.to) + "<br><span style='font-family:inherit;color:var(--ink-3);font-size:12px'>the ERC-20 contract, not the recipient</span>"],
+    ["value", esc(t.value) + "<br><span style='font-family:inherit;color:var(--ink-3);font-size:12px'>" + esc(t.valueRepresentation) + "</span>"],
+    ["data", "<span class='calldata'>" + esc(t.data) + "</span>"],
+    ["gas", esc(t.gas)],
+    ["maxFeePerGas", esc(t.maxFeePerGas) + " wei<br><span style='font-family:inherit;color:var(--ink-3);font-size:12px'>Arc mempool floor " + esc(g.arcMempoolFloorWei) + " wei</span>"],
+  ])}</div>
+  <h2>Decoded from those bytes</h2>
+  <div class="card">${rows([
+    ["signature", esc(dd.signature)],
+    ["recipient", esc(dd.recipient)],
+    ["units (raw)", esc(dd.units)],
+    ["decimals", esc(dd.tokenDecimals) + "<br><span style='font-family:inherit;color:var(--ink-3);font-size:12px'>" + esc(dd.tokenDecimalsSource) + "</span>"],
+    ["amount", esc(dd.humanAmount) + " <span style='color:var(--ink-3)'>ERC-20, " + esc(dd.tokenDecimals) + "dp</span>"],
+    ["max gas cost", esc(g.maxCostNative.display) + " <span style='color:var(--ink-3)'>native, 18dp</span>"],
+  ])}</div>
+  <div class="owner">
+    <strong>REQUIRES_OWNER_SIGNATURE</strong><br>
+    ${esc(r.preview.ownerAction)}
+  </div>`;
+}
+
+fetch("/api/report")
+  .then((res) => res.json().then((body) => ({ok: res.ok, body})))
+  .then(({ok, body}) => {
+    if (!ok) {
+      $("chain").textContent = "unavailable";
+      $("content").innerHTML = `<h2>Failed closed</h2><div class="card err">
+        <p><code>${esc(body.error)}</code></p>
+        <p style="color:var(--ink-2);font-size:14px">${esc(body.message || "")}</p>
+        <p style="color:var(--ink-3);font-size:13px">${esc(body.detail || "")}</p></div>`;
+      return;
+    }
+    $("chain").textContent = `${body.chain.name} · chainId ${body.chain.chainId} · block ${body.chain.blockNumber} · ${body.chain.rpc}`;
+    $("content").innerHTML =
+      renderPosition(body) + renderPolicy(body) + renderDecision(body) + renderPreview(body);
+  })
+  .catch((e) => {
+    $("chain").textContent = "unavailable";
+    $("content").innerHTML = `<h2>Failed closed</h2><div class="card err">
+      <p style="color:var(--ink-2);font-size:14px">${esc(e.message)}</p>
+      <p style="color:var(--ink-3);font-size:13px">This page shows no recorded data when it cannot reach the chain.</p></div>`;
+  });
+</script>
+</body>
+</html>
