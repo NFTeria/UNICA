@@ -1,0 +1,40 @@
+{
+  "note": "The five market scenarios published in the challenge README, transcribed to integer vUSD units per full vETH (200000 = 2000.00). The 'expected behaviour' column is the README's own wording, kept so a simulation can be read against what the organisers said they were testing rather than against what we assumed.",
+  "source": "https://github.com/solangegueiros/cf-liquidation-protection-challenge README, commit 58b24604795cd4c8a32ccd30e4d11f4962e3b3ac",
+  "startingPosition": {
+    "note": "Per participant on join(). vETH units 100 = 1.00; vUSD units 100 = 1.00.",
+    "collateral": "500",
+    "debt": "700000",
+    "freeCollateral": "500",
+    "freeDebtToken": "300000",
+    "price": "200000"
+  },
+  "secondsPerUpdate": 300,
+  "scenarios": [
+    {
+      "name": "gradual decline",
+      "expected": "Make a proportionate intervention before liquidation.",
+      "prices": ["200000", "185000", "175000", "165000", "155000"]
+    },
+    {
+      "name": "sudden crash",
+      "expected": "React quickly at the first dangerous update.",
+      "prices": ["200000", "170000", "162500", "145000"]
+    },
+    {
+      "name": "temporary wick",
+      "expected": "Hold or intervene minimally rather than closing unnecessarily.",
+      "prices": ["200000", "175000", "162000", "190000"]
+    },
+    {
+      "name": "two-stage decline",
+      "expected": "Create sufficient protection or perform an efficient second intervention.",
+      "prices": ["200000", "175000", "165000", "165000", "150000"]
+    },
+    {
+      "name": "safe volatility",
+      "expected": "Avoid unnecessary interventions.",
+      "prices": ["200000", "180000", "195000", "175000", "205000"]
+    }
+  ]
+}
