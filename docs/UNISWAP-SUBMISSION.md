@@ -1,5 +1,11 @@
 # Uniswap Developer Feedback Form — prepared answers
 
+**Track: Best Uniswap Stack Contribution (From Scratch).** UNICA has no predecessor codebase —
+genesis `24989a5` at 2026-09-04 20:00:06 UTC, zero commits before the window opened. The commands
+that prove it are in [`PROVENANCE-LEDGER.md`](PROVENANCE-LEDGER.md).
+
+**Status: `READY_FOR_FORM_SUBMISSION`.** The engineering is complete; what remains is the form.
+
 **The form is a human action.** Everything below is drafted so the owner can review and paste. It is
 not submitted, and nothing here impersonates the owner or supplies contact details.
 
@@ -111,12 +117,17 @@ resolves at that SHA.
 
 ## Before submitting — owner checklist
 
-1. Replace every `<FINAL_SHA>` and confirm each link resolves at that commit.
-2. Confirm `FEEDBACK.md` at that SHA contains the 2026-09-08 Permit2 entry.
-3. Decide the follow-up permission question and supply contact details **in the form only**.
-4. Submit personally. Record the confirmation privately — not in this repository.
+1. Confirm the track name on the live prize page before selecting it — this file names **Best
+   Uniswap Stack Contribution (From Scratch)**, and a track name read from a doc rather than from
+   the page is exactly the kind of stale fact that costs a submission.
+2. Replace every `<FINAL_SHA>` and confirm each link resolves at that commit.
+3. Confirm `FEEDBACK.md` at that SHA contains the 2026-09-08 Permit2 entry.
+4. Decide the follow-up permission question and supply contact details **in the form only**.
+5. Submit personally. Record the confirmation privately — not in this repository.
 
 ## What must not be claimed on the form
 
 V2 is deployed, shipped, safe to release, or audited. Any prize, placement or finalist status at any
-event. Endorsement, affiliation or review by Uniswap. Mainnet anything.
+event. Endorsement, affiliation or review by Uniswap. Mainnet anything. **Any continuation of, or
+relationship to, an earlier project** — there is none, and the from-scratch track is selected
+precisely because the history says so.

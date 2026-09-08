@@ -31,6 +31,12 @@ this repository.
 One row per ecosystem: what we built on your tool, the single command that proves it, and the
 honest limit. Every count is from a `make gate` run at this commit.
 
+**Submitting to five from-scratch tracks.** Which track, what is finished, and the one owner action
+each is waiting on: [`docs/SPONSOR-ELIGIBILITY.md`](docs/SPONSOR-ELIGIBILITY.md). This repository
+was created inside the build window — genesis `24989a5`, 2026-09-04 20:00:06 UTC, zero commits
+before it — and [`docs/PROVENANCE-LEDGER.md`](docs/PROVENANCE-LEDGER.md) carries the commands that
+prove it.
+
 | Ecosystem | What we built on it | Run this | Status | What we found for you |
 |---|---|---|---|---|
 | **Uniswap** | a v4 settlement hook + executor, **live and verified** on Sepolia, and a frozen V2 that binds a merchant-signed invoice to the swap that discharges it | `make gate` · `make fork` · `make proof` | **live** (V1) · **frozen RC**, undeployed (V2) | under exact output, the official periphery checks the input ceiling and never compares delivered output with the request — so full-fill enforcement lives in a hook or nowhere. Measured in [`test/v2/ShortFill.t.sol`](test/v2/ShortFill.t.sol) |
@@ -61,6 +67,7 @@ honest limit. Every count is from a `make gate` run at this commit.
 | Deployment records and live addresses | [`broadcast/`](broadcast/), and the proof table below |
 | Developer feedback | [`FEEDBACK.md`](FEEDBACK.md) |
 | Provenance — this is a **from-scratch** entry | [`docs/PROVENANCE-LEDGER.md`](docs/PROVENANCE-LEDGER.md) |
+| Which sponsor track, and what each is waiting on | [`docs/SPONSOR-ELIGIBILITY.md`](docs/SPONSOR-ELIGIBILITY.md) |
 
 **V2 is not deployed, not shipped, and not safe to release.** It is frozen as `v2.0.0-rc1` with an
 open Critical against it. Nothing in this repository claims otherwise, and the advisory above is
