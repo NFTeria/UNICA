@@ -50,6 +50,99 @@ specific as the friction — "the `X` helper saved an hour because it did `Y`" �
 
 <!-- newest first -->
 
+### 2026-09-08 — `permitWitnessTransferFrom` lets a witness bind one side of a two-party agreement, and nothing says that is a total-loss bug
+
+**Context, because it decides whether this is actionable:** the integration is business payments.
+A merchant issues an invoice, a customer pays in whatever token they hold, and Uniswap v4 is what
+turns one into the other. The merchant is paid the exact amount they invoiced, in the currency they
+asked for, and neither party runs a swap UI. That shape — a business getting Uniswap's liquidity
+and execution without becoming a trading venue — is the whole reason this project exists, and it is
+why the payer's and the merchant's halves of the deal are signed by two different people.
+
+**Trying to:** have the customer authorise exactly one payment against exactly one merchant-signed
+invoice, using `permitWitnessTransferFrom` so the authorisation carries the invoice with it.
+
+**Blocked by:** nothing refused, which is the problem.
+
+`permitWitnessTransferFrom(PermitTransferFrom, SignatureTransferDetails, address owner, bytes32
+witness, string witnessTypeString, bytes signature)` composes the caller's witness onto Permit2's
+own stub. Permit2's half hashes the token permissions, the spender (`msg.sender`), the nonce and
+the deadline. Everything else about the agreement has to come from the witness, and the witness is
+whatever the integrator decides to put in it.
+
+The witness we wrote covered six fields — `quoteId`, `payer`, `tokenIn`, `maxIn`, the destination,
+and the executor. Every one of them is the payer's own half of the deal: which invoice, who is
+paying, in what token, up to how much, into which venue. It reads complete. It is not: the
+merchant's half — `recipient`, `merchantSigner`, `tokenOut`, `amountOut`, and the pool — is outside
+it, and Permit2's own fields do not separate them either, because the spender is the same executor
+for every caller.
+
+So two invoices differing **only** in `merchantSigner` and `recipient` produce a byte-identical
+payer signing digest, and one customer signature is valid for both. Anyone holding the
+authorisation — the relayer it was handed to, or anyone watching the pending transaction — can
+rebuild the invoice naming themselves as merchant and recipient, sign that with their own key, and
+present the customer's authorisation completely unchanged. Reproduced end to end against the
+official PoolManager bytecode in `test/v2/WitnessBinding.t.sol`:
+
+```
+actualIn pulled from payer:  1003010032
+thief tokenOut:              1000000000
+honest recipient tokenOut:            0
+```
+
+The customer is debited in full, the merchant is paid nothing, and the honest transaction then
+reverts on the spent nonce — so it is a theft rather than a duplicate payment.
+
+**This is the second face of one trap, and we only caught the first.** `SignatureTransferDetails.to`
+is chosen by the caller at spend time and is not covered by the payer's signature. We found that
+one, measured it in `test/v2/Permit2Witness.t.sol` where a transfer to an attacker was accepted and
+the payer's signature did not object, and wrote it into
+`src/v2/interfaces/IPermit2Transfer.sol:26` — the executor now writes `to = address(POOL_MANAGER)`
+as a literal and never reads it from calldata. Having caught the destination hole, we assumed the
+witness was the part that was safe by construction. It is the same hole one level up.
+
+The docs page for this function is
+<https://developers.uniswap.org/docs/protocols/permit2/concepts/signature-transfer> — fetched
+2026-09-08. It documents `permitWitnessTransferFrom` and both witness parameters, and it contains
+**no** guidance on what a witness should contain and **no** warning about omitting fields from one.
+Its "Security Considerations" section covers caller-context validation for signatures generally and
+does not reach witness content. Two redirects also stand between the URL that is still widely
+linked and the page that answers: `docs.uniswap.org/contracts/permit2/reference/signature-transfer`
+301s to `developers.uniswap.org/contracts/permit2/...`, which 303s to the `docs/protocols/...` path
+above.
+
+**Cost:** not recorded as a duration, per this file's rule against reconstructed timelines — the
+hour it happened was an internal security review, not a debugging session, and quoting minutes
+afterwards would be inventing them. What is recordable: three of five independent review dimensions
+reached it separately; the first attempt to reproduce it failed for an unrelated Solidity reason
+(`Quote memory forged = q` aliases rather than copies, so both digests came out equal and the
+exploit looked refuted); and the real cost is that it reached a frozen release candidate, which is
+now blocked and cannot ship. The fix moves the payer's EIP-712 signing digest, so it is a new
+release candidate rather than a patch.
+
+**Would have prevented it:** one sentence on the signature-transfer page, in the witness section,
+saying what a witness is for:
+
+> The witness must commit to **every** term of the agreement, including the terms the other party
+> chose. Permit2 verifies only that the owner signed *something*; it cannot know which fields of
+> your application's agreement matter. A witness that omits a counterparty's fields lets one
+> signature authorise any agreement that shares the fields you did include.
+
+A worked two-party example beside the existing single-party one would do it even better, because
+every published witness example we could find has one signer, and with one signer this class of bug
+cannot occur. The trap is invisible until the second signer appears, and by then the witness type
+string is in production and moving it is a breaking change for every wallet that signed one.
+
+**Specific praise, since it is the same integration:** v4's unlock/`take` accounting is why this
+product can exist at all for a business. The customer's token goes from the customer straight to
+the PoolManager via Permit2, and the output goes from the PoolManager straight to the merchant via
+`take` — the settlement contract never holds either leg, and we assert that on real balance deltas
+rather than claiming it in a diagram (`ExecutorHeldTheInput` / `ExecutorHeldTheOutput`, in
+`test/v2/Settlement.t.sol`). A payments integrator gets non-custodial settlement as a property of
+the venue instead of as something they have to build, audit and insure. That is a genuinely large
+thing to be handed for free, and it is worth saying plainly next to the complaint above.
+
+
 ### 2026-09-05 — a Universal Router built from a newer v4-periphery refuses the listed single-swap encoding with an empty revert, and nothing on chain says which build it is
 
 **Trying to:** run this repository's exact settlement plan (command `0x10`; `SWAP_EXACT_IN_SINGLE`, `SETTLE`, `TAKE`; `OPEN_DELTA`; `hookData` = one `bytes32`) against a Universal Router observed on another testnet, on a fork, read-only, to learn whether the hook's admission path is portable.
@@ -228,8 +321,8 @@ Filled in at submission, from the entries above, never from memory.
 
 | Question the form asks | Draft answer, pointing at the entry that proves it |
 |---|---|
-| What did you build? | UNICA — a Uniswap v4 hook enforcing order-bound, full-fill USDC settlement, executed only through the official Universal Router and a thin admitted executor, with an indexable settlement receipt. See the 2026-09-04 entry "the Universal Router as the execution path for a settlement hook" for the architecture this answer summarizes. |
-| Biggest blocker | The template `uniswap-ai`'s own `v4-security-foundations` skill hands out does not compile against the current public `v4-periphery`/`v4-core` — a stale `BaseHook` import with no working replacement path in that repository, and a `SwapParams` reference to a type `IPoolManager` no longer declares. See the 2026-09-04 entry "`v4-security-foundations` run over the real gate and router" and its upstream draft. |
+| What did you build? | **A way for a business to be paid through Uniswap without becoming a trading venue.** A merchant issues an invoice; a customer pays in whatever token they hold; Uniswap v4 turns one into the other, and the merchant receives the exact amount invoiced in the currency they asked for. Neither party touches a swap UI, and neither party's funds touch our contracts — Permit2 moves the customer's token straight to the PoolManager and `take` moves the output straight to the merchant. Concretely that is a v4 hook enforcing order-bound, full-fill settlement, executed only through the official Universal Router and a thin admitted executor, with an indexable receipt. Architecture: the 2026-09-04 entry "the Universal Router as the execution path for a settlement hook". Why the venue is what makes it possible: the praise paragraph in the 2026-09-08 entry. |
+| Biggest blocker | Permit2's witness parameter has no documented contract about what it must contain, and a witness that binds only the signer's own half of a two-party agreement is a total-loss bug that nothing refuses. It reached our frozen release candidate and blocked it. See the 2026-09-08 entry — the reproduction, the two-redirect docs URL, and the one sentence that would have prevented it are all in there. Second, and earlier: the template `uniswap-ai`'s `v4-security-foundations` skill hands out does not compile against the current public `v4-periphery`/`v4-core` — a stale `BaseHook` import with no working replacement path, and a `SwapParams` reference to a type `IPoolManager` no longer declares. See the 2026-09-04 entry and its upstream draft. |
 | Time to first successful integration | Not reconstructable honestly from memory; the entries record specific costs (4 minutes to find the missing MCP tool and abandon it; about 25 minutes to run the security checklist and re-verify each of its claims; about 20 minutes today to isolate the two-compiler split) rather than one end-to-end figure. Leave blank rather than estimate, per this file's own rule against reconstructed timelines. |
 | Documentation helpfulness (1–5) | Draft: 2. The guides that were followed (the first-hook guide's import, the deployment guide's `HookMiner` import) point at paths that do not exist in the current repository, and the troubleshooting and concepts pages stop at a selector or a partial failure-mode list exactly where a reader most needs cause and fix — see the 2026-09-04 and 2026-09-05 upstream drafts under `docs/upstream/`. |
 | Support (1–5) | Not answerable from this project's own experience — no support channel was used. Leave blank rather than guess. |
