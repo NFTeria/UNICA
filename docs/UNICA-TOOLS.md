@@ -388,6 +388,34 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
 - Last verified commit: `b9d9116b5890`
 
+### Merchant Settlement Policy (Vyper)
+
+- Id: `merchant-policy-vy`
+- Purpose: decide what proportion of a settlement reaches a bank off-ramp as USDC and what stays
+  in the coins a merchant chose.
+- Product role: the merchant's own preference, expressed once and applied to every settlement.
+- Version: 0.1.0
+- Location: `vy/src/unica/merchant_policy.vy`
+- **Provenance: PRIOR ART.** Written before this repository's hackathon window and carried in
+  rather than authored during it. See `docs/PRIOR-ART.md`.
+- Trust boundary: it holds no tokens, moves nothing and pays nobody. It answers one question —
+  how does this amount divide — and a caller does the paying.
+- Security guarantees: a split is EXACT. Shares must sum to ten thousand basis points or
+  registration is refused, and the final hold leg is defined as the remainder so that flooring
+  cannot lose a unit: `bank + every leg == the amount` is checked at fourteen amounts including
+  zero, one, and 2^64 − 1.
+- Identity: the merchant is a NUMBER, and the operator is only a key. An operator address can
+  change without the merchant's identity, policy or history changing with it — which is what lets
+  a merchant be onboarded without managing an EOA.
+- Explicit non-guarantees: the platform address is fixed at construction and cannot be changed or
+  renounced; the operator is not checked against zero; there is no way to deactivate a merchant
+  once registered.
+- Networks: none. **Not deployed anywhere and not audited.**
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 13 rows, `cd vy && mox test tests/test_merchant_policy.py`.
+- Tests: `vy/tests/test_merchant_policy.py`
+- Last verified commit: `e66e0771e8a5`
+
 ### Arc Nanopayments Integration
 
 - Id: `arc-nanopayments`

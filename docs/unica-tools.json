@@ -1020,6 +1020,31 @@
       ],
       "sponsorRoles": ["circle"],
       "lastVerifiedCommit": "3582eb5350e3902baac6f5f54a2f6f3b63409be5"
+    },
+    {
+      "id": "merchant-policy-vy",
+      "name": "Merchant Settlement Policy (Vyper)",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": ["vy/src/unica/merchant_policy.vy"],
+      "networks": [],
+      "dependencies": [],
+      "tests": ["vy/tests/test_merchant_policy.py"],
+      "evidence": [
+        {"kind": "command", "value": "cd vy && mox test tests/test_merchant_policy.py"},
+        {"kind": "measurement", "value": "13 rows: a split loses nothing at fourteen amounts including 0, 1 and 2^64-1, and the last leg is proven to absorb the flooring remainder"},
+        {"kind": "measurement", "value": "eight refusals: shares off ten thousand in four shapes, a zero token, a bank share with no payout reference, a stranger registering, a double registration, a stranger changing a policy, and an unregistered merchant"}
+      ],
+      "limitations": [
+        "PRIOR ART: written before this repository's hackathon window and carried in, not authored during it; see docs/PRIOR-ART.md",
+        "policy only: it decides proportions and holds no tokens, moves nothing and pays nobody",
+        "the platform address is set at construction and cannot be changed or renounced",
+        "the operator address is not checked against zero, so a merchant registered with none can only be changed by the platform",
+        "no way to deactivate a merchant once registered",
+        "not deployed anywhere, and not audited"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "e66e0771e8a5af11e0d4f26c0354d59987c497f7"
     }
   ]
 }

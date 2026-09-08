@@ -49,3 +49,12 @@ def namemath():
 @pytest.fixture(scope="session")
 def logobackground(model):
     return model["logobackground"]
+
+
+# The UNICA payment-rail contracts. Stateful, so FUNCTION scoped: a policy registered by one
+# example must not still be registered in the next.
+@pytest.fixture(scope="function")
+def merchant_policy():
+    from src.unica import merchant_policy as _mp
+
+    return _mp.deploy()
