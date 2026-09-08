@@ -1,0 +1,41 @@
+{
+  "note": "A Circle Gateway batched x402 authorization, SIGNED BY CIRCLE'S OWN SDK (@circle-fin/x402-batching@2.0.4) with a throwaway key derived from the fixed phrase 'unica.arc.throwaway.payer'. No key is recorded here and none is needed: everything below is a digest, a signature and an address. The clock and the random nonce were pinned so the vector is reproducible; the shape is exactly what the SDK produces.",
+  "upstream": {
+    "repository": "https://github.com/circlefin/arc-nanopayments.git",
+    "commit": "a29f920ed8eef89bec36d5138892c72b13759710",
+    "license": "Apache-2.0",
+    "sdk": "@circle-fin/x402-batching@2.0.4",
+    "inspected": "2026-09-08"
+  },
+  "environment": {
+    "network": "eip155:5042002",
+    "chainId": 5042002,
+    "verifyingContract": "0x0077777d7EBA4688BDeF3E311b846F25870A19B9",
+    "usdc": "0x3600000000000000000000000000000000000000",
+    "usdcDecimals": 6
+  },
+  "authorization": {
+    "from": "0x4431c6bB8bff7827D6861aC7f24FEb788673ee53",
+    "to": "0x2222222222222222222222222222222222222222",
+    "value": "1000",
+    "validAfter": "1788800000",
+    "validBefore": "1789145600",
+    "nonce": "0x3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "expected": {
+    "signer": "0x4431c6bB8bff7827D6861aC7f24FEb788673ee53",
+    "domainSeparator": "0x777f1a7bd2dd4cb786270c436ca4c6349f27d20cf59769780fe13355920306f0",
+    "signature": "0x37671d933db215b8c78aa94db00c0a0f7858ef6db50a9ce559ee690baa269e9c444f60cd912f9e44088980cf1fe13a38cfbc1c66ce7ba49b28103bf24ef239e21b"
+  },
+  "measured": {
+    "note": "Read off the SDK at the pinned version, not from documentation.",
+    "signedFieldCount": 6,
+    "defaultBackdateSeconds": 600,
+    "demoMaxTimeoutSeconds": 345600,
+    "observedAuthorizationWindowSeconds": 346200,
+    "nonceBytes": 32,
+    "nonceSource": "crypto.getRandomValues",
+    "merkleOrBatchCommitmentOccurrences": 0,
+    "eventDefinitionsInSdkAbi": 0
+  }
+}

@@ -989,6 +989,37 @@
         "uniswap"
       ],
       "lastVerifiedCommit": "c2d69a03303c34f6713d48eacdc7a9e0fb3a66c7"
+    },
+    {
+      "id": "arc-nanopayments",
+      "name": "Arc Nanopayments Integration",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/arc-nanopayments/protocol.mjs",
+        "integrations/arc-nanopayments/mandate.mjs",
+        "integrations/arc-nanopayments/vectors.json"
+      ],
+      "networks": [],
+      "dependencies": ["eip-712", "secp256k1", "unica-sign"],
+      "tests": ["integrations/arc-nanopayments/test.mjs"],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/arc-nanopayments/test.mjs"},
+        {"kind": "measurement", "value": "141 rows, offline: a vector signed by Circle's own SDK at version 2.0.4 verifies against an independent implementation that never imports it"},
+        {"kind": "measurement", "value": "the Gateway authorization signs exactly six fields; resource, request, response, session and cumulative budget are provably outside it"},
+        {"kind": "measurement", "value": "five sabotages killed by their own named row, including one that grades a purchased resource as cryptographically verified"},
+        {"kind": "artifact", "value": "upstream pinned at circlefin/arc-nanopayments a29f920e, Apache-2.0, inspected 2026-09-08"}
+      ],
+      "limitations": [
+        "Circle Gateway batching produces OPERATIONAL ACCOUNTING rather than a per-payment commitment: the SDK contains no merkle root, no batch id, no inclusion proof and no indexable event",
+        "settlement evidence is an API assertion of shape success plus transaction, where that transaction is shared by every payment in the batch",
+        "a Gateway authorization proves an amount was authorised to a recipient and says nothing about what was bought",
+        "the upstream demo uses plain private keys rather than Circle Agent Wallet, and discards the payer signature when it records a payment",
+        "no Arc transaction has been sent, no wallet created, no faucet used, and nothing settled",
+        "not audited"
+      ],
+      "sponsorRoles": ["circle"],
+      "lastVerifiedCommit": "3582eb5350e3902baac6f5f54a2f6f3b63409be5"
     }
   ]
 }

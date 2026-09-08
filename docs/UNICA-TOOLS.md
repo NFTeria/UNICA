@@ -388,6 +388,53 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
 - Last verified commit: `b9d9116b5890`
 
+### Arc Nanopayments Integration
+
+- Id: `arc-nanopayments`
+- Purpose: verify a Circle Gateway nanopayment authorization without asking Circle, and bind the
+  things that authorization provably does not cover.
+- Product role: the payment layer for a budgeted agent. It decides what an agent is allowed to buy
+  and what the answer is allowed to cause.
+- Version: 0.1.0
+- Location: `integrations/arc-nanopayments/`
+- Upstream: `circlefin/arc-nanopayments` at `a29f920e`, Apache-2.0, inspected 2026-09-08, with the
+  protocol in `@circle-fin/x402-batching@2.0.4`. **Nothing is vendored and the SDK is never
+  imported** — being a second implementation is the point.
+- **What a Gateway authorization actually signs**, read off the SDK rather than the documentation:
+  domain `GatewayWalletBatched` version 1 with the chain id and the GatewayWallet as verifying
+  contract, over `from, to, value, validAfter, validBefore, nonce`. **Six fields.** There is no
+  resource, no request digest, no response digest, no session, no cumulative ceiling and not even
+  the token address. A nanopayment proves an account agreed to pay an amount to a recipient in a
+  window on a chain, and says nothing about what was bought.
+- **What the batching gives you, and what it does not.** The SDK contains zero occurrences of
+  merkle, root, proof, batch id, inclusion or commitment, and its embedded ABI declares no events.
+  `settle` returns `{success, transaction}` where that transaction is the batch's, shared by every
+  payment in it. So Circle Gateway batching is **operational accounting, not a per-payment
+  commitment** — the authorization is cryptographic, the settlement is an API assertion.
+- Trust boundary: `BatchFacilitatorClient.verify` and `.settle` are HTTP calls to Circle's hosted
+  API, so a seller using the SDK learns that Circle says a payment is valid and never checks. The
+  payload carries both the authorization and the signature, so local verification is available and
+  simply unused. This module takes it.
+- Security guarantees: eleven classified refusals on the payment, sixteen on the policy, each
+  returning no action mandate and no calldata. Budget is **reserved before the spend**, so two
+  concurrent requests cannot both see the same remaining balance — the upstream agent adds to a
+  running total inside a promise callback and prints its own in-flight count, which is measured
+  here as an admitted overspend.
+- Explicit non-guarantees: **no Arc transaction has been sent**, no wallet created, no faucet used
+  and nothing settled. Every claim about settlement is graded API-reported, and the grading itself
+  is asserted so that calling a resource purchase "verified" fails a row.
+- Dependencies: EIP-712 and secp256k1, both already in this repository. No new package.
+- Networks: none exercised.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 141 offline rows. A vector signed by Circle's own SDK verifies against this
+  implementation; five sabotages killed by their own named row.
+- Tests: `integrations/arc-nanopayments/test.mjs`
+- Deployment: none.
+- Limitations: as above. **Not audited.**
+- Sponsor relevance: Circle — evaluated as the payment layer for a budgeted UNICA agent. No track
+  qualification is claimed.
+- Last verified commit: `3582eb5350e3`
+
 ### ENSv2 Configuration Builder
 
 - Id: `ensv2-config-builder`

@@ -155,6 +155,10 @@ gate     : _need-deps
 	@# `make verify-online` adds the RPC rows against a local node.
 	@command -v node >/dev/null 2>&1 && node tools/unica-verify/test.mjs \
 	  || echo "SKIP  receipt verifier: node is not installed (this is a SKIP, not a pass)"
+	@# The Arc nanopayments integration. Offline by construction: it verifies a vector Circle's own
+	@# SDK signed, without importing that SDK and without an endpoint or a key.
+	@command -v node >/dev/null 2>&1 && node integrations/arc-nanopayments/test.mjs \
+	  || echo "SKIP  Arc nanopayments: node is not installed (this is a SKIP, not a pass)"
 	@# The Vyper workspace. It ran green for weeks without being gated, which meant nothing
 	@# would have said so the day it stopped. Moccasin's in-process EVM needs no network.
 	@command -v mox >/dev/null 2>&1 && (cd vy && mox test -q) \
