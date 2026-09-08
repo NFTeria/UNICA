@@ -1,5 +1,17 @@
 # UNICA V2 — release-candidate interface freeze (`v2.0.0-rc1`)
 
+> ## ⛔ THIS CANDIDATE MUST NOT BE DEPLOYED
+>
+> An internal security review on 2026-09-08 found and reproduced a **Critical** defect in
+> `QuoteSettlementExecutor`: the payer's Permit2 witness does not bind the merchant's half of the
+> quote, so a relayer or any mempool observer can redirect a settlement to themselves in full.
+> See [`SECURITY-ADVISORY-001.md`](SECURITY-ADVISORY-001.md) and the
+> [internal security review](INTERNAL-SECURITY-REVIEW.md).
+>
+> It is **not fixed**. The fix moves the payer's EIP-712 signing digest, so it is an `rc2` and an
+> owner decision. Everything below still describes what `rc1` froze, accurately — a freeze document
+> that quietly stopped describing the frozen thing would be worse than one carrying this banner.
+
 Frozen at commit `82c7dcb4`, after the integrated settlement path ran against pinned live Sepolia
 dependencies in a read-only fork.
 

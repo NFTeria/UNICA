@@ -782,10 +782,11 @@
       ],
       "limitations": [
         "it freezes a SURFACE, not behaviour; a function may change what it does without changing its selector",
+        "the surface it froze is v2.0.0-rc1, which MUST NOT BE DEPLOYED: a Critical defect is open against it (docs/v2/SECURITY-ADVISORY-001.md). A green freeze check says the interface has not drifted, never that the interface is safe",
         "additions are reported as changes on purpose, which makes it noisy by design"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "82c7dcb440386f794faf210c86d0241a6474cd2f"
+      "lastVerifiedCommit": "8c5cb8d8a3c5bde460a901d1fa18180d22f79d19"
     },
     {
       "id": "size-budget",

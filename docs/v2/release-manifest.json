@@ -3,9 +3,9 @@
   "generatedFrom": "script/v2/release-manifest.mjs",
   "rehearsal": "test/v2/DeploymentRehearsal.t.sol — a forge test, which cannot broadcast",
   "source": {
-    "commit": "7b12a6edf0a8ac83fad76d73da5b6ec0658718d7",
-    "shortCommit": "7b12a6e",
-    "describesTree": "f8eaf209b434f708c3147de7976375650c1fd7d1",
+    "commit": "8c5cb8d8a3c5bde460a901d1fa18180d22f79d19",
+    "shortCommit": "8c5cb8d",
+    "describesTree": "dbaccf78a18891230c1474ce79b8b7dc2a2b5dbf",
     "frozenBlobHashes": {
       "src/v2/QuoteSettlementHook.sol": "c955c6f7649d13dbfa66068fe904f3bba6ec0b7f",
       "src/v2/QuoteSettlementExecutor.sol": "8284e7eb84b0dee5be1b4e366a92c579171b3473",
@@ -82,10 +82,13 @@
   "status": {
     "deployed": false,
     "broadcast": false,
+    "deployable": false,
+    "blockedBy": "SECURITY-ADVISORY-001: the payer's Permit2 witness does not bind the merchant's half of the quote. Critical, reproduced in test/v2/WitnessBinding.t.sol, unfixed. This file describes a REHEARSAL, and the block is written here rather than in the JSON because the JSON is generated: an edit to the output would disappear the next time anyone ran this script.",
     "v1Untouched": true,
     "v2Frozen": "v2.0.0-rc1 at 82c7dcb44038"
   },
   "unresolvedAssumptions": [
+    "the Critical defect in docs/v2/SECURITY-ADVISORY-001.md is unfixed, so no deployment of this candidate is sanctioned",
     "the deployer address and nonce are chosen by the owner at deployment time and are not fixed here",
     "no V2 address has been reserved, funded or announced anywhere",
     "source verification has not been submitted, because nothing is deployed to verify",

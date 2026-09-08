@@ -6,8 +6,35 @@ should not hold value it cannot afford to lose.** This file states what is defen
 defence is proven, and what is not defended, so a reader can judge the posture rather than take
 a claim on trust. It is dated and it is updated in the commit that changes a row.
 
-Last reviewed 2026-09-05, against `main`, after an adversarial attack review whose two
-exploitable findings are fixed and whose remaining findings are recorded in `docs/reviews/`.
+Last reviewed 2026-09-08, against `main`, after an internal security review of the frozen V2 core.
+Earlier: an adversarial attack review on 2026-09-05 whose two exploitable findings are fixed and
+whose remaining findings are recorded in `docs/reviews/`.
+
+Everything below this line describes **V1**, which is the deployed generation. V2 is a separate,
+undeployed codebase and it currently **must not be deployed** — see the section immediately below.
+
+## V2 — an open Critical finding, and why nothing is at risk today
+
+**`v2.0.0-rc1` must not be deployed.** An internal review on 2026-09-08 found and reproduced a
+Critical defect in `src/v2/QuoteSettlementExecutor.sol`: the payer's Permit2 witness binds only the
+payer's half of the quote — which invoice, who pays, in what token, up to how much — and leaves the
+merchant's half outside it. Two quotes differing only in `merchantSigner` and `recipient` produce a
+byte-identical payer signing digest, so a relayer, or anyone watching a pending `settle`, can
+rebuild the quote naming themselves, sign it with their own key, present the payer's authorisation
+unchanged, and take delivery in full. The honest settlement then fails on the spent Permit2 nonce.
+
+- **Nothing is at risk today.** No V2 contract exists on any chain, testnet included.
+- **V1 is unaffected.** It has no Permit2 path and no merchant-signed quote, and its deployed
+  source is byte-identical to the `live-green` tag.
+- **It is not fixed.** The fix moves the payer's EIP-712 signing digest and twelve files with it,
+  which makes it an `rc2` and an owner decision, not a patch.
+- **It is executable, not described.** `test/v2/WitnessBinding.t.sol` runs the exploit end to end in
+  the default gate, as a characterisation test with three controls, so no fix can land without
+  breaking it.
+
+Analysis: [`docs/v2/SECURITY-ADVISORY-001.md`](docs/v2/SECURITY-ADVISORY-001.md).
+Full package, including seven further findings and four dismissed candidates:
+[`docs/v2/INTERNAL-SECURITY-REVIEW.md`](docs/v2/INTERNAL-SECURITY-REVIEW.md).
 
 ## Reporting a vulnerability
 

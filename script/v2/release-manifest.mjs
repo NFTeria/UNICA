@@ -118,11 +118,18 @@ const manifest = {
   status: {
     deployed: false,
     broadcast: false,
+    deployable: false,
+    blockedBy:
+      "SECURITY-ADVISORY-001: the payer's Permit2 witness does not bind the merchant's half of the quote. "
+      + "Critical, reproduced in test/v2/WitnessBinding.t.sol, unfixed. This file describes a REHEARSAL, "
+      + "and the block is written here rather than in the JSON because the JSON is generated: an edit to "
+      + "the output would disappear the next time anyone ran this script.",
     v1Untouched: true,
     v2Frozen: "v2.0.0-rc1 at 82c7dcb44038",
   },
 
   unresolvedAssumptions: [
+    "the Critical defect in docs/v2/SECURITY-ADVISORY-001.md is unfixed, so no deployment of this candidate is sanctioned",
     "the deployer address and nonce are chosen by the owner at deployment time and are not fixed here",
     "no V2 address has been reserved, funded or announced anywhere",
     "source verification has not been submitted, because nothing is deployed to verify",
@@ -138,3 +145,4 @@ console.log(`  executor creation code ${manifest.contracts.QuoteSettlementExecut
 console.log(`  hook headroom          ${manifest.contracts.QuoteSettlementHook.eip170Headroom} bytes`);
 console.log(`  executor headroom      ${manifest.contracts.QuoteSettlementExecutor.eip170Headroom} bytes`);
 console.log(`  deployed               ${manifest.status.deployed}`);
+console.log(`  deployable             ${manifest.status.deployable}  (${manifest.status.blockedBy.split(":")[0]})`);
