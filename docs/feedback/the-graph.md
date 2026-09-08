@@ -26,4 +26,21 @@ hook data source in `v4-subgraph` exists for exactly one network, and the genera
 could template it across networks does not. Both are detailed in `uniswap/README.md`, table (c),
 since the affected repository is Uniswap's, not The Graph's own.
 
-Status: no claim of qualification.
+**A second ask, from building the V2 client (2026-09-08).** A subgraph whose manifest names an
+address that holds **no code** deploys cleanly, syncs to head, and indexes nothing — forever, with
+no error anywhere. Studio reports it as healthy and synced, because it is: there is simply nothing
+to match. We hit this ourselves and caught it only by running `eth_getCode` against our own
+manifest address before deploying, which is not a step anything told us to take.
+
+It is the same failure shape as an event-signature mismatch, and it is invisible in the same way:
+the honest signal and the broken one are both "0 entities". We would ask for a deploy-time or
+Studio-side warning when a data source's `address` has no code at `startBlock` on the named
+network. A one-line check would have saved us a deployment that could only ever have indexed
+nothing, and would save anyone whose contract moved between networks.
+
+Our own preflight now refuses a zero start block and a disagreement between `subgraph.yaml` and
+`networks.json`; the code check is step 0 of `integrations/graph-v2/STUDIO-OWNER-ACTION.md`.
+
+Status: `READY_FOR_STUDIO_OWNER_ACTION`. No successful live read has ever been observed, because
+nothing is deployed to read from — and the live command exits non-zero rather than pretending
+otherwise.

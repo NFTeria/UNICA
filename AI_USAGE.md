@@ -135,6 +135,11 @@ blanket statement.
 | `script/v2/` | the fork-settlement script, its driver and the fixture capture |
 | `vy/tests/test_merchant_policy.py`, `vy/tests/test_payany_router.py`, `vy/tests/test_namemath.py`, `vy/tests/test_logobackground.py` | the Vyper test suites |
 | `docs/PRIOR-ART.md`, `docs/UNICA-TOOLS.md`, `docs/unica-tools.json` | the provenance record and the living tool ledger |
+| `integrations/ensv2/permissioned.mjs`, `authz-sim.mjs`, `preview.mjs`, `permissioned-test.mjs`, `permissioned-live.mjs` | the ENSv2 Permissioned Resolver and Enhanced Access Control layer, its live authorization contrast, its transaction preview and both suites. The wire bytes in `integrations/ensv2/fixtures/permissioned-observations.json` are Sepolia's, captured verbatim |
+| `integrations/graph-v2/provider.mjs`, `copilot.mjs`, `samples.mjs`, `provider-test.mjs`, `copilot-test.mjs`, `live-proof.mjs`, `STUDIO-OWNER-ACTION.md` | the live Graph client, the deterministic treasury analyst, the offline samples and the live proof command |
+| `integrations/arc-treasury/` | the Arc USDC treasury: the unit system, the read-only client, the bounded policy, the transaction preview, the server and page, both suites and the owner-action file. `transcript.json` is an Arc RPC transcript recorded verbatim |
+| `integrations/arc-treasury/split.mjs`, `split-test.mjs`, `vy/tests/test_arc_split_parity.py` | the JavaScript second derivation of `merchant_policy.split()`, and the Vyper-side capture it is checked against. The contract itself is carried-in prior art and is unchanged |
+| `script/secret-patterns.sh` | the one shared definition of what a secret looks like, extracted from the two scanners that had copied and then silently drifted from it |
 
 **NOT AI-authored, and not to be recorded as such.** The Vyper contract sources under
 `vy/src/unica/` and `vypersetup/contracts/` are **carried-in prior art** supplied by the owner.
