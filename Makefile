@@ -115,6 +115,21 @@ snapshot : _need-deps ; forge snapshot
 format   :; forge fmt
 fmt      :; forge fmt
 clean    :; forge clean
+# A gate row that runs an external tool. The shape matters more than it looks.
+#
+# The old form was `command -v node >/dev/null 2>&1 && node X || echo "SKIP  ...: node is not
+# installed"`. In `sh`, that returns 0 whenever X FAILS — so a broken suite printed "node is not
+# installed" and the gate went green. Three suites sat behind that line: the ENS identity chain had
+# crashed on a missing fixture key and had NEVER run past a third of its rows; its demo exited 1;
+# and the tool ledger was correctly reporting itself stale and being ignored. The message was worse
+# than the silence, because it named a cause that was false — node was installed the whole time.
+#
+# `if/then/else` returns the command's own status. A missing runner is a skip and says so; a
+# failing tool fails the gate, which is the only reason to have a gate.
+define run_row
+if command -v $(1) >/dev/null 2>&1; then $(2); 	else echo "SKIP  $(3): $(1) is not installed (this is a SKIP, not a pass)"; fi
+endef
+
 gate     : _need-deps
 	@# The fork suites are excluded on purpose. They need a Sepolia endpoint, and a gate that
 	@# depends on a third party's uptime is not a gate — it is a status page. `make fork` runs them.
@@ -125,61 +140,48 @@ gate     : _need-deps
 	@# The ENS resolution tests are offline and deterministic, so they belong in the gate. If node
 	@# is missing they report a SKIP and say it is a skip: an absent runner and a passing suite
 	@# must not look the same. `make gate-live` additionally resolves real names on Sepolia.
-	@command -v node >/dev/null 2>&1 && node integrations/ensv2/test.mjs \
-	  || echo "SKIP  ENS resolution tests: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node integrations/ensv2/test.mjs,ENS resolution tests)
 	@# The ENS identity chain: a name, to a policy, to a canonical configuration, to a V2 quote.
 	@# Offline by construction — the resolver reply and the policy bytes are committed fixtures.
-	@command -v node >/dev/null 2>&1 && node integrations/ensv2/identity-test.mjs \
-	  || echo "SKIP  ENS identity chain: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node integrations/ensv2/identity-test.mjs,ENS identity chain)
 	@# And the end-to-end command itself, run for its exit status. A demo that stopped working
 	@# would otherwise be discovered by whoever ran it in front of an audience.
-	@command -v node >/dev/null 2>&1 && node integrations/ensv2/demo.mjs >/dev/null \
-	  || echo "SKIP  ENS identity demo: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node integrations/ensv2/demo.mjs >/dev/null,ENS identity demo)
 	@# The offline half of the Permit2 digest gate. Its whole value is being a SECOND derivation:
 	@# the vector it pins is recomputed in Solidity and presented to the real Permit2 runtime, so
 	@# running only one of the two proves that one side is self-consistent and nothing else.
-	@command -v node >/dev/null 2>&1 && node integrations/permit2/test.mjs \
-	  || echo "SKIP  Permit2 digest vectors: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node integrations/permit2/test.mjs,Permit2 digest vectors)
 	@# The tool ledger. Its last check is the one that keeps it honest: a commit that changes a
 	@# tool's code without updating docs/unica-tools.json fails the build, so a status cannot drift.
-	@command -v node >/dev/null 2>&1 && node script/validate-tools.mjs \
-	  || echo "SKIP  tool ledger validation: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node script/validate-tools.mjs,tool ledger validation)
 	@# The release-candidate interface freeze. It checks its own input first: if the artifacts were
 	@# not built from the sources now on disk it refuses to report rather than validating yesterday.
-	@command -v node >/dev/null 2>&1 && node script/verify-freeze.mjs \
-	  || echo "SKIP  interface freeze: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node script/verify-freeze.mjs,interface freeze)
 	@# The V2 indexer's manifest, ABI and queries. Needs no node_modules: the matchstick suite does,
 	@# and lives behind `make graph-v2-test`, but a subgraph that subscribes to the wrong topic
 	@# indexes nothing and reports no error, so THAT check belongs in the gate.
-	@command -v node >/dev/null 2>&1 && node integrations/graph-v2/check.mjs \
-	  || echo "SKIP  V2 indexer consistency: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node integrations/graph-v2/check.mjs,V2 indexer consistency)
 	@# The client signing tool. Its vectors are re-derived in test/v2/SigningVectors.t.sol, so
 	@# running only one of the two proves that one side is self-consistent and nothing else.
-	@command -v node >/dev/null 2>&1 && node tools/unica-sign/test.mjs \
-	  || echo "SKIP  signing tool vectors: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node tools/unica-sign/test.mjs,signing tool vectors)
 	@# The receipt verifier, offline. Its fixture is a REAL settlement captured off a local fork, so
 	@# these rows need no network and no endpoint — which is the point: a verifier whose own suite
 	@# could only run against a chain would be untestable exactly when a chain is unavailable.
 	@# `make verify-online` adds the RPC rows against a local node.
-	@command -v node >/dev/null 2>&1 && node tools/unica-verify/test.mjs \
-	  || echo "SKIP  receipt verifier: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node tools/unica-verify/test.mjs,receipt verifier)
 	@# The CRE liquidation-protection policy. Offline and deterministic by construction: no CRE
 	@# CLI, no credentials, no RPC. It is the part of that challenge worth most of the score, and
 	@# the part that can be tested without any of the parts that cannot.
-	@command -v node >/dev/null 2>&1 && node integrations/chainlink-cre-guardian/test.mjs \
-	  || echo "SKIP  CRE guardian policy: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node integrations/chainlink-cre-guardian/test.mjs,CRE guardian policy)
 	@# The CRE adapter. Its verdict is the EXIT STATUS, never a grep over its output: a producer
 	@# that throws before printing anything has to fail the gate, and one of its own rows proves it.
-	@command -v node >/dev/null 2>&1 && node integrations/chainlink-cre-guardian/adapter-test.mjs \
-	  || echo "SKIP  CRE adapter: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node integrations/chainlink-cre-guardian/adapter-test.mjs,CRE adapter)
 	@# The Arc nanopayments integration. Offline by construction: it verifies a vector Circle's own
 	@# SDK signed, without importing that SDK and without an endpoint or a key.
-	@command -v node >/dev/null 2>&1 && node integrations/arc-nanopayments/test.mjs \
-	  || echo "SKIP  Arc nanopayments: node is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,node,node integrations/arc-nanopayments/test.mjs,Arc nanopayments)
 	@# The Vyper workspace. It ran green for weeks without being gated, which meant nothing
 	@# would have said so the day it stopped. Moccasin's in-process EVM needs no network.
-	@command -v mox >/dev/null 2>&1 && (cd vy && mox test -q) \
-	  || echo "SKIP  vy model and art: moccasin is not installed (this is a SKIP, not a pass)"
+	@$(call run_row,mox,(cd vy && mox test -q),vy model and art)
 	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors, the signing tool,"
 	@echo "      the receipt verifier and the tool ledger all exit 0"
 
