@@ -149,7 +149,26 @@ gate     : _need-deps
 	@# running only one of the two proves that one side is self-consistent and nothing else.
 	@command -v node >/dev/null 2>&1 && node tools/unica-sign/test.mjs \
 	  || echo "SKIP  signing tool vectors: node is not installed (this is a SKIP, not a pass)"
-	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors and the tool ledger all exit 0"
+	@# The receipt verifier, offline. Its fixture is a REAL settlement captured off a local fork, so
+	@# these rows need no network and no endpoint — which is the point: a verifier whose own suite
+	@# could only run against a chain would be untestable exactly when a chain is unavailable.
+	@# `make verify-online` adds the RPC rows against a local node.
+	@command -v node >/dev/null 2>&1 && node tools/unica-verify/test.mjs \
+	  || echo "SKIP  receipt verifier: node is not installed (this is a SKIP, not a pass)"
+	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors, the signing tool,"
+	@echo "      the receipt verifier and the tool ledger all exit 0"
+
+# The receipt verifier's ONLINE rows, against a local fork node. Separate from the gate for the same
+# reason the fork suites are: a gate that needs somebody else's node is a status page. Start the node
+# with `make anvil`, then `make verify-fixture` to re-capture the fixture from a fresh settlement.
+.PHONY: verify-online verify-fixture
+verify-online:
+	UNICA_VERIFY_RPC=$(LOCAL_RPC_URL) node tools/unica-verify/test.mjs
+
+# Re-captures tools/unica-verify/fixtures/fork-settlement.json from a settlement this run performs.
+# Local node only, refused otherwise, and nothing it does reaches a public chain.
+verify-fixture:
+	bash script/v2/fork-settle.sh
 
 # The V2 mutation suite: thirty specific defects, each applied to the real tree and each required
 # to turn the row that NAMES it red. Not in `make gate` because it recompiles thirty times; run it

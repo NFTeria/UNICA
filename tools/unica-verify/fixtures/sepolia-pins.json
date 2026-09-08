@@ -1,0 +1,23 @@
+{
+  "note": "Deployed-code hashes for the dependencies a V2 settlement rests on. Pinned from test/fork/ForkPin.sol, where each is asserted against live Ethereum Sepolia. Code is a property of an address rather than of a block, so these are pins and not a snapshot: re-pinning the fork block does not move them, and a change in any of them is a change in the dependency itself.",
+  "PoolManager": {
+    "address": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+    "codeHash": "0x09930125a49f5b95caf8052991cc14d1240dca8b43f42b899115b86867e4bce1"
+  },
+  "Permit2": {
+    "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "codeHash": "0x96d9f5c3f0fb0423426b7f970186235b7347027f4e5c19c40c412b7d97fc3751"
+  },
+  "CREATE2 deployer": {
+    "address": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+    "codeHash": "0x2fa86add0aed31f33a762c9d88e807c475bd51d0f52bd0955754b2608f7e4989"
+  },
+  "USDC": {
+    "address": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    "codeHash": "0xcd3f29e2ea9c61dadd48bfeaf8b2884b6de9dfee7bf45329452c4c33d0868ceb"
+  },
+  "WETH9": {
+    "address": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+    "codeHash": "0xc864e10689f2da18833652a3b075d43106e87f0f90d95ee64f6f0b33bc026083"
+  }
+}

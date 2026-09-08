@@ -870,6 +870,57 @@
         "uniswap"
       ],
       "lastVerifiedCommit": "09309888958bc57f982e5c4b98e70a2c6fcd263a"
+    },
+    {
+      "id": "unica-verify",
+      "name": "V2 Receipt Verifier",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — FORK TESTS",
+      "paths": [
+        "tools/unica-verify/secp256k1.mjs",
+        "tools/unica-verify/receipt.mjs",
+        "tools/unica-verify/rpc.mjs",
+        "tools/unica-verify/verify.mjs",
+        "tools/unica-verify/cli.mjs",
+        "tools/unica-verify/README.md",
+        "tools/unica-verify/fixtures/fork-settlement.json",
+        "tools/unica-verify/fixtures/sepolia-pins.json",
+        "script/v2/ForkSettle.s.sol",
+        "script/v2/fork-settle.sh",
+        "script/v2/capture-fixture.mjs"
+      ],
+      "networks": [],
+      "dependencies": [
+        "eip-712",
+        "secp256k1",
+        "unica-sign",
+        "v2-merchant-config-commitment"
+      ],
+      "tests": [
+        "tools/unica-verify/test.mjs",
+        "test/fork/CaptureReceipt.t.sol"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "node tools/unica-verify/test.mjs"},
+        {"kind": "command", "value": "make verify-online"},
+        {"kind": "measurement", "value": "100 offline rows and 109 with the online rows: one positive control, 30 negatives altering exactly one field each, and 10 sabotages"},
+        {"kind": "measurement", "value": "50 of 50 checks pass online against a settlement fetched by hash, 5 dependency code hashes compared against live Sepolia code"},
+        {"kind": "artifact", "value": "tools/unica-verify/fixtures/fork-settlement.json, a real transaction receipt captured off a local anvil fork of Ethereum Sepolia"}
+      ],
+      "limitations": [
+        "the settlement it verifies exists only inside a local fork, because V2 is not deployed to any public chain",
+        "offline mode believes the receipt it is handed; only online mode establishes that a transaction is in a chain",
+        "EOA merchant signers only: ERC-1271 contract signers are outside V2 and are not checked",
+        "it never states that a payment is final, irreversible or owed, and reports confirmations without declaring any depth final",
+        "absence of a settlement proves nothing about whether an invoice was paid by another route",
+        "not audited"
+      ],
+      "sponsorRoles": [
+        "uniswap",
+        "ens",
+        "the-graph"
+      ],
+      "lastVerifiedCommit": "c15f6607b06657a65a34781b99ac672758d777f1"
     }
   ]
 }

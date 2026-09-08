@@ -388,6 +388,57 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
 - Last verified commit: `b9d9116b5890`
 
+### V2 Receipt Verifier
+
+- Id: `unica-verify`
+- Purpose: answer one question — does this transaction receipt record a settlement of *this* quote?
+- Product role: the other end of `unica-sign`. One tool builds what two parties sign; this one reads
+  back what happened and says, field by field, whether it was the same thing.
+- Version: 0.1.0
+- Location: `tools/unica-verify/`, with its evidence captured by `script/v2/fork-settle.sh`
+- Inputs: a quote, the merchant's signature, a transaction receipt (or a hash and an endpoint), what
+  the caller expects (chain, executor, hook), and optionally the merchant configuration preimage and
+  a set of code-hash pins.
+- Outputs: VERIFIED or NOT VERIFIED, every check that ran with its verdict, and `--json` with stable
+  fields — `verified`, `mode`, `checks`, `errors`, `warnings`, `receipt`, `quote`,
+  `merchantConfiguration`, `dependencies`, `evidence`.
+- Trust boundary: **it recomputes rather than reads and agrees.** The receipt carries a
+  `quoteDigest`, and reading that back out would verify nothing, because the emitter chose it. So
+  the digest is rebuilt from the quote's own fields, the merchant's address is recovered from the
+  signature over the rebuilt digest, the PoolId is rebuilt from the complete pool key, and only then
+  is any of it compared with the log. Ten sabotages encode the shortcut version of each of those
+  checks and require the real one to refuse what the shortcut accepts.
+- Security guarantees: none of its own — it signs nothing, sends nothing, and holds no key. Online
+  mode reaches a chain through a client that refuses any JSON-RPC method that is not a query, and an
+  endpoint is redacted to scheme, host and port everywhere it could appear, errors included.
+- How it closes `docs/v2/COMPATIBILITY-001.md`: the frozen receipt carries no `merchantConfigHash`,
+  and adding one would change the event topic — the single change in the frozen surface that fails
+  silently. It is not needed. The commitment is *inside* the quote digest, so the proof runs the
+  other way: rebuild the commitment from the preimage, put it in the quote, rebuild the digest, and
+  require that digest to be the one the receipt records. The report's recommendation was option 1,
+  accept the gap; this is what made option 1 real.
+- Explicit non-guarantees: it never says a payment is final, irreversible or owed. It reports
+  confirmations and declares no depth final. Offline mode believes the receipt JSON it is handed.
+  EOA merchant signers only. **A settlement's absence proves nothing** about whether an invoice was
+  paid by another route.
+- Dependencies: EIP-712, secp256k1, and the repository's own `tools/unica-sign` and
+  `integrations/ensv2/config.mjs` encoders — imported, never re-implemented, so there is one hashing
+  schema rather than two.
+- Networks: none of its own. Verified against a local anvil fork of Ethereum Sepolia.
+- Status: IMPLEMENTED — FORK TESTS
+- Evidence: 100 offline rows, 109 with the online rows. One positive control on a real captured
+  receipt, 30 negatives altering exactly one field each, and 10 sabotages. Online: 50 of 50 checks
+  against a settlement fetched by hash over JSON-RPC, including 5 dependency code hashes compared
+  against live Sepolia code and the hook's own record that it consumed this quote.
+- Tests: `tools/unica-verify/test.mjs`, `test/fork/CaptureReceipt.t.sol`
+- Deployment: none. Not published as a package.
+- Limitations: the settlement it verifies exists only inside a local fork, because **V2 is not
+  deployed to any public chain**. Not audited.
+- Sponsor relevance: Uniswap — a merchant, an auditor or an indexer can check a v4 settlement
+  without trusting the party that emitted it. ENS — it is what makes a resolved merchant
+  configuration provable after the fact.
+- Last verified commit: `c15f6607b066`
+
 ### V2 Receipt
 
 - Id: `v2-receipt`
