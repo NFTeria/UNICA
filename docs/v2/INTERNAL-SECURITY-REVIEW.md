@@ -235,6 +235,8 @@ Severity: Critical / High / Medium / Low / Informational.
 | # | Severity | Subject | Status |
 |---|---|---|---|
 | V2-001 | **Critical** | the payer's witness does not bind the merchant's half of the quote | **OPEN — blocks the release** |
+| V1-001 | Low | a V1 `orderId` does not commit to the order's terms; what closes it is an unpinned integration habit | OPEN, accepted |
+| V1-002 | Informational | V1 `pay()` has no intended-payer binding — anyone may pay any open order | OPEN, accepted |
 | V2-002 | High | the verifier's online mode never fetched the receipt | fixed `daec8f6` |
 | V2-006 | High | the gate reported failing suites as a missing runner | fixed `bc34099` |
 | V2-007 | Medium | the ENS identity suite had never run past a third of its rows | fixed `9cd92e2` |
@@ -243,15 +245,22 @@ Severity: Critical / High / Medium / Low / Informational.
 | V2-004 | Informational | two declared errors are never raised | accepted |
 | V2-005 | Informational | `InputIsNotADebit` is unreachable and untested | accepted |
 
-Four of the eight are in the **verification harness**, not in the contracts. That ratio is itself a
+Four of the ten are in the **verification harness**, not in the contracts. That ratio is itself a
 finding: this repository's confidence rests on its gate, and the gate was the least examined thing
 in it.
 
 ### V2-001 — Critical — OPEN
 
-**The payer's Permit2 witness does not bind the merchant's half of the quote.** Two quotes differing
-only in `merchantSigner` and `recipient` produce a byte-identical payer signing digest, so one payer
-authorisation funds either. A relayer, or anyone watching `settle` in the mempool, can rebuild the
+**The payer's Permit2 witness does not bind the merchant's half of the quote.** Ten fields sit
+outside it — `recipient`, `merchantSigner`, `tokenOut`, `amountOut`, `pool`, `hook`, `deadline`,
+`merchantConfigHash`, `policyVersion` and the quote digest — and every one is substitutable by
+whoever submits. The two signatures intersect in only five values, none of which identifies the
+merchant.
+
+**The loss ceiling is the payer's entire signed `maxIn`, not the invoice amount**, because
+`amountOut` is outside the witness too. The party who loses money is the **payer**; the merchant is
+simply never paid. An adversarial re-derivation on 2026-09-08 was tasked with refuting this finding
+and instead corrected it upward. A relayer, or anyone watching `settle` in the mempool, can rebuild the
 quote naming themselves, sign it with their own key, present the payer's authorisation unchanged,
 and take delivery. The honest settlement then fails on the spent nonce.
 
@@ -323,6 +332,25 @@ three came from carrying numbers forward instead of re-measuring.
 Separately, the ledger's staleness rule could only fire *after* an offending commit existed, so it
 guaranteed a red gate on a commit that was already written and sometimes already pushed. It now
 asks the same question of the working tree, where the fix is still free (`083d2d2`).
+
+### V1-001 — Low — OPEN, accepted
+
+**A V1 `orderId` does not commit to the order's terms.** Two orders differing only in `recipient`,
+from the same creator with the same salt, produce a byte-identical id. Found while proving V1
+unaffected by V2-001.
+
+It is not exploitable today, and what closes it is an **integration invariant that no test pins**:
+never fix `pay(orderId)` calldata before the order exists on chain. The shipped payer surface obeys
+it — it takes the id from the `OrderCreated` receipt and reads the recipient back from chain before
+paying — and so do the operator scripts. Safe by habit rather than by construction, which is exactly
+the kind of thing that stops being true when somebody writes a second client.
+
+### V1-002 — Informational — OPEN, accepted
+
+**V1 `pay()` has no binding to an intended payer.** Anyone may pay any open order, and paying it
+consumes it, so a stranger can settle an order that was not theirs. It is griefing rather than
+theft, and it is unprofitable — the front-runner pays in full and receives nothing — but it was
+undocumented until now.
 
 ### V2-004 — Informational — OPEN, accepted
 

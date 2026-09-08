@@ -13,6 +13,13 @@
 > recommendation. A settlement built with this executor can be redirected in full to a stranger by
 > anyone who sees the payer's authorisation, which includes every relayer and every observer of a
 > pending `settle` transaction.
+>
+> **Correction, 2026-09-08, after an adversarial re-derivation.** The paragraph above understates
+> the loss. It describes the same-amount case; the actual ceiling is the payer's **entire signed
+> `maxIn`**, not the invoice amount. `amountOut` is outside the payer's witness too, so an attacker
+> who also supplies the pool can raise the output and draw the payer's full ceiling. And the party
+> who loses the money is the **payer**, not the merchant: the merchant is simply never paid, while
+> the payer is debited and receives nothing.
 
 ## The defect
 
@@ -26,8 +33,11 @@ string public constant PAYMENT_TYPE =
 Six fields. All six are the payer's own half of the deal: which invoice, who is paying, in what
 token, up to how much, into which venue, through which executor.
 
-**The merchant's half is not there.** `recipient`, `merchantSigner`, `tokenOut`, `amountOut` and
-`pool` are all outside the witness. Permit2's own digest adds only the token permissions
+**The merchant's half is not there.** Ten fields are outside the payer's witness and every one of
+them is substitutable by whoever submits: `recipient`, `merchantSigner`, `tokenOut`, `amountOut`,
+`pool`, `hook`, `deadline`, `merchantConfigHash`, `policyVersion`, and the quote digest itself.
+The payer's signature and the merchant's signature intersect in only five values — `quoteId`,
+`payer`, `tokenIn`, `maxIn`, `executor` — none of which identifies the merchant. Permit2's own digest adds only the token permissions
 (`tokenIn`, `maxIn` — already witnessed), the spender, the nonce and the deadline; the spender is
 this executor for every caller, so it separates nothing.
 
@@ -52,6 +62,28 @@ This directly contradicts the contract's own header at lines 29–32:
 > hook, not the recipient…
 
 The recipient and the entire merchant half are precisely what a relayer may choose.
+
+## What an attacker needs, and what they do not
+
+Established by adversarial re-derivation on 2026-09-08, which was tasked with refuting this
+advisory and failed to.
+
+**Needed:** the payer's `PayerAuthorization` — `{nonce, deadline, signature}` — plus the four
+witnessed values it was signed over. Both are plainly readable in the calldata of any pending
+`settle()`, and are held by construction by whoever is going to submit it. An ordinary EOA and its
+own key. A pool containing `tokenIn` whose hook returns this executor, which in a normal deployment
+is the very pool the honest quote already names.
+
+**Not needed:** the merchant's key, the payer's key, any modification to the payer's signature (it
+is presented byte-for-byte unchanged), a block builder, a flash loan, or any interaction with the
+merchant at all. If the attacker *is* the relayer or the checkout, no race is required either.
+
+**A merchant allowlist would not close this.** The re-derivation built a row in which the attacker
+is a *second legitimate merchant* stealing the first merchant's payment. Permissionless merchants
+are an intentional property of this design — the review's own actor table states that a hostile
+merchant may sign any quote naming themselves, and must merely be unable to reach a payer's
+authorisation. That is exactly the property that broke. The fix belongs in the cryptographic join,
+not in an admission list.
 
 ## The attack, in order
 
@@ -169,8 +201,69 @@ with 6,207 bytes of headroom. The added field costs a small constant.
 
 - No V2 contract is deployed, so **nothing is exploitable on any chain today**. The severity is
   Critical because of what the code would do if deployed, not because of a live loss.
-- V1 is a separate, unrelated codebase and is **not affected**: it has no Permit2 path and no
-  merchant-signed quote. Its live deployment is untouched by this advisory.
+- V1 is **UNAFFECTED**, and this was proven rather than assumed — see below.
 - The fix above is stated, not implemented or tested. Its correctness is an assertion about a
   design, and it earns nothing until an rc2 exists with a row that inverts the two
   `KNOWN_DEFECT` tests above.
+
+## V1: UNAFFECTED, by mechanism absence
+
+V1 is live on Ethereum Sepolia, so a wrong "unaffected" would be the most expensive error available
+here. It was therefore given to a reviewer told to prove the opposite. The verdict survived.
+
+The V2 defect needs three things: an off-chain authorisation that is transferable, a submitter
+distinct from the authorising party, and a destination field outside what was authorised. **V1 has
+none of the three.** A grep over `src/V4SettlementHook.sol`, `src/SettlementExecutor.sol` and
+`src/libraries/` for every signature primitive — `ecrecover`, `EIP712`, `permit`, `SignatureTransfer`,
+`isValidSignature`, ERC-1271, `recover` — returns zero hits, and so does every fund-pull primitive.
+V1 has exactly two state-changing external functions, `createOrder` and `pay`, and the caller of
+`pay()` supplies no data that reaches the router's plan: the plan is built entirely from storage.
+
+Twelve probes were run, ten of them as executed tests. The verdict is mechanism absence, not a
+compensating control — there is no authorisation to detach because there is no authorisation.
+
+### Two residual V1 findings, neither exploitable today
+
+Recorded because they were found while proving the verdict, and because both are properties nothing
+currently pins.
+
+1. **The `orderId` does not commit to the order's terms.** Two orders differing only in `recipient`,
+   from the same creator with the same salt, produce a byte-identical id. What closes it today is an
+   integration invariant no test asserts and no threat-model row names: *never fix `pay(orderId)`
+   calldata before the order exists on chain*. The shipped payer path obeys it — `web/index.html`
+   takes the id from the `OrderCreated` receipt and reads the recipient back from chain before
+   paying — and so do the operator scripts. It is safe by habit rather than by construction.
+2. **`pay()` has no binding to an intended payer.** Anyone may pay any open order, and paying it
+   consumes it. That is griefing, and it is unprofitable — a front-runner pays in full and receives
+   nothing — but it is undocumented.
+
+Neither changes the UNAFFECTED verdict. Both belong in the invariant record.
+
+**Stated limit on this verdict:** it is about source in the working tree, not about the deployed
+bytecode. The live contracts are source-verified, which is what ties the two together; nobody
+re-derived the runtime from the chain for this advisory.
+
+## Remediation: which of the five, and why
+
+Two reviewers evaluated the same five options from independent angles — protocol design and
+engineering — without seeing each other's work. They agreed.
+
+| | Option | Closes it | Keeps permissionless merchants | Verdict |
+|---|---|---|---|---|
+| **A** | Bind the complete quote digest into the witness | fully | yes | **recommended by both** |
+| B | Bind every load-bearing field independently | fully | yes | viable, more surface to get wrong |
+| C | Merchant registry / allowlist | partially | **no** | **rejected by both** |
+| D | Payer-side merchant/config trust constraints | partially / no | yes | **rejected by both** |
+| E | Reject rc1, cut rc2 with a corrected join | — | yes | the delivery vehicle for A |
+
+**The recommendation is A, delivered as E.** Hash the `\x19\x01`-prefixed quote digest into the
+payer's `Payment` witness, keeping the five named payer fields so a wallet can still render the
+payment in human terms.
+
+C and D are rejected on the merits, not on taste. C buys partial closure at the price of centralised
+admission, censorship authority, operator-compromise risk and an onboarding dependency — and it does
+not even work, because a second legitimate merchant can perform the same theft. D leaves the join
+missing and moves the burden to a party who cannot see the merchant's half.
+
+**This is an rc2.** It moves the payer's EIP-712 signing digest, so it is a new release candidate
+rather than a patch, and it is the owner's decision to cut. `rc1` is preserved as it stands.
