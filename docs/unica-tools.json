@@ -1134,6 +1134,39 @@
       ],
       "sponsorRoles": ["chainlink"],
       "lastVerifiedCommit": "2cad3e3e75ae79c9cb7be8987ae99d8630c97a14"
+    },
+    {
+      "id": "ens-identity-chain",
+      "name": "ENS Merchant Identity Chain",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/ensv2/merchant-id.mjs",
+        "integrations/ensv2/policy.mjs",
+        "integrations/ensv2/identity.mjs",
+        "integrations/ensv2/demo.mjs",
+        "integrations/ensv2/fixtures/merchant-policy.json"
+      ],
+      "networks": [],
+      "dependencies": ["ensv2-universal-resolver", "ensv2-config-builder", "merchant-policy-vy", "unica-sign"],
+      "tests": ["integrations/ensv2/identity-test.mjs", "vy/tests/test_zz_genfix.py"],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/ensv2/identity-test.mjs"},
+        {"kind": "command", "value": "node integrations/ensv2/demo.mjs"},
+        {"kind": "measurement", "value": "95 offline rows and ten mutations, every one killed by its own named row"},
+        {"kind": "measurement", "value": "the policy decoder is checked against wire bytes from cast abi-encode that decode to values captured from the real Vyper contract: three implementations agree"},
+        {"kind": "measurement", "value": "no address can enter through any argument, and a payer supplying any of six immutable quote fields is refused by name"}
+      ],
+      "limitations": [
+        "every stage is a local fixture or a local computation; no live chain read happens in the default path",
+        "the merchant policy is read from committed bytes, not from a deployed registry — merchant_policy.vy is deployed nowhere",
+        "V2 is not deployed to any public chain, so no settlement can follow a quote this builds",
+        "nothing is signed: the artifact is a digest, and no key is used or needed",
+        "the merchant id derivation is this repository's own, because merchant_policy.vy takes the id as an argument and derives nothing",
+        "not audited"
+      ],
+      "sponsorRoles": ["ens", "uniswap"],
+      "lastVerifiedCommit": "4b0b2774c9f62ec323e96d279fc2f98db8e36346"
     }
   ]
 }
