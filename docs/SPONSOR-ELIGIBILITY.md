@@ -14,7 +14,7 @@ because the work feels close to done.
 | Status | Means |
 |---|---|
 | `READY_FOR_FORM_SUBMISSION` | the engineering is complete; a human must fill in a form |
-| `READY_FOR_CRE_LOGIN` | complete; blocked on a Chainlink credential the owner holds |
+| `BLOCKED_ON_CRE_SIMULATE` | the workflow compiles to a CRE WASM binary; the CLI's own simulator cannot start an engine for it |
 | `READY_FOR_STUDIO_OWNER_ACTION` | complete; blocked on a Subgraph Studio deploy key |
 | `READY_FOR_WALLET_CONFIRMATION` | complete; blocked on a wallet signature the owner must give |
 | `READY_FOR_ARC_DEPLOYMENT_ACTION` | complete; blocked on funding and a broadcast on Arc |
@@ -45,7 +45,7 @@ Remaining: the form itself.
 
 ### 2. Chainlink — Best Confidential Workflow (From Scratch)
 
-**Status: `READY_FOR_CRE_LOGIN`**
+**Status: `BLOCKED_ON_CRE_SIMULATE`**
 
 A real CRE Confidential Workflow — a cron-triggered TEE handler that reads a merchant's treasury
 position, applies a deterministic bounded policy, and publishes a decision without publishing the
@@ -58,9 +58,19 @@ policy that produced it.
 | The deterministic policy underneath | `integrations/chainlink-cre-guardian/strategy.mjs` |
 | The confidentiality boundary, and its one stated leak | the workflow's own header and its leak tests |
 
-Remaining: `cre login`. Until then the workflow has run in simulation only, and the evidence grade
-it stamps on its own output says exactly that — `CRE_CONFIDENTIAL_SIMULATION`, never
-`TEE_ATTESTED`. It will not claim attestation it has not received.
+`cre login` is **done** (CLI v1.32.0, SDK 1.18.0), and running the real toolchain is what moved
+this row. Three defects in our own workflow were found and fixed by it, after which the workflow
+**compiles** — binary hash `924c5266…`, config hash `bece38e7…`, secrets bound, credentials
+validated. That had never happened before today.
+
+It then stops inside the SDK: `failed to execute subscribe` with a bare `wasm unreachable` trap.
+Narrowed by elimination across separate runs — not the TEE constraint shape, not `handlerInTee`
+versus `handler`, not our own config validation. `docs/feedback/chainlink.md` carries the table.
+
+**It has never executed, in a TEE or otherwise**, and the evidence grade it stamps on its own
+output says exactly that — `CRE_CONFIDENTIAL_SIMULATION`, never `TEE_ATTESTED`. Separately,
+`cre whoami` reports **Deploy Access: Not enabled**, so a deployment needs `cre account access`
+regardless.
 
 ### 3. The Graph — Best AI Tooling or AI Use Case with The Graph (From Scratch)
 

@@ -1,6 +1,6 @@
 # Chainlink CRE Confidential Workflow — what exists, and the one action that is not ours
 
-**Status: `READY_FOR_CRE_LOGIN`.** The workflow is written, typechecks against the official SDK,
+**Status: `BLOCKED_ON_CRE_SIMULATE`.** The workflow is written, typechecks against the official SDK,
 and its decision logic is tested. The official simulation has **not** been run, because the CRE CLI
 requires a login that is an owner action. No claim of eligibility is made here.
 
