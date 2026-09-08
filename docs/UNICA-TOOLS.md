@@ -1200,3 +1200,37 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Limitations: not in `make gate`, because the gate does not require a Python toolchain.
 - Sponsor relevance: none.
 - Last verified commit: `28c82b75f36c`
+### ENSv2 Permissioned Resolver and Access Control
+
+- Id: `ensv2-permissioned-resolver`
+- Purpose: read who is allowed to change a merchant's name, live, and simulate the change before
+  anyone signs it.
+- Product role: a merchant is not just a name — it is a name whose records only an authorised party
+  may edit. This is the half that makes the name mean something.
+- Version: 0.1.0
+- Location: `integrations/ensv2/permissioned.mjs`, `authz-sim.mjs`, `preview.mjs`,
+  `permissioned-test.mjs`, `permissioned-live.mjs`
+- Inputs: a name, and an endpoint that must report Sepolia.
+- Outputs: the resolver behind the name, its implementation, the role bitmap for an account, and a
+  transaction preview — never a bare boolean.
+- Trust boundary: the deployed Permissioned Resolver implementation at
+  `0x9eae5c2730a7dd16bdd1dee6421a1b91e3b0365e` on Sepolia, and the RPC endpoint.
+- Security guarantees: it refuses before acting if the endpoint is not Sepolia; a return that will
+  not decode is its own observation and is never rounded into "holds no roles"; and the preview
+  cannot broadcast, because there is no signer to broadcast with.
+- Explicit non-guarantees: the accepted half of the authorisation contrast is an `eth_call`, not a
+  mined transaction. `grantRoles` and its siblings are confirmed only as dispatch constants in the
+  deployed runtime — no live call has reached them, so their argument order is documented and not
+  observed, and no calldata is built for them.
+- Dependencies: the ENSv2 Merchant Resolver.
+- Networks: Ethereum Sepolia (read-only).
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 278 offline rows in `make gate`; 78 live rows in `make gate-live`, including three real
+  refusals decoded from the deployed contract.
+- Tests: `integrations/ensv2/permissioned-test.mjs`
+- Deployment: none. UNICA owns no ENS name.
+- Limitations: every live row is read from a name somebody else registered; the per-text-key and
+  per-coin-type resource derivations are derived rather than confirmed, because every refusal
+  observed named the name-level resource.
+- Sponsor relevance: ENS. No claim is made that it qualifies for anything.
+

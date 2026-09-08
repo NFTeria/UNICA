@@ -3,9 +3,12 @@
 //
 //   node integrations/ensv2/live-check.mjs [rpc-url]
 //
-// The RPC defaults to a public endpoint and is printed, so no private URL is ever exposed.
+// The RPC endpoint is printed so a reader knows which one answered, but only its ORIGIN is, via
+// `redactRpc`. The default being public defends nothing: the endpoint is a command-line argument,
+// and provider URLs carry the key in the path or the query.
 
 import { resolveMerchant, normalizeName, namehash, dnsEncode, ENSV2, EXPLAIN } from "../../web/ensv2/resolve.mjs";
+import { redactRpc } from "./permissioned.mjs";
 
 const RPC = process.argv[2] || "https://ethereum-sepolia-rpc.publicnode.com";
 let calls = 0;
@@ -40,7 +43,7 @@ const CASES = [
 const block = await blockNumber();
 console.log(`ENSv2 live resolution — chain ${ENSV2.chainId} (${ENSV2.chainName})`);
 console.log(`entry point ${ENSV2.entryPoint}`);
-console.log(`rpc ${RPC}`);
+console.log(`rpc ${redactRpc(RPC)}`);
 console.log(`block ${block}`);
 console.log(`docs ${ENSV2.docs} (retrieved ${ENSV2.retrieved})\n`);
 

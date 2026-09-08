@@ -211,7 +211,7 @@
       "sponsorRoles": [
         "ens"
       ],
-      "lastVerifiedCommit": "0845dec9ea015d6febed2cfbbcc641c1754ee28d"
+      "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
     },
     {
       "id": "v2-invoice-hook",
@@ -1168,6 +1168,37 @@
       ],
       "sponsorRoles": ["ens", "uniswap"],
       "lastVerifiedCommit": "9cd92e291767d3b0c286a9754a076ffde46494f4"
+    },
+    {
+      "id": "ensv2-permissioned-resolver",
+      "name": "ENSv2 Permissioned Resolver and Access Control",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/ensv2/permissioned.mjs",
+        "integrations/ensv2/authz-sim.mjs",
+        "integrations/ensv2/preview.mjs",
+        "integrations/ensv2/permissioned-test.mjs",
+        "integrations/ensv2/permissioned-live.mjs"
+      ],
+      "networks": ["ethereum-sepolia"],
+      "dependencies": ["ensv2-merchant-resolver", "ensv2-universal-resolver"],
+      "tests": ["integrations/ensv2/permissioned-test.mjs"],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/ensv2/permissioned-test.mjs"},
+        {"kind": "measurement", "value": "278 rows, 278 passed, 0 failed, offline, no socket opened"},
+        {"kind": "command", "value": "node integrations/ensv2/permissioned-live.mjs"},
+        {"kind": "measurement", "value": "78 live rows against Sepolia, three of them real refusals decoded from the deployed contract"},
+        {"kind": "address", "chainId": 11155111, "value": "0x9eae5c2730a7dd16bdd1dee6421a1b91e3b0365e"}
+      ],
+      "limitations": [
+        "no name is owned by UNICA: every live row reads a name somebody else registered, discovered from the chain rather than hard-coded",
+        "grantRoles and its siblings are confirmed only as dispatch constants in the deployed runtime; no live call reached them, so their semantics are documented and not observed",
+        "the per-text-key and per-coin-type resource derivations are derived, not confirmed: every refusal observed named the name-level resource",
+        "the accepted half of the authorization contrast is an eth_call, not a mined transaction"
+      ],
+      "sponsorRoles": ["ens"],
+      "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
     }
   ]
 }
