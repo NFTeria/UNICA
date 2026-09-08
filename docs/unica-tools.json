@@ -664,14 +664,14 @@
       ],
       "evidence": [
         {"kind": "command", "value": "cd vy && mox test"},
-        {"kind": "measurement", "value": "33 tests pass under titanoboa 0.2.8"}
+        {"kind": "measurement", "value": "81 tests pass under titanoboa 0.2.8; the count said 33 until 2026-09-08, when it was re-measured rather than carried forward"}
       ],
       "limitations": [
         "a model of the arithmetic, not a deployment target; no Vyper contract is part of the product",
         "not in make gate: it needs a Python toolchain the gate does not require"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "5e4733e1b0ee4c199d7150bea65d8e1d28c4fd29"
+      "lastVerifiedCommit": "9cd92e291767d3b0c286a9754a076ffde46494f4"
     },
     {
       "id": "v2-merchant-config-commitment",
@@ -1153,8 +1153,8 @@
       "evidence": [
         {"kind": "command", "value": "node integrations/ensv2/identity-test.mjs"},
         {"kind": "command", "value": "node integrations/ensv2/demo.mjs"},
-        {"kind": "measurement", "value": "95 offline rows and ten mutations, every one killed by its own named row"},
-        {"kind": "measurement", "value": "the policy decoder is checked against wire bytes from cast abi-encode that decode to values captured from the real Vyper contract: three implementations agree"},
+        {"kind": "measurement", "value": "95 rows, 95 passed, 0 failed. Until 2026-09-08 the suite crashed at row 30 on a fixture key that had never existed, so this count was the intended one and not a measured one; the ten mutations recorded here were run by hand during development and have no committed runner, unlike the V2 suite behind make mutants"},
+        {"kind": "measurement", "value": "the policy decoder is checked against the raw ABI bytes merchant_policy.vy itself returned, captured by vy/tests/test_zz_genfix.py out of the in-process EVM"},
         {"kind": "measurement", "value": "no address can enter through any argument, and a payer supplying any of six immutable quote fields is refused by name"}
       ],
       "limitations": [
@@ -1166,7 +1166,7 @@
         "not audited"
       ],
       "sponsorRoles": ["ens", "uniswap"],
-      "lastVerifiedCommit": "4b0b2774c9f62ec323e96d279fc2f98db8e36346"
+      "lastVerifiedCommit": "9cd92e291767d3b0c286a9754a076ffde46494f4"
     }
   ]
 }
