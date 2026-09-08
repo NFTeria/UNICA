@@ -155,12 +155,20 @@ gate     : _need-deps
 	@# `make verify-online` adds the RPC rows against a local node.
 	@command -v node >/dev/null 2>&1 && node tools/unica-verify/test.mjs \
 	  || echo "SKIP  receipt verifier: node is not installed (this is a SKIP, not a pass)"
+	@# The Vyper workspace. It ran green for weeks without being gated, which meant nothing
+	@# would have said so the day it stopped. Moccasin's in-process EVM needs no network.
+	@command -v mox >/dev/null 2>&1 && (cd vy && mox test -q) \
+	  || echo "SKIP  vy model and art: moccasin is not installed (this is a SKIP, not a pass)"
 	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors, the signing tool,"
 	@echo "      the receipt verifier and the tool ledger all exit 0"
 
 # The receipt verifier's ONLINE rows, against a local fork node. Separate from the gate for the same
 # reason the fork suites are: a gate that needs somebody else's node is a status page. Start the node
 # with `make anvil`, then `make verify-fixture` to re-capture the fixture from a fresh settlement.
+.PHONY: verify-online verify-fixture vy
+# The Vyper workspace on its own, verbosely, for when a row is being worked on.
+vy:
+	cd vy && mox test -s
 .PHONY: verify-online verify-fixture
 verify-online:
 	UNICA_VERIFY_RPC=$(LOCAL_RPC_URL) node tools/unica-verify/test.mjs

@@ -671,7 +671,7 @@
         "not in make gate: it needs a Python toolchain the gate does not require"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "28c82b75f36c09a73ed16a734034a75c238fc466"
+      "lastVerifiedCommit": "aee1048edde04d6bc1d3115592e5118b32fe08b1"
     },
     {
       "id": "v2-merchant-config-commitment",
@@ -921,6 +921,39 @@
         "the-graph"
       ],
       "lastVerifiedCommit": "c15f6607b06657a65a34781b99ac672758d777f1"
+    },
+    {
+      "id": "namemath-art",
+      "name": "NameMath Art Contracts",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "vy/src/namemath.vy",
+        "vy/src/logobackground.vy"
+      ],
+      "networks": [],
+      "dependencies": [],
+      "tests": [
+        "vy/tests/test_namemath.py",
+        "vy/tests/test_logobackground.py"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "cd vy && mox test -q"},
+        {"kind": "measurement", "value": "20 rows: forward then inverse is the identity over 845 grid points across five seeds, and the map is injective on the grid"},
+        {"kind": "measurement", "value": "every generated affine over 400 seeds has determinant +1 or -1, so the inverse is an integer map"},
+        {"kind": "measurement", "value": "64 seeds produce 64 distinct transform programs, and a one-character name change leaves 0 of 49 cells unchanged"}
+      ],
+      "limitations": [
+        "namemath.vy had never compiled before this commit: convert(block.prevrandao, bytes32) is a type error in every Vyper 0.4.x",
+        "no declared coordinate bound: the safe grid is a property of the seed, measured at 158 on the worst of 24 namemath seeds against 1727786871 on logobackground",
+        "namemath's register() mixes caller-supplied entropy with a readable prevrandao, so a minter can grind the seed; 256 candidates reachable in one transaction gave 13 distinct trait classes",
+        "logobackground's `if m < 0` guard after a sum of squares is unreachable under checked arithmetic; the case it appears to handle reverts instead",
+        "namemath binds no name: its registry seed contains no name, contract, chain id or algorithm version",
+        "art, not settlement. Neither contract touches ENS, Uniswap, a pool, a token or a payment",
+        "not deployed anywhere, and not audited"
+      ],
+      "sponsorRoles": [],
+      "lastVerifiedCommit": "aee1048edde04d6bc1d3115592e5118b32fe08b1"
     }
   ]
 }
