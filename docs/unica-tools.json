@@ -1103,6 +1103,37 @@
       ],
       "sponsorRoles": ["chainlink"],
       "lastVerifiedCommit": "ae7eb7b194ed5c7911d624814058b877d22ff7c4"
+    },
+    {
+      "id": "cre-guardian-adapter",
+      "name": "CRE Workflow Adapter",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/chainlink-cre-guardian/profiles.mjs",
+        "integrations/chainlink-cre-guardian/adapter.mjs",
+        "integrations/chainlink-cre-guardian/evidence.mjs"
+      ],
+      "networks": [],
+      "dependencies": ["cre-guardian-policy"],
+      "tests": ["integrations/chainlink-cre-guardian/adapter-test.mjs"],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/chainlink-cre-guardian/adapter-test.mjs"},
+        {"kind": "measurement", "value": "86 offline rows and ten mutations, every one killed"},
+        {"kind": "measurement", "value": "the adapter's decision equals the frozen policy's in 950 compared states across the whole published price range"},
+        {"kind": "measurement", "value": "observing every price update survives the sudden crash; observing every SECOND update loses it"},
+        {"kind": "artifact", "value": "challenge pinned at solangegueiros/cf-liquidation-protection-challenge 58b24604, MIT"}
+      ],
+      "limitations": [
+        "PUBLIC DEPLOYMENT IS BLOCKED: the challenge README and its own config.staging.json name different lending and token addresses at the pinned commit, and the organisers have not said which is authoritative",
+        "there is no default deployment profile and there must not be one; selecting is an argument",
+        "local only: nothing is deployed, nothing is broadcast, join() has not been called and no CRE CLI is installed",
+        "evidence records are LOCAL_SIMULATION and cannot claim a TEE attestation or a DON execution receipt",
+        "whether a cron faster than five minutes is permitted by the DON is not established here",
+        "not audited"
+      ],
+      "sponsorRoles": ["chainlink"],
+      "lastVerifiedCommit": "2cad3e3e75ae79c9cb7be8987ae99d8630c97a14"
     }
   ]
 }

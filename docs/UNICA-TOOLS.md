@@ -388,6 +388,42 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
 - Last verified commit: `b9d9116b5890`
 
+### CRE Workflow Adapter
+
+- Id: `cre-guardian-adapter`
+- Purpose: turn an observation into exactly one permitted transaction, or into nothing.
+- Product role: the bridge between the chain and the frozen policy. It decides nothing itself.
+- Version: 0.1.0
+- Location: `integrations/chainlink-cre-guardian/{profiles,adapter,evidence}.mjs`
+- **PUBLIC DEPLOYMENT IS BLOCKED.** The challenge README and its own `config.staging.json` name
+  different lending and token addresses at the pinned commit. A participant running the example
+  unchanged protects a position on a deployment the organisers are not scoring, and nothing in the
+  example says so. Both address sets are carried as named profiles, selecting one is an argument,
+  **there is no default**, and mixing an address across profiles is refused by name.
+- Trust boundary: **there is no parameter that could redirect a call.** An intent becomes one of
+  two shapes — approve-then-deposit on vETH, or approve-then-repay on vUSD — with every target
+  taken from the selected profile. "No arbitrary calldata" is a property of the signature, not a
+  promise about how it is called.
+- Security guarantees: the frozen policy is the oracle, and the adapter's decision is asserted
+  equal to it across 950 compared states. Amounts pass through unchanged. Observations are refused
+  when stale, duplicated or reordered. A pending action suppresses a duplicate.
+- The approval model, established from the contracts rather than assumed: `deposit` calls
+  `vETH.transferFrom`, and `repay` calls `vUSD.burnFrom` which itself spends allowance — so both
+  need an allowance to the lending contract, and `burnFrom` is additionally `onlyRole(ADMIN_ROLE)`,
+  which is the organisers' setup rather than a participant's. Allowance is observable and can be
+  prepared before the scenario starts.
+- Cadence, measured: observing every price update survives the sudden crash; observing every
+  **second** update loses it, because the first update is already below the line and a tick that
+  never happens cannot react. Whether a cron faster than five minutes is permitted by the DON is
+  **not** established here.
+- Explicit non-guarantees: evidence records carry `LOCAL_SIMULATION` and there is no argument that
+  can set anything else — they are **not** TEE attestations and **not** DON execution receipts.
+  Nothing is deployed, nothing broadcast, `join()` not called, no CRE CLI installed.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 86 offline rows; ten mutations, all killed.
+- Sponsor relevance: Chainlink.
+- Last verified commit: `2cad3e3e75ae`
+
 ### CRE Liquidation-Protection Policy
 
 - Id: `cre-guardian-policy`

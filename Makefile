@@ -160,6 +160,10 @@ gate     : _need-deps
 	@# the part that can be tested without any of the parts that cannot.
 	@command -v node >/dev/null 2>&1 && node integrations/chainlink-cre-guardian/test.mjs \
 	  || echo "SKIP  CRE guardian policy: node is not installed (this is a SKIP, not a pass)"
+	@# The CRE adapter. Its verdict is the EXIT STATUS, never a grep over its output: a producer
+	@# that throws before printing anything has to fail the gate, and one of its own rows proves it.
+	@command -v node >/dev/null 2>&1 && node integrations/chainlink-cre-guardian/adapter-test.mjs \
+	  || echo "SKIP  CRE adapter: node is not installed (this is a SKIP, not a pass)"
 	@# The Arc nanopayments integration. Offline by construction: it verifies a vector Circle's own
 	@# SDK signed, without importing that SDK and without an endpoint or a key.
 	@command -v node >/dev/null 2>&1 && node integrations/arc-nanopayments/test.mjs \
