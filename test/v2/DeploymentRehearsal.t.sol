@@ -45,12 +45,14 @@ contract DeploymentRehearsalTest is Test {
 
     function _executorInitcode() internal pure returns (bytes memory) {
         return abi.encodePacked(
-            type(QuoteSettlementExecutor).creationCode, abi.encode(IPoolManager(POOL_MANAGER), IPermit2Transfer(PERMIT2))
+            type(QuoteSettlementExecutor).creationCode,
+            abi.encode(IPoolManager(POOL_MANAGER), IPermit2Transfer(PERMIT2))
         );
     }
 
     function _hookInitcode(address executor_) internal pure returns (bytes memory) {
-        return abi.encodePacked(type(QuoteSettlementHook).creationCode, abi.encode(IPoolManager(POOL_MANAGER), executor_));
+        return
+            abi.encodePacked(type(QuoteSettlementHook).creationCode, abi.encode(IPoolManager(POOL_MANAGER), executor_));
     }
 
     // ---- the bits that become an address ----------------------------------------------------
@@ -60,7 +62,9 @@ contract DeploymentRehearsalTest is Test {
     ///      contract does not implement.
     function test_Rehearsal_TheMinedAddressCarriesExactlyTheDeclaredBits() public {
         (address mined,) = HookMiner.find(
-            DETERMINISTIC_DEPLOYER, DECLARED_FLAGS, type(QuoteSettlementHook).creationCode,
+            DETERMINISTIC_DEPLOYER,
+            DECLARED_FLAGS,
+            type(QuoteSettlementHook).creationCode,
             abi.encode(IPoolManager(POOL_MANAGER), address(0xE0))
         );
         uint160 bits = uint160(mined) & uint160(Hooks.ALL_HOOK_MASK);
@@ -72,9 +76,8 @@ contract DeploymentRehearsalTest is Test {
     ///      permission it returns is matched by a declared bit. Checked in both directions, because
     ///      one direction alone lets a callback exist that is never invoked.
     function test_Rehearsal_ThePermissionsAndTheBitsAgreeInBothDirections() public {
-        QuoteSettlementHook hook = QuoteSettlementHook(
-            payable(address(uint160(DECLARED_FLAGS) | (uint160(0xAA) << 152)))
-        );
+        QuoteSettlementHook hook =
+            QuoteSettlementHook(payable(address(uint160(DECLARED_FLAGS) | (uint160(0xAA) << 152))));
         deployCodeTo(
             "QuoteSettlementHook.sol:QuoteSettlementHook",
             abi.encode(IPoolManager(POOL_MANAGER), address(0xE0)),
@@ -153,7 +156,9 @@ contract DeploymentRehearsalTest is Test {
             new QuoteSettlementExecutor(IPoolManager(POOL_MANAGER), IPermit2Transfer(PERMIT2));
 
         (address mined, bytes32 salt) = HookMiner.find(
-            DETERMINISTIC_DEPLOYER, DECLARED_FLAGS, type(QuoteSettlementHook).creationCode,
+            DETERMINISTIC_DEPLOYER,
+            DECLARED_FLAGS,
+            type(QuoteSettlementHook).creationCode,
             abi.encode(IPoolManager(POOL_MANAGER), address(executor))
         );
         (bool ok,) = DETERMINISTIC_DEPLOYER.call(abi.encodePacked(salt, _hookInitcode(address(executor))));
@@ -166,7 +171,9 @@ contract DeploymentRehearsalTest is Test {
         // And the same initcode with a DIFFERENT executor mines a different address, which is the
         // property that makes the binding unforgeable rather than merely declared.
         (address other,) = HookMiner.find(
-            DETERMINISTIC_DEPLOYER, DECLARED_FLAGS, type(QuoteSettlementHook).creationCode,
+            DETERMINISTIC_DEPLOYER,
+            DECLARED_FLAGS,
+            type(QuoteSettlementHook).creationCode,
             abi.encode(IPoolManager(POOL_MANAGER), address(0xBEEF))
         );
         assertTrue(other != mined, "two different executors mined the same hook address");
@@ -188,7 +195,9 @@ contract DeploymentRehearsalTest is Test {
         // so the deployed size is read from the artifact instead. Immutables occupy their slots in
         // the runtime either way, so the length is the length a deployment will produce.
         emit log_named_uint("hook runtime size          ", _deployedSize("QuoteSettlementHook.sol:QuoteSettlementHook"));
-        emit log_named_uint("executor runtime size      ", _deployedSize("QuoteSettlementExecutor.sol:QuoteSettlementExecutor"));
+        emit log_named_uint(
+            "executor runtime size      ", _deployedSize("QuoteSettlementExecutor.sol:QuoteSettlementExecutor")
+        );
         emit log_named_uint("declared permission bits   ", uint256(DECLARED_FLAGS));
         emit log_named_uint("target chain               ", SEPOLIA);
     }
@@ -201,7 +210,9 @@ contract DeploymentRehearsalTest is Test {
 
     function test_Rehearsal_BothContractsFitTheirLimits() public {
         assertLt(_deployedSize("QuoteSettlementHook.sol:QuoteSettlementHook"), 24576, "hook exceeds EIP-170");
-        assertLt(_deployedSize("QuoteSettlementExecutor.sol:QuoteSettlementExecutor"), 24576, "executor exceeds EIP-170");
+        assertLt(
+            _deployedSize("QuoteSettlementExecutor.sol:QuoteSettlementExecutor"), 24576, "executor exceeds EIP-170"
+        );
         assertLt(_executorInitcode().length, 49152, "executor initcode exceeds EIP-3860");
         assertLt(_hookInitcode(address(0xE0)).length, 49152, "hook initcode exceeds EIP-3860");
     }
