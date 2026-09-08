@@ -6,11 +6,42 @@ recipient receives another, atomically, through Uniswap's official Universal Rou
 whose hook admits a swap only on that path and only for a registered order, with a versioned
 receipt event. UNICA composes Uniswap v4 hooks and official execution infrastructure into a
 verifiable settlement flow with enforceable order invariants and indexable receipts. Built from
-scratch during ETHOnline 2026 by NFTeria. UNICA is a project, not affiliated with or endorsed by
-Uniswap.
+scratch during ETHOnline 2026 by **NFTeria**.
+
+**The name.** *Unica* is Latin for *one of a kind*. It is the name, and it is meant as one — not
+as a claim about the software. Nothing in this repository asserts that UNICA is the first or the
+only anything; where prior art exists it is named in [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md) and
+in the specification, and every capability below is stated at the rung it has actually reached.
+
+**Who made this, and for whom.** UNICA is built and maintained by **NFTeria** for the Uniswap v4
+ecosystem and for the sponsor programmes named below — Uniswap, Chainlink, Circle, ENS and The
+Graph. It is offered to those teams and to anyone else as MIT-licensed work they are free to read,
+run, fork and extend. **NFTeria is an independent builder: UNICA is not commissioned, affiliated
+with, endorsed by, or reviewed by Uniswap or by any sponsor named here.** Where their tools are
+used, they are used as published, at pinned versions, and every claim about them is testable from
+this repository.
 
 > The specification and threat model were written before the event; every line of code was
 > written during it. Both pre-event documents ship unedited in [`specs/`](specs/README.md).
+> Some Vyper contracts are carried-in prior art rather than work authored here, and
+> [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md) says which.
+
+## Sponsors — start here
+
+One row per ecosystem: what we built on your tool, the single command that proves it, and the
+honest limit. Every count is from a `make gate` run at this commit.
+
+| Ecosystem | What we built on it | Run this | Status | What we found for you |
+|---|---|---|---|---|
+| **Uniswap** | a v4 settlement hook + executor, **live and verified** on Sepolia, and a frozen V2 that binds a merchant-signed invoice to the swap that discharges it | `make gate` · `make fork` · `make proof` | **live** (V1) · **frozen RC**, undeployed (V2) | under exact output, the official periphery checks the input ceiling and never compares delivered output with the request — so full-fill enforcement lives in a hook or nowhere. Measured in [`test/v2/ShortFill.t.sol`](test/v2/ShortFill.t.sol) |
+| **Chainlink** | a deterministic CRE liquidation-protection policy and workflow adapter, offline and reproducible | `node integrations/chainlink-cre-guardian/test.mjs` | **local simulation**; no workflow deployed | the challenge contract's liquidation boundary is higher than its threshold implies, and **every published scenario liquidates a position that does nothing** — [`docs/feedback/chainlink.md`](docs/feedback/chainlink.md) |
+| **Circle** | an independent verifier for a Gateway nanopayment authorization, plus the mandate binding what it does not cover | `node integrations/arc-nanopayments/test.mjs` | **local**; nothing settled, no wallet used | Gateway batching is operational accounting, not a per-payment commitment — and your SDK's server half verifies nothing it could verify locally. [`BACKFEED.md`](BACKFEED.md) |
+| **ENS** | ENSv2 merchant resolution with 13 classified failure shapes, and a config builder with no argument that can carry an address | `node integrations/ensv2/test.mjs` | **local**; not yet wired to the payout policy | only one of three lookup failures reverts; the other two return the zero address, so a caller who catches reverts alone hands `address(0)` to a payment. [`docs/feedback/ens.md`](docs/feedback/ens.md) |
+| **The Graph** | a V2 invoice indexer namespace with deterministic entity ids | `make graph-v2-test` | **local**; not deployed to Studio | absence of a row does not prove an invoice is unpaid, and the schema says so where a reader would look |
+
+Newest work first: [`HACKATHON.md`](HACKATHON.md) is the per-track ledger — artifact, evidence,
+what is missing, and what may not be claimed. [`FEEDBACK.md`](FEEDBACK.md) holds questions we have
+asked and nobody has answered yet; they are labelled OPEN rather than presented as your answers.
 
 **Status, 2026-09-08.** `make gate` exits zero. What follows is recomputed from that run, not
 carried forward from an earlier one.
