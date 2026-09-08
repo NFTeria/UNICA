@@ -1,5 +1,5 @@
 {
-  "note": "Golden vectors for the UNICA V2 signing tool. The quote below is the one settled in test/fork/V2ForkSettlement.t.sol, so quoteDigest here is the digest a REAL settlement against the pinned Sepolia fork produced. Every value is re-derived independently in Solidity by test/v2/SigningVectors.t.sol and by this file's own suite. No key appears here and none is needed: these are digests.",
+  "note": "Golden vectors for the UNICA V2 signing tool. The quote below is the one settled in test/fork/V2ForkSettlement.t.sol, so quoteDigest here is the digest a REAL settlement against a pinned Sepolia fork produced. Every value is re-derived independently in Solidity by test/v2/SigningVectors.t.sol and by this file's own suite. The merchantConfigHash is a real MerchantConfig commitment with the preimage recorded below, not a hash of a phrase \u2014 tools/unica-verify needs the preimage to prove which resolution a receipt committed to. No key appears here and none is needed: these are digests.",
   "environment": {
     "chainId": 11155111,
     "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
@@ -28,25 +28,36 @@
     "deadline": "2000000000",
     "hook": "0xdD1FD0c33FEF7434443df2031f1E5e2e80dA60c0",
     "executor": "0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f",
-    "merchantConfigHash": "0x3bb52b86fe98b105da3be02385dc3d3eea709a8975a2b7d972c7dfbda5a6ff36",
+    "merchantConfigHash": "0x4e05349f968fea00fd20f1ac52e7529637453bcb24cf41641abb9c694a11bc85",
     "policyVersion": 1
   },
   "expected": {
     "poolKeyHash": "0x47ee6fdc24658bdb15909b92c42242aebcf1272dbb4ead31ff085c1e4bfa5455",
-    "quoteStructHash": "0x7cc3ecd91754305236f7d27084d5b1bad79d04c614ed6bbf94d7539d032002d4",
+    "quoteStructHash": "0x8f1830ce1d8e7e44506742ba719ec0429de742ac0e86c76c04d055c33cb6ceec",
     "unicaDomainSeparator": "0x39d622e8be85aa5546ae7ac84fbd4a18be5d05fe9036f2236abaceea726fae1d",
-    "quoteDigest": "0x7c5a616652fc5d2067f150e69830662e07e73bb30e5d8d459b2c6b82fbbc3869",
+    "quoteDigest": "0xba644671b7e407bd6af89a092fa14debd857b2eb26ab3639dd723991de90e5dd",
     "paymentWitness": "0x352b8c1d3512cd0181e0ceccf26afb1023c3818b9e1d56a57b6cc402ea1669d7",
     "permit2DomainSeparator": "0x94c1dec87927751697bfc9ebf6fc4ca506bed30308b518f0e9d6c5f74bbafdb8",
     "permitDigest": "0xb50e8ef95e170463737fd74c5ea510c605388a6ba19b9f7581a50c91ad3afe07",
     "settleSelector": "0x7b65b825",
     "hookData": "0x",
     "calldataLength": 1060,
-    "calldataHash": "0x642949680e443d032d67fd02e3c93c6e3141fb1ff201835a809ab4f3f9b3db34"
+    "calldataHash": "0x9071010d4431c21d894ba00c5adcddfbb1d030a9800876550c8fd1da59d3498e"
   },
   "placeholderSignatures": {
     "note": "Not signatures. Fixed-length filler so the calldata encoding is deterministic and no key is involved anywhere in this repository's test material.",
     "merchant": "0xababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab",
     "payer": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+  },
+  "merchantConfiguration": {
+    "note": "The preimage behind the quote's merchantConfigHash. It used to be keccak256 of a phrase with nothing behind it, which meant no verifier could ever be handed the resolution a fork receipt had committed to. Derived by integrations/ensv2/config.mjs and recomputed in Solidity by test/v2/SigningVectors.t.sol.",
+    "version": 1,
+    "namehash": "0x7825d40d6800e28bd1018984ac9d649c39174be745a90021a4dd67d50d072639",
+    "name": "fork-merchant.eth",
+    "recipient": "0xa50802FBcAfc5aF3D0093026d301a82ec341652a",
+    "payoutCurrency": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    "chainId": 11155111,
+    "resolvedAtBlock": 11656000,
+    "validForBlocks": 50000
   }
 }

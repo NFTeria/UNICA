@@ -16,6 +16,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {QuoteSettlementHook} from "../../../src/v2/QuoteSettlementHook.sol";
 import {QuoteSettlementExecutor} from "../../../src/v2/QuoteSettlementExecutor.sol";
+import {MerchantConfig} from "../../../src/v2/MerchantConfig.sol";
 import {IPermit2Transfer} from "../../../src/v2/interfaces/IPermit2Transfer.sol";
 import {IQuoteSettlement} from "../../../src/v2/interfaces/IQuoteSettlement.sol";
 import {HookRevertAsserts} from "../../v2/util/HookRevertAsserts.sol";
@@ -108,6 +109,12 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
     ///      quote digest a function of the pinned block, so re-pinning would silently invalidate
     ///      the receipt fixture the V2 indexer's tests are built from. 2033.
     uint256 internal constant FORK_QUOTE_DEADLINE = 2_000_000_000;
+
+    /// @dev Derived offline by `web/ensv2/resolve.mjs` and pinned here, exactly as
+    ///      `test/v2/MerchantConfig.t.sol` pins its own vector. Solidity recomputes the commitment
+    ///      from this and the two derivations are compared in `test/fork/MerchantConfigFork.t.sol`.
+    bytes32 internal constant FORK_NAMEHASH = 0x7825d40d6800e28bd1018984ac9d649c39174be745a90021a4dd67d50d072639;
+    bytes32 internal constant FORK_CONFIG_HASH = 0x4e05349f968fea00fd20f1ac52e7529637453bcb24cf41641abb9c694a11bc85;
 
     uint256 internal merchantKey = uint256(keccak256("unica.v2.fork.merchant"));
     uint256 internal payerKey = uint256(keccak256("unica.v2.fork.payer"));
@@ -213,6 +220,32 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
     }
 
     /// @dev The merchant is paid in USDC, which is currency0, so the swap is one-for-zero.
+    /// @notice The merchant configuration the fork quotes commit to, as a real preimage.
+    /// @dev It used to be `keccak256("fork merchant config")` — a word with no preimage anywhere,
+    ///      which meant no verifier could ever be handed the resolution a fork receipt committed
+    ///      to. `tools/unica-verify` needs the preimage to close `docs/v2/COMPATIBILITY-001.md`:
+    ///      the receipt carries no configuration field, so the only way to prove which resolution
+    ///      was settled is to rebuild the commitment, rebuild the quote digest from it, and match
+    ///      that against the digest the receipt does carry.
+    ///
+    ///      `resolvedAtBlock` is NOT the pinned block, for the same reason `FORK_QUOTE_DEADLINE`
+    ///      is absolute: a value derived from the pin makes every quote digest a function of it,
+    ///      so re-pinning would silently invalidate the captured fixtures. The window is wide
+    ///      enough that re-pinning forward does not turn the verifier's freshness row red for a
+    ///      reason that has nothing to do with the code.
+    function _forkMerchantConfig() internal view returns (MerchantConfig.Config memory) {
+        return MerchantConfig.Config({
+            version: 1,
+            namehash: FORK_NAMEHASH,
+            name: "fork-merchant.eth",
+            recipient: recipient,
+            payoutCurrency: payoutCurrency,
+            chainId: 11155111,
+            resolvedAtBlock: 11656000,
+            validForBlocks: 50000
+        });
+    }
+
     function _quote(bytes32 quoteId, uint256 amountOut, uint256 maxIn)
         internal
         view
@@ -233,7 +266,7 @@ abstract contract V2ForkFixture is ForkPin, HookRevertAsserts, QuoteSigning {
             deadline: FORK_QUOTE_DEADLINE,
             hook: address(hook),
             executor: address(executor),
-            merchantConfigHash: keccak256("fork merchant config"),
+            merchantConfigHash: MerchantConfig.hash(_forkMerchantConfig()),
             policyVersion: 1
         });
     }

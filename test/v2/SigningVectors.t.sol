@@ -5,6 +5,7 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {IQuoteSettlement} from "../../src/v2/interfaces/IQuoteSettlement.sol";
+import {MerchantConfig} from "../../src/v2/MerchantConfig.sol";
 import {QuoteSettlementExecutor} from "../../src/v2/QuoteSettlementExecutor.sol";
 import {QuoteSigning} from "./util/QuoteSigning.sol";
 
@@ -37,13 +38,13 @@ contract SigningVectorsTest is QuoteSigning {
 
     /// @dev PINNED from `tools/unica-sign/vectors.json`.
     bytes32 internal constant POOL_KEY_HASH = 0x47ee6fdc24658bdb15909b92c42242aebcf1272dbb4ead31ff085c1e4bfa5455;
-    bytes32 internal constant QUOTE_STRUCT_HASH = 0x7cc3ecd91754305236f7d27084d5b1bad79d04c614ed6bbf94d7539d032002d4;
+    bytes32 internal constant QUOTE_STRUCT_HASH = 0x8f1830ce1d8e7e44506742ba719ec0429de742ac0e86c76c04d055c33cb6ceec;
     bytes32 internal constant UNICA_DOMAIN = 0x39d622e8be85aa5546ae7ac84fbd4a18be5d05fe9036f2236abaceea726fae1d;
-    bytes32 internal constant QUOTE_DIGEST = 0x7c5a616652fc5d2067f150e69830662e07e73bb30e5d8d459b2c6b82fbbc3869;
+    bytes32 internal constant QUOTE_DIGEST = 0xba644671b7e407bd6af89a092fa14debd857b2eb26ab3639dd723991de90e5dd;
     bytes32 internal constant PAYMENT_WITNESS = 0x352b8c1d3512cd0181e0ceccf26afb1023c3818b9e1d56a57b6cc402ea1669d7;
     bytes32 internal constant PERMIT2_DOMAIN = 0x94c1dec87927751697bfc9ebf6fc4ca506bed30308b518f0e9d6c5f74bbafdb8;
     bytes32 internal constant PERMIT_DIGEST = 0xb50e8ef95e170463737fd74c5ea510c605388a6ba19b9f7581a50c91ad3afe07;
-    bytes32 internal constant CALLDATA_HASH = 0x642949680e443d032d67fd02e3c93c6e3141fb1ff201835a809ab4f3f9b3db34;
+    bytes32 internal constant CALLDATA_HASH = 0x9071010d4431c21d894ba00c5adcddfbb1d030a9800876550c8fd1da59d3498e;
     uint256 internal constant CALLDATA_LENGTH = 1060;
 
     /// @dev Filler, not signatures. Fixed length so the calldata encoding is deterministic, and no
@@ -79,9 +80,43 @@ contract SigningVectorsTest is QuoteSigning {
             deadline: DEADLINE,
             hook: HOOK,
             executor: EXECUTOR,
-            merchantConfigHash: keccak256("fork merchant config"),
+            merchantConfigHash: MerchantConfig.hash(_merchantConfig()),
             policyVersion: 1
         });
+    }
+
+    /// @dev The resolution the fork quote commits to, as a real preimage rather than a word with
+    ///      nothing behind it. It used to be `keccak256("fork merchant config")`, which meant no
+    ///      verifier could ever be handed the configuration a fork receipt had committed to —
+    ///      the gap `docs/v2/COMPATIBILITY-001.md` reported and `tools/unica-verify` closes.
+    function _merchantConfig() internal pure returns (MerchantConfig.Config memory) {
+        return MerchantConfig.Config({
+            version: 1,
+            namehash: FORK_NAMEHASH,
+            name: "fork-merchant.eth",
+            recipient: RECIPIENT,
+            payoutCurrency: USDC,
+            chainId: CHAIN_ID,
+            resolvedAtBlock: 11656000,
+            validForBlocks: 50000
+        });
+    }
+
+    /// @dev Derived offline by `web/ensv2/resolve.mjs`, pinned here, and recomputed in Solidity
+    ///      below. Two derivations of one commitment, exactly as `test/v2/MerchantConfig.t.sol`
+    ///      does for its own vector.
+    bytes32 internal constant FORK_NAMEHASH = 0x7825d40d6800e28bd1018984ac9d649c39174be745a90021a4dd67d50d072639;
+
+    /// @dev PINNED from `integrations/ensv2/config.mjs`, and recomputed here. Two derivations of
+    ///      one commitment, written from the EIP-712 specification rather than from each other.
+    bytes32 internal constant CONFIG_HASH = 0x4e05349f968fea00fd20f1ac52e7529637453bcb24cf41641abb9c694a11bc85;
+
+    function test_Vectors_TheMerchantConfigurationCommitmentAgrees() public pure {
+        assertEq(
+            MerchantConfig.hash(_merchantConfig()),
+            CONFIG_HASH,
+            "the on-chain and offline derivations of the merchant configuration disagree"
+        );
     }
 
     function _ctx() internal pure returns (AuthContext memory) {

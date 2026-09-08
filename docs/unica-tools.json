@@ -677,7 +677,7 @@
       "id": "v2-merchant-config-commitment",
       "name": "V2 Merchant Configuration Commitment",
       "version": "1",
-      "status": "IMPLEMENTED — LOCAL TESTS",
+      "status": "IMPLEMENTED — FORK TESTS",
       "paths": [
         "src/v2/MerchantConfig.sol",
         "integrations/ensv2/config.mjs"
@@ -689,12 +689,15 @@
       ],
       "tests": [
         "test/v2/MerchantConfig.t.sol",
-        "integrations/ensv2/test.mjs"
+        "integrations/ensv2/test.mjs",
+        "test/fork/CaptureReceipt.t.sol",
+        "tools/unica-verify/test.mjs"
       ],
       "evidence": [
         {"kind": "command", "value": "forge test --match-path 'test/v2/MerchantConfig.t.sol'"},
         {"kind": "command", "value": "node integrations/ensv2/test.mjs"},
-        {"kind": "measurement", "value": "three derivations of one commitment agree: JavaScript, Solidity, and the executor"}
+        {"kind": "measurement", "value": "three derivations of one commitment agree: JavaScript, Solidity, and the executor"},
+        {"kind": "measurement", "value": "the fork quotes commit to a real preimage rather than a hash of a phrase, and tools/unica-verify rebuilds the quote digest from it and matches the digest a real receipt carries"}
       ],
       "limitations": [
         "the expiry window is enforced off chain only; a settlement never sees the struct, only its hash",
@@ -705,7 +708,7 @@
         "ens",
         "uniswap"
       ],
-      "lastVerifiedCommit": "48a07e710ef77a3128108fdc47f0a71241033c36"
+      "lastVerifiedCommit": "09309888958bc57f982e5c4b98e70a2c6fcd263a"
     },
     {
       "id": "v2-fork-qualification",
@@ -752,7 +755,7 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "b27cb5a0f0a7d0668f968395de900db0776ef398"
+      "lastVerifiedCommit": "09309888958bc57f982e5c4b98e70a2c6fcd263a"
     },
     {
       "id": "interface-freeze-verifier",
@@ -866,7 +869,7 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "b9d9116b5890be23296ef044ad087f7f7c4399c5"
+      "lastVerifiedCommit": "09309888958bc57f982e5c4b98e70a2c6fcd263a"
     }
   ]
 }

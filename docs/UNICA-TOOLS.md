@@ -441,7 +441,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   fresh reading produces a different commitment and therefore a different digest.
 - Dependencies: EIP-712, the ENSv2 Universal Resolver.
 - Networks: none.
-- Status: IMPLEMENTED — LOCAL TESTS
+- Status: IMPLEMENTED — FORK TESTS
 - Evidence: three derivations of one commitment agree — JavaScript, Solidity, and the executor's own
   `hashMerchantConfig`. Eight component rows on each side, and three sabotages (a field renamed on
   either side, and the name dropped from the hash) each turn rows red.

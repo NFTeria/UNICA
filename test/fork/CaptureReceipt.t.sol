@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {Vm} from "forge-std/Vm.sol";
 import {IQuoteSettlement} from "../../src/v2/interfaces/IQuoteSettlement.sol";
+import {MerchantConfig} from "../../src/v2/MerchantConfig.sol";
 import {V2ForkFixture} from "./util/V2ForkFixture.sol";
 
 /// @title The fixture the V2 indexer's tests are built from, captured rather than invented
@@ -14,6 +15,25 @@ import {V2ForkFixture} from "./util/V2ForkFixture.sol";
 contract CaptureReceiptForkTest is V2ForkFixture {
     function setUp() public {
         _setUpForkV2();
+    }
+
+    /// @dev The two derivations of the merchant configuration commitment, compared on the fork
+    ///      rather than only locally — because the quote every row here settles now COMMITS to a
+    ///      real resolution instead of `keccak256("fork merchant config")`, a word with no preimage
+    ///      that no verifier could ever have been handed. `tools/unica-verify` needs the preimage to
+    ///      close `docs/v2/COMPATIBILITY-001.md`, and a preimage that Solidity and the offline
+    ///      encoder disagree about would close nothing.
+    function test_ForkCapture_TheMerchantConfigurationAgreesWithTheOfflineDerivation() public view {
+        assertEq(
+            MerchantConfig.hash(_forkMerchantConfig()),
+            FORK_CONFIG_HASH,
+            "the on-chain and offline derivations of the fork merchant configuration disagree"
+        );
+        assertEq(
+            _quote(bytes32("fork-1"), 100e6, 1e18).merchantConfigHash,
+            FORK_CONFIG_HASH,
+            "the fork quote does not commit to the configuration this fixture describes"
+        );
     }
 
     function test_ForkCapture_PrintTheReceiptTheIndexerIsTestedAgainst() public {

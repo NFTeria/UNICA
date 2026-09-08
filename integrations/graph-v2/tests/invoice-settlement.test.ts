@@ -11,7 +11,7 @@ import { handleQuoteSettled } from "../src/mapping";
 // A subgraph tested against somebody's idea of a receipt is a subgraph tested against nothing.
 const EXECUTOR = Address.fromString("0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f");
 const QUOTE_ID = Bytes.fromHexString("0x666f726b2d310000000000000000000000000000000000000000000000000000");
-const QUOTE_DIGEST = Bytes.fromHexString("0x7c5a616652fc5d2067f150e69830662e07e73bb30e5d8d459b2c6b82fbbc3869");
+const QUOTE_DIGEST = Bytes.fromHexString("0xba644671b7e407bd6af89a092fa14debd857b2eb26ab3639dd723991de90e5dd");
 const RECIPIENT = Address.fromString("0xa50802FBcAfc5aF3D0093026d301a82ec341652a");
 const PAYER = Address.fromString("0x14aa1c8aEB544A744624a5B9956F3318b468dC94");
 const MERCHANT = Address.fromString("0xd1948520eCC70CFD26c23D2528272c017dAAA256");
