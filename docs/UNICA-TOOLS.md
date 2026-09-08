@@ -388,6 +388,43 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
 - Last verified commit: `b9d9116b5890`
 
+### ENSv2 Configuration Builder
+
+- Id: `ensv2-config-builder`
+- Purpose: turn a validated resolution into a merchant configuration, and refuse everything else.
+- Product role: the join between discovery and the invoice. `resolve.mjs` answers which address a
+  name points at; this decides whether that answer may become something a merchant signs.
+- Version: 0.1.0
+- Location: `integrations/ensv2/build.mjs`
+- Inputs: a resolution object, and a policy carrying the payout currency, the validity window, the
+  settlement chain, and the block the caller is building at.
+- Outputs: the configuration, its commitment, and diagnostics that are explicitly outside the hash.
+- Trust boundary: **there is no argument that can carry an address.** A recipient comes from the
+  resolution or not at all, so "resolve, then quietly pay somebody else" is not a mistake a caller
+  can make — it is not expressible. A `recipient` passed in the policy is refused by name rather
+  than ignored, because a caller who passed one believes it is being used.
+- Security guarantees: ten classified refusals, each returning no configuration and no commitment
+  and each carrying an explanation. The payout currency is chosen from a compiled per-chain set;
+  an unlisted token is refused by name. Staleness is judged against a block the caller supplies,
+  so the module needs no clock and no network to be tested.
+- The time rule, and why it is safe in one direction only: the schema measures validity in BLOCKS
+  and a quote's deadline is a TIMESTAMP. Ethereum slots are twelve seconds and an empty slot
+  produces no block, so `validForBlocks` blocks always take **at least** `12 × validForBlocks`
+  seconds. Bounding a quote at that lower estimate expires it no later than the configuration
+  expires, never after — the error is conservative by construction rather than by luck.
+- Explicit non-guarantees: it builds a commitment and nothing else. It does not resolve, sign,
+  quote or settle. A caller that lies about the current block gets a stale configuration.
+- Dependencies: the ENSv2 resolver module and the canonical `MerchantConfig` encoder, imported
+  rather than reimplemented.
+- Networks: none. No RPC, no key, no clock.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 136 rows in the ENS suite. Five sabotages killed by their own named row.
+- Tests: `integrations/ensv2/test.mjs`
+- Deployment: none.
+- Limitations: as above. Local tests only, no fork run, **V2 is not deployed**, and not audited.
+- Sponsor relevance: ENS and Uniswap.
+- Last verified commit: `c2d69a03303c`
+
 ### NameMath Art Contracts
 
 - Id: `namemath-art`

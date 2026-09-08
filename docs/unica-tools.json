@@ -954,6 +954,41 @@
       ],
       "sponsorRoles": [],
       "lastVerifiedCommit": "aee1048edde04d6bc1d3115592e5118b32fe08b1"
+    },
+    {
+      "id": "ensv2-config-builder",
+      "name": "ENSv2 Configuration Builder",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/ensv2/build.mjs"
+      ],
+      "networks": [],
+      "dependencies": [
+        "ensv2-universal-resolver",
+        "v2-merchant-config-commitment"
+      ],
+      "tests": [
+        "integrations/ensv2/test.mjs"
+      ],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/ensv2/test.mjs"},
+        {"kind": "measurement", "value": "136 rows in the ENS suite, of which about 60 cover the builder: one positive path, ten classified refusals, and every committed field moved one at a time"},
+        {"kind": "measurement", "value": "five sabotages killed by their own named row: an accepted recipient override, a bypassed payout allowlist, a removed staleness check, a diagnostic that crept into the commitment, and a failed resolution built anyway"}
+      ],
+      "limitations": [
+        "it builds a commitment; it does not resolve, sign, quote or settle",
+        "the payout allowlist is one token on one chain, compiled in rather than configurable",
+        "staleness is judged against a block the CALLER supplies, so a caller that lies about the head gets a stale configuration",
+        "the block window bounds a quote deadline through Ethereum's twelve-second slot, which is conservative but is a protocol assumption stated rather than proven here",
+        "local tests only: no fork run, and V2 is not deployed",
+        "not audited"
+      ],
+      "sponsorRoles": [
+        "ens",
+        "uniswap"
+      ],
+      "lastVerifiedCommit": "c2d69a03303c34f6713d48eacdc7a9e0fb3a66c7"
     }
   ]
 }

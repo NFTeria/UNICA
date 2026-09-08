@@ -12,6 +12,10 @@
 // shown to a payer is not blank.
 
 import {readFileSync} from "node:fs";
+import {
+  BUILD_STATUS, CONFIG_VERSION, PAYOUT_CURRENCIES, SECONDS_PER_BLOCK,
+  buildMerchantConfig, expiryTimestamp,
+} from "./build.mjs";
 import {CONFIG_TYPE, merchantConfigHash, isFresh, commitResolution} from "./config.mjs";
 import {
   resolveMerchant, normalizeName, namehash, dnsEncode,
@@ -25,6 +29,19 @@ let pass = 0, fail = 0;
 function check(name, cond, detail) {
   if (cond) { pass++; console.log(`PASS  ${name}`); }
   else { fail++; console.log(`FAIL  ${name}${detail ? `\n      ${detail}` : ""}`); }
+}
+
+/// For a row whose subject can THROW. A throw is a failure with a reason, not a crash: without
+/// this, one bad call takes the summary and the exit status down with it and a piped run reads as
+/// a pass. Measured while sabotaging the payout-currency allowlist, which turned a classified
+/// refusal into a raw TypeError and left this suite reporting nothing at all.
+function guard(name, fn) {
+  try {
+    return fn();
+  } catch (e) {
+    check(name, false, `threw: ${e.message}`);
+    return undefined;
+  }
 }
 
 /** Every refusal must look the same from outside: classified, empty-handed, and explained. */
@@ -139,6 +156,120 @@ console.log("\n— no fallback, ever —");
 // the same EIP-712 specification and not from this file, and by the deployed executor's own
 // `hashMerchantConfig`. Three derivations of one word, because a commitment a wallet computes
 // differently from the contract is rejected in the wallet.
+
+console.log("\n— from a resolution to a configuration, and to nothing else —");
+{
+  // The resolution is produced by the real module against an injected reply, not hand-written.
+  // A builder tested against an object somebody typed is a builder tested against an assumption
+  // about what the resolver returns.
+  const MERCHANT = "0x51050ec063d393217b436747617ad1c2285aeeee";
+  const USDC = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+  const AT_BLOCK = 11660000;
+  const resolved = async (addr = MERCHANT, opts = {blockNumber: AT_BLOCK}) =>
+    resolveMerchant("merchant.eth", async () => okReturn(addrWord(addr)), opts);
+
+  const policy = {payoutCurrency: USDC, validForBlocks: 300, settlementChainId: 11155111, atBlock: AT_BLOCK};
+
+  const built = buildMerchantConfig(await resolved(), policy);
+  check("a validated resolution builds a configuration", built.ok && built.status === "BUILT",
+        JSON.stringify(built));
+  check("the recipient is the RESOLVED address and nothing else",
+        built.config.recipient === MERCHANT);
+  check("the namehash and normalised name travel from the resolution",
+        built.config.namehash === namehash("merchant.eth") && built.config.name === "merchant.eth");
+  check("the resolution block is recorded", built.config.resolvedAtBlock === AT_BLOCK);
+  check("the schema version is the builder's", built.config.version === CONFIG_VERSION);
+  check("the commitment is the canonical hash of exactly that configuration",
+        built.merchantConfigHash === merchantConfigHash(built.config));
+
+  // THE RULE THIS MODULE EXISTS FOR. There is no argument that carries an address, so the failure
+  // is not "the override was ignored" -- it is refused, because a caller who passed one believes
+  // it is being used.
+  const overridden = buildMerchantConfig(await resolved(), {...policy, recipient: "0x" + "ba".repeat(20)});
+  check("a recipient supplied alongside the resolution is REFUSED",
+        !overridden.ok && overridden.status === BUILD_STATUS.RECIPIENT_OVERRIDE_REFUSED, overridden.status);
+  check("a refused build returns no configuration and no commitment",
+        overridden.config === undefined && overridden.merchantConfigHash === undefined);
+
+  // Diagnostics are outside the commitment. Changed all at once, so a single field that had crept
+  // into the hash would show up here rather than in a merchant's wallet.
+  const a = buildMerchantConfig(await resolved(), policy);
+  const b = buildMerchantConfig(await resolved(), {...policy, atBlock: AT_BLOCK + 299});
+  check("every diagnostic differs between the two builds",
+        a.diagnostics.builtAtBlock !== b.diagnostics.builtAtBlock);
+  check("changing a diagnostic does NOT change the commitment",
+        a.merchantConfigHash === b.merchantConfigHash);
+  for (const k of ["input", "dns", "resolver", "entryPoint", "payoutSymbol", "payoutDecimals", "builtAtBlock"]) {
+    check(`the diagnostic '${k}' is present and outside the config`,
+          k in a.diagnostics && !(k in a.config));
+  }
+
+  // Every committed field, moved one at a time on the BUILDER'S output.
+  for (const [label, over] of Object.entries({
+    "the resolved recipient": {recipient: "0x" + "cd".repeat(20)},
+    "the payout currency": {payoutCurrency: "0x" + "cd".repeat(20)},
+    "the chain": {chainId: 1},
+    "the schema version": {version: 2},
+    "the namehash": {namehash: namehash("other.eth")},
+    "the normalised name": {name: "other.eth"},
+    "the resolution block": {resolvedAtBlock: AT_BLOCK + 1},
+    "the validity window": {validForBlocks: 301},
+  })) {
+    check(`${label} moves the built commitment`,
+          merchantConfigHash({...a.config, ...over}) !== a.merchantConfigHash);
+  }
+}
+
+console.log("\n— the builder refuses, by name, and hands back nothing —");
+{
+  const MERCHANT = "0x51050ec063d393217b436747617ad1c2285aeeee";
+  const USDC = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+  const AT_BLOCK = 11660000;
+  const ok = await resolveMerchant("merchant.eth", async () => okReturn(addrWord(MERCHANT)),
+                                   {blockNumber: AT_BLOCK});
+  const base = {payoutCurrency: USDC, validForBlocks: 300, settlementChainId: 11155111, atBlock: AT_BLOCK};
+
+  const refusals = [
+    ["a non-resolution object", null, base, "NOT_A_RESOLUTION"],
+    ["a resolution that failed",
+      await resolveMerchant("merchant.eth", async () => okReturn(addrWord("0x" + "00".repeat(20)))),
+      base, "RESOLUTION_REFUSED"],
+    ["a resolution with a zero recipient", {...ok, recipient: "0x" + "00".repeat(20)}, base, "ZERO_RECIPIENT"],
+    ["a resolution with no block recorded", {...ok, resolvedAt: null}, base, "NO_RESOLUTION_BLOCK"],
+    ["a settlement chain that is not the resolution chain", ok, {...base, settlementChainId: 1}, "WRONG_CHAIN"],
+    ["a payout token nobody supports", ok, {...base, payoutCurrency: "0x" + "cd".repeat(20)}, "UNSUPPORTED_PAYOUT_TOKEN"],
+    ["a validity window of zero blocks", ok, {...base, validForBlocks: 0}, "INVALID_VALIDITY_POLICY"],
+    ["a validity window wider than uint32", ok, {...base, validForBlocks: 0x100000000}, "INVALID_VALIDITY_POLICY"],
+    ["a reading that has expired", ok, {...base, atBlock: AT_BLOCK + 301}, "STALE_RESOLUTION"],
+    ["a reading from the future", ok, {...base, atBlock: AT_BLOCK - 1}, "STALE_RESOLUTION"],
+  ];
+  for (const [label, res, pol, want] of refusals) {
+    const r = guard(`${label} is refused as ${want}`, () => buildMerchantConfig(res, pol)) ?? {};
+    check(`${label} is refused as ${want}`, !r.ok && r.status === want, `got ${r.status}`);
+    check(`... and returns no configuration`, r.config === undefined && r.merchantConfigHash === undefined);
+    check(`... and explains itself`, typeof r.explain === "string" && r.explain.length > 0);
+  }
+
+  check("the last block of the window still builds",
+        buildMerchantConfig(ok, {...base, atBlock: AT_BLOCK + 300}).ok);
+  check("USDC is the only payout currency this deployment lists",
+        Object.keys(PAYOUT_CURRENCIES[11155111]).length === 1);
+}
+
+console.log("\n— the block window bounds a timestamp, in the safe direction only —");
+{
+  const config = {validForBlocks: 300};
+  const t0 = 1788800000n;
+  const expiry = expiryTimestamp(config, t0);
+  check("the expiry is the reading's time plus twelve seconds a block",
+        expiry === t0 + 300n * BigInt(SECONDS_PER_BLOCK), String(expiry));
+  // The whole argument for using a block window to bound a timestamp: an EMPTY slot produces no
+  // block, so 300 blocks always take AT LEAST 300 * 12 seconds. The bound therefore expires a
+  // quote no later than the configuration expires, and the error is conservative by construction.
+  check("a chain that skipped slots outlives the bound rather than the bound outliving it",
+        expiry <= t0 + 300n * 13n);
+  check("twelve seconds is the protocol's slot time, not a measurement", SECONDS_PER_BLOCK === 12);
+}
 
 console.log("\n— one canonical schema, checked against the contract as written —");
 {
