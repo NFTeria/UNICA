@@ -388,6 +388,48 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
 - Last verified commit: `b9d9116b5890`
 
+### NameMath Art Contracts
+
+- Id: `namemath-art`
+- Purpose: turn a seed, and in one case a name, into an exactly invertible planar map whose
+  forward and inverse forms are the artwork.
+- Product role: none in settlement. This is the art side of the workspace and shares nothing with
+  the payment path but the repository.
+- Version: 0.1.0
+- Location: `vy/src/namemath.vy`, `vy/src/logobackground.vy`
+- Inputs: a 32-byte seed (`namemath`), or a UTF-8 label up to 64 bytes (`logobackground`).
+- Outputs: a transform program, its exact inverse, computed traits, and a lattice field with a
+  palette.
+- Trust boundary: pure functions over checked `int256`. Nothing is stored except `namemath`'s seed
+  registry, and nothing is transferred.
+- Security guarantees: every generated affine step is unimodular, so the inverse is an integer map
+  and `F^-1(F(p)) = p` exactly rather than approximately. Checked at 845 grid points across five
+  unrelated seeds, and the forward map is separately shown to be injective on the grid — an inverse
+  built from the same broken table as its forward map would otherwise agree with it.
+- Explicit non-guarantees, each measured rather than asserted:
+  - **`namemath.vy` had never compiled.** `convert(block.prevrandao, bytes32)` is a type error in
+    every Vyper 0.4.x, so no version of this contract has ever been deployable.
+  - **No declared coordinate bound.** Evaluation reverts on overflow, which is the right failure,
+    but the usable grid is a property of the seed: 158 on the worst of 24 `namemath` seeds against
+    1,727,786,871 for `logobackground`. A renderer cannot pick one grid for every token.
+  - **The registry seed is grindable.** `register()` mixes a caller-supplied entropy word with a
+    readable `prevrandao`, so a minter can compute the outcome off chain and submit the one they
+    want. 256 candidates reachable in a single transaction gave 13 distinct trait classes.
+  - **`namemath` binds no name.** Its seed contains no name, no contract, no chain id and no
+    algorithm version — so nothing ties a token's art to its identity.
+  - **An unreachable guard.** `logobackground.cell()` tests `if m < 0` after summing two squares.
+    Under checked arithmetic that branch cannot run; the case it appears to handle reverts.
+- Dependencies: none. No imports, no libraries, no oracles.
+- Networks: none. The only EVM these run on is Moccasin's in-process one.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 20 rows, `cd vy && mox test -q`.
+- Tests: `vy/tests/test_namemath.py`, `vy/tests/test_logobackground.py`
+- Deployment: none.
+- Limitations: as above. **Not deployed and not audited.** Neither contract touches ENS, Uniswap,
+  a pool, a token or a payment.
+- Sponsor relevance: none claimed.
+- Last verified commit: `aee1048edde0`
+
 ### V2 Receipt Verifier
 
 - Id: `unica-verify`

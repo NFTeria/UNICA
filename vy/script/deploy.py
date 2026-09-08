@@ -5,7 +5,15 @@ in-process pyevm, and moccasin.toml is trimmed to that one network so it cannot 
 elsewhere by accident.
 """
 
-from src import bushmaster, constrictor, egg_eater, rattler, sidewinder
+from src import (
+    bushmaster,
+    constrictor,
+    egg_eater,
+    logobackground,
+    namemath,
+    rattler,
+    sidewinder,
+)
 from moccasin.boa_tools import VyperContract
 
 
@@ -16,6 +24,10 @@ def deploy_all() -> dict[str, VyperContract]:
         "rattler": rattler.deploy(),
         "egg_eater": egg_eater.deploy(),
         "sidewinder": sidewinder.deploy(),
+        # NameMath is the art side of this workspace rather than the settlement model. It
+        # shares the EVM and nothing else.
+        "namemath": namemath.deploy(),
+        "logobackground": logobackground.deploy(),
     }
 
 

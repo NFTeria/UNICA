@@ -34,3 +34,18 @@ def egg_eater(model):
 @pytest.fixture(scope="session")
 def sidewinder(model):
     return model["sidewinder"]
+
+
+# NameMath holds storage, unlike every model above it, so its fixture is FUNCTION scoped: a
+# token registered by one example must not still be registered in the next. The session-scoped
+# `model` above stays as it is, because those contracts are pure.
+@pytest.fixture(scope="function")
+def namemath():
+    from src import namemath as _namemath
+
+    return _namemath.deploy()
+
+
+@pytest.fixture(scope="session")
+def logobackground(model):
+    return model["logobackground"]
