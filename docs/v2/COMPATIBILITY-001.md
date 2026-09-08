@@ -1,8 +1,9 @@
 # Compatibility report 001 — the V2 receipt does not carry `merchantConfigHash`
 
 **Raised by:** building the V2 Graph indexer namespace against the frozen `v2.0.0-rc1` receipt.
-**Status:** open. **No interface was changed.** The freeze holds; this is the report the ruling asks
-for instead of an edit.
+**Status:** CLOSED on 2026-09-08 by option 1, below. **No interface was changed.** The freeze held;
+this is the report the ruling asked for instead of an edit, and the resolution is a tool rather than
+a field.
 
 ## The finding
 
@@ -50,8 +51,38 @@ for it.
 3. **Emit a second event.** Rejected. "Exactly one receipt per settlement" is a frozen claim with a
    test behind it, and two events would make "one settlement" ambiguous to anything counting logs.
 
-## Recommendation
+## Recommendation, and what was done
 
-Option 1 until a product path actually needs the query. The commitment's job is to be *inside what
-the merchant signed*, and it is; being *also* readable from a log is a convenience, and buying it
-costs a topic change — the one change in the frozen surface that fails silently rather than loudly.
+Option 1 — accept the gap — until a product path actually needs the query. The commitment's job is
+to be *inside what the merchant signed*, and it is; being *also* readable from a log is a
+convenience, and buying it costs a topic change, the one change in the frozen surface that fails
+silently rather than loudly.
+
+### How option 1 was made real
+
+Accepting a gap is not the same as closing a report, and this one stayed open until anybody holding
+a quote could actually perform the check the table above says is possible. Two things were needed.
+
+**A preimage that exists.** Every fork quote committed to `keccak256("fork merchant config")` — a
+word with nothing behind it. So the "yes, if you hold the quote" row was true in principle and
+unreachable in practice: there was no configuration to hold. The fork fixture and the signing
+vectors now commit to a real `MerchantConfig` for `fork-merchant.eth`, derived offline by
+`integrations/ensv2/config.mjs` and recomputed in Solidity by `src/v2/MerchantConfig.sol` — the two
+compared in `test/v2/SigningVectors.t.sol` and again on the fork in `test/fork/CaptureReceipt.t.sol`.
+
+**A verifier that runs the proof.** `tools/unica-verify` takes the preimage, rebuilds the
+commitment, puts it into the quote, rebuilds the EIP-712 digest, and requires that digest to equal
+the one the receipt carries. If it does, the settlement committed to exactly this resolution and to
+no other. It also refuses the near-misses: a configuration that resolved to a different address, one
+that names another chain, one whose payout currency is not the quote's, and one whose reading had
+expired by the block the settlement landed in.
+
+Sabotage S2 in `tools/unica-verify/test.mjs` is the row that keeps this honest. It builds the
+shortcut — "the quote carries *some* configuration hash, so call it verified" — feeds it a
+configuration whose payout currency was changed, and requires the shortcut to accept what the real
+verifier refuses.
+
+**What is still true:** the "settlements by merchant configuration" query remains unavailable,
+because there is still nothing in the log to filter on. Nothing here changes that, and no document
+should say otherwise. What changed is that the per-settlement question is now answerable by running
+a command, rather than in principle.
