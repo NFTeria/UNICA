@@ -14,9 +14,14 @@ marks='unica-closet|claude-toolkit|SESSION-PROMPT|prize-watch/|/Users/'
 # identifier rather than a secret. Widened for the V2 Permit2 vectors, which pin EIP-712 domain
 # separators, witness hashes and signing digests as literals on both sides of a two-language
 # comparison. `id[[:space:]:]` rather than `id[[:space:]]` so a struct field like `quoteId:` counts.
+# Widened again on 2026-09-08 by `curve` and `signature`, for `tools/unica-verify`: secp256k1's
+# published domain parameters and a 65-byte ECDSA signature are both PUBLIC BY DEFINITION — the
+# curve's parameters are in the standard, and a signature is the thing that gets broadcast. Neither
+# widening touches the `secrets` rule, which matches on the NAME beside a value and still fires on
+# `PRIVATE_KEY=` however the rest of the line reads; there is a control for exactly that below.
 # Every addition here is paired with a control below: the scan must still catch a value with none
 # of these words on its line, or the widening has quietly turned the check off.
-label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]:]|swap|receipt|topic|digest|witness|domain|vector'
+label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]:]|swap|receipt|topic|digest|witness|domain|vector|curve|signature'
 
 # The controls, first: each pattern must catch a planted bad input and pass a planted good one.
 chk "control: a labelled key is caught"        "printf 'PRIVATE_KEY=0x%064d\n' 1 | grep -qiE '$secrets'"
@@ -28,14 +33,27 @@ chk "control: a labelled pool id is NOT caught" "! (printf 'pool id 0x%064d\n' 3
 chk "control: a labelled digest is NOT caught"  "! (printf 'digest 0x%064d\n' 4 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label')"
 chk "control: a struct field named quoteId is NOT caught" "! (printf '  quoteId: \"0x%064d\",\n' 5 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label')"
 chk "control: the widened label still catches a naked value" "printf '  \"0x%064d\",\n' 6 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label'"
+chk "control: a curve parameter is NOT caught"  "! (printf 'const CURVE_GX = 0x%064d;\n' 7 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label')"
+chk "control: a signature is NOT caught"        "! (printf '  signature: \"0x%064d\",\n' 8 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label')"
+# The widening's own guard: the two new words must not become a place to hide a key. `secrets`
+# matches on the NAME beside the value, so it fires whatever else the line says.
+chk "control: a key on a line that also says 'signature' is STILL caught" "printf 'signature PRIVATE_KEY=0x%064d\n' 9 | grep -qiE '$secrets'"
+chk "control: a key on a line that also says 'curve' is STILL caught"     "printf 'curve PRIVATE_KEY=0x%064d\n' 9 | grep -qiE '$secrets'"
 
 # Then the tree.
 # script/check-surface.sh carries this same pattern and a planted control key, as this file does; both are scanners.
 chk "no labelled secret or token format" "! git grep -niE '$secrets' -- . ':!lib' ':!.github/workflows/ci.yml' ':!script/scan.sh' ':!script/check-surface.sh'"
 chk "no private runtime file tracked"    "! { git ls-files; git ls-files --others --exclude-standard; } | grep -qE '$names'"
 chk "no private location mentioned"      "! git grep -nE '$marks' -- . ':!lib' ':!.github/workflows/ci.yml' ':!.gitignore' ':!script/scan.sh'"
-bare=$(git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' ':!broadcast/' ':!script/scan.sh' | grep -viE "$label" || true)
-chk "no bare 32-byte value without a label on its line" "[ -z \"\$(git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' ':!broadcast/' ':!script/scan.sh' | grep -viE '$label')\" ]"
+# CAPTURED CHAIN ARTIFACTS are excluded from the bare-value rule, and only from that one.
+# `broadcast/` and `tools/unica-verify/fixtures/` hold bytes a node returned, recorded verbatim
+# because the whole point of a captured artifact is that nobody edited it — a receipt's topics and
+# data are structurally nothing but unlabelled 32-byte words, and labelling them would mean
+# rewriting the evidence. The `secrets` rule above still reads both directories, so a key that
+# somehow landed in one is still caught by name.
+artifacts="':!broadcast/' ':!tools/unica-verify/fixtures/'"
+bare=$(eval "git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' $artifacts ':!script/scan.sh'" | grep -viE "$label" || true)
+chk "no bare 32-byte value without a label on its line" "[ -z \"\$bare\" ]"
 [ -n "$bare" ] && echo "$bare"
 
 echo "checks run: $((ok+fail)), passed: $ok, failed: $fail"
