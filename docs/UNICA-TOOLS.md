@@ -726,10 +726,14 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   schema rather than two.
 - Networks: none of its own. Verified against a local anvil fork of Ethereum Sepolia.
 - Status: IMPLEMENTED — FORK TESTS
-- Evidence: 100 offline rows, 109 with the online rows. One positive control on a real captured
-  receipt, 30 negatives altering exactly one field each, and 10 sabotages. Online: 50 of 50 checks
-  against a settlement fetched by hash over JSON-RPC, including 5 dependency code hashes compared
-  against live Sepolia code and the hook's own record that it consumed this quote.
+- Evidence: 113 rows with no endpoint at all, 113 passed, 0 failed. One positive control on a real
+  captured receipt, 30 negatives altering exactly one field each, 10 sabotages, and 13 rows driving
+  ONLINE mode against a stub node — those are in the gate because what they test is whether the
+  verifier asks the chain anything, which does not depend on anyone's uptime. Ten of the thirteen go
+  red against the code as it stood before 2026-09-08; the three that do not are the controls.
+  A further nine rows run when `UNICA_VERIFY_RPC` names a real endpoint. **They were not run in this
+  slice: no endpoint was available.** Online mode emits 57 check rows against a settlement fetched
+  by hash, including 5 dependency code hashes and the hook's own record that it consumed this quote.
 - Tests: `tools/unica-verify/test.mjs`, `test/fork/CaptureReceipt.t.sol`
 - Deployment: none. Not published as a package.
 - Limitations: the settlement it verifies exists only inside a local fork, because **V2 is not

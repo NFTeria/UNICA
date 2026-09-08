@@ -94,9 +94,11 @@ const input = {
   },
 };
 
-// Online mode fetches the receipt itself unless one was supplied. `--tx` with a fixture that
-// already carries a receipt still re-fetches nothing: the caller's receipt is what they asked
-// about, and silently replacing it would verify a different transaction than the one they named.
+// Online mode ALWAYS fetches the receipt, whether or not the evidence file carries one. It used to
+// skip the lookup when a receipt was supplied — which is every invocation of this CLI, since the
+// line above hands it `evidence.receipt` — so `eth_getTransactionReceipt` was never issued and a
+// receipt for a transaction in no chain verified clean. A supplied receipt is not discarded: the
+// chain's copy is the authority, the two are compared, and a disagreement is a named failing row.
 if (!rpcUrl && input.checkConsumed) {
   console.error("--check-consumed needs an endpoint: pass --rpc-env <VAR> or --rpc <url>");
   process.exit(2);

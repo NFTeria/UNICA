@@ -63,10 +63,12 @@ make verify-online      # the suite, including the RPC rows
 ## The suite
 
 ```sh
-node tools/unica-verify/test.mjs                                    # 100 rows, no network
-UNICA_VERIFY_RPC=http://127.0.0.1:8545 node tools/unica-verify/test.mjs   # 109 rows
+node tools/unica-verify/test.mjs                                    # 113 rows, no network
+UNICA_VERIFY_RPC=http://127.0.0.1:8545 node tools/unica-verify/test.mjs   # 9 more rows
 ```
 
-One positive control, 30 negatives altering exactly one field each, and 10 sabotages. It runs in
-`make gate`, offline, because a verifier whose own suite could only run against a chain would be
-untestable exactly when a chain is unavailable.
+One positive control, 30 negatives altering exactly one field each, 10 sabotages, and 13 rows that
+drive ONLINE mode against a stub node. It runs in `make gate`, offline, because a verifier whose own
+suite could only run against a chain would be untestable exactly when a chain is unavailable — and
+because the stub is what proves online mode actually asks the chain for the receipt rather than
+believing the copy it was handed.

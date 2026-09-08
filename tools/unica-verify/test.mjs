@@ -447,6 +447,144 @@ console.log("— nothing leaks —");
 }
 
 // =================================================================================================
+// Online mode against a STUB node. These rows are in the gate on purpose: what they test is the
+// verifier's own behaviour — whether it asks the chain anything at all, and whether it believes the
+// caller when the chain disagrees — and that has nothing to do with anyone's uptime. The rows below
+// the stub, against a real endpoint, stay optional.
+//
+// They exist because of a measured defect. Online mode used to skip `eth_getTransactionReceipt`
+// whenever the caller supplied a receipt, which the CLI always does, so a fabricated receipt for a
+// transaction that is in no chain verified clean — and the row that said "the transaction receipt
+// was fetched" recorded PASS with the detail "supplied by the caller".
+console.log("— online, against a stub node, so these rows run in the gate —");
+
+/// The smallest thing shaped like `ReadOnlyRpc` that `verifyOnline` can drive. It counts what was
+/// asked, which is the point: a row can then assert that a lookup HAPPENED, not merely that the
+/// verdict came out the expected colour.
+class StubRpc {
+  constructor({receipts = {}, block = null, code = "0x60006000", callAnswers = {}} = {}) {
+    this.receipts = receipts;
+    this.block = block;
+    this.codeAnswer = code;
+    this.callAnswers = callAnswers;
+    this.calls = 0;
+    this.asked = [];
+  }
+  get endpoint() {
+    return "stub://node";
+  }
+  #note(m) {
+    this.calls++;
+    this.asked.push(m);
+  }
+  async chainId() {
+    this.#note("eth_chainId");
+    return "0xaa36a7";
+  }
+  async receipt(hash) {
+    this.#note("eth_getTransactionReceipt");
+    return this.receipts[String(hash).toLowerCase()] ?? null;
+  }
+  async blockByNumber() {
+    this.#note("eth_getBlockByNumber");
+    return this.block;
+  }
+  async code() {
+    this.#note("eth_getCode");
+    return this.codeAnswer;
+  }
+  async call(to, data) {
+    this.#note("eth_call");
+    return this.callAnswers[data.slice(0, 10)] ?? "0x" + "0".repeat(64);
+  }
+  async blockNumber() {
+    this.#note("eth_blockNumber");
+    return "0x" + (BigInt(this.block?.number ?? "0x0") + 12n).toString(16);
+  }
+}
+
+const onChain = () => {
+  const f = clone(F);
+  return {
+    receipts: {[f.receipt.transactionHash.toLowerCase()]: f.receipt},
+    block: f.block,
+    callAnswers: {
+      // EXECUTOR() answers the expected executor, so the binding row passes.
+      "0x630dc7cb": "0x" + "0".repeat(24) + f.expected.executor.replace(/^0x/, "").toLowerCase(),
+      // consumed(bytes32) answers true.
+      "0x4648c943": "0x" + "0".repeat(63) + "1",
+    },
+  };
+};
+
+const row = (r, needle) => r.checks.find((c) => c.name.includes(needle));
+
+{
+  // The control, built first: the caller's receipt IS the chain's, and everything agrees.
+  const e = evidence();
+  const rpc = new StubRpc(onChain());
+  const r = await verifyOnline({...e, block: null, transactionHash: e.receipt.transactionHash}, rpc);
+  check("CONTROL online: an honest receipt still verifies against the node", r.verified, r.errors.join("; "));
+  check("CONTROL online: the receipt was actually fetched", rpc.asked.includes("eth_getTransactionReceipt"));
+  check("CONTROL online: the supplied receipt agrees with the chain's",
+    row(r, "carries the chain's settlement log")?.ok === true);
+}
+
+{
+  // The defect. A receipt the endpoint has never heard of must not verify, with `--check-consumed`
+  // OFF, because that flag is opt-in and was the only thing that used to catch this.
+  const e = evidence();
+  e.receipt.transactionHash = "0x" + "ab".repeat(32);
+  const rpc = new StubRpc(onChain());
+  const r = await verifyOnline({...e, block: null, transactionHash: e.receipt.transactionHash}, rpc);
+  check("online: a receipt for a transaction the chain does not have is REFUSED", !r.verified);
+  check("online: and the failing row says the lookup is what failed",
+    row(r, "fetched from the chain")?.ok === false);
+  check("online: the lookup was attempted even though a receipt was supplied",
+    rpc.asked.includes("eth_getTransactionReceipt"));
+}
+
+{
+  // The nastier half: a real transaction hash carrying an invented settlement log. The header
+  // matches; the log does not.
+  const e = evidence();
+  const forged = clone(F.receipt);
+  const idx = forged.logs.findIndex((l) => (l.topics ?? []).length === 4);
+  forged.logs[idx] = {...forged.logs[idx], data: "0x" + "cd".repeat((forged.logs[idx].data.length - 2) / 2)};
+  const rpc = new StubRpc(onChain());
+  const r = await verifyOnline({...e, receipt: forged, block: null, transactionHash: forged.transactionHash}, rpc);
+  check("online: a real transaction hash carrying an invented log is REFUSED", !r.verified);
+  check("online: and the failing row names the settlement log",
+    row(r, "carries the chain's settlement log")?.ok === false);
+}
+
+{
+  // The silent-skip defect: a pins file that lost a codeHash used to drop the entry with no row,
+  // leaving a report indistinguishable from one where every dependency was compared.
+  const e = evidence();
+  // The well-formed entry's hash is the stub's own code hash, so it PASSES. That is what makes the
+  // row discriminating: the only thing that can turn the verdict red is the malformed entry. An
+  // earlier draft used a hash that could not match, and the row went red against the unfixed code
+  // too — for the wrong reason, which is the same as not being a check.
+  const STUB_CODE_HASH = "0x5e3ce470a8506d55e59815db7232a08774174ae0c7fdb2fbc81a49e4e242b0d6";
+  const pins = {
+    PoolManager: {address: F.expected.poolManager, codeHash: STUB_CODE_HASH},
+    Permit2: {address: F.expected.permit2},
+  };
+  const rpc = new StubRpc(onChain());
+  const r = await verifyOnline({...e, block: null, transactionHash: e.receipt.transactionHash, pins}, rpc);
+  const pinRows = r.checks.filter((c) => c.name.includes("pinned code hash"));
+  eq("online: one pin row per entry in the pins file, malformed included", pinRows.length, 2);
+  check("online: the malformed pin entry has its own failing row",
+    row(r, "Permit2 matches its pinned code hash")?.ok === false);
+  check("online: and the report says what was missing",
+    /missing a codeHash/.test(row(r, "Permit2 matches its pinned code hash")?.detail ?? ""));
+  check("online: the well-formed pin still passes, so only the malformed one is red",
+    row(r, "PoolManager matches its pinned code hash")?.ok === true);
+  check("online: a malformed pin makes the verdict NOT VERIFIED", !r.verified);
+}
+
+// =================================================================================================
 const RPC = process.env.UNICA_VERIFY_RPC;
 if (RPC) {
   console.log("— online, read-only, against the supplied node —");

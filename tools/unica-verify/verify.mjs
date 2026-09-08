@@ -103,6 +103,40 @@ class Verdict {
     }
   }
 
+  /// The chain's copy of a receipt against the caller's. Used only in online mode, where the chain
+  /// is the authority and the caller's JSON is a claim about it. The settlement log is compared
+  /// field by field rather than by object identity, because that log is the one thing a forger has
+  /// a reason to write: matching a real transaction's header while carrying an invented log is
+  /// exactly the shape this has to refuse.
+  agree(supplied, fetched) {
+    const norm = (x) => (x === null || x === undefined ? null : typeof x === "string" ? x.toLowerCase() : String(x));
+    const num = (x) => (x === null || x === undefined ? null : String(hexToBig(x)));
+
+    this.equal("the supplied receipt names the transaction the chain returned",
+      norm(supplied.transactionHash), norm(fetched.transactionHash));
+    this.equal("the supplied receipt names the block the chain returned",
+      norm(supplied.blockHash), norm(fetched.blockHash));
+    this.equal("the supplied receipt names the block number the chain returned",
+      num(supplied.blockNumber), num(fetched.blockNumber));
+    this.equal("the supplied receipt names the status the chain returned",
+      num(supplied.status), num(fetched.status));
+
+    const flat = (r) => {
+      let logs;
+      try {
+        logs = findSettlementLogs(r);
+      } catch {
+        return null;
+      }
+      return logs.map((l) => [norm(l.address), (l.topics ?? []).map(norm).join(","), norm(l.data)].join("|")).join(";;");
+    };
+    const a = flat(supplied);
+    const b = flat(fetched);
+    this.record("the supplied receipt carries the chain's settlement log", a !== null && b !== null && a === b, {
+      detail: a === b ? null : "the settlement log in the supplied receipt is not the one the chain returned",
+    });
+  }
+
   get verified() {
     return this.checks.every((c) => c.ok || !c.mandatory);
   }
@@ -417,17 +451,34 @@ export async function verifyOnline(input, rpc) {
     v.equal("the endpoint is the chain the quote was signed for", chainId, Number(expected.chainId));
   }
 
-  let receipt = input.receipt ?? null;
-  if (!receipt) {
-    receipt = await v.guardAsync("the transaction receipt was fetched", async () => {
-      const got = await rpc.receipt(input.transactionHash);
+  // ONLINE MODE ALWAYS FETCHES. An earlier version believed the caller's receipt whenever one was
+  // supplied, which is how the CLI always calls it, so `eth_getTransactionReceipt` was never issued
+  // and a fabricated receipt for a transaction that is not in any chain verified clean. The row was
+  // even named "the transaction receipt was fetched" and recorded PASS with the detail "supplied by
+  // the caller" — a green row asserting the opposite of what happened. Online mode's one job is to
+  // establish that the transaction is in a chain at all, and it cannot do that from the caller's
+  // JSON.
+  //
+  // The caller's copy is not discarded either: it is COMPARED, and a disagreement is a named
+  // mandatory failure. Nothing is silently replaced, which was the concern the old comment raised.
+  const supplied = input.receipt ?? null;
+  const txHash = input.transactionHash ?? supplied?.transactionHash ?? null;
+
+  let receipt = null;
+  if (txHash) {
+    receipt = await v.guardAsync("the transaction receipt was fetched from the chain", async () => {
+      const got = await rpc.receipt(txHash);
       if (!got) throw new Error("the endpoint knows no such transaction");
       return got;
     });
-    if (receipt) v.record("the transaction receipt was fetched", true, {detail: input.transactionHash});
+    if (receipt) v.record("the transaction receipt was fetched from the chain", true, {detail: txHash});
   } else {
-    v.record("the transaction receipt was fetched", true, {detail: "supplied by the caller"});
+    v.record("the transaction receipt was fetched from the chain", false, {
+      detail: "no transaction hash was supplied, so nothing could be looked up",
+    });
   }
+
+  if (receipt && supplied) v.agree(supplied, receipt);
 
   let block = input.block ?? null;
   if (receipt && !block) {
@@ -472,7 +523,19 @@ export async function verifyOnline(input, rpc) {
   const pins = input.pins ?? null;
   if (pins) {
     for (const [label, pin] of Object.entries(pins)) {
-      if (!pin || !pin.address || !pin.codeHash) continue;
+      // A malformed entry used to `continue` in silence, so a pins file that lost four of its five
+      // code hashes to a bad merge produced one row and a report indistinguishable from one where
+      // every dependency was compared. An absent result and a broken reporter must not look alike:
+      // the entry gets a named, failing, mandatory row of its own, and the number of pin rows now
+      // always equals the number of entries in the file.
+      if (!pin || !pin.address || !pin.codeHash) {
+        v.record(`${label} matches its pinned code hash`, false, {
+          detail: !pin
+            ? "the pins file has no entry body for this dependency"
+            : `the entry is missing ${!pin.address ? "an address" : "a codeHash"}`,
+        });
+        continue;
+      }
       const code = await v.guardAsync(`${label} matches its pinned code hash`, async () => rpc.code(pin.address));
       if (code === undefined) continue;
       const hash = toHex(keccak256(hexBytes(code)));
