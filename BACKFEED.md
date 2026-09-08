@@ -59,3 +59,86 @@ the next entry says so.
 ## Entries
 
 <!-- newest first -->
+
+---
+
+## 2026-09-08 — Chainlink CRE, and a boundary that is not where it looks
+
+Repository read at `solangegueiros/cf-liquidation-protection-challenge@58b24604`, MIT.
+
+The thing I did not expect: **the liquidation boundary is higher than the threshold suggests,
+and it is integer flooring that puts it there.** `ChallengeLending.calcHF` computes
+
+```
+hf = collateral * price * LIQUI_THRESHOLD / (100 * debt)
+```
+
+with Solidity's floor division, and `checkAllHF` liquidates at `hf <= 100`. Both halves matter.
+Flooring means a position whose true ratio is 1.0028 reports 100, and `<=` means 100 is already
+fatal. So the starting position — 5.00 vETH against 7000.00 vUSD at 2000.00 — is liquidatable at
+any price at or below **1812.82**, which is 9.4% below where it starts, not the ~11% the headline
+health factor of 1.11 implies.
+
+Follow that through the published scenarios and the consequence is sharp: **every one of the five
+liquidates an untouched position, including the one named "safe volatility"**, whose first step to
+$1800 floors to exactly 100. Its stated expectation is *"avoid unnecessary interventions"*, and read
+as "do nothing" that scenario is lost. I do not think that is a mistake in the challenge — it is a
+genuinely interesting trap, and it rewards reading the contract over reading the table. But it is
+worth knowing that the scenario named for restraint is not the one where restraint wins.
+
+Two more things I would have wanted to know earlier, both reproducible:
+
+**The example workflow's own address set disagrees with the README's.** `README.md` names the
+official contracts; `automated-liquidation-protection-workflow/config.staging.json` names different
+ones. A participant who follows the getting-started steps unchanged protects a position on a
+deployment the organisers are not scoring, and nothing in the run output says so. We now carry both
+as named profiles with no default, because picking one silently seemed worse than being blocked.
+
+**A five-minute cron can miss the update that kills you.** In the sudden-crash path the *first*
+price update is already below the line. Measured against our own model: observing every update
+survives it; observing every second update does not. That makes the schedule a strategy decision
+rather than a default, and I would like to know what the DON actually permits before assuming a
+faster one is available.
+
+What I liked: the challenge is scored by *running* the workflows rather than by reading them, and
+the contract emits enough to reconstruct every participant's decisions afterwards. That is a much
+better test of a strategy than a demo video, and it is why we put the arithmetic under 88 tests and
+nine mutations before writing a single line of workflow code.
+
+Where our intention exceeded our evidence: we have a policy and an adapter, both offline. We have
+**not** deployed a workflow, called `join()`, installed the CRE CLI or produced anything a TEE
+attested. Every evidence record this repository generates says `LOCAL_SIMULATION` in a field that
+cannot be set to anything else, and that is deliberate.
+
+## 2026-09-08 — Circle Gateway nanopayments, and what a batch does not prove
+
+Repository read at `circlefin/arc-nanopayments@a29f920e`, Apache-2.0, with the protocol in
+`@circle-fin/x402-batching@2.0.4`.
+
+The question I went in with was whether batching produces a **verifiable commitment to every
+nanopayment** or cheap operational accounting. It is the second, and the answer is in the SDK
+rather than in any document: zero occurrences of merkle, root, proof, batch id, inclusion or
+commitment, and no events in its embedded ABI. `settle` returns `{success, transaction}`, and that
+transaction is the batch's — shared by every payment in it, with no index and no inclusion proof.
+
+That is not a criticism of the design; for sub-cent payments it is probably the right trade. But it
+draws a line we had to respect: a Gateway authorization is a **real signature over six fields** —
+payer, recipient, amount, a validity window, a nonce, and through its domain the chain and the
+GatewayWallet — and it says nothing whatever about *what was bought*. There is no resource, no
+request digest, no response digest, not even the token address. So we bind those ourselves, in a
+mandate, and grade every piece of the trail separately rather than calling the whole thing verified.
+
+The thing I found genuinely surprising: **the SDK's server half verifies nothing.**
+`BatchFacilitatorClient.verify` and `.settle` are `fetch` calls to Circle's hosted API, so a seller
+using them learns that Circle says a payment is valid. Yet the payload the buyer sends carries both
+the authorization *and* the signature over it — so local verification was available the whole time
+and simply unused. We wrote it, from the EIP-712 spec, without importing the SDK; Circle's own SDK,
+viem and our implementation all produce one digest.
+
+A smaller one, from the demo app: it records payments to Postgres and stores `{requirements,
+settleResult}` — **discarding the payer's signature**, which is the only cryptographic evidence it
+ever held. If a seller wants to prove later that a payer authorised something, that is the field
+they needed.
+
+What a developer after us can reuse: an independent verifier for a Gateway authorization, and an
+evidence grading that refuses to call an API answer a proof.

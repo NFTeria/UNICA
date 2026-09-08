@@ -12,25 +12,43 @@ Uniswap.
 > The specification and threat model were written before the event; every line of code was
 > written during it. Both pre-event documents ship unedited in [`specs/`](specs/README.md).
 
-**Status, day 2 (2026-09-04, night):** the settlement runs through Uniswap's official Universal
-Router, and the hook admits a swap only when the PoolManager reports that router as the sender
-and the router reports the executor as its caller (invariant I1); the hook reads every term of
-the order from the executor's storage and enforces it itself (I3, I4, I5), refuses a partial fill
-or a short output (I3, and I6 by reverting), and emits the versioned receipt beside OpenZeppelin's
-standard `HookFee` (I2); native settlement is proven as four rows against a switchable stand-in
-plus a fifth against the official router's own bytecode (I7). A pool carrying this hook is native
-ETH against the chain's payout currency or it cannot be initialised, so no pool of an attacker's
-devising can mint a receipt (spec C2 and C4), and no settlement may pay a contract on its own path. Fifty-four tests, fuzz at 10,000,
-against Uniswap's official PoolManager bytecode and, for the gate and order checks, the deployed
-Universal Router runtime. The whole path was then rehearsed end to end on an anvil fork of Sepolia
-against the deployed Universal Router: hook and executor at their mined and derived addresses and
-bound to each other, pool initialised and seeded, one order paid with a 1.5 USDC minimum, one
-receipt, seven transactions at status 1, nothing broadcast (`make rehearse`). An adversarial
-review the same night found defects that reproduced; each is fixed with its own test and commit,
-and the adjudication is in
-[`docs/reviews/`](docs/reviews/2026-09-04-day2-adversarial-review.md). On chain, the day-1
-scaffold hook keeps its record; the gated hook is mined fresh and live-fired on day 4. The surface
-and the video are the next days' work. Nothing here is claimed past the rung it has reached.
+**Status, 2026-09-08.** `make gate` exits zero. What follows is recomputed from that run, not
+carried forward from an earlier one.
+
+| Component | Status | Evidence | Limitation |
+|---|---|---|---|
+| V1 hook + executor | **LIVE AND VERIFIED** on Ethereum Sepolia | tag `live-green` = `v1.0.0` = `5e1d8436`, broadcast tree `c15c7cda`, `make proof` | one settlement has run on it; USDC only; no external review |
+| V2 hook + executor | **FROZEN RELEASE CANDIDATE** `v2.0.0-rc1` at `82c7dcb4` | 167 Solidity tests, 44 fork rows against pinned live dependencies, `script/verify-freeze.mjs` 17/17 | **not deployed to any public chain**; EOA merchant signers only |
+| V2 receipt verifier | locally demonstrated + fork-tested | `tools/unica-verify`, 100 rows offline / 109 with RPC | the settlement it verifies exists only inside a local fork |
+| V2 signing tool | locally demonstrated | `tools/unica-sign`, 81 rows | builds and reads; never broadcasts |
+| ENSv2 resolver + config + builder | locally demonstrated | `integrations/ensv2`, 136 rows | not yet wired to `merchant_policy.vy` |
+| V2 Graph indexer | locally demonstrated | 13 matchstick + 17 manifest checks | **not deployed to Subgraph Studio** — owner gate |
+| Chainlink CRE policy | locally demonstrated | `integrations/chainlink-cre-guardian`, 88 rows, 9 mutations | **LOCAL SIMULATION only**; no workflow deployed |
+| Chainlink CRE adapter | locally demonstrated | 86 rows, 10 mutations | **deployment BLOCKED** — see the Chainlink section |
+| Circle Arc nanopayments | locally demonstrated | `integrations/arc-nanopayments`, 141 rows | paid tool and agent loop not built; nothing settled |
+| `merchant_policy.vy` | **PRIOR ART**, tested here | `vy/tests`, 13 rows | policy only; holds and moves nothing |
+| `payany_router.vy` | **PRIOR ART**, partially tested | `vy/tests`, 14 rows | **the swap leg is untested** — it needs a Universal Router |
+| `flash_liquidator.vy` | **COMPILES ONLY** | `vy/src/unica` | zero tests |
+| `settlement_hook.vy` | **SUPERSEDED PRIOR ART** | `docs/PRIOR-ART.md` | replaced by the frozen V2 hook; not a V3 |
+| finance math library | **BLOCKED** | — | three sources arrived damaged; awaiting authoritative copies |
+| Vyper settlement model + art | locally demonstrated | 80 rows, `cd vy && mox test` | in-process EVM only |
+
+Totals from that gate run: **167** Solidity tests, **80** Vyper tests, and **669** JavaScript rows
+across eight suites, plus the secret scan, the copied-source scan, the interface freeze and the
+tool ledger. The 44 fork rows are deliberately **outside** the gate — they need a Sepolia endpoint,
+and a gate that depends on a third party's uptime is a status page rather than a gate. Run them
+with `make fork`.
+
+Frozen object hashes, unchanged: `08479a85` `8a38e9a6` (V1) and `c955c6f7` `8284e7eb` `8cb14dfd`
+(V2 rc1).
+
+**Uniswap is UNICA's exclusive DEX integration.** No competing DEX is integrated, quoted, routed
+through or recommended. That is not a requirement to swap: direct operations such as a lending
+deposit, a debt repayment or a USDC transfer are performed directly and are not forced through a
+pool.
+
+Some Vyper contracts in this repository are **carried-in prior art rather than work authored
+here**, and which is which is recorded in [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md).
 
 ## The problem
 
@@ -169,7 +187,7 @@ read as a V2 capability, a V2 decision, or evidence of completed V2 design.
 | Supported payout | USDC only, compiled in per chain |
 | Execution path | Universal Router `V4_SWAP`, actions `SWAP_EXACT_IN_SINGLE`, `SETTLE`, `TAKE`; the hook admits the swap only with the executor behind the router. No Permit2 call |
 | Receipt schema | version 1, frozen; one receipt per settlement, emitted inside the swap |
-| Proof status | 31 of 31 chain checks, both sources verified, 54 tests |
+| Proof status | 31 of 31 chain checks, both sources verified, and the 54 tests that existed at `live-green` — the repository has many more now, but these are the ones that produced this bytecode |
 | Production status | not production: unaudited, one settlement, thin liquidity |
 | Limitations | one input, one payout, one chain, exact-input only, no merchant identity — the full list is in [`docs/versions/V1.md`](docs/versions/V1.md) |
 

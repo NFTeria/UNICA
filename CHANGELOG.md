@@ -19,6 +19,52 @@ Documentation, tooling and specification work on top of the 1.0.0 contract state
 `test/` are untouched by everything in this section — verify with
 `git diff --stat live-green..HEAD -- src/ test/`, which prints nothing.
 
+### Added — 2026-09-08
+
+- **Chainlink CRE liquidation-protection policy** (`integrations/chainlink-cre-guardian/`). The
+  challenge contract's integer health-factor model, transcribed from `ChallengeLending.calcHF`
+  rather than described, with every rounding direction chosen toward safety and checked from both
+  ends. 88 rows, nine mutations killed.
+- **CRE workflow adapter** — deployment profiles with no default, an action builder with no
+  parameter that could redirect a call, observation admission (stale, duplicate, reordered), and
+  local evidence records that carry `LOCAL_SIMULATION` in a field nothing can change. 86 rows, ten
+  mutations killed.
+- **Circle Arc nanopayment modules** (`integrations/arc-nanopayments/`) — an independent verifier
+  for a Gateway authorization, and a mandate binding the resource, request, response and budget
+  that authorization does not cover. 141 rows.
+- **ENSv2 configuration builder** (`integrations/ensv2/build.mjs`) — ten classified refusals and no
+  argument that can carry a recipient.
+- **V2 receipt verifier** (`tools/unica-verify/`) — recomputes the quote digest, recovers the
+  merchant signer and rebuilds the PoolId rather than reading them back. 100 rows offline.
+- **Vyper prior art landed and tested**: `merchant_policy.vy` (13 rows) and `payany_router.vy`
+  (14 rows), plus the NameMath art contracts (20 rows). The Vyper workspace joined `make gate`.
+- `docs/PRIOR-ART.md`, separating work authored here from work carried in.
+
+### Changed
+
+- The V2 fork quotes now commit to a **real** `MerchantConfig` preimage instead of a hash of a
+  phrase, which is what let `tools/unica-verify` close `docs/v2/COMPATIBILITY-001.md` without
+  touching the frozen receipt.
+- The secret scan gained two narrow label words and a captured-artifact exclusion, each with its
+  own control.
+- README's status block replaced with a component table recomputed from `make gate`.
+
+### Discovered
+
+- **The challenge contract's liquidation boundary is higher than its threshold suggests.**
+  `calcHF` floors and `checkAllHF` liquidates at `hf <= 100`, so an untouched starting position is
+  liquidatable at any price at or below 1812.82 — and every published scenario, including the one
+  named "safe volatility", liquidates a position that does nothing.
+- **Circle Gateway batching is operational accounting, not a per-payment commitment.** No merkle
+  root, batch id, inclusion proof or indexable event exists in the SDK; `settle` returns a batch
+  transaction shared by every payment in it.
+- `namemath.vy` had never compiled in any Vyper 0.4.x.
+
+### Not claimed
+
+No component added in this section is deployed. The CRE workflow is **not** deployed and `join()`
+has not been called; the Circle modules have settled nothing; the Graph indexer is not on Studio.
+
 ### Added
 
 - `docs/INPUT-POLICY-SPEC.md` — the generic ERC-20 payer-input policy, with UNI as the first

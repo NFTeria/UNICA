@@ -58,3 +58,91 @@ configuration, credentials, customer data, or private links.
 - No prize, placement, or finalist status at any event is claimed anywhere in this tree.
 - AI tooling assisted the build; `AI_USAGE.md` says exactly where. No commit carries an AI
   co-author, because tooling is not authorship.
+
+---
+
+## 5. Sponsor-track submission ledger — 2026-09-08
+
+Recomputed from `make gate` at this commit. **Nothing below is a claim of qualification for any
+track.** Each row says what exists, what is missing, and what only the owner can do.
+
+### Uniswap v4 — DEMONSTRATED
+
+| | |
+|---|---|
+| Artifact | V1 hook + executor **live and verified** on Ethereum Sepolia; V2 hook + executor frozen as `v2.0.0-rc1` |
+| Evidence | tag `live-green` = `5e1d8436`, broadcast tree `c15c7cda`, `make proof`; 167 Solidity tests, 44 fork rows, 48 mutations killed |
+| Missing | V2 is **not deployed**; EOA merchant signers only |
+| Owner gate | a V2 deployment decision |
+| Prohibited claim | that V2 is live, audited, or that every merchant wallet can issue a quote |
+
+**Uniswap is UNICA's exclusive DEX integration.** No competing DEX is integrated or recommended.
+Direct non-DEX operations — a lending deposit, a debt repayment, a USDC transfer — are performed
+directly and are never routed through a pool to manufacture composition.
+
+### Chainlink CRE — PARTIAL, DEPLOYMENT BLOCKED
+
+| | |
+|---|---|
+| Challenge | Automated Liquidation Protection, `solangegueiros/cf-liquidation-protection-challenge@58b24604` |
+| Artifact | a deterministic risk policy and a workflow adapter, both offline: `integrations/chainlink-cre-guardian/` |
+| Evidence | 88 policy rows + 9 mutations; 86 adapter rows + 10 mutations; all five published scenarios survive |
+| Missing | **no CRE workflow is deployed**; no CLI installed; `join()` not called |
+| Blocker | the challenge README and its own `config.staging.json` name **different** lending and token addresses |
+| Owner gate | Early Access approval, CLI authentication, a funded TEE wallet, `join()` |
+| Prohibited claim | that this is a deployed CRE workflow, TEE-attested, DON-executed, or that liquidation is guaranteed |
+
+The scenario table below is a **LOCAL SIMULATION** against `fixtures/scenarios.json`, not a judged run:
+
+| Scenario | Survives | Actions | vETH used | vUSD used | Loan continuity |
+|---|---|---|---|---|---|
+| gradual decline | yes | 2 | 142 / 500 | 0 | 10000 bps |
+| sudden crash | yes | 2 | 231 / 500 | 0 | 10000 bps |
+| temporary wick | yes | 1 | 106 / 500 | 0 | 10000 bps |
+| two-stage decline | yes | 2 | 206 / 500 | 0 | 10000 bps |
+| safe volatility | yes | 1 | 89 / 500 | 0 | 10000 bps |
+
+The implementation finding behind it: `calcHF` floors and `checkAllHF` liquidates at `hf <= 100`,
+so an untouched starting position is liquidatable at any price at or below **1812.82**, and the
+$1800 step of "safe volatility" floors to exactly 100. **Every published scenario therefore requires
+at least one intervention.** The current configuration selects collateral deposits in these
+fixtures, and the selector stays configurable because the organisers have not said how loan
+continuity and capital efficiency trade off.
+
+### Circle — PARTIAL
+
+| | |
+|---|---|
+| Artifact | `integrations/arc-nanopayments/` — a local verifier for a Gateway authorization, and a mandate binding what that authorization does not |
+| Evidence | 141 rows, 5 mutations; a vector signed by Circle's own SDK verifies against an independent implementation |
+| Missing | the paid tool and the CLI agent loop are **not built** |
+| Prohibited claim | that payments are practically free, that every nanopayment is on-chain, that a marketplace works on Arc testnet, or that any wallet or credential was used |
+
+### ENS — PARTIAL
+
+| | |
+|---|---|
+| Artifact | a resolver with 13 classified failure shapes, the canonical `MerchantConfig` encoder, and a builder with no argument that can carry an address |
+| Evidence | 136 rows; the Solidity and JavaScript schemas agree byte for byte |
+| Missing | `merchant_policy.vy` is **not yet wired** to the resolver and builder |
+| Prohibited claim | a complete end-to-end ENS policy integration, until that join exists |
+
+### The Graph — PARTIAL, OWNER GATE
+
+| | |
+|---|---|
+| Artifact | a V2 invoice indexer namespace, `integrations/graph-v2/` |
+| Evidence | 13 matchstick tests, 17 manifest and ABI checks in the gate |
+| Missing | **not deployed to Subgraph Studio** |
+| Owner gate | the Studio deployment |
+| Prohibited claim | a hosted or queryable subgraph |
+
+### Demonstrated now · Next build · Owner action · Optional
+
+- **Demonstrated now:** V1 live; V2 frozen and fork-tested; the verifier, signing tool, ENS
+  modules, Graph indexer, CRE policy and adapter, and the Circle protocol and mandate modules.
+- **Next build:** `flash_liquidator.vy` tests; the ENS-to-policy wiring; the Circle agent loop.
+- **Owner action:** the CRE address question to the organisers, Early Access, `join()`, Studio
+  deployment, and the V2 deployment decision.
+- **Optional, post-hackathon:** EIP-1271 merchant signers, the payout-asset policy, additional
+  chains. None is claimed.

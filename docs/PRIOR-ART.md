@@ -23,6 +23,32 @@ the repairs listed below — was written in this repository. The contract source
 | `calculator.vy` | the source | as above |
 | `namemath.vy`, `logobackground.vy` | the source | tests, ledger entry, and the one-line fix that made `namemath.vy` compile for the first time |
 
+### Classification, per file
+
+The distinction below is the one that matters, so it is spelled out rather than implied.
+
+| File | Provenance | Status here |
+|---|---|---|
+| `vy/src/unica/merchant_policy.vy` | **carried in** | tested here — 13 rows |
+| `vy/src/unica/payany_router.vy` | **carried in** | partially tested here — 14 rows; the swap leg is untested |
+| `vy/src/unica/flash_liquidator.vy` | **carried in** | **merely inventoried** — compiles, zero tests |
+| `vy/src/unica/calculator.vy` | **carried in** | **merely inventoried** — compiles, zero tests |
+| `vy/src/namemath.vy` | **carried in**, **restored** | tested here — one-line compile repair |
+| `vy/src/logobackground.vy` | **carried in** | tested here |
+| `vypersetup/contracts/settlement_hook.vy` | **carried in** | **superseded prior art** — replaced by `src/v2/QuoteSettlementHook.sol`. Not a production candidate, not a V3, and not repaired on the critical path |
+| `vypersetup/contracts/fixedmath.vy` | **carried in, damaged** | **blocked** — indentation lost in transit; awaiting authoritative source |
+| `vypersetup/contracts/loanmath.vy` | **carried in, damaged** | **blocked** — same |
+| `vypersetup/contracts/fintechmath.vy` | **incomplete** | **not an implementation** — four lines arrived; treated as unwritten rather than as damaged |
+| `vypersetup/contracts/{creditmath,pricingmath,taxmath,tokenomicsmath,treasurymath,volmath,univ4math}.vy` | **carried in** | **blocked** — they import `fixedmath.vy` |
+
+**These will not be reconstructed.** Financial arithmetic inferred from its callers, or from a
+model's recollection, is arithmetic nobody can verify against an original. They stay blocked until
+an authoritative copy is supplied, and no document may describe them as operational meanwhile.
+
+Everything under `integrations/chainlink-cre-guardian/`, `integrations/arc-nanopayments/`,
+`integrations/ensv2/`, `tools/unica-sign/` and `tools/unica-verify/` was **authored in this
+repository**, including every test above.
+
 Repairs made here, and named so nobody mistakes them for authorship:
 
 - `namemath.vy` had **never compiled** in any Vyper 0.4.x — `convert(block.prevrandao, bytes32)` is

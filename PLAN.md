@@ -101,3 +101,47 @@ anyway. I7's four rows now run against a stand-in at the router's address, with 
 against the router's deployed bytecode. The hook was renamed `V4SettlementHook` for the venue.
 Day 3 is therefore free for the reentrancy test (T6), the pool allowlist (C2), and the sponsor
 artifacts, ahead of the day-4 deploy.
+
+## 2026-09-08 — where the work actually stands, and what comes next
+
+Written after a full `make gate` at this commit, not from memory. Completed items are marked only
+where a commit and a test back them.
+
+### Done since the last entry
+
+- [x] V2 receipt verifier, offline and online — `tools/unica-verify`, 100 rows
+- [x] ENSv2 configuration builder — `integrations/ensv2/build.mjs`, inside 136 ENS rows
+- [x] Solidity/JavaScript schema agreement proven byte for byte, with four sabotages
+- [x] Circle Gateway authorization verifier and agent mandate — 141 rows
+- [x] Chainlink CRE deterministic policy — 88 rows, nine mutations
+- [x] Chainlink CRE workflow adapter — 86 rows, ten mutations
+- [x] `merchant_policy.vy` and `payany_router.vy` landed with tests; Vyper workspace in the gate
+- [x] `docs/PRIOR-ART.md` written and kept current
+
+### P0 — now
+
+1. **Documentation synchronisation** (this entry, and the commit carrying it).
+2. **Resolve the CRE address mismatch** with the organisers. Until then `profiles.mjs` refuses to
+   default and public deployment stays blocked.
+3. **Preserve submission evidence** — the gate output, the frozen hashes, the proof rows.
+
+### P1 — next
+
+4. `flash_liquidator.vy` tests. It compiles and has **zero** tests; it is UNICA Guardian research
+   and not the challenge submission.
+5. Wire `merchant_policy.vy` to the ENS resolver and builder, so the identity chain runs end to end.
+6. The Circle paid tool and CLI agent loop.
+
+### Blocked
+
+- **Finance math library** — `fixedmath.vy`, `loanmath.vy` and `fintechmath.vy` arrived damaged.
+  Awaiting authoritative source. They will **not** be reconstructed from callers or from memory,
+  and six dependent modules stay blocked behind them.
+- **Graph Studio deployment** — owner action.
+- **CRE deployment, Early Access and `join()`** — organiser and owner gates.
+- **V2 deployment** — an owner decision that has not been made.
+
+### Superseded
+
+- `settlement_hook.vy` is prior art replaced by the frozen V2 hook. It is not a V3, will not be
+  developed on the critical path, and its one-line compile repair is archival if it happens at all.

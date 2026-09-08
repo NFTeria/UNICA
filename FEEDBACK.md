@@ -248,3 +248,42 @@ a `github.com` blob URL pinned to a commit SHA, and screenshot the submitted for
 | Partner | File | Status |
 |---|---|---|
 | The Graph, World, and every other partner investigated | `docs/feedback/<partner>.md` | none yet; files appear when a partner's tooling is actually used or investigated, never before |
+
+---
+
+## Chainlink CRE — OPEN QUESTIONS, 2026-09-08
+
+**These are questions asked of the organisers, not feedback received.** Nobody has answered them.
+They are recorded as OPEN so that a later reader does not mistake our own deductions for a partner
+statement. Repository read at `solangegueiros/cf-liquidation-protection-challenge@58b24604`.
+
+| # | Question | Why it changes what we build |
+|---|---|---|
+| 1 | Which address set is authoritative — the README's, or `config.staging.json`'s? | They disagree on all three contracts. A workflow run against the wrong one protects a position nobody is scoring. **This blocks deployment.** |
+| 2 | How often will `updatevETHPrice` be called, and how long is a scenario? | The example cron is every five minutes. In the crash path the first update is already fatal, and we measured that observing every second update loses it. |
+| 3 | Is a cron faster than five minutes permitted by the DON? | Decides whether reaction speed is a lever at all. |
+| 4 | Is Early Access still being granted, and what is the last date to apply and still deploy? | Stated turnaround is 24h; the deadline is fixed. |
+| 5 | What exactly is submitted — a deployed workflow, a repository, or both? | Decides whether a repository alone is scoreable. |
+| 6 | How is the confidentiality score assessed against a **public** repository? | Our thresholds live in secrets, but our policy code is readable. We do not know whether that costs points. |
+| 7 | What form does "confidential execution evidence" take — a TEE attestation, a workflow execution id, or something we emit? | Three of the fifteen confidentiality points. |
+| 8 | What counts as an "unnecessary or repeated" intervention? | Ten points, and it decides whether an approval transaction is charged against us. |
+| 9 | How do loan continuity and capital efficiency trade off? | Twenty points against fifteen. Until answered, our selector stays configurable rather than tuned. |
+| 10 | Must the workflow perform the token approval, or is it prepared once beforehand? | `deposit` needs a vETH allowance and `repay` needs a vUSD allowance; both to the lending contract. |
+| 11 | If a workflow errors on one cron tick, does the DON retry, skip, or void the run? | Decides whether a single failure is recoverable. |
+| 12 | Does joining early rather than late change `cumulativeDebtTime` or the continuity score? | `start()` sets a shared clock, but we have not confirmed the interaction. |
+| 13 | `liquidateUser` is **partial** — it restores to MAX_LTV rather than closing. Does "the position survives" mean zero liquidations, or is one partial event partially credited? | Changes how much buffer is worth carrying. |
+| 14 | Does composing with another protocol — for us, Uniswap v4 — earn any credit? | We see no scoring line it could earn, and we will not add a swap the flow does not need. |
+| 15 | Is any part of the Day 1 bootcamp material required to appear in a submission? | Decides scope. |
+
+## Circle — OPEN QUESTIONS, 2026-09-08
+
+Read from `circlefin/arc-nanopayments@a29f920e` and `@circle-fin/x402-batching@2.0.4`. Again:
+asked, not answered.
+
+1. What is the maximum batching delay before a settled authorization reaches a chain?
+2. Who carries credit risk between authorization and batch settlement — the seller, or Circle?
+3. Is there any way for a seller to obtain an inclusion proof for one payment within a batch?
+4. Are Circle Agent Wallet policy controls — destination restrictions, per-call and cumulative
+   limits, session keys — available on Arc testnet today? The sample uses a plain private key.
+5. Is the marketplace reachable on Arc testnet, and if not, does a team's own x402 seller endpoint
+   demonstrate the same thing for judging?

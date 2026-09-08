@@ -114,3 +114,36 @@ specific artifact, the artifact's commit message says so.
 - Every account, form submission, purchase, and the recorded voice in the demo video.
 - Review and acceptance of every change. The assistant's output was read before it was
   committed, and the owner is responsible for what is in this history.
+
+---
+
+## Addition — 2026-09-08
+
+The same tool, the same interactive direction, the same authorship rule. The paths below were not
+represented in the list above and are added so the disclosure stays granular rather than becoming a
+blanket statement.
+
+**Drafted with AI assistance, authored in this repository:**
+
+| Path | What it is |
+|---|---|
+| `integrations/chainlink-cre-guardian/` | the CRE liquidation-protection policy, its adapter, deployment profiles, evidence records, scenario fixture and both suites |
+| `integrations/arc-nanopayments/` | the Circle Gateway authorization verifier, the agent mandate, its vector and suite |
+| `integrations/ensv2/build.mjs` | the resolution-to-configuration builder, and the schema-agreement rows added to `integrations/ensv2/test.mjs` |
+| `tools/unica-verify/` | the V2 receipt verifier, its secp256k1 recovery, receipt decoder, read-only RPC client, CLI and suite |
+| `tools/unica-sign/` | the V2 quote and signing tool, its ABI codec and suite |
+| `script/v2/` | the fork-settlement script, its driver and the fixture capture |
+| `vy/tests/test_merchant_policy.py`, `vy/tests/test_payany_router.py`, `vy/tests/test_namemath.py`, `vy/tests/test_logobackground.py` | the Vyper test suites |
+| `docs/PRIOR-ART.md`, `docs/UNICA-TOOLS.md`, `docs/unica-tools.json` | the provenance record and the living tool ledger |
+
+**NOT AI-authored, and not to be recorded as such.** The Vyper contract sources under
+`vy/src/unica/` and `vypersetup/contracts/` are **carried-in prior art** supplied by the owner.
+What was drafted here is their tests, their ledger entries, their compiler pins and — in one case,
+`namemath.vy` — a one-line repair. `docs/PRIOR-ART.md` classifies every file individually, and
+over-attributing carried-in work as newly AI-authored would be as much a disclosure failure as
+under-attributing it.
+
+Upstream repositories inspected during this work — `circlefin/arc-nanopayments` and
+`solangegueiros/cf-liquidation-protection-challenge` — were read in a temporary workspace outside
+this repository. **Nothing from either was vendored or copied**; both are pinned by commit in the
+tool ledger, and `script/no-copied-source.sh` runs against the whole working tree on every gate.
