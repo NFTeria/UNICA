@@ -34,10 +34,37 @@ honest limit. Every count is from a `make gate` run at this commit.
 | Ecosystem | What we built on it | Run this | Status | What we found for you |
 |---|---|---|---|---|
 | **Uniswap** | a v4 settlement hook + executor, **live and verified** on Sepolia, and a frozen V2 that binds a merchant-signed invoice to the swap that discharges it | `make gate` · `make fork` · `make proof` | **live** (V1) · **frozen RC**, undeployed (V2) | under exact output, the official periphery checks the input ceiling and never compares delivered output with the request — so full-fill enforcement lives in a hook or nowhere. Measured in [`test/v2/ShortFill.t.sol`](test/v2/ShortFill.t.sol) |
-| **Chainlink** | a deterministic CRE liquidation-protection policy and workflow adapter, offline and reproducible | `node integrations/chainlink-cre-guardian/test.mjs` | **local simulation**; no workflow deployed | the challenge contract's liquidation boundary is higher than its threshold implies, and **every published scenario liquidates a position that does nothing** — [`docs/feedback/chainlink.md`](docs/feedback/chainlink.md) |
+| **Chainlink** | a real **CRE Confidential Workflow** — `handlerInTee` over `@chainlink/cre-sdk@1.18.0` — reading five private policy values inside the handler and publishing a commitment, an action class and a reason category but never a threshold | `cd integrations/chainlink-cre-guardian/workflow && bun test` | **`READY_FOR_OWNER_ACTION`** — typechecks against the official SDK; the CLI simulation needs a `cre login`, which is an owner action. Not a DON deployment, not TEE-attested | the challenge contract's liquidation boundary is higher than its threshold implies, and **every published scenario liquidates a position that does nothing** — [`docs/feedback/chainlink.md`](docs/feedback/chainlink.md) |
 | **Circle** | an independent verifier for a Gateway nanopayment authorization, plus the mandate binding what it does not cover | `node integrations/arc-nanopayments/test.mjs` | **local**; nothing settled, no wallet used | Gateway batching is operational accounting, not a per-payment commitment — and your SDK's server half verifies nothing it could verify locally. [`BACKFEED.md`](BACKFEED.md) |
 | **ENS** | ENSv2 merchant resolution with 13 classified failure shapes, and a config builder with no argument that can carry an address | `node integrations/ensv2/test.mjs` | **local**; not yet wired to the payout policy | only one of three lookup failures reverts; the other two return the zero address, so a caller who catches reverts alone hands `address(0)` to a payment. [`docs/feedback/ens.md`](docs/feedback/ens.md) |
 | **The Graph** | a V2 invoice indexer namespace with deterministic entity ids | `make graph-v2-test` | **local**; not deployed to Studio | absence of a row does not prove an invoice is unpaid, and the schema says so where a reader would look |
+
+### Uniswap judges — every pointer, in one place
+
+| What you asked to see | Where it is |
+|---|---|
+| Order creation, live V1 | [`src/SettlementExecutor.sol:133`](src/SettlementExecutor.sol#L133) |
+| Payment entry point, live V1 | [`src/SettlementExecutor.sol:181`](src/SettlementExecutor.sol#L181) |
+| The plan built from storage, never from caller data | [`src/SettlementExecutor.sol:215`](src/SettlementExecutor.sol#L215) |
+| PoolManager interaction and callback authentication | [`src/V4SettlementHook.sol:167`](src/V4SettlementHook.sol#L167), [`:153`](src/V4SettlementHook.sol#L153) |
+| Permission bits `0xC0`, no returns-delta | [`src/V4SettlementHook.sol:126`](src/V4SettlementHook.sol#L126) |
+| Exact-output full-fill enforcement | [`src/V4SettlementHook.sol:190`](src/V4SettlementHook.sol#L190), [`test/v2/ShortFill.t.sol`](test/v2/ShortFill.t.sol) |
+| Payer-to-merchant flow, no custody | [`src/v2/QuoteSettlementExecutor.sol:429`](src/v2/QuoteSettlementExecutor.sol#L429) |
+| V2 frozen source — `settle`, `_validate`, `unlockCallback` | [`:134`](src/v2/QuoteSettlementExecutor.sol#L134), [`:262`](src/v2/QuoteSettlementExecutor.sol#L262), [`:369`](src/v2/QuoteSettlementExecutor.sol#L369) |
+| **V2-001, the open Critical** | [`docs/v2/SECURITY-ADVISORY-001.md`](docs/v2/SECURITY-ADVISORY-001.md) · reproduced in [`test/v2/WitnessBinding.t.sol`](test/v2/WitnessBinding.t.sol) · site at [`:436`](src/v2/QuoteSettlementExecutor.sol#L436) |
+| Proposed rc2 remediation, and why not an allowlist | the remediation table in the same advisory |
+| Internal security review, ten findings with severity | [`docs/v2/INTERNAL-SECURITY-REVIEW.md`](docs/v2/INTERNAL-SECURITY-REVIEW.md) |
+| Receipt verifier — recomputes, never trusts the receipt | [`tools/unica-verify/`](tools/unica-verify/) — `node tools/unica-verify/test.mjs` |
+| Adversarial tests | [`test/v2/SettlementAdversarial.t.sol`](test/v2/SettlementAdversarial.t.sol), [`test/attack/`](test/attack/) |
+| Fork tests against deployed Sepolia contracts | [`test/fork/`](test/fork/) — `make fork` |
+| Mutation suite — every guard validated by deletion | `make mutants` — [`script/mutation-suite.sh`](script/mutation-suite.sh) |
+| Deployment records and live addresses | [`broadcast/`](broadcast/), and the proof table below |
+| Developer feedback | [`FEEDBACK.md`](FEEDBACK.md) |
+| Provenance — this is a **from-scratch** entry | [`docs/PROVENANCE-LEDGER.md`](docs/PROVENANCE-LEDGER.md) |
+
+**V2 is not deployed, not shipped, and not safe to release.** It is frozen as `v2.0.0-rc1` with an
+open Critical against it. Nothing in this repository claims otherwise, and the advisory above is
+ours — we found it, reproduced it, and blocked our own release rather than shipping.
 
 Newest work first: [`HACKATHON.md`](HACKATHON.md) is the per-track ledger — artifact, evidence,
 what is missing, and what may not be claimed. [`FEEDBACK.md`](FEEDBACK.md) holds questions we have
