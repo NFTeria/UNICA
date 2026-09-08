@@ -66,6 +66,11 @@ it stamps on its own output says exactly that — `CRE_CONFIDENTIAL_SIMULATION`,
 
 **Status: `READY_FOR_STUDIO_OWNER_ACTION`**
 
+> Published requirement, retrieved 2026-09-05: *"Use The Graph as a load-bearing part of the
+> project: either the AI tooling targets The Graph's products or AI Suite, or the agent/app uses
+> The Graph (Subgraphs, the Subgraph MCP, or Substreams) as its source of blockchain data"*, and
+> *"Must consume live data via API keys or Graph Market streaming."*
+
 The merchant's own record of what settled, indexed, and a deterministic analyst on top of it. The
 subgraph is the source of blockchain data for that analysis — remove it and the feature has no
 inputs.
@@ -84,6 +89,10 @@ one, which is the whole point.
 ### 4. ENS — Best Use of ENSv2 (From Scratch)
 
 **Status: `READY_FOR_WALLET_CONFIRMATION`**
+
+> Published requirement, retrieved 2026-09-05: *"Project must be built on ENSv2 (Sepolia). ENSv2
+> features should be central to the product, not a cosmetic add-on. Your demo must be functional
+> and not just include hard-coded values."*
 
 A merchant is a name, not an address — and in ENSv2 a name is also an authorization model. UNICA
 resolves the name live on Sepolia, commits that reading into the signed quote so the address a
@@ -107,6 +116,13 @@ Remaining: a wallet signature for the record the owner controls.
 
 **Status: `READY_FOR_ARC_DEPLOYMENT_ACTION`**
 
+> Published requirement, retrieved 2026-09-05: *"Build stablecoin-native DeFi on Arc."* And,
+> separately on the same page: *"Build lending, borrowing, swaps, liquidity, FX, yield, payments,
+> treasury or fintech infrastructure using Arc and USDC."*
+
+**Treasury is named in the requirement itself**, which is why this is the track and why no swap
+had to be invented to reach it.
+
 A merchant treasury on a chain where the money and the gas are the same asset. Bounded policy,
 reserve floor, per-action cap, one permitted transfer — and a transaction preview that stops in
 front of the signature.
@@ -123,6 +139,14 @@ labelled network paths; nothing crosses between them.
 | Owner steps | `integrations/arc-treasury/OWNER-ACTION.md` |
 
 Remaining: faucet funding and a broadcast on Arc testnet, both owner actions.
+
+## A note on track names
+
+Every track name on this page was read from the prize page and is dated. Names get edited during an
+event, and a name carried forward from a doc rather than re-read from the page is the kind of stale
+fact that costs a submission. **Re-confirm each one against the live page before the form is
+filled.** `docs/INTEGRATIONS.md` deliberately preserves an earlier, differently-named Arc reading
+rather than overwriting it, for the same reason.
 
 ## What UNICA does not claim
 

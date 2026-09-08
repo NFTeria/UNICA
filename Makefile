@@ -161,6 +161,29 @@ gate     : _need-deps
 	@# and lives behind `make graph-v2-test`, but a subgraph that subscribes to the wrong topic
 	@# indexes nothing and reports no error, so THAT check belongs in the gate.
 	@$(call run_row,node,node integrations/graph-v2/check.mjs,V2 indexer consistency)
+	@# The V2 indexer's live Graph client. Offline by construction: `fetch` is a parameter, so every
+	@# named failure is driven by a stub rather than by somebody else's outage. It also SPAWNS
+	@# live-proof.mjs with the endpoint unset and asserts a non-zero exit — a fail-closed path
+	@# nobody tests is a fail-closed path nobody has seen work.
+	@$(call run_row,node,node integrations/graph-v2/provider-test.mjs,V2 live Graph provider)
+	@# The treasury copilot. Deterministic by construction — no model call, no clock, no randomness —
+	@# so every recommendation is re-derivable, and every rule has a boundary row on the passing
+	@# side as well as the failing one.
+	@$(call run_row,node,node integrations/graph-v2/copilot-test.mjs,V2 treasury copilot)
+	@# The ENSv2 authorization layer: the Permissioned Resolver and Enhanced Access Control. Offline
+	@# and deterministic — it replays wire bytes captured from live Sepolia, three real refusals
+	@# among them, so the role constants and the resource derivation are checked against what the
+	@# deployed contract actually said rather than against a second copy of our own keccak.
+	@$(call run_row,node,node integrations/ensv2/permissioned-test.mjs,ENSv2 permissioned resolver)
+	@# The Arc treasury: the unit system that keeps an 18-decimal native gas amount and a 6-decimal
+	@# ERC-20 amount from ever meeting, plus the bounded policy above it. Offline; the transport
+	@# throws on any request the committed transcript did not record.
+	@$(call run_row,node,node integrations/arc-treasury/test.mjs,Arc treasury units and policy)
+	@# The merchant split, derived twice. merchant_policy.vy is what would run on chain and is the
+	@# truth; split.mjs is the JavaScript an Arc console shows a merchant. This row checks the
+	@# second against 78 rows of what the FIRST actually computed, because the place the two can
+	@# disagree is rounding, and a leg that is wrong by the remainder looks right on its own.
+	@$(call run_row,node,node integrations/arc-treasury/split-test.mjs,Arc split parity with Vyper)
 	@# The client signing tool. Its vectors are re-derived in test/v2/SigningVectors.t.sol, so
 	@# running only one of the two proves that one side is self-consistent and nothing else.
 	@$(call run_row,node,node tools/unica-sign/test.mjs,signing tool vectors)
@@ -192,7 +215,7 @@ gate     : _need-deps
 # The receipt verifier's ONLINE rows, against a local fork node. Separate from the gate for the same
 # reason the fork suites are: a gate that needs somebody else's node is a status page. Start the node
 # with `make anvil`, then `make verify-fixture` to re-capture the fixture from a fresh settlement.
-.PHONY: verify-online verify-fixture vy
+.PHONY: verify-online verify-fixture vy graph-v2-test graph-v2-live
 # The Vyper workspace on its own, verbosely, for when a row is being worked on.
 vy:
 	cd vy && mox test -s
@@ -222,6 +245,12 @@ fork:
 graph-v2-test:
 	cd integrations/graph-v2 && npx graph codegen && npx graph test
 
+# The V2 indexer against a LIVE subgraph. Not in `make gate` for the same reason the fork suites
+# are not: it needs somebody else's endpoint. With UNICA_SUBGRAPH_URL unset it prints a SKIP naming
+# the variable and exits non-zero, so it can never be mistaken for a passing gate row.
+graph-v2-live:
+	node integrations/graph-v2/live-proof.mjs
+
 # And the highest-value mutations re-run under fork conditions.
 fork-mutants:
 	bash script/mutation-suite.sh --fork
@@ -229,6 +258,14 @@ fork-mutants:
 # The gate plus the rows that need a network: real ENSv2 names resolved on Sepolia. Read-only.
 gate-live: gate
 	node integrations/ensv2/test.mjs --live
+	@# The ENSv2 authorization evidence: every address with its observed code size, every probe
+	@# labelled with which of the three observations it produced, and the two authorization rows.
+	@# Read-only, and it refuses before doing anything if the endpoint is not Sepolia.
+	node integrations/ensv2/permissioned-live.mjs
+	@# Arc's decimal evidence, re-derived against the live chain. NOT in `gate`: it needs somebody
+	@# else's endpoint, and a gate that depends on a third party's uptime is a status page. It
+	@# exits non-zero when it reaches nothing, so an unreachable RPC cannot read as a pass.
+	node integrations/arc-treasury/live-check.mjs
 
 predict:
 	forge script script/LiveFire.s.sol:LiveFire --sig "predict()" -vv
