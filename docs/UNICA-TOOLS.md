@@ -1234,3 +1234,37 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   observed named the name-level resource.
 - Sponsor relevance: ENS. No claim is made that it qualifies for anything.
 
+### Graph Live Provider and Treasury Copilot
+
+- Id: `graph-treasury-copilot`
+- Purpose: read a merchant's settlements from a live subgraph and say something useful about them
+  that can be re-derived.
+- Product role: the merchant's own searchable record, and the reasoning on top of it.
+- Version: 0.1.0
+- Location: `integrations/graph-v2/provider.mjs`, `copilot.mjs`, `samples.mjs`,
+  `provider-test.mjs`, `copilot-test.mjs`, `live-proof.mjs`
+- Inputs: `UNICA_SUBGRAPH_URL` and, on the decentralised network, `GRAPH_API_KEY`.
+- Outputs: settlement rows, or one of eighteen named refusals — never a partial read, and never a
+  fixture wearing a live label.
+- Trust boundary: the Subgraph Studio or gateway endpoint, and an independent RPC used only to
+  learn the chain head the index is measured against.
+- Security guarantees: freshness is judged before a row is read, and against a head the subgraph
+  did not supply; a non-numeric staleness threshold is refused rather than defaulted, because a
+  comparison against `NaN` is a guard that can never fire; no credential is rendered on any path;
+  and the live path cannot reach the offline samples, which is asserted structurally and
+  behaviourally.
+- Explicit non-guarantees: **no successful live read has ever been observed**, because nothing is
+  deployed to read from. The copilot is a deterministic analyst, not a model — that is deliberate,
+  since a recommendation nobody can re-derive is a recommendation nobody can audit. Its thresholds
+  are policy defaults and were never fitted to a real merchant's history.
+- Dependencies: the V2 settlement indexer.
+- Networks: Ethereum Sepolia.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 147 provider rows and 115 copilot rows in `make gate`; `make graph-v2-live` exits
+  non-zero with no endpoint configured, which is itself asserted by a spawn in the provider suite.
+- Tests: `integrations/graph-v2/provider-test.mjs`, `integrations/graph-v2/copilot-test.mjs`
+- Deployment: none. A Studio deployment is an owner action, and the executor address the manifest
+  names holds zero bytes on Sepolia today — so a deploy made now would index nothing, forever.
+- Limitations: the response shapes are written from the GraphQL specification and The Graph's
+  documented `_meta`, never captured from a live gateway.
+- Sponsor relevance: The Graph. No claim is made that it qualifies for anything.

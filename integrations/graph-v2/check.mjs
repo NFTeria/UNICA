@@ -12,6 +12,12 @@ import {chdir} from "node:process";
 import {dirname, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {keccak256, toHex} from "../../web/ensv2/keccak.mjs";
+// The provider and the copilot are IMPORTED rather than described. A second description of a field
+// list is a second thing to keep in step, and the whole point of these rows is that nothing is kept
+// in step by hand. Both modules read no file and open no socket at import time, which is why this
+// is safe in a gate that runs on a fresh clone.
+import {FAILURE, META_SELECTION, NETWORK_CHAIN_ID, SETTLEMENT_FIELDS, buildSettlementQuery} from "./provider.mjs";
+import {FINDING, REQUIRED_FIELDS, SEVERITY, VERDICT} from "./copilot.mjs";
 
 // Anchored, so this reads the repository and not whatever directory it was called from.
 chdir(resolve(dirname(fileURLToPath(import.meta.url)), "../.."));
@@ -148,6 +154,158 @@ for (const line of queries.split("\n")) {
 }
 chk("every field the queries select exists in the schema", unknown.size === 0, [...unknown]);
 
+// ---- the start block is real -------------------------------------------------------------------
+//
+// The manifest row above already refuses block 0. networks.json is what `graph build` actually
+// reads, so it is checked on its own terms rather than only against the manifest: the two agreeing
+// on zero would pass the agreement row and index nothing.
+
+for (const [net, entry] of Object.entries(networksFile)) {
+  const sb = entry?.QuoteSettlementExecutor?.startBlock;
+  chk(`networks.json start block for ${net} is a real block, not zero`,
+      Number.isInteger(sb) && sb > 0,
+      "indexing from block 0 scans the whole chain for events that cannot be there, and costs a Studio deployment hours");
+}
+
+// ---- the live provider asks for fields that exist -------------------------------------------------
+//
+// The provider validates every field it lists and refuses a row that is missing one. If the schema
+// renames a field, that refusal fires against a LIVE endpoint, in front of whoever is watching. It
+// is cheaper to fail here.
+
+const settlementFields = entities.InvoiceSettlement ?? new Set();
+const providerMissing = SETTLEMENT_FIELDS.filter((f) => !settlementFields.has(f));
+chk("every field the live provider selects exists in the schema", providerMissing.length === 0, providerMissing);
+
+const copilotMissing = REQUIRED_FIELDS.filter((f) => !settlementFields.has(f));
+chk("every field the copilot requires exists in the schema", copilotMissing.length === 0, copilotMissing);
+
+const notSelected = REQUIRED_FIELDS.filter((f) => !SETTLEMENT_FIELDS.includes(f));
+chk("every field the copilot requires is one the provider actually asks for", notSelected.length === 0, notSelected,
+    "the copilot would receive undefined and reject every live read");
+
+const providerQuery = buildSettlementQuery({byRecipient: true});
+chk("the provider's query asks _meta before it asks for rows",
+    providerQuery.indexOf(META_SELECTION) < providerQuery.indexOf("invoiceSettlements"),
+    "a freshness check made after the rows are read is a freshness check that arrived too late");
+const queryMissing = SETTLEMENT_FIELDS.filter((f) => !new RegExp(`^\\s+${f}$`, "m").test(providerQuery));
+chk("the provider's query selects every field the provider validates", queryMissing.length === 0, queryMissing);
+
+// ---- the query filters name real fields too ---------------------------------------------------------
+//
+// The structural row above walks bare selections. A `where:` argument is not a bare selection, and a
+// filter on a renamed field is the same silent-empty-result failure with a different shape.
+
+const filterFields = new Set();
+for (const m of queries.matchAll(/where:\s*\{([^}]*)\}/g)) {
+  for (const f of m[1].matchAll(/(\w+)\s*:/g)) filterFields.add(f[1]);
+}
+const unknownFilters = [...filterFields].filter((f) => !known.has(f.replace(/_(gt|gte|lt|lte|in|not|contains)$/, "")));
+chk(`every field the queries FILTER on exists in the schema (${filterFields.size} checked)`,
+    unknownFilters.length === 0, unknownFilters);
+
+// ---- the copilot's vocabulary is closed --------------------------------------------------------------
+//
+// The copilot's whole claim is that a reader can switch on its output. A finding name that is used
+// but never declared breaks that quietly: the report still renders, and the consumer's switch falls
+// through to nothing.
+
+const copilotSource = text(`${HERE}/copilot.mjs`);
+function undeclared(source, prefix, declared) {
+  const used = new Set([...source.matchAll(new RegExp(`${prefix}\\.([A-Z_]+)`, "g"))].map((m) => m[1]));
+  return [...used].filter((u) => !(u in declared));
+}
+chk("every FINDING the copilot emits is declared in its vocabulary",
+    undeclared(copilotSource, "FINDING", FINDING).length === 0, undeclared(copilotSource, "FINDING", FINDING));
+chk("every SEVERITY it uses is declared", undeclared(copilotSource, "SEVERITY", SEVERITY).length === 0,
+    undeclared(copilotSource, "SEVERITY", SEVERITY));
+chk("every VERDICT it can return is declared", undeclared(copilotSource, "VERDICT", VERDICT).length === 0,
+    undeclared(copilotSource, "VERDICT", VERDICT));
+
+// ---- every named failure is exercised by a test -------------------------------------------------------
+//
+// A taxonomy nobody drives is a list of strings. This does not prove the rows are good; it proves
+// none of them is absent, which is the failure that happens when a new failure mode is added.
+
+const providerTest = text(`${HERE}/provider-test.mjs`);
+const untested = Object.keys(FAILURE).filter((f) => !providerTest.includes(`FAILURE.${f}`));
+chk(`every one of the provider's ${Object.keys(FAILURE).length} named failures is named in its suite`,
+    untested.length === 0, untested);
+
+// ---- the live path cannot reach the offline samples -----------------------------------------------------
+//
+// The suite asserts this too. It is repeated in the gate because it is the load-bearing claim of the
+// whole integration: an offline run that could render as a live one would make every screenshot in
+// the submission worthless. Whole comment lines are stripped first, because the provider's header
+// DOCUMENTS the absence and has to name the file to do it — a guard that fires on its own
+// documentation is a guard that gets deleted.
+
+const providerSource = text(`${HERE}/provider.mjs`);
+const providerCode = providerSource
+  .split("\n")
+  .filter((l) => {
+    const t = l.trim();
+    return !(t.startsWith("//") || t.startsWith("/*") || t.startsWith("*"));
+  })
+  .join("\n");
+chk("the live provider's code names no sample module", !providerCode.includes("samples.mjs"),
+    "a fixture fallback is one import away from existing");
+chk("the live provider's code reads no file",
+    !providerCode.includes("node:fs") && !providerCode.includes("readFileSync"),
+    "a module that can read from disk can fall back to a file on disk");
+chk("control: the provider still documents why there is no fallback",
+    providerSource.includes("does not import ./samples.mjs"),
+    "the two rows above are checking a file that no longer explains itself");
+
+// ---- nothing renders a credential ------------------------------------------------------------------------
+
+const liveProof = text(`${HERE}/live-proof.mjs`);
+chk("the live proof prints the endpoint's label and never its raw URL",
+    !liveProof.includes("endpoint.url"),
+    "the URL can carry the API key in its path; only the redacted label is printable");
+// The row above covers the SUBGRAPH endpoint only, and for a while that was the whole of this
+// section — which is how the head RPC came to be printed raw. UNICA_HEAD_RPC_URL exists so an
+// operator can point the independent head source at their own node, and a node provider's url
+// carries its key as an ordinary path segment (`/v2/<key>`), where the endpoint redactor does not
+// look. The head RPC must stay VISIBLE — a proof whose independent source is secret proves
+// nothing — so it goes through `rpcLabel`, which keeps the host and redacts the segment.
+chk("the live proof prints the head RPC through a label, never the raw variable",
+    /rpcLabel\(headRpc\)/.test(liveProof) && !/\$\{headRpc\}/.test(liveProof),
+    "UNICA_HEAD_RPC_URL can carry a node provider's key in its path");
+chk("the live proof refuses a staleness threshold it could not parse",
+    liveProof.includes("BAD_THRESHOLD") && !/Number\(env\.UNICA_MAX_LAG_BLOCKS\)/.test(liveProof),
+    "Number(\"abc\") is NaN and every comparison against NaN is false, so an unparseable threshold "
+      + "deletes the staleness check instead of widening it");
+
+// A pasted key would land in the owner document or the README, which is where somebody copies a
+// working command back from. The provider suite's planted key is deliberately NOT scanned here: it
+// is a fake, it is declared as a fake, and a scanner that fires on its own test fixture gets muted.
+for (const doc of ["STUDIO-OWNER-ACTION.md", "README.md"]) {
+  const body = text(`${HERE}/${doc}`);
+  chk(`${doc} carries no filled-in API key`,
+      !/\/api\/[0-9a-f]{16,}/i.test(body) && !/\b[0-9a-f]{32}\b/.test(body),
+      "a key pasted into a document in a public repository is a disclosed key, permanently");
+}
+chk("the provider suite declares its planted key as a plant",
+    providerTest.includes("the planted credential"),
+    "the key-shaped constant in the suite is no longer labelled, and a reader would take it for a real one");
+
+const ownerDoc = text(`${HERE}/STUDIO-OWNER-ACTION.md`);
+chk("the owner document uses a placeholder for the deploy key",
+    ownerDoc.includes("<DEPLOY_KEY>"),
+    "the deploy steps must be copyable without inviting a real key into the repository");
+chk("the owner document says the deploy key never comes back into the repository",
+    /never.{0,80}(paste|commit)/is.test(ownerDoc),
+    "the one rule the owner has to carry away is the one that cannot be undone");
+
+// ---- the manifest's network is one the provider can measure staleness against -------------------------------
+
+if (network) {
+  chk(`the provider knows a chain id for the manifest's network (${network[1]})`,
+      NETWORK_CHAIN_ID[network[1]] !== undefined,
+      "the staleness margin is measured against a head from an independent RPC, and an unknown network has no head to compare with");
+}
+
 // ---- the generated bindings are in step with the schema ----------------------------------------
 
 let generated = null;
@@ -168,5 +326,5 @@ if (generated === null) {
 
 console.log("UNICA V2 indexer — manifest, ABI and query consistency");
 console.log(rows.join("\n"));
-console.log(`\nchecks run: ${checks}, failed: ${failures}, skipped: ${skipped}`);
+console.log(`\nchecks run: ${checks}, passed: ${checks - failures}, failed: ${failures}, skipped: ${skipped}`);
 process.exit(failures === 0 ? 0 : 1);

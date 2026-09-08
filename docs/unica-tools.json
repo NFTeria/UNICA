@@ -641,7 +641,7 @@
       "sponsorRoles": [
         "the-graph"
       ],
-      "lastVerifiedCommit": "3690dc413f2985d33ebd5c6386bf658eaa069a06"
+      "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
     },
     {
       "id": "vyper-settlement-model",
@@ -1198,6 +1198,38 @@
         "the accepted half of the authorization contrast is an eth_call, not a mined transaction"
       ],
       "sponsorRoles": ["ens"],
+      "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
+    },
+    {
+      "id": "graph-treasury-copilot",
+      "name": "Graph Live Provider and Treasury Copilot",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "integrations/graph-v2/provider.mjs",
+        "integrations/graph-v2/copilot.mjs",
+        "integrations/graph-v2/samples.mjs",
+        "integrations/graph-v2/provider-test.mjs",
+        "integrations/graph-v2/copilot-test.mjs",
+        "integrations/graph-v2/live-proof.mjs"
+      ],
+      "networks": ["ethereum-sepolia"],
+      "dependencies": ["v2-settlement-indexer"],
+      "tests": ["integrations/graph-v2/provider-test.mjs", "integrations/graph-v2/copilot-test.mjs"],
+      "evidence": [
+        {"kind": "command", "value": "node integrations/graph-v2/provider-test.mjs"},
+        {"kind": "measurement", "value": "147 rows, 147 passed, 0 failed, offline with fetch stubbed"},
+        {"kind": "command", "value": "node integrations/graph-v2/copilot-test.mjs"},
+        {"kind": "measurement", "value": "115 rows, 115 passed, 0 failed, deterministic"},
+        {"kind": "command", "value": "make graph-v2-live"}
+      ],
+      "limitations": [
+        "no successful live read has ever been observed: nothing is deployed, so the client is proven and the endpoint is not",
+        "the executor address the manifest names holds zero bytes on Sepolia, so a Studio deploy made today would index nothing forever",
+        "the copilot thresholds are policy defaults and were never fitted to any real merchant history",
+        "the response shapes are written from the GraphQL specification, never captured from a live gateway"
+      ],
+      "sponsorRoles": ["thegraph"],
       "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
     }
   ]
