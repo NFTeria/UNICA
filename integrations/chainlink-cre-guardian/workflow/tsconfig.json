@@ -1,4 +1,15 @@
 {
+  "//": [
+    "This config is what the CRE compiler typechecks with before it builds main.ts to WASM, so its",
+    "`include` is a statement about WHAT THE WORKFLOW IS, not about what this directory contains.",
+    "",
+    "`*.ts` swept in main.test.ts, and the build failed on `Cannot find module 'bun:test'` — an error",
+    "about the test runner, raised against the workflow, at deploy time. The test is not part of the",
+    "workflow: it never ships to the enclave, and the types it needs are supplied by `bun test` at",
+    "run time rather than by this compilation.",
+    "",
+    "So the workflow build compiles the workflow. tsconfig.test.json typechecks the test."
+  ],
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -7,12 +18,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "lib": [
-      "ES2022",
-      "DOM"
-    ]
+    "lib": ["ES2022", "DOM"]
   },
-  "include": [
-    "*.ts"
-  ]
+  "include": ["*.ts"],
+  "exclude": ["*.test.ts", ".cre_build_tmp.js"]
 }

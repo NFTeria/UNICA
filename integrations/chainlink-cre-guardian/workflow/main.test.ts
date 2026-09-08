@@ -23,7 +23,7 @@ import {
   policyCommitment,
   type Observation,
   type PrivatePolicy,
-} from "./main";
+} from "./guardian";
 
 /** JSON.stringify throws on a bigint, and every amount here is one. */
 function render(o: unknown): string {

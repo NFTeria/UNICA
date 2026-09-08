@@ -63,3 +63,83 @@ or public configuration".
 updating the config, would remove the trap entirely.
 
 **QUESTION** — the fifteen open questions are in `FEEDBACK.md`. None has been answered.
+
+
+---
+
+## Running the real CLI, 2026-09-08 — three defects in our own workflow, and one wall
+
+`cre login` succeeded (CLI **v1.32.0**, SDK **1.18.0**). What it unblocked was not a passing
+simulation; it was the discovery that our workflow had never been compiled by the real toolchain,
+only typechecked by us and run under `bun test`. Three things were wrong, and all three are ours:
+
+1. **The test file broke the workflow build.** `tsconfig.json` had `"include": ["*.ts"]`, so the
+   CRE compiler typechecked `main.test.ts` and failed on `Cannot find module 'bun:test'` — an
+   error about the test runner, raised against the workflow, at build time. The `include` of the
+   config the CRE compiler reads is a statement about what the WORKFLOW is, not about what the
+   directory contains. Fixed by excluding `*.test.ts` and adding `tsconfig.test.json` so the test
+   is still typechecked, just not by the workflow build.
+
+2. **Javy refuses exported functions that take parameters.**
+
+       Error: Exported functions with parameters are not supported
+
+   Only the ENTRY module's exports become WASM exports, and `decide`, `policyCommitment`,
+   `onCronTrigger` and `initWorkflow` all take arguments — and all must stay exported so the suite
+   can drive them directly. Fixed by splitting: `guardian.ts` holds the logic, `main.ts` is the
+   entry and its only export takes nothing. **This is worth documenting upstream.** Nothing in the
+   quickstart says the entry module's export shape is constrained, and the error surfaces at the
+   WASM step with a Javy backtrace rather than at the point where a developer chose to export a
+   function.
+
+3. **A `.ts` extension in a relative import** fails the typecheck under the shipped tsconfig
+   (`allowImportingTsExtensions` is not enabled). Minor, but it cost a run.
+
+**After those three, the workflow compiles.** That is new and it is checkable:
+
+```
+✓ Workflow compiled
+  Binary hash: 924c5266c168abc84b59b52184ed1d364610a20d8b16ba455ec250395a55164b
+  Config hash: bece38e7321bab5f104f7db19277b54b216940b97ce842960e0c65a85681769d
+```
+
+Secrets resolve from `--env`, the five secret names in `secret-names.yaml` bind, and credential
+validation passes.
+
+**Then it stops, and this one is not ours:**
+
+```
+Failed to create engine: failed to execute subscribe: error while executing at wasm backtrace:
+    0:  0x9a097 - <unknown>!<wasm function 313>
+    1:  0xdb47f - <unknown>!<wasm function 1231>
+Caused by: wasm trap: wasm `unreachable` instruction executed
+```
+
+Narrowed by elimination, each a separate run:
+
+| Hypothesis | Result |
+|---|---|
+| the TEE constraint shape | `{}` and `[{tee:"nitro",regions:[NITRO_REGIONS[0]]}]` **both trap** |
+| `handlerInTee` specifically | swapping to plain `handler` **still traps** |
+| our own config validation | replaced every `throw` with a log — **it never fires** |
+
+So the throw is inside the SDK's subscribe path, before our code runs, and is not caused by the
+confidential handler. **What we would ask for:** a JS-level error rather than a bare
+`unreachable` trap with a raw WASM backtrace. As it stands the failure names no capability, no
+field and no line, and the only way to learn anything is to bisect the workflow by deletion.
+
+**Unverified hypothesis, stated as one:** CLI **v1.32.0** against SDK **1.18.0** may simply be
+mismatched version lines. We have not confirmed which SDK version this CLI expects, and we are
+not claiming a version bug — only that the pairing is untested by us and the error gives a
+developer nothing to distinguish that from their own mistake.
+
+Also observed, and transient: `api.cre.chain.link` returned a **Cloudflare 520** during credential
+validation, self-described as retryable after 60 seconds. It cleared on the next attempt. Noted
+only so a reader does not mistake it for the trap above.
+
+**Account state:** `cre whoami` reports **Deploy Access: Not enabled**, so `cre login` alone does
+not unblock a deployment; `cre account access` is the request path and is an owner action.
+
+Status: `BLOCKED_ON_CRE_SIMULATE`. The workflow compiles to a CRE WASM binary with a stated hash.
+It has never executed, in a TEE or otherwise, and the evidence grade it stamps on its own output
+still says `CRE_CONFIDENTIAL_SIMULATION` rather than `TEE_ATTESTED`.

@@ -1103,7 +1103,7 @@
         "not audited"
       ],
       "sponsorRoles": ["chainlink"],
-      "lastVerifiedCommit": "ae7eb7b194ed5c7911d624814058b877d22ff7c4"
+      "lastVerifiedCommit": "97297ffa687c02f1f72728d6a88a8932b201ca1d"
     },
     {
       "id": "cre-guardian-adapter",
@@ -1134,7 +1134,7 @@
         "not audited"
       ],
       "sponsorRoles": ["chainlink"],
-      "lastVerifiedCommit": "2cad3e3e75ae79c9cb7be8987ae99d8630c97a14"
+      "lastVerifiedCommit": "97297ffa687c02f1f72728d6a88a8932b201ca1d"
     },
     {
       "id": "ens-identity-chain",

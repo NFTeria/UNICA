@@ -1,0 +1,15 @@
+{
+  "//": [
+    "The test half, kept separate so excluding the test from the WORKFLOW build does not quietly",
+    "stop it being typechecked at all. `bun test` runs the file without typechecking it, so without",
+    "this the exclusion above would be a silent loss of coverage rather than a separation.",
+    "",
+    "Run: bunx tsc -p tsconfig.test.json"
+  ],
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun-types"]
+  },
+  "include": ["*.ts"],
+  "exclude": [".cre_build_tmp.js"]
+}
