@@ -388,6 +388,35 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Sponsor relevance: Uniswap — this is what a wallet would use to render a UNICA quote.
 - Last verified commit: `b9d9116b5890`
 
+### PayAny Router (Vyper)
+
+- Id: `payany-router-vy`
+- Purpose: let a payer bring any token and still pay a merchant a defensible amount of USDC.
+- Product role: the accept-anything front door. A Chainlink-priced floor in front of a Uniswap
+  route, then a split through the merchant's policy.
+- Version: 0.1.0
+- Location: `vy/src/unica/payany_router.vy`
+- **Provenance: PRIOR ART.** Carried in, not authored here. See `docs/PRIOR-ART.md`.
+- Security guarantees: the swap's output is MEASURED as a balance delta rather than taken from the
+  router's word, and compared against an independently priced floor. The Chainlink read refuses a
+  missing feed, a non-positive price, an answer older than `max_feed_age`, a future-dated answer
+  and an incomplete round; the freshness boundary is checked from both sides. An intent is consumed
+  by id alone, so a replay under another merchant or amount is still a replay. Slippage and
+  platform fee are each capped at ten percent, so an owner cannot quietly widen either.
+- Explicit non-guarantees, each measured: `pay()` executes **caller-supplied calldata** against the
+  Universal Router with a live approval — what bounds the damage is the oracle gate on the measured
+  delta, not any validation of that calldata. The bank leg is *approved* to the off-ramp and the
+  off-ramp is *trusted to pull it*: an adapter that does not pull leaves the USDC in the router with
+  a live allowance while `pay()` still succeeds, so the no-custody claim rests on another
+  contract's behaviour. There is no L2 sequencer-uptime check. The gate is applied to the gross
+  output while the merchant is paid net of the platform fee.
+- Networks: none. **Not deployed anywhere and not audited.** The swap leg is untested: it needs a
+  Universal Router, and only the USDC path runs without one.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 14 rows, `cd vy && mox test tests/test_payany_router.py`.
+- Sponsor relevance: Uniswap and Chainlink.
+- Last verified commit: `86a402ed68bc`
+
 ### Merchant Settlement Policy (Vyper)
 
 - Id: `merchant-policy-vy`

@@ -1045,6 +1045,32 @@
       ],
       "sponsorRoles": [],
       "lastVerifiedCommit": "e66e0771e8a5af11e0d4f26c0354d59987c497f7"
+    },
+    {
+      "id": "payany-router-vy",
+      "name": "PayAny Router (Vyper)",
+      "version": "0.1.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": ["vy/src/unica/payany_router.vy"],
+      "networks": [],
+      "dependencies": ["chainlink-price-feed", "uniswap-universal-router", "merchant-policy-vy"],
+      "tests": ["vy/tests/test_payany_router.py"],
+      "evidence": [
+        {"kind": "command", "value": "cd vy && mox test tests/test_payany_router.py"},
+        {"kind": "measurement", "value": "14 rows: the Chainlink gate refuses a missing feed, a zero or negative price, a stale answer, a future-dated answer and an incomplete round, with the freshness boundary checked from both sides"},
+        {"kind": "measurement", "value": "an intent is consumed by id alone, so a replay under a different merchant or amount is still refused"}
+      ],
+      "limitations": [
+        "PRIOR ART: written before this repository's hackathon window and carried in, not authored during it; see docs/PRIOR-ART.md",
+        "pay() executes CALLER-SUPPLIED calldata against the Universal Router with a live approval; what bounds the damage is the oracle gate on the measured USDC delta, not any validation of the calldata",
+        "the bank leg is approved to the off-ramp and the off-ramp is trusted to pull it: an adapter that does not pull leaves that USDC in the router with a live allowance and pay() still succeeds",
+        "no L2 sequencer-uptime check accompanies the Chainlink read",
+        "the oracle gate is applied to the gross swap output, while the merchant is paid after the platform fee",
+        "the swap leg itself is untested here: it needs a Universal Router, and only the USDC path runs without one",
+        "not deployed anywhere, and not audited"
+      ],
+      "sponsorRoles": ["uniswap", "chainlink"],
+      "lastVerifiedCommit": "86a402ed68bccb152114bb58bf440d65989d2aaa"
     }
   ]
 }
