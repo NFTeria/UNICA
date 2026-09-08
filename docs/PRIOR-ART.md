@@ -31,7 +31,7 @@ The distinction below is the one that matters, so it is spelled out rather than 
 |---|---|---|
 | `vy/src/unica/merchant_policy.vy` | **carried in** | tested here — 13 rows |
 | `vy/src/unica/payany_router.vy` | **carried in** | partially tested here — 14 rows; the swap leg is untested |
-| `vy/src/unica/flash_liquidator.vy` | **carried in** | **merely inventoried** — compiles, zero tests |
+| `vy/src/unica/flash_liquidator.vy` | **carried in** | **BLOCKED, merely inventoried** — compiles, zero tests. The lending interface it declares matches no protocol in this repository, and ChallengeLending has no third-party liquidation at all. See [`docs/v3/FLASH-LIQUIDATOR-GAP.md`](v3/FLASH-LIQUIDATOR-GAP.md) |
 | `vy/src/unica/calculator.vy` | **carried in** | **merely inventoried** — compiles, zero tests |
 | `vy/src/namemath.vy` | **carried in**, **restored** | tested here — one-line compile repair |
 | `vy/src/logobackground.vy` | **carried in** | tested here |

@@ -28,7 +28,7 @@ carried forward from an earlier one.
 | Circle Arc nanopayments | locally demonstrated | `integrations/arc-nanopayments`, 141 rows | paid tool and agent loop not built; nothing settled |
 | `merchant_policy.vy` | **PRIOR ART**, tested here | `vy/tests`, 13 rows | policy only; holds and moves nothing |
 | `payany_router.vy` | **PRIOR ART**, partially tested | `vy/tests`, 14 rows | **the swap leg is untested** — it needs a Universal Router |
-| `flash_liquidator.vy` | **COMPILES ONLY** | `vy/src/unica` | zero tests |
+| `flash_liquidator.vy` | **BLOCKED** | [`docs/v3/FLASH-LIQUIDATOR-GAP.md`](docs/v3/FLASH-LIQUIDATOR-GAP.md) | the lending protocol it liquidates is not in this repository; zero tests |
 | `settlement_hook.vy` | **SUPERSEDED PRIOR ART** | `docs/PRIOR-ART.md` | replaced by the frozen V2 hook; not a V3 |
 | finance math library | **BLOCKED** | — | three sources arrived damaged; awaiting authoritative copies |
 | Vyper settlement model + art | locally demonstrated | 80 rows, `cd vy && mox test` | in-process EVM only |
