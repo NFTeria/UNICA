@@ -69,6 +69,19 @@ function chk(name, ok, detail) {
 
 // ---- the checks, each a pure function over a manifest so a control can feed it a broken one ----
 
+/// True when this is a shallow clone. Cached: it cannot change while the process runs.
+let _shallow = null;
+function shallow() {
+  if (_shallow === null) {
+    try {
+      _shallow = execFileSync("git", ["rev-parse", "--is-shallow-repository"], {encoding: "utf8"}).trim() === "true";
+    } catch {
+      _shallow = false;
+    }
+  }
+  return _shallow;
+}
+
 /// TRACKED paths under `paths` with uncommitted content changes, staged or not.
 ///
 /// Untracked files are deliberately excluded, and the exclusion is load-bearing rather than
@@ -207,7 +220,14 @@ const CHECKS = {
         reachable = false;
       }
       if (!reachable) {
-        bad.push(`${t.id}: lastVerifiedCommit ${sha.slice(0, 8)} is not an ancestor of HEAD`);
+        // A shallow clone makes EVERY sha unreachable, which is a broken checkout rather than 35
+        // stale tools. Say which, once, instead of printing the same confusing line per tool: CI
+        // did exactly that, and the row that swallowed it meant nobody read the output.
+        bad.push(
+          shallow()
+            ? `${t.id}: the checkout is SHALLOW, so no commit is reachable — this check needs full history (fetch-depth: 0)`
+            : `${t.id}: lastVerifiedCommit ${sha.slice(0, 8)} is not an ancestor of HEAD`,
+        );
         continue;
       }
       // Every commit since then that touched this tool must also have touched the manifest.
