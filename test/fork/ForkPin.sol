@@ -19,14 +19,18 @@ import {Test} from "forge-std/Test.sol";
 ///      fork test that quietly ran against nothing would be worse than no fork test.
 abstract contract ForkPin is Test {
     uint256 internal constant PINNED_CHAIN_ID = 11155111;
-    uint256 internal constant DEFAULT_BLOCK = 11656955;
-    /// @dev Block hash of the pinned block, read with `cast block` on 2026-09-07.
+    uint256 internal constant DEFAULT_BLOCK = 11661031;
+    /// @dev Block hash of the pinned block, read with `cast block` on 2026-09-08.
     ///
     ///      RE-PINNED TWICE, and the second time settled the design. Block 11656449 stopped
     ///      resolving within the hour and 11656701 within minutes: the public node answers
     ///      `historical state ... is not available` for any storage slot no earlier run had warmed.
     ///      Suites with warm caches keep passing, which is the dangerous shape — the pin looks
     ///      reproducible right up until a new row touches an uncached slot.
+    ///
+    ///      RE-PINNED A THIRD TIME on 2026-09-08, and the reason is the pattern rather than the
+    ///      block: 11656955 had stopped resolving too. This is what a pruning endpoint does, and
+    ///      it is why the override below matters more than any particular constant.
     ///
     ///      Chasing the head with a new constant every time is not engineering, so the block is
     ///      OVERRIDABLE. `UNICA_FORK_BLOCK` moves it; the default below is a block that worked when
@@ -37,8 +41,8 @@ abstract contract ForkPin is Test {
     ///      running at the DEFAULT block, and say so out loud when they do not. Every dependency's
     ///      CODE HASH is asserted either way, and those are unchanged across all three pins — which
     ///      is the substantive claim. The pin moved; the dependencies did not.
-    bytes32 internal constant DEFAULT_BLOCK_HASH = 0xd92c7168e4ba7017d3081fada61d3c20dc807187fc3767f3fc83325ce8cd1da5;
-    uint256 internal constant DEFAULT_TIMESTAMP = 1788818688;
+    bytes32 internal constant DEFAULT_BLOCK_HASH = 0x2abc012bc2a07eb1f68c81e0543a83a507a5a749d2b4d0bd124be99d233e047a;
+    uint256 internal constant DEFAULT_TIMESTAMP = 1788869904;
 
     /// @dev A public endpoint with no API key. Recorded rather than hidden, precisely because it
     ///      carries no secret; a private endpoint may be supplied through the environment instead.
