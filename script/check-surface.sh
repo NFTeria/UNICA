@@ -57,17 +57,29 @@ chk "control: an external <script src=> is caught" "grep -qiE '<script[^>]+src='
 rm -f "$tmp_ext"
 
 # ── 3. no secret-shaped string ────────────────────────────────────────────────
-# SECRETS is the same pattern script/scan.sh defines and runs over the whole tree; it is repeated
-# here, verbatim, with attribution, so this script stays self-contained for the one file GitHub
-# Pages will publish rather than depending on scan.sh's git-grep-over-the-repo shape. Source:
-# script/scan.sh, variable `secrets` (as of the commit that added this file).
-SECRETS='(PRIVATE_KEY|MNEMONIC|SECRET|API_KEY|AUTH_TOKEN|PASSWORD)[A-Z_]*[[:space:]]*=[[:space:]]*[^[:space:]<$]{8,}|"ciphertext"|ghp_[A-Za-z0-9]{36}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}'
-chk "no secret-shaped string in any served file ($(echo $SERVED | wc -w | tr -d ' ') files)" "! grep -qiE '$SECRETS' $SERVED"
+# The pattern is SOURCED, not copied. It used to be repeated here verbatim "with attribution",
+# and on 2026-09-08 the two had silently drifted: scan.sh's copy had been taught the JSON
+# `NAME: value` shape and this one had not, so the scanner guarding the PUBLISHED page was the
+# weaker of the two and nothing said so. One definition now, in script/secret-patterns.sh.
+[ -r "$(dirname "$0")/secret-patterns.sh" ] || { echo "FAIL  secret-patterns.sh is missing — refusing to publish with no patterns"; exit 1; }
+. "$(dirname "$0")/secret-patterns.sh"
+
+# Two stages, as the shared file defines them: $assign finds a name/separator/value, $material
+# keeps only the values that carry a digit or a hyphen. A served file must satisfy neither.
+served_hits=$(grep -hiE "$assign" $SERVED 2>/dev/null | grep -iE "$material" || true)
+served_toks=$(grep -hiE "$tokens" $SERVED 2>/dev/null || true)
+chk "no secret-shaped string in any served file ($(echo $SERVED | wc -w | tr -d ' ') files)" \
+  "[ -z \"\$served_hits\$served_toks\" ]"
+[ -n "$served_hits$served_toks" ] && printf '%s\n' "$served_hits" "$served_toks" | grep -v '^$'
 
 chk "control: the secrets pattern catches a planted key" \
-  "printf 'PRIVATE_KEY=0x%064d\\n' 1 | grep -qiE '$SECRETS'"
+  "printf 'PRIVATE_KEY=0x%064d\\n' 1 | grep -qiE \"\$material\""
+chk "control: ...and catches one in JSON form, which this file used to miss" \
+  "printf '  \"apiKey\": \"0x%064d\"\\n' 1 | grep -qiE \"\$material\" || printf '  \"API_KEY\": \"0x%064d\"\\n' 1 | grep -qiE \"\$material\""
 chk "control: the secrets pattern does not catch ordinary hex data" \
-  "! printf 'poolId: \"0xff4f4e2438f61817271cbd8399a925f5f99a1482f88c55419a2b69d0768e56db\"\\n' | grep -qiE '$SECRETS'"
+  "! printf 'poolId: \"0xff4f4e2438f61817271cbd8399a925f5f99a1482f88c55419a2b69d0768e56db\"\\n' | grep -qiE \"\$material\""
+chk "control: a shell default substitution is NOT caught" \
+  "! printf 'PASSWORD: \${PASSWORD:-local}\\n' | grep -qiE \"\$material\""
 
 # ── 4. the approved public claim, and only it ─────────────────────────────────
 # The one sentence this project is allowed to claim in public:

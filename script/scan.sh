@@ -7,7 +7,23 @@ cd "$(dirname "$0")/.."
 ok=0; fail=0
 chk() { if eval "$2"; then echo "PASS  $1"; ok=$((ok+1)); else echo "FAIL  $1"; fail=$((fail+1)); fi; }
 
-secrets='(PRIVATE_KEY|MNEMONIC|SECRET|API_KEY|AUTH_TOKEN|PASSWORD)[A-Z_]*[[:space:]]*=[[:space:]]*[^[:space:]<$]{8,}|"ciphertext"|ghp_[A-Za-z0-9]{36}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}'
+# The secret patterns live in ONE place, sourced here and by script/check-surface.sh. They used to
+# be copied between the two and had already drifted apart; secret-patterns.sh says why.
+#
+# TWO defects were found in this rule on 2026-09-08, by sabotage: planting a key inside a path the
+# bare-value rule excludes, in order to prove that exclusion was safe, and watching the scan stay
+# green at 17 of 17.
+#
+#   1. The separator was `=` only, so `"PRIVATE_KEY": "0x..."` was MISSED. JSON is the natural
+#      shape of a config file, and it is the shape a pasted key actually arrives in.
+#   2. It ran `git grep` WITHOUT `--untracked`, so a NEW file was invisible to it — which is the
+#      exact case a pre-commit scan exists to catch. A key in a new JSON file passed both rules.
+#
+# Both are fixed, and every row that found them is a permanent control below: a regression here
+# would otherwise be silent, this scan printing the same PASS lines while catching strictly less.
+[ -r "$(dirname "$0")/secret-patterns.sh" ] || { echo "FAIL  secret-patterns.sh is missing — refusing to scan with no patterns"; exit 1; }
+. "$(dirname "$0")/secret-patterns.sh"
+secrets="$assign|$tokens"
 names='(^|/)(STATE|MVP-PATH|SLOT-DECISION|BATTLE-PLAN|PLAYBOOK|PREBUILD|BOOTSTRAP|SESSION-PROMPT|ANSWERS|HANDOFF|SPONSORS|SPONSOR-BRIEF|LAW|PRIZE|SHIP|WHOSE-PROJECT|HOOK-CRAFT|UNISWAP-GITHUB|FEEDBACK-PLAN|FEEDBACK-DISCIPLINE|QUESTIONS|REMINDERS|PURSUIT-KIT|IDENTITY-RULING|WINNERS-EVIDENCE|UNISWAP-NEEDS|UF-SKILL-REVIEW|CHAIN-ADVANTAGES|INSIDE-THE-STACK|CHAINS|DISCIPLINE|privatenotes)\.md$|(^|/)(unica-closet|prize-watch|sponsors|routines|critique|do-not-ship|pseudocode|day1|warroom|war-room)/|\.REFERENCE$|\.output$'
 marks='unica-closet|claude-toolkit|SESSION-PROMPT|prize-watch/|/Users/'
 # What counts as a LABEL: a word on the same line that says the 32-byte value is a public
@@ -26,6 +42,23 @@ label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:spac
 # The controls, first: each pattern must catch a planted bad input and pass a planted good one.
 chk "control: a labelled key is caught"        "printf 'PRIVATE_KEY=0x%064d\n' 1 | grep -qiE '$secrets'"
 chk "control: a lowercase key is caught"       "printf 'private_key=0x%064d\n' 1 | grep -qiE '$secrets'"
+# The rows below are the sabotage that found the two defects, kept permanently: a regression here
+# would be silent, the scan printing the same PASS lines while catching strictly less.
+chk "control: a key in JSON form is caught"    "printf '  \"PRIVATE_KEY\": \"0x%064d\"\n' 1 | grep -qiE \"\$assign\" | grep -qiE \"\$material\" || printf '  \"PRIVATE_KEY\": \"0x%064d\"\n' 1 | grep -qiE \"\$material\""
+chk "control: a key in YAML form is caught"    "printf 'private_key: 0x%064d\n' 1 | grep -qiE \"\$material\""
+chk "control: a key in an UNTRACKED file is caught" "d=\$(mktemp -d ./.scanprobe-XXXX); printf 'PRIVATE_KEY=0x%064d\n' 1 > \$d/p.json; r=1; git grep --untracked -qiE \"\$assign\" -- \$d >/dev/null 2>&1 || r=0; rm -rf \$d; [ \$r -eq 1 ]"
+chk "control: a docker-compose password literal is caught" "printf '      POSTGRES_PASSWORD: let-me-in\n' | grep -qiE \"\$material\""
+# ...and the shapes that are CODE, not credentials. Each of these was a real false positive when
+# stage two was absent; each must stay quiet or stage two has stopped doing its job.
+chk "control: a TypeScript type annotation is NOT caught"  "! (printf '  secrets_ids: SecretsConfig;\n'            | grep -qiE \"\$material\")"
+chk "control: an undefined env value is NOT caught"        "! (printf '{API_KEY: undefined, GRAPH_API_KEY: undefined}\n' | grep -qiE \"\$material\")"
+chk "control: an enum member name is NOT caught"           "! (printf '  NO_API_KEY: \"NO_API_KEY\",\n'            | grep -qiE \"\$material\")"
+chk "control: a member expression is NOT caught"           "! (printf '  secrets: endpoint.secrets,\n'              | grep -qiE \"\$material\")"
+chk "control: an env-substituted value is NOT caught"      "! (printf 'POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}\n'  | grep -qiE \"\$material\")"
+chk "control: a shell default substitution is NOT caught"  "! (printf 'POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:-graph-node-local}\n' | grep -qiE \"\$material\")"
+chk "control: ...but a literal beside one IS still caught"  "printf 'POSTGRES_PASSWORD: \${X:-y} PRIVATE_KEY=0x%064d\n' 1 | grep -qiE \"\$material\""
+# The stated gap, asserted so it is visible rather than believed closed.
+chk "KNOWN GAP: an all-alphabetic passphrase is NOT caught" "! (printf 'PASSWORD=correcthorse\n' | grep -qiE \"\$material\")"
 chk "control: a private name anywhere is caught" "printf 'docs/notes/privatenotes.md\n' | grep -qE '$names'"
 chk "control: a private location is caught"    "printf 'see /Users/someone/notes\n' | grep -qE '$marks'"
 chk "control: an unlabelled 32-byte value is caught" "printf '| key | 0x%064d |\n' 2 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label'"
@@ -42,16 +75,33 @@ chk "control: a key on a line that also says 'curve' is STILL caught"     "print
 
 # Then the tree.
 # script/check-surface.sh carries this same pattern and a planted control key, as this file does; both are scanners.
-chk "no labelled secret or token format" "! git grep -niE '$secrets' -- . ':!lib' ':!.github/workflows/ci.yml' ':!script/scan.sh' ':!script/check-surface.sh'"
+# --untracked, for defect 2 above. Both stages run: stage one narrows the tree, stage two decides.
+# The three scanners are excluded from the secret rule because each one CONTAINS the patterns it
+# looks for; a scanner that fails on its own definitions is a scanner nobody can run.
+scanpaths=". ':!lib' ':!.github/workflows/ci.yml' ':!script/scan.sh' ':!script/check-surface.sh' ':!script/secret-patterns.sh'"
+leaks=$(eval "git grep --untracked -niE \"\$assign\" -- $scanpaths" 2>/dev/null | grep -iE "$material" || true)
+toks=$(eval "git grep --untracked -niE \"\$tokens\" -- $scanpaths" 2>/dev/null || true)
+chk "no labelled secret or token format" "[ -z \"\$leaks\$toks\" ]"
+[ -n "$leaks$toks" ] && printf '%s\n' "$leaks" "$toks" | grep -v '^$' 
 chk "no private runtime file tracked"    "! { git ls-files; git ls-files --others --exclude-standard; } | grep -qE '$names'"
-chk "no private location mentioned"      "! git grep -nE '$marks' -- . ':!lib' ':!.github/workflows/ci.yml' ':!.gitignore' ':!script/scan.sh'"
+chk "no private location mentioned"      "! git grep --untracked -nE '$marks' -- . ':!lib' ':!.github/workflows/ci.yml' ':!.gitignore' ':!script/scan.sh'"
 # CAPTURED CHAIN ARTIFACTS are excluded from the bare-value rule, and only from that one.
 # `broadcast/` and `tools/unica-verify/fixtures/` hold bytes a node returned, recorded verbatim
 # because the whole point of a captured artifact is that nobody edited it — a receipt's topics and
 # data are structurally nothing but unlabelled 32-byte words, and labelling them would mean
 # rewriting the evidence. The `secrets` rule above still reads both directories, so a key that
 # somehow landed in one is still caught by name.
-artifacts="':!broadcast/' ':!tools/unica-verify/fixtures/'"
+# These paths hold bytes a node returned, recorded verbatim: a receipt's topics and an `eth_call`
+# return are structurally nothing but unlabelled 32-byte words, and labelling them would mean
+# rewriting the evidence. The `secrets` rule above still reads every one of them — and as of
+# 2026-09-08 that is TRUE rather than merely asserted, because probing this exclusion is what
+# found the two defects the rule now carries controls for.
+#
+#   broadcast/                                   forge deployment records
+#   tools/unica-verify/fixtures/                 a settlement captured off a fork
+#   integrations/ensv2/fixtures/                 ENSv2 Sepolia wire bytes, three real refusals among them
+#   integrations/arc-treasury/transcript.json    an Arc RPC request/response transcript
+artifacts="':!broadcast/' ':!tools/unica-verify/fixtures/' ':!integrations/ensv2/fixtures/' ':!integrations/arc-treasury/transcript.json'"
 bare=$(eval "git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' $artifacts ':!script/scan.sh'" | grep -viE "$label" || true)
 chk "no bare 32-byte value without a label on its line" "[ -z \"\$bare\" ]"
 [ -n "$bare" ] && echo "$bare"

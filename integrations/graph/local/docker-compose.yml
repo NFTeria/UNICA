@@ -33,6 +33,9 @@ services:
     command: ["postgres", "-cshared_preload_libraries=pg_stat_statements", "-cmax_connections=200"]
     environment:
       POSTGRES_USER: graph-node
-      POSTGRES_PASSWORD: let-me-in
+      # No password literal in a public repository, even a local-only one. The scan caught this
+      # on 2026-09-08 once its rule learned the `NAME: value` shape; the fix is to remove the
+      # literal rather than to carve an exception for it.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-graph-node-local}
       POSTGRES_DB: graph-node
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
