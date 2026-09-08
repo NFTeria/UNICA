@@ -127,6 +127,14 @@ gate     : _need-deps
 	@# must not look the same. `make gate-live` additionally resolves real names on Sepolia.
 	@command -v node >/dev/null 2>&1 && node integrations/ensv2/test.mjs \
 	  || echo "SKIP  ENS resolution tests: node is not installed (this is a SKIP, not a pass)"
+	@# The ENS identity chain: a name, to a policy, to a canonical configuration, to a V2 quote.
+	@# Offline by construction — the resolver reply and the policy bytes are committed fixtures.
+	@command -v node >/dev/null 2>&1 && node integrations/ensv2/identity-test.mjs \
+	  || echo "SKIP  ENS identity chain: node is not installed (this is a SKIP, not a pass)"
+	@# And the end-to-end command itself, run for its exit status. A demo that stopped working
+	@# would otherwise be discovered by whoever ran it in front of an audience.
+	@command -v node >/dev/null 2>&1 && node integrations/ensv2/demo.mjs >/dev/null \
+	  || echo "SKIP  ENS identity demo: node is not installed (this is a SKIP, not a pass)"
 	@# The offline half of the Permit2 digest gate. Its whole value is being a SECOND derivation:
 	@# the vector it pins is recomputed in Solidity and presented to the real Permit2 runtime, so
 	@# running only one of the two proves that one side is self-consistent and nothing else.
