@@ -49,10 +49,10 @@ carried forward from an earlier one.
 | Component | Status | Evidence | Limitation |
 |---|---|---|---|
 | V1 hook + executor | **LIVE AND VERIFIED** on Ethereum Sepolia | tag `live-green` = `v1.0.0` = `5e1d8436`, broadcast tree `c15c7cda`, `make proof` | one settlement has run on it; USDC only; no external review |
-| V2 hook + executor | **FROZEN RELEASE CANDIDATE** `v2.0.0-rc1` at `82c7dcb4` | 167 Solidity tests, 44 fork rows against pinned live dependencies, `script/verify-freeze.mjs` 17/17 | **not deployed to any public chain**; EOA merchant signers only |
-| V2 receipt verifier | locally demonstrated + fork-tested | `tools/unica-verify`, 100 rows offline / 109 with RPC | the settlement it verifies exists only inside a local fork |
+| V2 hook + executor | **FROZEN RELEASE CANDIDATE** `v2.0.0-rc1` at `82c7dcb4` — **BLOCKED, MUST NOT BE DEPLOYED** | 182 Solidity tests in the gate, 226 including fork, 44 fork rows against pinned live dependencies, 30 of 30 mutations killed, `script/verify-freeze.mjs` 17/17 | a **Critical** unfixed defect: the payer's authorisation does not bind the merchant's half of the quote, so a settlement can be redirected in full by anyone who sees it — [`docs/v2/SECURITY-ADVISORY-001.md`](docs/v2/SECURITY-ADVISORY-001.md). Also: not deployed to any public chain; EOA merchant signers only |
+| V2 receipt verifier | locally demonstrated + fork-tested | `tools/unica-verify`, 113 rows with no endpoint at all; 9 more with one | the settlement it verifies exists only inside a local fork |
 | V2 signing tool | locally demonstrated | `tools/unica-sign`, 81 rows | builds and reads; never broadcasts |
-| ENSv2 identity chain | **locally demonstrated end-to-end** | `integrations/ensv2`, 136 + 95 rows, `node integrations/ensv2/demo.mjs` | every stage is a local fixture or computation; the policy registry is deployed nowhere |
+| ENSv2 identity chain | **locally demonstrated end-to-end** | `integrations/ensv2`, 136 + 95 rows, `node integrations/ensv2/demo.mjs` | every stage is a local fixture or computation; the policy registry is deployed nowhere. The 95-row suite crashed at row 30 and had never run to completion until 2026-09-08 |
 | V2 Graph indexer | locally demonstrated | 13 matchstick + 17 manifest checks | **not deployed to Subgraph Studio** — owner gate |
 | Chainlink CRE policy | locally demonstrated | `integrations/chainlink-cre-guardian`, 88 rows, 9 mutations | **LOCAL SIMULATION only**; no workflow deployed |
 | Chainlink CRE adapter | locally demonstrated | 86 rows, 10 mutations | **deployment BLOCKED** — see the Chainlink section |
@@ -198,16 +198,25 @@ bytecode that is live. The **documentation HEAD** is the commit you are reading 
 is normally later. A claim about what runs on chain belongs to the first; a claim about what is
 written down belongs to the second.
 
-`live-green` (`5e1d843`) is the deployment tag. `src/` and `test/` are byte-identical from it to
-HEAD, and so is `docs/proof/verify-live.sh` — `git diff --stat live-green..HEAD -- src/ test/`
-prints nothing. Everything committed since is documentation, scripts, the surface and indexer
-tooling. A semantic tag `v1.0.0` is **proposed and does not exist yet**; until it does, the
+`live-green` (`5e1d843`) is the deployment tag. **V1's** source and tests are byte-identical from
+it to HEAD, and so is `docs/proof/verify-live.sh`. The command that shows it has to exclude what was
+added since, because V2 lives under `src/` and `test/` too:
+
+```sh
+git diff --stat live-green..HEAD -- src/ test/ ':(exclude)src/v2' ':(exclude)test/v2' ':(exclude)test/fork'
+```
+
+It prints nothing. The older form of this claim named `-- src/ test/` with no exclusions and said it
+printed nothing; that stopped being true the day V2 was written, and it is recorded here rather than
+quietly corrected. A semantic tag `v1.0.0` is **proposed and does not exist yet**; until it does, the
 release is named `live-green` in every claim. Full record: [`docs/versions/V1.md`](docs/versions/V1.md).
 
-**V2 design work is in progress. No V2 implementation or deployment exists.** There is one
-version of UNICA, and it is the one below. `docs/versions/V2-SPEC.md` is an outline whose
-sections are not yet filled; it is not a specification, and nothing in this repository should be
-read as a V2 capability, a V2 decision, or evidence of completed V2 design.
+**V2 is implemented, frozen as `v2.0.0-rc1`, and deployed nowhere.** There is one version of UNICA
+on a chain, and it is V1, below. V2 exists as source, tests and a rehearsal, and it carries an open
+**Critical** defect that blocks its release — see
+[`docs/v2/SECURITY-ADVISORY-001.md`](docs/v2/SECURITY-ADVISORY-001.md) and the
+[internal security review](docs/v2/INTERNAL-SECURITY-REVIEW.md). Nothing in this repository should
+be read as a V2 capability on any chain.
 
 | | V1 — live |
 |---|---|

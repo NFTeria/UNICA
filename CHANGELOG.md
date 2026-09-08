@@ -15,9 +15,40 @@ No tag is created by this file. Creating or pushing a public release tag is an o
 
 ## [Unreleased]
 
-Documentation, tooling and specification work on top of the 1.0.0 contract state. `src/` and
-`test/` are untouched by everything in this section — verify with
-`git diff --stat live-green..HEAD -- src/ test/`, which prints nothing.
+Documentation, tooling and the V2 contract generation, on top of the 1.0.0 contract state. **V1's**
+source and tests are untouched by everything in this section; V2 was added beside them under the
+same directories, so the verify command has to say which:
+
+```sh
+git diff --stat live-green..HEAD -- src/ test/ ':(exclude)src/v2' ':(exclude)test/v2' ':(exclude)test/fork'
+```
+
+It prints nothing. The earlier wording claimed `src/` and `test/` as a whole were untouched and
+named a command that disproves it; corrected here rather than deleted, because a release note that
+quietly repairs its own evidence is the thing this file exists to prevent.
+
+### Security — 2026-09-08
+
+- **`v2.0.0-rc1` MUST NOT BE DEPLOYED.** An internal security review found, and reproduced, a
+  Critical defect in the frozen executor: the payer's Permit2 witness binds only the payer's half
+  of the quote, so a relayer or any mempool observer can rebuild the quote naming themselves as
+  merchant and recipient, present the payer's authorisation unchanged, and take delivery in full.
+  The honest settlement then fails on the spent nonce. Reproduced end to end in
+  `test/v2/WitnessBinding.t.sol`, which runs in the gate; analysed in
+  `docs/v2/SECURITY-ADVISORY-001.md`. **Not fixed** — the defect is in a frozen file and the fix
+  moves the payer's EIP-712 signing digest, which is an rc2 and an owner decision. Nothing is
+  deployed, so nothing is at risk today, and V1 has no Permit2 path and is unaffected.
+- **The gate reported failing suites as a missing runner.** Every external-tool row returned 0 when
+  its tool failed and printed "node is not installed". Three suites were behind it. Every "N rows
+  pass, in the gate" claim made before this fix was true only of the suites that happened not to be
+  broken.
+- The receipt verifier's online mode never fetched the receipt when one was supplied, so a
+  fabricated receipt verified clean; a malformed code-hash pin was skipped in silence.
+- The ENS identity suite had never run past a third of its rows, on a fixture key that had never
+  existed in any commit.
+
+Full record with severities, remediation status, and the four candidates that were dismissed:
+[`docs/v2/INTERNAL-SECURITY-REVIEW.md`](docs/v2/INTERNAL-SECURITY-REVIEW.md).
 
 ### Added — 2026-09-08
 
