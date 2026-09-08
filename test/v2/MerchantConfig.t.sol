@@ -65,6 +65,66 @@ contract MerchantConfigTest is SettlementFixture {
         assertEq(executor.hashMerchantConfig(_config()), OFFLINE_CONFIG_HASH, "the executor disagrees with both");
     }
 
+    /// @dev THE FIELD WIDTHS, at both ends of every one of them. The vector above exercises one
+    ///      plausible configuration; these exercise the ENCODING. A `uint64` written as a `uint256`
+    ///      or an address padded on the wrong side agrees with the offline encoder on ordinary
+    ///      values and disagrees here, which is the only place it would ever be caught.
+    ///
+    ///      Both are computed by `integrations/ensv2/config.mjs` and pinned. The all-zero vector
+    ///      is not decoration: it is the row that goes red if a field is DROPPED, because
+    ///      `abi.encode` loses a word and the hash moves even though every value is zero.
+    bytes32 internal constant AT_THE_LIMITS = 0x6a8f77b04ab9535939df8f18fa0468d9d890d30b6e550695bed109e15799e2b3;
+    bytes32 internal constant ALL_ZERO = 0xc5ae8f73ad7c28222f697ad64095eb9863057ed9bd155bbd2658a31e9d97c621;
+
+    function test_Config_EveryFieldAtItsMaximumAgreesWithTheOfflineEncoder() public view {
+        MerchantConfig.Config memory c = MerchantConfig.Config({
+            version: type(uint8).max,
+            namehash: bytes32(type(uint256).max),
+            name: "",
+            recipient: address(type(uint160).max),
+            payoutCurrency: address(0),
+            chainId: type(uint256).max,
+            resolvedAtBlock: type(uint64).max,
+            validForBlocks: type(uint32).max
+        });
+        assertEq(MerchantConfig.hash(c), AT_THE_LIMITS, "the encoders disagree at the field widths");
+        assertEq(executor.hashMerchantConfig(c), AT_THE_LIMITS, "the executor disagrees with both");
+    }
+
+    function test_Config_EveryFieldAtZeroAgreesWithTheOfflineEncoder() public view {
+        MerchantConfig.Config memory c = MerchantConfig.Config({
+            version: 0,
+            namehash: bytes32(0),
+            name: "",
+            recipient: address(0),
+            payoutCurrency: address(0),
+            chainId: 0,
+            resolvedAtBlock: 0,
+            validForBlocks: 0
+        });
+        assertEq(MerchantConfig.hash(c), ALL_ZERO, "the encoders disagree on an empty configuration");
+        assertTrue(ALL_ZERO != AT_THE_LIMITS, "the two boundary vectors collided");
+    }
+
+    /// @dev The type string, compared with the one the offline encoder is written against. A hash
+    ///      that agrees on one vector does not establish that two implementations share a SCHEMA;
+    ///      two type strings differing in a field name can agree by coincidence of what was tested.
+    ///      `integrations/ensv2/test.mjs` reads this same literal out of the source and compares it
+    ///      the other way round, so neither side is trusted to describe itself.
+    function test_Config_TheTypeStringIsTheOneTheOfflineEncoderUses() public pure {
+        assertEq(
+            MerchantConfig.CONFIG_TYPE,
+            "MerchantConfig(uint8 version,bytes32 namehash,string name,address recipient,"
+            "address payoutCurrency,uint256 chainId,uint64 resolvedAtBlock,uint32 validForBlocks)",
+            "the canonical type string moved"
+        );
+        assertEq(
+            MerchantConfig.CONFIG_TYPEHASH,
+            keccak256(bytes(MerchantConfig.CONFIG_TYPE)),
+            "the typehash is not the hash of the type string"
+        );
+    }
+
     // ---- every component is inside the commitment ------------------------------------------
 
     /// @dev One row per field. A component outside the hash is a component somebody can change

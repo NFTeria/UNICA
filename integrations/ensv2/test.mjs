@@ -11,7 +11,8 @@
 // here: the status is the intended one, no recipient is carried, `ok` is false, and the message
 // shown to a payer is not blank.
 
-import {merchantConfigHash, isFresh, commitResolution} from "./config.mjs";
+import {readFileSync} from "node:fs";
+import {CONFIG_TYPE, merchantConfigHash, isFresh, commitResolution} from "./config.mjs";
 import {
   resolveMerchant, normalizeName, namehash, dnsEncode,
   encodeResolveCall, decodeResolveReturn, ENSV2, EXPLAIN,
@@ -138,6 +139,77 @@ console.log("\n— no fallback, ever —");
 // the same EIP-712 specification and not from this file, and by the deployed executor's own
 // `hashMerchantConfig`. Three derivations of one word, because a commitment a wallet computes
 // differently from the contract is rejected in the wallet.
+
+console.log("\n— one canonical schema, checked against the contract as written —");
+{
+  // THE RULING'S OWN PRECONDITION. Two derivations of one commitment are only worth having if
+  // they are derivations of the SAME schema, and the hash of one vector does not establish that:
+  // two type strings differing in a field name can still agree on a value by coincidence of what
+  // was tested. So the Solidity literal is pulled out of the source and compared byte for byte.
+  //
+  // It is read from `src/v2/MerchantConfig.sol` rather than pinned here on purpose. A pinned copy
+  // is a third description of the schema and would drift from the contract in exactly the way
+  // this check exists to catch.
+  const sol = readFileSync("src/v2/MerchantConfig.sol", "utf8");
+  const decl = sol.match(/string internal constant CONFIG_TYPE\s*=\s*((?:"(?:[^"\\]|\\.)*"\s*)+);/);
+  check("the contract's CONFIG_TYPE literal was found in the source", decl !== null);
+  const solType = decl ? [...decl[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((x) => x[1]).join("") : "";
+  check("the type string agrees byte for byte with the contract", solType === CONFIG_TYPE,
+        `contract:   ${solType}\n        javascript: ${CONFIG_TYPE}`);
+
+  // Field order and width, parsed rather than eyeballed. An encoder that hashed the right fields
+  // in the wrong order would produce a different commitment on every real input and an identical
+  // one on a vector where those fields happen to match.
+  const fields = solType.slice(solType.indexOf("(") + 1, -1).split(",").map((f) => f.split(" "));
+  const expected = [
+    ["uint8", "version"], ["bytes32", "namehash"], ["string", "name"], ["address", "recipient"],
+    ["address", "payoutCurrency"], ["uint256", "chainId"], ["uint64", "resolvedAtBlock"],
+    ["uint32", "validForBlocks"],
+  ];
+  check("the schema has exactly eight fields", fields.length === 8, `it has ${fields.length}`);
+  for (let i = 0; i < expected.length; i++) {
+    check(`field ${i} is ${expected[i][0]} ${expected[i][1]}`,
+          fields[i] && fields[i][0] === expected[i][0] && fields[i][1] === expected[i][1],
+          `the contract says ${(fields[i] || []).join(" ")}`);
+  }
+
+  // The struct members must be in the same order as the type string. EIP-712 hashes members in
+  // declaration order, so a struct that reordered them would keep this type string and produce a
+  // different hash — the one disagreement a type-string comparison alone cannot see.
+  const structBody = sol.slice(sol.indexOf("struct Config {"), sol.indexOf("}", sol.indexOf("struct Config {")));
+  const members = [...structBody.matchAll(/^\s{8}(\w+)\s+(\w+);/gm)].map((m) => [m[1], m[2]]);
+  check("the struct declares its members in the type string's order",
+        JSON.stringify(members) === JSON.stringify(expected), JSON.stringify(members));
+
+  // Every field at its declared width, so an encoder that padded or truncated one is caught by a
+  // value rather than by a reading. Both are recomputed in test/v2/MerchantConfig.t.sol.
+  const atTheLimits = {
+    version: 255,
+    namehash: "0x" + "ff".repeat(32),
+    name: "",
+    recipient: "0xffffffffffffffffffffffffffffffffffffffff",
+    payoutCurrency: "0x0000000000000000000000000000000000000000",
+    chainId: (2n ** 256n - 1n).toString(),
+    resolvedAtBlock: (2n ** 64n - 1n).toString(),
+    validForBlocks: (2n ** 32n - 1n).toString(),
+  };
+  const limitsHash = "0x6a8f77b04ab9535939df8f18fa0468d9d890d30b6e550695bed109e15799e2b3";
+  check("every field at its maximum hashes to the pinned vector",
+        merchantConfigHash(atTheLimits) === limitsHash, merchantConfigHash(atTheLimits));
+
+  const allZero = {
+    version: 0, namehash: "0x" + "00".repeat(32), name: "",
+    recipient: "0x" + "00".repeat(20), payoutCurrency: "0x" + "00".repeat(20),
+    chainId: 0, resolvedAtBlock: 0, validForBlocks: 0,
+  };
+  const zeroHash = "0xc5ae8f73ad7c28222f697ad64095eb9863057ed9bd155bbd2658a31e9d97c621";
+  check("every field at zero hashes to the pinned vector",
+        merchantConfigHash(allZero) === zeroHash, merchantConfigHash(allZero));
+  // The all-zero vector is not decoration: it is the row that would go red if a field were
+  // DROPPED from the encoding, because abi.encode loses a word and the length changes even when
+  // every value is zero.
+  check("the two boundary vectors differ", merchantConfigHash(atTheLimits) !== merchantConfigHash(allZero));
+}
 
 console.log("\n— the merchant configuration commitment —");
 {

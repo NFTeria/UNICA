@@ -671,7 +671,7 @@
         "not in make gate: it needs a Python toolchain the gate does not require"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "aee1048edde04d6bc1d3115592e5118b32fe08b1"
+      "lastVerifiedCommit": "5e4733e1b0ee4c199d7150bea65d8e1d28c4fd29"
     },
     {
       "id": "v2-merchant-config-commitment",
