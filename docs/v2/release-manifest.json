@@ -1,0 +1,94 @@
+{
+  "what": "A REHEARSAL manifest. Every address is PREDICTED and none is deployed.",
+  "generatedFrom": "script/v2/release-manifest.mjs",
+  "rehearsal": "test/v2/DeploymentRehearsal.t.sol — a forge test, which cannot broadcast",
+  "source": {
+    "commit": "7b12a6edf0a8ac83fad76d73da5b6ec0658718d7",
+    "shortCommit": "7b12a6e",
+    "describesTree": "f8eaf209b434f708c3147de7976375650c1fd7d1",
+    "frozenBlobHashes": {
+      "src/v2/QuoteSettlementHook.sol": "c955c6f7649d13dbfa66068fe904f3bba6ec0b7f",
+      "src/v2/QuoteSettlementExecutor.sol": "8284e7eb84b0dee5be1b4e366a92c579171b3473",
+      "src/v2/MerchantConfig.sol": "8cb14dfdce66e6ee9c9de780280d60bda5b1616f",
+      "src/v2/interfaces/IQuoteSettlement.sol": "df8405af9581bd5f7fb30252c9858d1322eb726e",
+      "src/v2/interfaces/IPermit2Transfer.sol": "c8b740d44d091ad64b18581a293602505ade909a"
+    }
+  },
+  "toolchain": {
+    "solc": "0.8.30",
+    "evmVersion": "cancun",
+    "viaIR": "false",
+    "optimizer": "",
+    "optimizerRuns": "",
+    "bytecodeHash": "none",
+    "cborMetadata": "false",
+    "note": "via_ir is load-bearing rather than a preference: V1's LIVE hook address was mined under these exact settings, so changing any of them changes bytecode that is already deployed."
+  },
+  "contracts": {
+    "QuoteSettlementHook": {
+      "creationCodeHash": "0x21c72f7be4f0cd7c5c430afae10bc3118a770628c518172566508314b0a90747",
+      "creationCodeSize": 10117,
+      "deployedCodeSize": 8317,
+      "eip170Headroom": 16259,
+      "constructorArgs": [
+        "IPoolManager poolManager_",
+        "address executor_"
+      ],
+      "deployedBy": "the canonical CREATE2 deployer at a mined salt"
+    },
+    "QuoteSettlementExecutor": {
+      "creationCodeHash": "0x93c329ab8e87cb2dd4ec8e50a8f1a44609127bb316c44c00044578724ab7db1d",
+      "creationCodeSize": 18878,
+      "deployedCodeSize": 18369,
+      "eip170Headroom": 6207,
+      "constructorArgs": [
+        "IPoolManager poolManager_",
+        "IPermit2Transfer permit2_"
+      ],
+      "deployedBy": "plain CREATE from the deployer, so its address is the deployer and a nonce"
+    }
+  },
+  "target": {
+    "chainId": 11155111,
+    "chainName": "Ethereum Sepolia",
+    "poolManager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "create2Deployer": "0x4e59b44847b379578588920cA78FbF26c0B4956C"
+  },
+  "hookAddress": {
+    "declaredPermissionBits": 8384,
+    "declaredPermissionBitsHex": "0x20c0",
+    "meaning": [
+      "beforeInitialize",
+      "beforeSwap",
+      "afterSwap"
+    ],
+    "returnDeltaPermissions": "none — the NoOp surface is deliberately not claimed",
+    "saltIsMinedAgainst": "the executor's address, which is embedded in the hook's creation code. A different executor mines a different hook address, which is what makes the binding unforgeable.",
+    "predicted": "NOT COMPUTED HERE — the salt depends on the executor address, which depends on the deployer and nonce chosen at deployment time. test/v2/DeploymentRehearsal.t.sol proves the search is deterministic given those two inputs."
+  },
+  "deploymentOrder": [
+    "1. deploy QuoteSettlementExecutor (plain CREATE) — its address is fixed by deployer + nonce",
+    "2. mine the hook salt against THAT executor address",
+    "3. deploy QuoteSettlementHook through the CREATE2 deployer at the mined salt",
+    "4. read back: the hook's EXECUTOR must equal the executor, and the executor must accept the hook"
+  ],
+  "orderIsForced": "the hook's creation code embeds the executor, so step 2 cannot precede step 1",
+  "verificationInputs": {
+    "hook": "constructor(address poolManager, address executor) — both readable from the deployed code",
+    "executor": "constructor(address poolManager, address permit2)",
+    "note": "cbor_metadata is off and bytecode_hash is none, so verification compares bytecode exactly."
+  },
+  "status": {
+    "deployed": false,
+    "broadcast": false,
+    "v1Untouched": true,
+    "v2Frozen": "v2.0.0-rc1 at 82c7dcb44038"
+  },
+  "unresolvedAssumptions": [
+    "the deployer address and nonce are chosen by the owner at deployment time and are not fixed here",
+    "no V2 address has been reserved, funded or announced anywhere",
+    "source verification has not been submitted, because nothing is deployed to verify",
+    "the fork suites need a Sepolia endpoint and are outside the default gate"
+  ]
+}
