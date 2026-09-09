@@ -70,7 +70,7 @@ share a length:
 
 ```sh
 cast code 0x8876789976decbfcbbbe364623c63652db8c0904 --rpc-url robinhood_testnet | cast keccak
-# 0xfdd90802f39ce5fc8bac4c2f1b3ac7bac530fd17ff46b0630f1bd00f1e14082f
+# codehash 0xfdd90802f39ce5fc8bac4c2f1b3ac7bac530fd17ff46b0630f1bd00f1e14082f
 ```
 
 ### 2.1 The cross-check that makes the table self-consistent
