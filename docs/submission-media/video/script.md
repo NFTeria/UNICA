@@ -31,8 +31,8 @@ exactly rather than 3:07:
 1. **The architecture explainer** — 46 words describing the executor composing the router's plan
    and the hook's `0xC0` permission bits. It is true and it is in the README. On camera it turned a
    demo into a lecture, and nothing later in the video depends on the listener having heard it.
-2. **The `make gate` recital** — 28 words reading out 182 Solidity tests, 82 Vyper tests and 1,543
-   JavaScript rows across 14 suites. Every number is real (see `timeline.md` shot 7 fallback), but
+2. **The `make gate` recital** — 28 words reading out 298 Solidity tests, 82 Vyper tests and 1,612
+   JavaScript rows across 16 suites. Every number is real (see `timeline.md` shot 7 fallback), but
    a spoken list of counts is the least persuasive thirty seconds available, and the status beat
    already establishes what is proven versus what is not.
 3. **The V2 short-fill finding** — 12 words on the periphery checking the input ceiling and never

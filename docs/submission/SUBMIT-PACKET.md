@@ -112,7 +112,18 @@ Ranked by what the repository can actually demonstrate, not by prize size.
 UNICA is a v4 hook that makes exact-fill merchant settlement enforceable inside the
 pool, deployed and source-verified on Sepolia with a real settled swap.
 
-The contribution back to the stack is three findings, each reproducible:
+Reach, stated exactly. V1 is live on Ethereum Sepolia and has SETTLED A REAL SWAP
+through the hook. V3 is deployed and source-verified on FOUR chains — Ethereum
+Sepolia, Unichain Sepolia, Base Sepolia and Arbitrum Sepolia — at one mined CREATE2
+address, 0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0 for the hook and
+0x015692C9E43ca19a2504F79368D1156A56680517 for the executor, each bound to that
+chain's own official v4 PoolManager. V3 HAS SETTLED NOTHING: receiptCount() and
+orderCount() are 0 on all four chains. Deployed and bound is the rung it reaches;
+exercised is not, and we are not claiming it. The one settled swap is V1's, on one
+chain. `bash script/verify-v3.sh` re-reads all of it from the chain — 65 checks, 0
+failed — and prints those two zeros as zeros rather than scoring them as a pass.
+
+The contribution back to the stack is four findings, each reproducible:
 
 1. The v4-periphery router's ExactInputSingleParams gained a sixth field
    (minHopPriceX36) at commit 03b2d09. An integrator built against the five-field
@@ -130,6 +141,20 @@ The contribution back to the stack is three findings, each reproducible:
    the theft on balances — payer spends the full input, receives zero, the hook's own
    balance rises by exactly that amount — because a test that only checks for a revert
    passes against a hook that steals.
+
+4. A hook that mines one CREATE2 address for many chains cannot also reach Sourcify's
+   exact_match tier, and the trade-off is not documented anywhere we could find. The
+   address is a function of the init code, so the init code must be byte-identical
+   across chains, which means bytecode_hash="none" and cbor_metadata=false — and with
+   no metadata hash in the deployed bytecode Sourcify caps the tier at `match`. All
+   eight of our V3 verifications sit at `match` for exactly this reason. Note also that
+   forge prints "Status: `match`", which reads like success at full tier and is not;
+   the tier is only legible from /server/v2/contract/<chainId>/<address>. A second
+   consequence worth documenting: the RUNTIME hash then differs per chain anyway,
+   because immutables are written in at construction — ours differs in 300 bytes across
+   15 regions in the hook and 276 across 12 in the executor, every one of them a
+   chain-specific immutable. "Same address" does not mean "same runtime bytecode", and
+   a verifier that assumes it will be wrong on every multi-chain hook.
 ```
 
 ### 6b · Chainlink — Best Confidential Workflow (From Scratch)
@@ -204,17 +229,32 @@ left untracked: they are not in the repository, not built, and not claimed.
 
 ```
 Repository   https://github.com/NFTeria/UNICA
-Hook         0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0   (Ethereum Sepolia, verified)
-Executor     0x044bc8a8773EC7b9B8de2467766636dFFCaC6210   (Ethereum Sepolia, verified)
+
+V1 — Ethereum Sepolia, verified, HAS SETTLED A REAL SWAP
+Hook         0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0
+Executor     0x044bc8a8773EC7b9B8de2467766636dFFCaC6210
 PoolManager  0xE03A1074c86CFeDd5C142C4F04F1a1536e203543   (Uniswap's official Sepolia deployment)
+
+V3 — four chains, verified at Sourcify's `match` tier, DEPLOYED AND BOUND, SETTLED NOTHING
+Hook         0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0   (same address on all four)
+Executor     0x015692C9E43ca19a2504F79368D1156A56680517   (same address on all four)
+  Ethereum Sepolia 11155111   PoolManager 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543
+  Unichain Sepolia 1301       PoolManager 0x00B036B58a818B1BC34d502D3fE730Db729e62AC
+  Base Sepolia     84532      PoolManager 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408
+  Arbitrum Sepolia 421614     PoolManager 0xFB3e0C6F74eB1a21CC1Da29aeC80D2Dfe6C9a317
+  receiptCount() = 0 and orderCount() = 0 on all four. Nothing has been settled on V3.
 ```
 
 Anyone can re-run the proof:
 
 ```sh
-make proof      # 14 offline rows, then 31 live chain reads
-make gate       # build, 298 tests, format, secret scan, never-copy, size budget
+make proof      # V3's 65 four-chain reads, then V1's 14 offline rows and 31 live reads
+make gate       # build, 298 tests, format, secret scan, never-copy, size budget,
+                # and the V3 proof's 25 endpoint-free rows
 ```
+
+`make proof` needs four testnet endpoints; `make gate` needs none. That split is deliberate — a
+gate that depends on somebody else's node is a status page, not a gate.
 
 ## 10 · The owner queue — nothing below can be done for you
 
@@ -223,7 +263,8 @@ make gate       # build, 298 tests, format, secret scan, never-copy, size budget
 | 1 | Register the Sepolia testnet parent name | signs a transaction |
 | 2 | Deploy the subgraph to Studio, or leave The Graph unclaimed | account + publish |
 | 3 | Record the demo video with a live human voice | it must be your voice |
-| 4 | Paste these blocks into the dashboard and press Submit | the submission is yours |
+| 4 | Re-capture `docs/submission-media/screenshots/02-live-sepolia-evidence.png` | needs a browser; its face still shows the old 182 / 1,543 counts |
+| 5 | Paste these blocks into the dashboard and press Submit | the submission is yours |
 
 Send back from step 1 only: owner address · registration transaction hash · the full Sepolia
 name · expiry. Never a key, seed phrase, session token or wallet export.

@@ -97,22 +97,32 @@ carried forward from an earlier one.
 | finance math library | **BLOCKED** | — | three sources arrived damaged; awaiting authoritative copies |
 | Vyper settlement model + art | locally demonstrated | 82 rows, `cd vy && mox test` | in-process EVM only |
 
-Totals from that gate run: **182** Solidity tests, **82** Vyper tests, and **1,543** JavaScript
-rows across fourteen suites, plus the secret scan, the copied-source scan, the interface freeze and
-the tool ledger. Re-derive every one of them:
+Totals from that gate run: **298** Solidity tests across 33 suites, **82** Vyper tests, and
+**1,612** JavaScript rows across 16 of the gate's 17 node suites — the seventeenth is a demo that
+prints no total — plus the 31-row secret scan, the 8-row copied-source scan and the 25 endpoint-free
+rows of the V3 proof. The interface freeze (17) and the tool ledger (25) are counted inside the
+1,612, not beside it. Re-derive every one of them:
 
 ```sh
-grep -rhoE 'function test[A-Za-z0-9_]*\(' test/ | wc -l          # 226 total, minus the 44 in test/fork/
+grep -rhoE 'function test[A-Za-z0-9_]*\(' test/ | wc -l          # 370 declared; the gate runs 298
 cd vy && mox test -q                                             # 82 passed
 grep -c 'run_row,node' Makefile                                  # 17 node rows in the gate
+make gate 2>&1 | grep -E 'tests passed|passed in|run: '          # every total above, from one run
 ```
 
-Those three figures previously read 167, 80 and 669 across eight suites. All three were stale — a
-hand-typed aggregate under a line promising the numbers were recomputed — and six independent
-readers each found them in under a minute. They are the cheapest claim in this repository to check,
-which is exactly why they were the worst ones to get wrong. The 44 fork rows are deliberately **outside** the gate — they need a Sepolia endpoint,
-and a gate that depends on a third party's uptime is a status page rather than a gate. Run them
-with `make fork`.
+**370 declared is not 298 run, and the difference is deliberate.** The gate's `forge test` carries
+`--no-match-path '{test/fork/*,test/compat/*,test/v3/DeploymentsV3Fork.t.sol}'`: 44 fork rows, 22
+compat rows and 6 V3 deployment-fork rows. 370 − 44 − 22 − 6 = 298, which is exactly what the gate
+prints. Those three paths need somebody else's endpoint, and a gate that depends on a third party's
+uptime is a status page rather than a gate. Run them with `make fork`.
+
+Those three figures previously read 167, 80 and 669 across eight suites, and then 182, 82 and 1,543
+across fourteen. **Both sets went stale, and the second set went stale under a paragraph complaining
+that the first had.** A hand-typed aggregate drifts the moment a suite is added; six independent
+readers found the first drift in under a minute. That is why the fourth command above now re-derives
+every number in this paragraph from a single `make gate` run, instead of asking a human to keep
+three numbers in their head. They are the cheapest claim in this repository to check, which is
+exactly why they were the worst ones to get wrong.
 
 Frozen object hashes, unchanged: `08479a85` `8a38e9a6` (V1) and `c955c6f7` `8284e7eb` `8cb14dfd`
 (V2 rc1).
@@ -255,8 +265,10 @@ printed nothing; that stopped being true the day V2 was written, and it is recor
 quietly corrected. A semantic tag `v1.0.0` is **proposed and does not exist yet**; until it does, the
 release is named `live-green` in every claim. Full record: [`docs/versions/V1.md`](docs/versions/V1.md).
 
-**V2 is implemented, frozen as `v2.0.0-rc1`, and deployed nowhere.** There is one version of UNICA
-on a chain, and it is V1, below. V2 exists as source, tests and a rehearsal, and it carries an open
+**V2 is implemented, frozen as `v2.0.0-rc1`, and deployed nowhere.** Two versions of UNICA are on a
+chain: **V1** on Ethereum Sepolia, which has settled a real swap, and **V3**, deployed to four
+testnets on 2026-09-09 and bound but **not exercised** — it has settled nothing. Both are below, and
+the difference between them is the whole point of keeping the two tables apart. V2 exists as source, tests and a rehearsal, and it carries an open
 **Critical** defect that blocks its release — see
 [`docs/v2/SECURITY-ADVISORY-001.md`](docs/v2/SECURITY-ADVISORY-001.md) and the
 [internal security review](docs/v2/INTERNAL-SECURITY-REVIEW.md). Nothing in this repository should
@@ -276,6 +288,88 @@ be read as a V2 capability on any chain.
 | Limitations | one input, one payout, one chain, exact-input only, no merchant identity — the full list is in [`docs/versions/V1.md`](docs/versions/V1.md) |
 
 [`CHANGELOG.md`](CHANGELOG.md) records what has landed since the release.
+
+## Proof: UNICA V3, one address on four chains (2026-09-09)
+
+**V3 is DEPLOYED and BOUND on four testnets, and it has SETTLED NOTHING.** `receiptCount()` on the
+hook and `orderCount()` on the executor are **0 on all four chains** — re-read on every run of the
+script below, printed as values rather than asserted as a pass. Nothing has been swapped, settled or
+paid through V3 on any chain. **V1 on Ethereum Sepolia is the only generation that has settled a
+real swap**, and its table is the next section down. A reader who comes away thinking four chains
+have settled anything has been misled by this page, not by the chain.
+
+Three rungs, kept apart on purpose: **deployed** (the code is at the address), **verified** (the
+source is published and matches), **exercised** (something has actually gone through it). V3 reaches
+the first two on four chains and the third on none.
+
+One mined CREATE2 address carries both contracts on every chain: hook
+`0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0` (10,634 bytes, flags `0x20C0`), executor
+`0x015692C9E43ca19a2504F79368D1156A56680517` (12,953 bytes). `bash script/verify-v3.sh` re-proves
+every row below from the chain — **65 checks, 0 failed** on the run that produced this table — and
+`make proof-v3` is the same thing through the Makefile.
+
+| Item | Value | Rung | Re-verify |
+|---|---|---|---|
+| Hook, all four chains | `0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0`, flags `0x20C0` (beforeInitialize, beforeSwap, afterSwap), 10,634 bytes of runtime code on every chain, zero-argument constructor | DEPLOYED | `cast code 0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0 --rpc-url $RPC \| wc -c` prints 21271 on each of the four |
+| Executor, all four chains | `0x015692C9E43ca19a2504F79368D1156A56680517`, 12,953 bytes on every chain, one constructor argument = the hook | DEPLOYED | `cast code 0x015692C9E43ca19a2504F79368D1156A56680517 --rpc-url $RPC \| wc -c` prints 25909 on each of the four |
+| Bound both ways, all four chains | `hook.SETTLEMENT_EXECUTOR()` names the executor and `executor.HOOK()` names the hook, on every chain | BOUND | `cast call 0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0 'SETTLEMENT_EXECUTOR()(address)' --rpc-url $RPC`, and `cast call 0x015692C9E43ca19a2504F79368D1156A56680517 'HOOK()(address)' --rpc-url $RPC` |
+| Ethereum Sepolia, 11155111 | hook [`0x6ff75c0b…9fd6`](https://sepolia.etherscan.io/tx/0x6ff75c0bb90378642b75359fc188a474a54b6b66017c2cf7d76e20d80e959fd6) 2,664,410 gas; executor [`0x0a65819d…d828`](https://sepolia.etherscan.io/tx/0x0a65819d4cbbdfefd9a77bd4aa79f72516d9c3f22d10551f71445715260fd828) 2,891,954 gas; both in block 11667702. `poolManager()` = `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` | DEPLOYED | `cast receipt 0x6ff75c0bb90378642b75359fc188a474a54b6b66017c2cf7d76e20d80e959fd6 --rpc-url $RPC status` prints `1 (success)` |
+| Unichain Sepolia, 1301 | hook [`0xe949fcd4…c08e`](https://unichain-sepolia.blockscout.com/tx/0xe949fcd49f95b20217b85b3145827e6998fbc1e298a372bb08d8705c5989c08e) 2,664,479 gas; executor [`0x1304be3b…ed7a`](https://unichain-sepolia.blockscout.com/tx/0x1304be3b6f39588d34790d284dfc77c1abde04d6b79b279c833ef5ed5f26ed7a) 2,892,000 gas; both in block 62101542. `poolManager()` = `0x00B036B58a818B1BC34d502D3fE730Db729e62AC` | DEPLOYED | `cast receipt 0xe949fcd49f95b20217b85b3145827e6998fbc1e298a372bb08d8705c5989c08e --rpc-url $RPC status` prints `1 (success)` |
+| Base Sepolia, 84532 | hook [`0xa82e8351…c038`](https://base-sepolia.blockscout.com/tx/0xa82e8351f7dd0c506c00f4bc0e18e69396f859f99d352016987cb38597c4c038) 2,664,548 gas; executor [`0xa4d01c6e…6cc4`](https://base-sepolia.blockscout.com/tx/0xa4d01c6ee5f9fc8003f851f2b39a8bfbbe18ff3e1d028c1ef873d4dd92cf6cc4) 2,892,046 gas; both in block 46592814. `poolManager()` = `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` | DEPLOYED | `cast receipt 0xa82e8351f7dd0c506c00f4bc0e18e69396f859f99d352016987cb38597c4c038 --rpc-url $RPC status` prints `1 (success)` |
+| Arbitrum Sepolia, 421614 | hook [`0xe22b2bcf…48d9`](https://arbitrum-sepolia.blockscout.com/tx/0xe22b2bcf652b3e0826ff5f593c022c9e166cef04a30a3eebd8e7d439838a48d9) 2,674,223 gas in block 307058865; executor [`0x6115e9dd…8d8d`](https://arbitrum-sepolia.blockscout.com/tx/0x6115e9dd9119245cbb7dee318a60b9fb88c1b104074f6b9cd35dfa63ce1b8d8d) 2,897,511 gas in block **307058867** — two blocks, not one, unlike the other three chains. `poolManager()` = `0xFB3e0C6F74eB1a21CC1Da29aeC80D2Dfe6C9a317` | DEPLOYED | `cast receipt 0xe22b2bcf652b3e0826ff5f593c022c9e166cef04a30a3eebd8e7d439838a48d9 --rpc-url $RPC status` prints `1 (success)` |
+| Source verification, hook | Sourcify, all four chains: `match` on creation and runtime. **This is Sourcify's partial tier, not `exact_match`** — see the note below | VERIFIED (partial) | `curl -s https://sourcify.dev/server/v2/contract/11155111/0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0` prints `"match":"match"`; swap in 1301, 84532, 421614 |
+| Source verification, executor | Sourcify, all four chains: `match` on creation and runtime, same partial tier | VERIFIED (partial) | `curl -s https://sourcify.dev/server/v2/contract/11155111/0x015692C9E43ca19a2504F79368D1156A56680517` prints `"match":"match"`; swap in the other three chain ids |
+| **Settlement counters** | **`receiptCount()` = 0 and `orderCount()` = 0 on all four chains.** V3 has never settled a swap, created an order, or emitted a receipt on any chain | **NOT EXERCISED** | `cast call 0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0 'receiptCount()(uint256)' --rpc-url $RPC` prints `0`; `cast call 0x015692C9E43ca19a2504F79368D1156A56680517 'orderCount()(uint256)' --rpc-url $RPC` prints `0` |
+| Broadcast records | [`broadcast/DeployV3.s.sol/<chainid>/run-latest.json`](broadcast/DeployV3.s.sol) for each of 11155111, 1301, 84532, 421614: two transactions, two receipts, all status 1 | committed | `bash script/verify-v3.sh` reads each record and compares the recorded block and status against the chain |
+
+**Why the runtime hash differs on every chain, and why that is correct.** The runtime code is *not*
+byte-identical across the four. It is the same 10,634 and 12,953 bytes everywhere, but the keccak
+differs per chain, because Solidity writes `immutable` values into runtime code at construction and
+`UnicaDeploymentsV3` resolves this chain's PoolManager, Universal Router and payout USDC there. The
+hook differs in 300 bytes across 15 regions and the executor in 276 across 12; **every one of those
+bytes is a chain-specific immutable**, and blanking exactly those regions collapses all four chains
+to one hash per contract (`0x8a830c48…7951` for the hook, `0xe63a3038…388e` for the executor).
+`script/verify-v3.sh` asserts that masked equality rather than the false claim that the raw hashes
+match. What *is* byte-identical everywhere is the **creation** code: the hook's init code is 30,590 bytes
+with no constructor arguments appended, the executor's is 15,752 bytes ending in the hook address,
+and each is the same on all four chains under the same salt through the standard CREATE2 factory
+`0x4e59…956C`. That identity — not the runtime hash — is what makes one mined address land on four
+chains. Re-derive it from the records:
+
+```sh
+python3 -c "
+import json
+for n in ('UnicaHookV3','UnicaExecutorV3'):
+    s={json.load(open(f'broadcast/DeployV3.s.sol/{c}/run-latest.json'))['transactions'][i]['transaction']['input'][66:]
+       for c in (11155111,1301,84532,421614) for i in (0,1)
+       if json.load(open(f'broadcast/DeployV3.s.sol/{c}/run-latest.json'))['transactions'][i]['contractName']==n}
+    print(n, 'distinct init codes across 4 chains:', len(s), '| bytes:', len(next(iter(s)))//2)"
+```
+
+**Why the Sourcify tier is `match` and not `exact_match`.** `foundry.toml` sets
+`bytecode_hash = "none"` and `cbor_metadata = false`. Those are what make the CREATE2 init-code hash
+reproducible on any machine, which is how one mined address lands on four chains; the price is that
+the deployed bytecode carries no metadata hash, so Sourcify cannot confirm the metadata is the exact
+one compiled and caps the tier at `match`. Full-tier verification and the identical-address property
+cannot both be had under this build, and this repository chose the address. The gap is not a
+Sourcify outage, and the control is a one-liner rather than a number to keep in your head — most
+recent Sepolia verifications on that server *do* reach `exact_match`, so the tier is plainly
+reachable there and these eight did not reach it:
+
+```sh
+curl -s 'https://sourcify.dev/server/v2/contracts/11155111?limit=20' \
+  | python3 -c "import sys,json,collections;print(collections.Counter(x['match'] for x in json.load(sys.stdin)['results']))"
+```
+
+That window moves with every new verification, which is exactly why the ratio is not written down
+here as a fixed pair of numbers.
+
+**What has not been checked.** No V3 pool exists, no liquidity has been added, and no swap has been
+routed on any of the four chains. The 6 rows in `test/v3/DeploymentsV3Fork.t.sol` exercise the
+deployment against a fork, not against these live addresses, and they are outside `make gate` for
+the endpoint reason given above. `make proof-v3` needs all four endpoints and is therefore also
+outside the gate; the gate runs only the 22 self-test rows and 3 address-arithmetic rows, which need
+no network at all.
 
 ## Proof: Ethereum Sepolia (chain id 11155111)
 

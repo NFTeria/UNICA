@@ -180,7 +180,7 @@
       "versionSource": "`node --version`",
       "publicUrl": "https://nodejs.org",
       "urlProvenance": "well-known",
-      "notes": "Zero third-party runtime dependencies. The evidence command returns only node: builtins (node:child_process, node:fs, node:http, node:path, node:process, node:url). There is no package.json at the repository root. 1,543 rows across 14 suites, 0 failed."
+      "notes": "Zero third-party runtime dependencies. The evidence command returns only node: builtins (node:child_process, node:fs, node:http, node:path, node:process, node:url). There is no package.json at the repository root. 1,612 rows across 16 reporting suites, 0 failed."
     },
     {
       "id": "github-actions",

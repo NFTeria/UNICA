@@ -107,8 +107,13 @@ Every screenshot must pass `video/redaction-checklist.md` before it lands here.
 the same content as data, with a status vocabulary defined in-file so no reader can upgrade a
 status by skimming.
 
-Re-derived on this commit, all green, nothing carried over: **182** Solidity tests (21 suites),
-**82** Vyper, **1,543** JavaScript rows across **14** suites, 0 failed anywhere.
+Re-derived on this commit, all green, nothing carried over: **298** Solidity tests (33 suites),
+**82** Vyper, **1,612** JavaScript rows across **16** reporting suites, 0 failed anywhere.
+
+> **`02-live-sepolia-evidence.png` is stale.** It was captured from
+> `screenshots/evidence-page-source.html` when the gate read 182 / 1,543 across 14 suites. The HTML
+> has been re-derived; the PNG has not been re-captured, because capturing it needs a browser. Do
+> not ship that image until it is retaken — the numbers on its face are the old ones.
 
 ---
 

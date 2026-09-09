@@ -40,8 +40,8 @@ Paste-ready for a submission form's "tech stack" field.
 > frozen at v2.0.0-rc1 and blocked** · Vyper 0.4.0 + Moccasin 0.4.4 (settlement and merchant
 > split model) · plain HTML/CSS checkout surface, no framework and no build step.
 >
-> **Proof:** `make gate` → 182 Solidity tests, 82 Vyper, 1,543 JavaScript rows across 14
-> suites. `make proof` → 14/14 + 31/31 read back from the chain.
+> **Proof:** `make gate` → 298 Solidity tests, 82 Vyper, 1,612 JavaScript rows across 16
+> suites. `make proof` → 65/65 four-chain + 14/14 + 31/31 read back from the chain.
 
 **Even shorter, if the field is a one-liner:**
 
@@ -120,12 +120,12 @@ Named explicitly, because an unstated absence and an overlooked dependency look 
 
 ```sh
 # the gate — build, test, format, both scans, and every offline suite
-make gate            # 182 Solidity tests, 0 failed (21 suites)
+make gate            # 298 Solidity tests, 0 failed (33 suites)
 cd vy && mox test -q # 82 passed
-                     # 1,543 JavaScript rows across 14 suites, 0 failed
+                     # 1,612 JavaScript rows across 16 suites, 0 failed
 
 # the chain — read back from Sepolia, not from this repository's claims
-make proof           # verify-day1.sh 14/14 · verify-live.sh 31/31
+make proof           # verify-v3.sh 65/65 · verify-day1.sh 14/14 · verify-live.sh 31/31
 
 # the toolchain, from real files rather than memory
 forge --version
@@ -156,19 +156,23 @@ its denominator and its failure count.
 
 | Lane | Count | Failed |
 |---|---|---|
-| Solidity (`forge test --no-match-path 'test/fork/*'`) | **182** tests across 21 suites | **0** |
+| Solidity (the gate's `forge test`, fork/compat/V3-fork paths excluded) | **298** tests across 33 suites | **0** |
 | Solidity fork suites (`make fork`, excluded from CI on purpose — they need archive state) | 44 declared | run by hand |
 | Vyper (`cd vy && mox test -q`) | **82** | **0** |
-| JavaScript, 14 gate suites | **1,543** rows | **0** |
+| JavaScript, 16 reporting gate suites | **1,612** rows | **0** |
 | Chainlink CRE workflow (`bun test`) | **30** tests, 860 `expect()` calls | **0** |
+| `make proof` — V3 four-chain readback | **65/65** | 0 |
 | `make proof` — day-1 chain readback | **14/14** | 0 |
 | `make proof` — live chain readback | **31/31** | 0 |
 
-The 1,543 is the sum of the fourteen suites, each of which prints its own count:
-ENS resolution 136 · ENS identity chain 95 · Permit2 digest vectors 20 · ENSv2 permissioned
-resolver 278 · V2 indexer consistency 40 · V2 live Graph provider 147 · V2 treasury copilot
-115 · Arc treasury units and policy 177 · Arc split parity with Vyper 26 · Arc nanopayments
-141 · signing tool vectors 81 · receipt verifier 113 · CRE guardian policy 88 · CRE adapter 86.
+The 1,612 is the sum of the sixteen suites that print their own count:
+ENS resolution 136 · ENS identity chain 95 · Permit2 digest vectors 20 · tool ledger 25 ·
+interface freeze 17 · ENSv2 permissioned resolver 305 · V2 indexer consistency 40 · V2 live Graph
+provider 147 · V2 treasury copilot 115 · Arc treasury units and policy 177 · Arc split parity with
+Vyper 26 · Arc nanopayments 141 · signing tool vectors 81 · receipt verifier 113 · CRE guardian
+policy 88 · CRE adapter 86. A seventeenth node row, the ENS identity demo, prints no total and is
+counted as none. The previous figure of 1,543 across fourteen missed the tool ledger and the
+interface freeze entirely, and predated the permissioned resolver growing from 278 rows to 305.
 
 ---
 
