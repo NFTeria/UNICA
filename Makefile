@@ -13,7 +13,8 @@
 
 .PHONY: help all deps doctor build test fuzz snapshot format fmt gate gate-live clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
         rehearse deploy init-pool seed settle topup live readback verify balances _need-deployer _need-signing \
-        predict-v3 deploy-v3 deploy-v3-check _deploy-v3-broadcast _need-v3-chain _need-v3-signing
+        predict-v3 deploy-v3 deploy-v3-check _deploy-v3-broadcast _need-v3-chain _need-v3-signing \
+        proof-v3 proof-v3-offline proof-v3-self-test
 
 # ── configuration ─────────────────────────────────────────────────────────────
 SEPOLIA_RPC_URL  ?= https://ethereum-sepolia-rpc.publicnode.com
@@ -74,7 +75,10 @@ help:
 	@echo "    make topup-check      the pre-flight for a bounded liquidity top-up of the live pool, with the plan it would follow. Sends nothing"
 	@echo "    make topup-live       the pre-flight, then approve + modifyLiquidity on Sepolia, within the bounds in script/LiveFire.s.sol"
 	@echo "    make tag-green TAG=<name> MSG=<file>   cut a milestone tag only after CI, proof and the docs that name it are all in"
-	@echo "    make proof            re-prove both deployments and the settlement from the chain (verify-day1, verify-live)"
+	@echo "    make proof            re-prove every deployment and the settlement from the chain (proof-v3, verify-day1, verify-live)"
+	@echo "    make proof-v3         re-prove the V3 four-chain deployment from the chain (needs all four endpoints)"
+	@echo "    make proof-v3-offline the 3 rows of that proof which need no endpoint at all (also run by make gate)"
+	@echo "    make proof-v3-self-test  sabotage the V3 proof's own comparators and require each to go red (also run by make gate)"
 	@echo ""
 	@echo "  V3, THE MULTI-CHAIN DEPLOY (one command per chain; keystore password prompted)"
 	@echo "    make predict-v3       the ONE hook and executor address this creation code lands on, every chain, offline"
@@ -230,8 +234,17 @@ gate     : _need-deps
 	@# The Vyper workspace. It ran green for weeks without being gated, which meant nothing
 	@# would have said so the day it stopped. Moccasin's in-process EVM needs no network.
 	@$(call run_row,mox,(cd vy && mox test -q),vy model and art)
+	@# The V3 four-chain proof, both of its halves that need no endpoint. --self-test sabotages the
+	@# script's own comparators (a flipped nibble in a pinned PoolManager, a byte count off by one,
+	@# a V1 runtime hash in the V3 row, a permission bit set) and requires each to go red; --offline
+	@# runs the three rows that read only the hook ADDRESS. The 62 chain rows are `make proof-v3`
+	@# and are deliberately NOT here: they need four endpoints. The self-test caught a real defect
+	@# in its own first draft — a row that went green because BOTH sides of its comparison had
+	@# failed to evaluate — which is the whole argument for gating it rather than trusting it.
+	bash script/verify-v3.sh --self-test
+	bash script/verify-v3.sh --offline
 	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors, the signing tool,"
-	@echo "      the receipt verifier and the tool ledger all exit 0"
+	@echo "      the receipt verifier, the tool ledger and the V3 proof's offline half all exit 0"
 
 # The receipt verifier's ONLINE rows, against a local fork node. Separate from the gate for the same
 # reason the fork suites are: a gate that needs somebody else's node is a status page. Start the node
@@ -327,9 +340,36 @@ topup-check:
 tag-green:
 	TAG=$(TAG) MSG=$(MSG) bash script/tag-green.sh
 
-proof:
+proof: proof-v3
 	bash docs/proof/verify-day1.sh
 	bash docs/proof/verify-live.sh
+
+# ── proof-v3: the V3 four-chain deployment, re-proved from the chain ──────────────────────────
+#
+# WHICH ROWS NEED THE NETWORK, so nobody puts the wrong half in the offline gate:
+#
+#   NEEDS AN ENDPOINT (all four aliases) — `proof-v3`. 62 of the 65 rows: chain id, code presence
+#   and byte counts, both runtime hashes per chain, the masked cross-chain hashes, both bindings,
+#   poolManager, getHookPermissions read from the deployed contract, the deploy receipts, and the
+#   two counter VALUES. These belong here, beside verify-day1 and verify-live, and NOT in `gate`.
+#   A gate that needs somebody else's node is a status page — the same reason the fork suites and
+#   test/v3/DeploymentsV3Fork.t.sol are excluded from `gate`.
+#
+#   NEEDS NOTHING — `proof-v3-offline` (3 rows: the hook address's low 14 bits are 0x20C0, and
+#   bits 3 and 10 are clear, all pure arithmetic on the address string) and `proof-v3-self-test`
+#   (22 rows of sabotage against the script's own comparators). Both are in `gate` below.
+#
+# It joins `make proof` because `proof` already reaches four chains' worth of somebody else's
+# uptime and is invoked deliberately, never on every build. Its self-test does NOT wait for that:
+# it is in the gate, where a broken comparator is caught on the commit that broke it.
+proof-v3:
+	bash script/verify-v3.sh
+
+proof-v3-offline:
+	bash script/verify-v3.sh --offline
+
+proof-v3-self-test:
+	bash script/verify-v3.sh --self-test
 
 rehearse: _need-deployer
 	DEPLOYER=$(DEPLOYER) SEPOLIA_RPC_URL=$(SEPOLIA_RPC_URL) bash script/rehearse-anvil.sh
