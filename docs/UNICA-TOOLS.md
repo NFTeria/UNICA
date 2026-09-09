@@ -1207,7 +1207,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   anyone signs it.
 - Product role: a merchant is not just a name — it is a name whose records only an authorised party
   may edit. This is the half that makes the name mean something.
-- Version: 0.1.0
+- Version: 0.1.1
 - Location: `integrations/ensv2/permissioned.mjs`, `authz-sim.mjs`, `preview.mjs`,
   `permissioned-test.mjs`, `permissioned-live.mjs`
 - Inputs: a name, and an endpoint that must report Sepolia.
@@ -1219,19 +1219,58 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   not decode is its own observation and is never rounded into "holds no roles"; and the preview
   cannot broadcast, because there is no signer to broadcast with.
 - Explicit non-guarantees: the accepted half of the authorisation contrast is an `eth_call`, not a
-  mined transaction. `grantRoles` and its siblings are confirmed only as dispatch constants in the
-  deployed runtime — no live call has reached them, so their argument order is documented and not
-  observed, and no calldata is built for them.
+  mined transaction. **That sentence is now false and is corrected rather than deleted.** It read: `grantRoles` and
+  its siblings are confirmed only as dispatch constants, no live call has reached them. Live calls
+  have since reached them on a pinned Sepolia fork, and the answer inverted the design:
+  `grantRoles` is REFUSED by this deployment with `EACCannotGrantRoles` `0xd1a3b355`, even from an
+  owner holding every role at ROOT_RESOURCE, and the call it accepts is
+  `authorizeTextRoles(bytes,string,address,bool)` `0xf2d1eb25`, which grants at a per-KEY resource.
 - Dependencies: the ENSv2 Merchant Resolver.
 - Networks: Ethereum Sepolia (read-only).
 - Status: IMPLEMENTED — LOCAL TESTS
-- Evidence: 278 offline rows in `make gate`; 78 live rows in `make gate-live`, including three real
+- Evidence: 305 offline rows in `make gate`; 78 live rows in `make gate-live`, including three real
   refusals decoded from the deployed contract.
 - Tests: `integrations/ensv2/permissioned-test.mjs`
 - Deployment: none. UNICA owns no ENS name.
 - Limitations: every live row is read from a name somebody else registered; the per-text-key and
   per-coin-type resource derivations are derived rather than confirmed, because every refusal
   observed named the name-level resource.
+- Sponsor relevance: ENS. No claim is made that it qualifies for anything.
+
+### ENSv2 delegation planner and role screen
+
+- Id: `ensv2-delegation-planner`
+- Purpose: turn "this merchant wants to delegate one record to an agent" into an ordered, fully
+  decoded transaction plan, and refuse the plan outright when it would hand over too much.
+- Product role: delegation is the feature and also the risk. A merchant who cannot see exactly what
+  they are granting will grant too much; this is the thing that makes the grant readable before it
+  is signed.
+- Version: 0.2.0
+- Location: `script/ensv2/plan.mjs`, `plan-sabotage.mjs`, `integrations/ensv2/roles.mjs`,
+  `plan-preview.mjs`, `plan-test.mjs`
+- Inputs: a config naming the parent, the merchant owner, the agent and the resolver. Nothing else.
+- Outputs: an ordered plan with every argument decoded, the resource each step touches, whether an
+  admin role or ROOT_RESOURCE is involved, the expected post-state, and the rollback.
+- Trust boundary: the pinned ENSv2 Sepolia deployment, and the owner's own reading of the preview.
+- Security guarantees: it refuses to emit a grant at ROOT_RESOURCE rather than merely avoiding one;
+  `agent_root_roles == 0` is a hard precondition; admin bits, `authorizeNameRoles`, `grantRoles` and
+  registry-targeted calls are each refused by name; and every plan is `signable: false` until real
+  gas estimates are supplied, because there is no signer here to sign one.
+- Explicit non-guarantees: **subtree mode SERVES names it does not OWN.** The entry point routes the
+  subtree to the parent's resolver, and that is what makes the records readable — but the write side
+  is not name-scoped: on a per-name resolver the owner holds every role at ROOT_RESOURCE, so
+  `hasRoles` returns true for any resource on that contract. If the subnames must be owned rather
+  than served, that is subregistry mode, which is kept intact for exactly this reason.
+- Dependencies: the ENSv2 Permissioned Resolver.
+- Networks: Ethereum Sepolia.
+- Status: IMPLEMENTED — LOCAL TESTS
+- Evidence: 378 offline checks; 31 sabotage checks over 26 mutations, all behaving as expected with
+  every file restored; subtree 17 steps / 13 transactions, subregistry 23 steps / 20 transactions.
+- Tests: `integrations/ensv2/plan-test.mjs`, `script/ensv2/plan-sabotage.mjs`
+- Deployment: none. UNICA owns no ENS name, and the shipped config for `unica.eth` correctly refuses
+  until it does.
+- Limitations: no gas is estimated here, so nothing is signable; the policy values stay off chain
+  and only their commitment is written.
 - Sponsor relevance: ENS. No claim is made that it qualifies for anything.
 
 ### Arc USDC Treasury

@@ -1171,6 +1171,39 @@
       "lastVerifiedCommit": "9cd92e291767d3b0c286a9754a076ffde46494f4"
     },
     {
+      "id": "ensv2-delegation-planner",
+      "name": "ENSv2 delegation planner and role screen",
+      "version": "0.2.0",
+      "status": "IMPLEMENTED — LOCAL TESTS",
+      "paths": [
+        "script/ensv2/plan.mjs",
+        "script/ensv2/plan-sabotage.mjs",
+        "integrations/ensv2/roles.mjs",
+        "integrations/ensv2/plan-preview.mjs",
+        "integrations/ensv2/plan-test.mjs"
+      ],
+      "networks": ["ethereum-sepolia"],
+      "sponsorRoles": ["ens"],
+      "lastVerifiedCommit": "b7d8b1206a51ac362844a7009cc3ac36ff283a0d",
+      "dependencies": ["ensv2-permissioned-resolver"],
+      "tests": [
+        "integrations/ensv2/plan-test.mjs",
+        "script/ensv2/plan-sabotage.mjs"
+      ],
+      "evidence": [
+        { "kind": "command", "value": "node integrations/ensv2/plan-test.mjs" },
+        { "kind": "measurement", "value": "378 checks, 378 passed, 0 failed, offline" },
+        { "kind": "command", "value": "node script/ensv2/plan-sabotage.mjs" },
+        { "kind": "measurement", "value": "31 checks, 26 mutations, 26 behaved as expected, 0 unexpected, every file restored" },
+        { "kind": "measurement", "value": "subtree 17 steps / 13 transactions; subregistry 23 steps / 20 transactions" }
+      ],
+      "limitations": [
+        "every plan is signable:false until real eth_estimateGas values are supplied with --gas",
+        "no signer exists in the module and it cannot broadcast",
+        "subtree mode SERVES names it does not OWN: the entry point routes the subtree to the parent resolver, and the write side is not name-scoped"
+      ]
+    },
+    {
       "id": "ensv2-permissioned-resolver",
       "name": "ENSv2 Permissioned Resolver and Access Control",
       "version": "0.1.1",
