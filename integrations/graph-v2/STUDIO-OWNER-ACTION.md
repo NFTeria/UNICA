@@ -1,7 +1,13 @@
 # Subgraph Studio deployment — owner action
 
-Everything in this directory runs today except the one thing that needs a credential and a wallet:
-the deployment itself. This document is the whole of that step, in order, with nothing left to guess.
+Everything in this directory runs today. The deployment does not, and **the blocker is not the
+Studio credential** — it is Step 0: the contract this manifest names does not exist on any public
+chain, so the deployment it would produce could only ever index nothing. Read Step 0 before Step 1.
+
+If what you want is a live Graph deployment against real UNICA data, that is **`integrations/graph/`**
+(the V1 hook), whose event has been confirmed emitted on Sepolia — see Step 0 and
+`integrations/graph/STUDIO-PREFLIGHT.md`. This document stays here for the day a V2 executor is
+deployed, and is correct from Step 1 onward once it is.
 
 > **The deploy key is never pasted into this repository and never committed to it.**
 > It never enters a chat either. It is a bearer credential for publishing under your Studio
@@ -13,31 +19,52 @@ the deployment itself. This document is the whole of that step, in order, with n
 
 ---
 
-## Step 0 — the precondition, and it is currently unmet
+## Step 0 — the precondition, still unmet, re-measured 2026-09-09
 
-**A subgraph can only index a contract that exists.** The executor address in `networks.json` is the
-**fork-local** V2 executor from `test/fork`. Measured against live Ethereum Sepolia on 2026-09-08:
+**A subgraph can only index a contract that exists.** The executor address in `networks.json` and
+`subgraph.yaml` is the **fork-local** V2 executor from `test/fork`. Re-measured against live
+Ethereum Sepolia on **2026-09-09**, at head block **11666369**, through the repository's configured
+alias rather than a pasted URL:
 
 ```sh
-curl -s -X POST -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":1,"method":"eth_getCode","params":["0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f","latest"]}' \
-  https://ethereum-sepolia-rpc.publicnode.com
+cast code    0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f --rpc-url sepolia_testnet   # -> 0x  (0 bytes)
+cast nonce   0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f --rpc-url sepolia_testnet   # -> 0
+cast balance 0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f --rpc-url sepolia_testnet   # -> 379390040000000000
 ```
 
-returned `"result":"0x"` — **zero bytes of code**. Deploying the subgraph as it stands would produce
-a Studio deployment that syncs to head and indexes nothing, forever, with no error anywhere. This
-repository's own rule is that an empty result proves nothing; a *permanently* empty one that looks
-like a working integration is worse.
+**Zero bytes of code.** Note the third line: the address is *not* untouched — it holds 0.37939 ETH
+from activity that has nothing to do with UNICA. "It has a balance" is exactly the kind of signal
+that reads as "something is deployed there" and is not. The only reading that decides this question
+is `eth_getCode`, and it returns nothing.
+
+Deploying the subgraph as it stands would produce a Studio deployment that syncs to head and indexes
+nothing, forever, with no error anywhere. This repository's own rule is that an empty result proves
+nothing; a *permanently* empty one that looks like a working integration is worse.
 
 So before anything below:
 
 - **Either** deploy a V2 `QuoteSettlementExecutor` to Sepolia and record its address and the block
   it was deployed in,
 - **or** decide deliberately to deploy the subgraph against a contract that does not exist yet, in
-  which case say so wherever the result is quoted. The V1 hook and executor **are** live
-  (`0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0` and `0x044bc8a8773EC7b9B8de2467766636dFFCaC6210`,
-  both carrying code at the same check) — but they emit the V1 event, which **this** subgraph does
-  not subscribe to. Pointing this manifest at them would index nothing for a different reason.
+  which case say so wherever the result is quoted.
+
+### This directory is not the route to a live subgraph today — `integrations/graph/` is
+
+The V1 hook and executor **are** live and **have emitted**. This was established from the chain on
+2026-09-09, not inferred from a document:
+
+| Measured | Value |
+|---|---|
+| `topic0`, recomputed with `cast keccak` from the manifest's own event signature | `0xf9b834e9c2d7d0250251dfdb3c5fdc3f97d829dbe3402f45c89257ab4ec43563` |
+| `eth_getLogs` at the V1 hook, 10-block window `0xb19cd5`–`0xb19cde` | **1 log** — block `11640026`, `logIndex` 107 |
+| that log's transaction | `0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83`, status `0x1` |
+| sabotage control — same window, last nibble of `topic0` flipped `3`→`4` | **0 logs**, so an empty answer here is a real answer |
+| the V1 hook's code at block `11639894` / `11639895` | `0` bytes / `10634` bytes — the manifest `startBlock` **is** the creation block |
+
+`integrations/graph/` subscribes to that event, at that address, from that block. It is deployable
+today against real data, and `integrations/graph/STUDIO-PREFLIGHT.md` is its owner-action document.
+**If the goal is a live Graph deployment, take that one — not this one.** This directory becomes
+deployable when, and only when, a V2 executor exists on a public chain.
 
 ## Step 1 — set the network, the address and the start block, before building
 
