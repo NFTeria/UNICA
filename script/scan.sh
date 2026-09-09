@@ -41,7 +41,12 @@ marks='unica-closet|claude-toolkit|SESSION-PROMPT|prize-watch/|/Users/'
 # 32-byte value that is public by construction — it is derived from a name, and the whole point of
 # printing one is that a reader can recompute it. Same class as a pool id or a log topic, and the
 # two rows below prove the widening did not blunt the rule.
-label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]:]|swap|receipt|topic|digest|witness|domain|vector|curve|signature|resource'
+# `roles` and `token ?id` join it on 2026-09-09, for the ENSv2 observation file: a role bitmap and a
+# registry token id are both READ OFF A PUBLIC CHAIN with `cast call`, and both are recomputable by
+# anyone — the token id is keccak256(label) with its low 32 bits cleared. `token ?id` deliberately
+# requires the `id`, so a bare `token:` beside a 64-hex value stays caught; an API token is exactly
+# the shape this rule exists to find. Both words have a control below in each direction.
+label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]:]|swap|receipt|topic|digest|witness|domain|vector|curve|signature|resource|roles|token ?id'
 
 # The controls, first: each pattern must catch a planted bad input and pass a planted good one.
 chk "control: a labelled key is caught"        "printf 'PRIVATE_KEY=0x%064d\n' 1 | grep -qiE '$secrets'"
@@ -82,6 +87,13 @@ chk "control: a signature is NOT caught"        "! (printf '  signature: \"0x%06
 # matches on the NAME beside the value, so it fires whatever else the line says.
 chk "control: a key on a line that also says 'signature' is STILL caught" "printf 'signature PRIVATE_KEY=0x%064d\n' 9 | grep -qiE '$secrets'"
 chk "control: a key on a line that also says 'curve' is STILL caught"     "printf 'curve PRIVATE_KEY=0x%064d\n' 9 | grep -qiE '$secrets'"
+# The 2026-09-09 widening, both directions. The negative rows are the ones that matter: a word added
+# to the vocabulary is a word an attacker could put on the line beside a key.
+chk "control: a role bitmap is NOT caught"      "! (printf '  \"ownerRolesAtParent\": \"0x%064d\",\n' 1 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label')"
+chk "control: a registry token id is NOT caught" "! (printf '  \"parentTokenId\": \"0x%064d\",\n' 1 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label')"
+chk "control: a bare 'token' does NOT exempt"   "printf '  \"token\": \"0x%064d\",\n' 1 | grep -E '0x[a-fA-F0-9]{64}' | grep -qviE '$label'"
+chk "control: a key on a line that also says 'roles' is STILL caught"    "printf 'roles PRIVATE_KEY=0x%064d\n' 9 | grep -qiE '$secrets'"
+chk "control: a key on a line that also says 'token id' is STILL caught" "printf 'token id PRIVATE_KEY=0x%064d\n' 9 | grep -qiE '$secrets'"
 
 # Then the tree.
 # script/check-surface.sh carries this same pattern and a planted control key, as this file does; both are scanners.
