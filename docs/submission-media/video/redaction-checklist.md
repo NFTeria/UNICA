@@ -12,8 +12,12 @@ A video is published forever and cannot be edited after it is judged. Everything
 ## 1. Terminal username and filesystem paths — **will appear by default**
 
 The default prompt on this machine shows the user name and the absolute path. Every command in
-`timeline.md` runs from `/Users/<name>/Desktop/unica`, so this leaks in **every terminal shot**
-unless it is fixed before recording.
+`timeline.md` runs from the repository checkout inside your home directory, so that path leaks in
+**every terminal shot** unless the prompt is fixed before recording.
+
+(This file deliberately does not spell out a home-directory path, even as an example. The
+repository's secret scan refuses one anywhere in the tree, and a redaction checklist that leaks the
+shape of the thing it is warning about is not much of a checklist.)
 
 **Fix it in the recording shell, before the recording software starts:**
 
@@ -22,7 +26,7 @@ PS1='unica $ '
 ```
 
 - [ ] Prompt reads exactly `unica $` — no user, no host, no path, no git branch, no timestamp.
-- [ ] No command in the take is typed with an absolute `/Users/…` path. `timeline.md` uses `~/Desktop/unica` or a bare relative path everywhere for this reason.
+- [ ] No command in the take is typed with an absolute home-directory path. `timeline.md` uses `~/Desktop/unica` or a bare relative path everywhere for this reason.
 - [ ] The terminal's **window title bar** does not show the path either — many terminals put the working directory there. Check the title bar in a still frame, not from memory.
 - [ ] The editor, if it is ever on screen, does not show a full path in its title, tab strip, or breadcrumb.
 - [ ] Shell history is not visible. Do not press ↑ on camera; a previous session's command may contain anything.

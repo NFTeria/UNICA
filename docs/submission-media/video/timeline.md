@@ -147,7 +147,7 @@ node tools/unica-verify/cli.mjs --input tools/unica-verify/fixtures/fork-settlem
 
 ```
   PASS  the quote digest recomputes from the quote's own fields
-        0x094d6ded1d6470ab5b7a92c2ebfc46779aff1f2fb4b79e11a38abbfc8b9d6f09
+        digest 0x094d6ded1d6470ab5b7a92c2ebfc46779aff1f2fb4b79e11a38abbfc8b9d6f09
   PASS  the recomputed digest is the digest the receipt records
   PASS  the merchant signature satisfies the V2 EOA policy
   PASS  the recovered signer is the merchant the quote names
@@ -157,7 +157,7 @@ node tools/unica-verify/cli.mjs --input tools/unica-verify/fixtures/fork-settlem
   PASS  the payer's signed ceiling was not exceeded
         ceiling 1000000000000000000, actually spent 41792042795051823
   PASS  the PoolId recomputes from the complete pool key
-        0x3808af73802a48d62b646371de0268429c4f6eb39b80e9a51fbcaf47a49c7121
+        pool id 0x3808af73802a48d62b646371de0268429c4f6eb39b80e9a51fbcaf47a49c7121
   PASS  the recomputed PoolId is the pool the receipt records
 
 VERIFIED

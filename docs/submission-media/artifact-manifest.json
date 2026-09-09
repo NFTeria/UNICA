@@ -446,7 +446,7 @@
     "svgSafety": "All 13 SVGs parsed with xmllint. Zero script, image, foreignObject, use or style elements; zero href attributes of any kind. Checked against the parse tree, not by grep: the only grep hit in the set is the words '<script>' and '<image>' inside an XML COMMENT in video/title-card.svg stating their absence. The instrument was validated by sabotage - a script element injected into a copy was caught.",
     "svgRender": "All 13 SVGs render with rsvg-convert without error, at their declared intrinsic size.",
     "pngDimensions": "All 11 PNGs match the size named in their filename. previews-light-dark.png (1600x600) and safe-area.png (1600x1060) name no size and match their source viewBox.",
-    "metadata": "No PNG carries a tEXt/Author/Software/Comment chunk or GPS data. No absolute path, username or credential appears in any file. The two matches for '/Users/' are an instructional placeholder '/Users/<name>/' and a warning not to depend on a temporary path.",
+    "metadata": "No PNG carries a tEXt/Author/Software/Comment chunk or GPS data. No absolute path, username or credential appears in any file. The two home-path matches that existed at audit time were an instructional placeholder and a warning not to depend on a temporary path; both were rewritten so no home-directory path shape appears anywhere in this package.",
     "bannedLanguage": "Zero occurrences of any banned term outside a prohibition list or an explicit negation ('No part of UNICA has been audited', 'not affiliated with or endorsed by Uniswap')."
   },
   "reDerivedCounts": {
