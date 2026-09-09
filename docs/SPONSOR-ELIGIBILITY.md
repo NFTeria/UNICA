@@ -14,7 +14,7 @@ because the work feels close to done.
 | Status | Means |
 |---|---|
 | `READY_FOR_FORM_SUBMISSION` | the engineering is complete; a human must fill in a form |
-| `BLOCKED_ON_CRE_SIMULATE` | the workflow compiles to a CRE WASM binary; the CLI's own simulator cannot start an engine for it |
+| `SIMULATED_IN_CRE` | the workflow runs in Chainlink's own simulator, which the CLI states is not a real TEE |
 | `READY_FOR_STUDIO_OWNER_ACTION` | complete; blocked on a Subgraph Studio deploy key |
 | `READY_FOR_WALLET_CONFIRMATION` | complete; blocked on a wallet signature the owner must give |
 | `READY_FOR_ARC_DEPLOYMENT_ACTION` | complete; blocked on funding and a broadcast on Arc |
@@ -45,7 +45,7 @@ Remaining: the form itself.
 
 ### 2. Chainlink — Best Confidential Workflow (From Scratch)
 
-**Status: `BLOCKED_ON_CRE_SIMULATE`**
+**Status: `SIMULATED_IN_CRE`**
 
 A real CRE Confidential Workflow — a cron-triggered TEE handler that reads a merchant's treasury
 position, applies a deterministic bounded policy, and publishes a decision without publishing the
@@ -58,19 +58,23 @@ policy that produced it.
 | The deterministic policy underneath | `integrations/chainlink-cre-guardian/strategy.mjs` |
 | The confidentiality boundary, and its one stated leak | the workflow's own header and its leak tests |
 
-`cre login` is **done** (CLI v1.32.0, SDK 1.18.0), and running the real toolchain is what moved
-this row. Three defects in our own workflow were found and fixed by it, after which the workflow
-**compiles** — binary hash `924c5266…`, config hash `bece38e7…`, secrets bound, credentials
-validated. That had never happened before today.
+**It runs.** `cre workflow simulate` returns exit 0, the simulator reports *"Handler requested
+TEE Execution"*, the five private policy values load from CRE secrets inside the handler, and the
+published result carries a policy commitment, an action class and a reason category with **no
+threshold in any field** — the boundary holding under Chainlink's engine rather than only under
+our own suite.
 
-It then stops inside the SDK: `failed to execute subscribe` with a bare `wasm unreachable` trap.
-Narrowed by elimination across separate runs — not the TEE constraint shape, not `handlerInTee`
-versus `handler`, not our own config validation. `docs/feedback/chainlink.md` carries the table.
+Getting there took a control experiment worth reading: Chainlink's own unmodified
+`hello-world-ts` template failed at byte-identical WASM offsets, which moved the question from
+"what is wrong with our workflow" to "what is wrong with this machine". The answer was `bun`
+below the SDK's declared `engines` requirement, reported as a bare `wasm unreachable` trap that
+named neither. Two findings we had published before that control were wrong and are retracted in
+`docs/feedback/chainlink.md` rather than edited away.
 
-**It has never executed, in a TEE or otherwise**, and the evidence grade it stamps on its own
-output says exactly that — `CRE_CONFIDENTIAL_SIMULATION`, never `TEE_ATTESTED`. Separately,
-`cre whoami` reports **Deploy Access: Not enabled**, so a deployment needs `cre account access`
-regardless.
+**What it is not.** The CLI says plainly that its simulator **is not a real TEE**. Nothing here
+has executed in an enclave, and the workflow stamps `CRE_CONFIDENTIAL_SIMULATION` on its own
+output, never `TEE_ATTESTED`. `cre account access` has been submitted and is awaiting Chainlink's
+review; until it is granted there is no DON deployment to claim.
 
 ### 3. The Graph — Best AI Tooling or AI Use Case with The Graph (From Scratch)
 
