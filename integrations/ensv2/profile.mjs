@@ -61,9 +61,26 @@ export const OBSERVED = {
   REVERT_NAMED_IT: "REVERT_NAMED_IT",
   DECODED: "DECODED",
   ACCEPTED_IN_SIMULATION: "ACCEPTED_IN_SIMULATION",
+  // A state-changing call actually EXECUTED against the deployed bytecode on a pinned fork of
+  // Sepolia, and the state it wrote read back. Stronger than ACCEPTED_IN_SIMULATION, which only
+  // says a call did not revert: this label means the write landed and was found again afterwards.
+  // Weaker than a canonical-history observation, because the block is a local fork — so it is a
+  // separate word rather than being folded into DECODED, and anything relying on it says so.
+  FORK_EXECUTED: "FORK_EXECUTED",
   PUSH4_IN_RUNTIME: "PUSH4_IN_RUNTIME",
   DOCUMENTED_NOT_OBSERVED: "DOCUMENTED_NOT_OBSERVED",
 };
+
+/// The fork the delegation evidence was taken on. Recorded so anyone can reproduce it, and so a
+/// FORK_EXECUTED row can never be mistaken for something read out of canonical history.
+export const DELEGATION_FORK = Object.freeze({
+  chainId: 11155111,
+  forkBlock: 11666400,
+  name: "raffy.eth",
+  node: "0x9c8b7ac505c9f0161bbbd04437fce8c630a0886e1ffea00078e298f063a8a5df",  // namehash("raffy.eth")
+  resolver: "0xc00E9189fe499b5F541932Ee57DA56B85Ac35eeE",
+  method: "anvil fork, owner impersonated; every RPC was 127.0.0.1 and nothing was broadcast",
+});
 
 // ── the deployment ────────────────────────────────────────────────────────────────────────────
 //
@@ -263,6 +280,37 @@ export const registryCanonicalId = (label) => registryResource(label, 0n);
 export const resolverNameResource = (node) =>
   toHex(keccak256(concat(wordBytes32(node), wordUint(0))));
 
+/// The resolver's resource, generalised. ONE formula covers every scope this contract has:
+///
+///     resource = keccak256(abi.encode(node, scopeHash))
+///
+/// and the scope is entirely decided by `scopeHash`:
+///
+///     bytes32(0)                             the NAME-LEVEL resource — every record on the name
+///     keccak256(bytes(key))                  ONE text key, or one data key
+///     keccak256(abi.encode(uint256(coin)))   ONE addr coin type
+///
+/// `resolverNameResource` is this function at `scopeHash = 0`, and is kept as its own name because
+/// that case is the dangerous one: it is the scope that carries everything.
+///
+/// This was established by executing the authorize* calls on a pinned fork and then finding the
+/// granted bit at the resource this formula predicts — see `DELEGATION_MECHANISM` below. It is not
+/// read off documentation, and the addr row is here because the obvious guess for it was WRONG:
+/// the coin type is hashed as an ABI word, not used as one.
+export const resolverScopedResource = (node, scopeHash) =>
+  toHex(keccak256(concat(wordBytes32(node), wordBytes32(scopeHash))));
+
+/// The scope hash for one text key (and, on this deployment, one data key: they share the rule).
+export const textScopeHash = (key) => toHex(keccak256(utf8(key)));
+
+/// The scope hash for one addr coin type. NOTE the extra hash: `bytes32(coinType)` is NOT the
+/// scope, `keccak256(abi.encode(uint256(coinType)))` is. Getting this wrong lands the grant at a
+/// resource nobody holds anything at, which reads as "the agent has no authority" — the
+/// safe-looking answer and the wrong one. At coinType 0 the wrong formula additionally COLLIDES
+/// with the name-level resource, which would silently widen a grant to the whole name; the correct
+/// formula does not, and that was checked on the fork rather than reasoned about.
+export const addrScopeHash = (coinType) => toHex(keccak256(wordUint(coinType)));
+
 export const RESOURCE_DERIVATIONS = [
   {
     contract: "PermissionedRegistry",
@@ -282,19 +330,99 @@ export const RESOURCE_DERIVATIONS = [
     contract: "PermissionedResolver",
     formula: "keccak256(abi.encode(node, keccak256(bytes(key))))",
     inputs: "namehash and text key",
-    observed: OBSERVED.DOCUMENTED_NOT_OBSERVED,
-    // setText and authorizeTextRoles BOTH named the name-level resource instead. Nothing observed
-    // on this deployment has ever named a per-key resource, so it is not used as a pin anywhere.
-    evidence: "not named by any observed call; setText named the name-level resource instead",
+    observed: OBSERVED.FORK_EXECUTED,
+    // CORRECTED IN PLACE. This row previously read DOCUMENTED_NOT_OBSERVED, with the note "setText
+    // and authorizeTextRoles BOTH named the name-level resource instead. Nothing observed on this
+    // deployment has ever named a per-key resource." That was drawn from refusals only — a refusal
+    // of setText names the resource the CALLER lacked, which is the name-level one, and says
+    // nothing about where an authorization writes. Executing the authorization settles it.
+    evidence:
+      "authorizeTextRoles(dns('raffy.eth'), 'unica.treasury.status', agent, true) executed on the fork; " +
+      "roles(keccak256(abi.encode(node, keccak256('unica.treasury.status'))), agent) went 0 -> 0x10 (SET_TEXT), " +
+      "while roles(nameResource, agent) stayed 0 and a second key's resource stayed 0. Reproduced on a third key.",
   },
   {
     contract: "PermissionedResolver",
     formula: "keccak256(abi.encode(node, keccak256(abi.encode(coinType))))",
     inputs: "namehash and coin type",
-    observed: OBSERVED.DOCUMENTED_NOT_OBSERVED,
-    evidence: "not named by any observed call; setAddr(bytes32,uint256,bytes) named the name-level resource instead",
+    observed: OBSERVED.FORK_EXECUTED,
+    // CORRECTED IN PLACE, and the correction cost a wrong guess first: the obvious derivation
+    // keccak256(abi.encode(node, bytes32(coinType))) was tried, found the grant NOWHERE, and was
+    // refuted by the functional test — the agent could setAddr afterwards, so the grant had landed
+    // somewhere the guess did not predict. The extra keccak is the difference.
+    evidence:
+      "authorizeAddrRoles(dns('raffy.eth'), 60, agent, true) executed on the fork; " +
+      "roles(keccak256(abi.encode(node, keccak256(abi.encode(uint256(60))))), agent) = 0x1 (SET_ADDR), " +
+      "and the agent's subsequent setAddr(node, 60, 0x..dEaD) was accepted and read back",
   },
 ];
+
+// ── how a delegation is actually made on this deployment ──────────────────────────────────────
+//
+// The single most expensive thing this survey got wrong before, and the reason this block exists
+// in the machine-readable profile rather than only in prose: the delegation call is NOT
+// `grantRoles`. This deployment REFUSES `grantRoles` for the shape a delegation needs, and the
+// refusal is not a permission problem that a better-authorised caller could avoid — the name owner
+// itself, holding every role at ROOT_RESOURCE, is refused.
+//
+// Each row below was executed against the deployed bytecode on the fork named in
+// `DELEGATION_FORK`, and each REFUSED row has an ACCEPTED control beside it so the refusal cannot
+// be explained away as "that account could not do anything".
+
+export const DELEGATION_MECHANISM = Object.freeze({
+  call: "authorizeTextRoles(bytes dnsName, string key, address account, bool granted)",
+  selector: "0xf2d1eb25",
+  grants: "RESOLVER_ROLE.SET_TEXT at the per-key resource, and nothing else",
+  requires: "adminRole(SET_TEXT) — the REGULAR SET_TEXT bit is not enough, and that was checked both ways",
+  observed: OBSERVED.FORK_EXECUTED,
+  rows: [
+    {call: "grantRoles(nameResource, SET_TEXT, agent) from the NAME OWNER",
+     result: "REFUSED — EACCannotGrantRoles(0x0bfd…5e61, 0x10, 0x…a6e17)", accepted: false,
+     note: "the revert data names the resource, the bitmap and the account, so the contract is quoting itself"},
+    {call: "authorizeTextRoles(dns, 'unica.treasury.status', agent, true) from the NAME OWNER",
+     result: "ACCEPTED, gasUsed 89316", accepted: true},
+    {call: "setText(node, 'unica.treasury.status', 'unica-ok') from the AGENT",
+     result: "ACCEPTED, and the value read back", accepted: true, note: "the control that proves the agent is not simply powerless"},
+    {call: "setText(node, 'unica.treasury.other', …) from the AGENT",
+     result: "REFUSED — EACUnauthorizedAccountRoles 0x4b27a133, and the key read back empty", accepted: false,
+     note: "THE per-key scoping result: one authorized key does not carry another"},
+    {call: "authorizeTextRoles(dns, key, agent, false) from the NAME OWNER",
+     result: "ACCEPTED, gasUsed 41658; the agent's next setText on that key was refused", accepted: true},
+    {call: "authorizeTextRoles(…) from a holder of the REGULAR SET_TEXT bit at ROOT",
+     result: "REFUSED — EACCannotGrantRoles", accepted: false,
+     note: "control: the same account's own setText WAS accepted, so it is the admin bit that is missing, not authority in general"},
+    {call: "authorizeTextRoles(…) from a holder of adminRole(SET_TEXT) at ROOT",
+     result: "ACCEPTED, and its revocation was accepted too", accepted: true},
+    {call: "authorizeTextRoles(dns, <another key>, agent, true) from the AGENT ITSELF",
+     result: "REFUSED — EACCannotGrantRoles", accepted: false,
+     note: "the agent cannot use the very mechanism that empowered it to broaden itself"},
+  ],
+});
+
+/// What a delegation costs, measured on the fork rather than estimated. Gas moves with the LENGTH
+/// of the text key, because the key travels as calldata, so a single number would be a lie for any
+/// key but the one it was measured on — the spread is published instead of an average.
+export const DELEGATION_GAS = Object.freeze({
+  observed: OBSERVED.FORK_EXECUTED,
+  basis: "raffy.eth on the pinned fork; a cold per-key slot for the grant, an existing one for the rest",
+  authorizeTextRoles_new_21charKey: 89316,
+  authorizeTextRoles_new_53charKey: 90123,
+  authorizeTextRoles_already_granted: 42748,
+  authorizeTextRoles_revoke: 41658,
+  authorizeAddrRoles_new: 87313,
+  // The two that matter most, because they were measured by executing the calldata THIS
+  // REPOSITORY's own encoder produced — not a hand-written cast invocation of the same function.
+  // The encoder was also compared byte-for-byte against `cast calldata` first, and a one-byte
+  // corruption of the offset word was REJECTED by the contract, so the acceptance is evidence
+  // rather than a call that happened not to revert.
+  repoEncodedGrant_key_unica_capabilities: 89280,
+  repoEncodedRevoke_key_unica_capabilities: 41622,
+  note:
+    "An earlier internal estimate of 45181 for the grant and 53965 for the revocation is REFUTED by " +
+    "these measurements and is not used anywhere. The grant is roughly twice the estimate because it " +
+    "writes a cold role word and a cold assignee-count word; the revocation is cheaper than the " +
+    "estimate because clearing them earns a refund.",
+});
 
 // ── role constants ────────────────────────────────────────────────────────────────────────────
 //
@@ -354,7 +482,8 @@ export const RESOLVER_ROLE = {
   SET_ALIAS: {bit: 1n << 28n, observed: OBSERVED.DOCUMENTED_NOT_OBSERVED, evidence: null},
   CLEAR: {bit: 1n << 32n, observed: OBSERVED.REVERT_NAMED_IT,
     evidence: "clearRecords() named 0x100000000"},
-  SET_DATA: {bit: 1n << 36n, observed: OBSERVED.DOCUMENTED_NOT_OBSERVED, evidence: null},
+  SET_DATA: {bit: 1n << 36n, observed: OBSERVED.FORK_EXECUTED,
+    evidence: "authorizeDataRoles(dns,'unica.blob',agent,true) on the fork left roles(perKeyResource,agent) = 0x1000000000 = 1<<36"},
   UPGRADE: {bit: 1n << 124n, observed: OBSERVED.DOCUMENTED_NOT_OBSERVED, evidence: null},
 };
 

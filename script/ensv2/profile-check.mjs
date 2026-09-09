@@ -235,11 +235,40 @@ function runChecks(p, emit) {
     p.WILDCARD.rows.some((r) => /UNREGISTERED and it still RESOLVED/.test(r.meaning)),
     "the non-reverting failure shape is not recorded",
   );
+  // CORRECTED IN PLACE. This check used to require the two finer derivations to be marked
+  // DOCUMENTED_NOT_OBSERVED, and it was right to, because at the time nothing had ever named a
+  // per-key resource. Executing authorizeTextRoles/authorizeAddrRoles on a pinned fork and finding
+  // the granted bit at the resource the formula predicts refuted that, so the check now enforces
+  // the stronger claim instead of the weaker one. What it must NEVER allow is the derivations
+  // being upgraded past the evidence that exists: a fork execution is not revert data.
   emit(
-    "the finer resolver resource derivations are marked DOCUMENTED_NOT_OBSERVED, not observed",
+    "the finer resolver resource derivations are marked FORK_EXECUTED and each carries its evidence",
     p.RESOURCE_DERIVATIONS.filter((r) => /keccak256\(bytes\(key\)\)|abi\.encode\(coinType\)/.test(r.formula))
-      .every((r) => r.observed === p.OBSERVED.DOCUMENTED_NOT_OBSERVED),
-    "a derivation nothing named is claimed as observed",
+      .every((r) => r.observed === p.OBSERVED.FORK_EXECUTED && typeof r.evidence === "string" && r.evidence.length > 40),
+    "a derivation is claimed at a strength its evidence does not carry, or claimed with no evidence at all",
+  );
+  emit(
+    "no derivation claims REVERT_NAMED_IT on the strength of an executed write",
+    p.RESOURCE_DERIVATIONS.filter((r) => r.observed === p.OBSERVED.REVERT_NAMED_IT)
+      .every((r) => !/executed on the fork/.test(String(r.evidence ?? ""))),
+    "a fork execution is being passed off as the contract quoting itself in revert data",
+  );
+  emit(
+    "the delegation mechanism records both the refused grantRoles and an accepted control",
+    p.DELEGATION_MECHANISM.rows.some((r) => r.accepted === false && /grantRoles/.test(r.call)) &&
+      p.DELEGATION_MECHANISM.rows.some((r) => r.accepted === true && /authorizeTextRoles/.test(r.call)),
+    "one half of the pair is missing, so the delegation finding proves nothing",
+  );
+  emit(
+    "the delegation mechanism records the per-key refusal AND the same agent's accepted write",
+    p.DELEGATION_MECHANISM.rows.some((r) => r.accepted === true && /setText\(node, 'unica\.treasury\.status'/.test(r.call)) &&
+      p.DELEGATION_MECHANISM.rows.some((r) => r.accepted === false && /setText\(node, 'unica\.treasury\.other'/.test(r.call)),
+    "per-key scoping is claimed without the control that separates 'scoped' from 'powerless'",
+  );
+  emit(
+    "the refuted gas estimate is named as refuted rather than deleted",
+    /REFUTED/.test(String(p.DELEGATION_GAS.note ?? "")) && /45181/.test(String(p.DELEGATION_GAS.note ?? "")),
+    "a wrong number was quietly removed instead of being corrected in place",
   );
   emit(
     "the unresolved list is not empty",
@@ -317,11 +346,37 @@ const SABOTAGE = [
     apply: (p) => { p.PROXY_CHAIN = [{...p.PROXY_CHAIN[0], to: "0x0000000000000000000000000000000000000001"}, {...p.PROXY_CHAIN[1]}]; },
   },
   {
-    what: "a per-text-key resource nothing ever named is claimed as observed",
+    what: "a per-text-key resource is upgraded from an executed write to revert data",
     apply: (p) => {
       const r = p.RESOURCE_DERIVATIONS.find((x) => /keccak256\(bytes\(key\)\)/.test(x.formula));
       r.observed = p.OBSERVED.REVERT_NAMED_IT;
     },
+  },
+  {
+    what: "the per-key derivation is claimed observed with its evidence stripped out",
+    apply: (p) => {
+      const r = p.RESOURCE_DERIVATIONS.find((x) => /keccak256\(bytes\(key\)\)/.test(x.formula));
+      r.evidence = "observed";
+    },
+  },
+  {
+    what: "the refused grantRoles row is dropped, leaving the delegation looking like a free choice",
+    apply: (p) => {
+      p.DELEGATION_MECHANISM = {...p.DELEGATION_MECHANISM,
+        rows: p.DELEGATION_MECHANISM.rows.filter((r) => !/grantRoles/.test(r.call))};
+    },
+  },
+  {
+    what: "the agent's ACCEPTED write is dropped, so 'scoped' cannot be told from 'powerless'",
+    apply: (p) => {
+      p.DELEGATION_MECHANISM = {...p.DELEGATION_MECHANISM,
+        rows: p.DELEGATION_MECHANISM.rows
+          .filter((r) => !(r.accepted === true && /setText\(node, 'unica\.treasury\.status'/.test(r.call)))};
+    },
+  },
+  {
+    what: "the refuted gas estimate is quietly deleted instead of corrected in place",
+    apply: (p) => { p.DELEGATION_GAS = {...p.DELEGATION_GAS, note: "measured on a fork"}; },
   },
   {
     what: "the accepted control is dropped from the admin-role rule, leaving only the refusal",

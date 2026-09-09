@@ -7,17 +7,60 @@ This document describes three ENSv2 text records, the client that reads them, an
 that decides whether UNICA will settle against what it read. It also says, in each section, which
 claims came off the chain and which are this repository's own choices.
 
-## The finding this design is shaped by
+## The finding this design is shaped by — and the half of it that was wrong
 
-The Phase 1 survey established, from five separate live refusals on a real per-name Permissioned
-Resolver, that **this deployment scopes every resolver write to the NAME-LEVEL resource**
-`keccak256(node ‖ bytes32(0))` — including `setText` and `setAddr(bytes32,uint256,bytes)`, where the
-published documentation leads you to expect a per-key or per-coin-type resource. Nothing observed on
-this deployment has ever named a finer one.
+### What this document used to say, corrected in place
 
-The consequence is not academic. **An agent granted `SET_TEXT` anywhere may rewrite every text record
-on that name.** There is no permission narrow enough to say "this agent may write the treasury key
-and not the pay key". So the mitigation cannot be a permission — it has to be structure.
+> The Phase 1 survey established, from five separate live refusals on a real per-name Permissioned
+> Resolver, that **this deployment scopes every resolver write to the NAME-LEVEL resource**
+> `keccak256(node ‖ bytes32(0))` — including `setText` and `setAddr(bytes32,uint256,bytes)`, where the
+> published documentation leads you to expect a per-key or per-coin-type resource. Nothing observed on
+> this deployment has ever named a finer one.
+>
+> The consequence is not academic. **An agent granted `SET_TEXT` anywhere may rewrite every text record
+> on that name.** There is no permission narrow enough to say "this agent may write the treasury key
+> and not the pay key". So the mitigation cannot be a permission — it has to be structure.
+
+The block above is left standing because this repository corrects a refuted claim with the
+measurement that refuted it rather than deleting it. **The chain refutes its second paragraph.**
+
+### The measurement
+
+Sepolia fork pinned at block 11666085, against the live resolver proxy `0xc00E9189…35eeE` — the same
+deployment and the same block the rest of this document is built on.
+
+| what was executed | what the chain did |
+|---|---|
+| `authorizeTextRoles(dns("raffy.eth"), "unica.treasury.status", agent, true)` from the name owner | ACCEPTED. `EACRolesChanged` named resource `0xbea6aab7…c175`, which is `keccak256(node ‖ keccak256("unica.treasury.status"))` — a **per-key** resource — and granted `SET_TEXT` (`0x10`) there |
+| `roles(nameLevelResource, agent)` after that grant | `0` — the name-level resource was never touched |
+| `roles(ROOT_RESOURCE, agent)` after that grant | `0` |
+| the agent's `setText` on **that** key | ACCEPTED, value read back |
+| the agent's `setText` on a **different** key | REFUSED — `EACUnauthorizedAccountRoles` (`0x4b27a133`) |
+| the agent's `setAddr` | REFUSED — `EACUnauthorizedAccountRoles` |
+| `grantRoles(nameLevelResource, SET_TEXT, agent)` from the same name owner | REFUSED — `EACCannotGrantRoles` (`0xd1a3b355`) |
+
+`authorizeAddrRoles(dns, coinType, …)` is the same story at `keccak256(node ‖ keccak256(uint256
+coinType))`, and `authorizeNameRoles(dns, bitmap, …)` is the name-level one.
+
+### What is true now
+
+**Per-key scoping IS available on this deployment**, through `authorizeTextRoles`. The blanket
+exposure the old paragraph described is a property of a **name-level** grant, not of `SET_TEXT` as
+such: on the same fork, an account holding `SET_TEXT` at `keccak256(node ‖ bytes32(0))` wrote
+`unica.pay`, `unica.treasury`, `avatar` and an arbitrary key — four for four. So
+
+- **name-level `SET_TEXT` → every text record on that name.** The old claim, still true, of that shape.
+- **per-key `SET_TEXT` → exactly one key.** Refuses every other key and every other record type.
+
+The old claim's mistake was believing this deployment offered only the first shape. It offers both,
+and the shape it offers for `grantRoles` — the call the delegation planner was written around — is
+**refused**.
+
+### Why the structure survives the correction
+
+Per-key scoping protects a key; it does not protect a name from a delegation someone makes later.
+The settlement configuration is worth keeping on a name the agent has no authority over at all, so
+the mitigation stays structural.
 
 That is why `pay` and `treasury` are sibling names rather than two keys on one name:
 
@@ -150,9 +193,61 @@ the same question, and **the difference fails unsafe**: on `raffy.eth`'s resolve
 `ROOT_RESOURCE` grant applies everywhere and `roles` does not report it. An integration reading
 `roles` alone concludes "this account cannot edit the merchant's records" and is wrong.
 
-So the validator judges the **union** of `roles(payResource, agent)` and `roles(ROOT_RESOURCE, agent)`,
-and asks one `hasRoles` as corroboration. If the two disagree, the union is still missing something
-and **neither is relied on** — `AUTHORITY_READ_DISAGREES`.
+So the validator judges a **union**, and asks `hasRoles` as corroboration. If the two disagree, the
+union is still missing something and **neither is relied on** — `AUTHORITY_READ_DISAGREES`.
+
+#### It used to read two resources, and that was CRITICAL 2
+
+> "So the validator judges the **union** of `roles(payResource, agent)` and
+> `roles(ROOT_RESOURCE, agent)`, and asks one `hasRoles` as corroboration."
+
+Both of those resources are `0` for an agent delegated with `authorizeTextRoles` — measured, above.
+The validator reported *no agent authority* about an agent that could write the settlement
+configuration. It failed **unsafe**, which is the opposite of this project's rule.
+
+The read now asks **four** resources, because the deployment has four:
+
+| scope | resource | what a role there reaches |
+|---|---|---|
+| `NAME` | `keccak256(payNode ‖ bytes32(0))` | every record on the pay name |
+| `ROOT` | `0` | every record on every name this resolver serves |
+| `PAY_TEXT_KEY` | `keccak256(payNode ‖ keccak256("unica.pay"))` | the text key carrying the settlement configuration |
+| `PAY_ADDR_COIN` | `keccak256(payNode ‖ keccak256(uint256(60)))` | the addr record `readAddr` asks for |
+
+The implementation's dispatch table carries **no read dedicated to an `authorize*` grant** — the only
+role reads it exposes are `roles`, `hasRoles`, `hasRootRoles`, `roleCount`, `hasAssignees` and
+`getAssigneeCount`. So the read that sees a per-key delegation is the ordinary `roles(uint256,address)`
+asked at the derived resource, and that is what the validator does.
+
+Two more measurements shape how the corroboration is judged, and both were taken rather than assumed:
+
+- `hasRoles(resource, bit, account)` answers about `roles(resource) | roles(ROOT_RESOURCE)`. The
+  root-holding account reads `roles(textResource) = 0` and `hasRoles(textResource, SET_TEXT) = true`.
+  So the honest comparison is against `scope | root`; comparing against the scope alone would report
+  `AUTHORITY_READ_DISAGREES` for every root holder — a true refusal reached by a false reason, and it
+  would mask `AGENT_HOLDS_ROOT_RESOURCE`, the precise one.
+- A per-key resource does **not** inherit a name-level grant in EAC. An account holding `SET_TEXT` at
+  the name level reads `roles = 0` and `hasRoles = false` at the per-key resource; the widening
+  happens inside the resolver's own setter. That is why all four scopes are read separately rather
+  than one being derived from another.
+
+#### It fails closed at every exit
+
+A missing chain view, a missing resolver, a missing pay node, a probe that reverts, an endpoint that
+drops the body, a return the decoder refuses — each is a named status the preflight turns into a
+refusal. None returns a zero bitmap, because a comfortable zero is exactly how CRITICAL 2 read as
+safe. `merchant-config-test.mjs` proves it as a pair: the same delegation, seen (`REFUSED —
+PROTECTED_FIELD_UNDER_AGENT_CONTROL`) and then with only that scope's read made to fail (`REFUSED —
+AUTHORITY_UNKNOWN`), with a row asserting the two statuses differ so an "everything refuses"
+regression cannot pass as fail-closed behaviour.
+
+#### What it does not claim
+
+Four scopes are not all the scopes. A per-key grant on some other text key, or a per-coin grant on
+some other coin type, is not read — this deployment offers no way to enumerate the resources an
+account holds roles at. Such a grant is authority over a record UNICA does not settle against, so
+this is a boundary rather than a gap, and the result carries `exhaustive: false` and a
+`notEnumerable` note so no reader mistakes one for the other.
 
 The mask it judges against includes every documented resolver role and each one's admin half, not
 only the four the chain has named back. The asymmetry is deliberate: including an unconfirmed bit can
@@ -208,7 +303,8 @@ the defect the suite claims to catch and requires the suite to go RED for each.
   it. What the validator will not do is let "we did not look" read the same as "we looked and it was
   fine" — that is what `DEPLOYMENT_UNVERIFIED` is for.
 - **No finer resolver resource has ever been observed on this deployment.** This whole design rests on
-  the name-level scoping, and it would need rewriting if a per-key resource ever appeared.
+  the name-level scoping. **A per-key resource has now appeared**, and the rewriting that sentence
+  anticipated is the four-scope authority read described above.
 - **Nothing here writes.** Every chain touch is `eth_call`, `eth_getCode`, `eth_getStorageAt`,
   `eth_chainId` or `eth_blockNumber`. Nothing signs, nothing broadcasts, and the endpoint is only ever
   printed as an origin.

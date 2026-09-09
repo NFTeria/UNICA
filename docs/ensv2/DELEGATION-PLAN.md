@@ -46,23 +46,82 @@ planner's derivation, because whether `getResource` and `getTokenId` diverge at 
 
 ---
 
-## The finding that shapes the whole design
+## The finding that shapes the whole design — REFUTED, and left standing
 
-Phase 1 established that **every refusal this deployment has ever produced named the NAME-LEVEL
-resource** — `keccak256(abi.encode(node, bytes32(0)))` — including `setText`'s, where the
-documentation leads you to expect a per-key resource. Five setters and all three `authorize*`
-functions named it. Nothing observed has ever named a finer one.
+> **This section is wrong, and the fork says so.** It is kept in place with the measurement that
+> refuted it, because deleting a claim a reader may have acted on hides that they were misled.
+>
+> `authorizeTextRoles(dns, key, account, true)`, executed against the deployed bytecode on a Sepolia
+> fork pinned at block 11666085, emitted `EACRolesChanged` naming
+> `keccak256(abi.encode(node, keccak256(bytes(key))))` — a **per-key** resource — and granted
+> `SET_TEXT` there and nowhere else. The delegated account then wrote that key and was refused, with
+> `EACUnauthorizedAccountRoles` (`0x4b27a133`), on a different key. `authorizeAddrRoles` behaves the
+> same way per coin type. **Per-key scoping exists on this deployment.**
+>
+> The reason the section reads as it does is a measurement error of a specific and recognisable
+> kind: it was drawn from REFUSALS only. A `setText` refusal names the resource the CALLER lacked —
+> the name-level one — and says nothing about where an authorization writes. Executing the
+> authorization settles it; reading the refusals never could.
+>
+> What survives is the *blanket* half: a NAME-LEVEL `SET_TEXT` grant does reach every text key on
+> that name, confirmed on the same fork against four different keys. The mistake was believing that
+> was the only shape available.
+>
+> Two further things followed, and they are why this section could not simply be patched in place:
+> `grantRoles` — the call this plan used to be written around — is **REFUSED** by this deployment
+> with `EACCannotGrantRoles` (`0xd1a3b355`), even from the name owner holding every role at
+> `ROOT_RESOURCE`; and the call it accepts, `authorizeTextRoles`, appeared nowhere in the planner.
+>
+> **That rewrite has now landed, and this document is written around the new call.** Every claim in
+> the banner above was re-established first-hand before anything was changed — the selector against
+> the resolver's runtime dispatch table, the acceptance and the refusals by executing them on a
+> pinned fork, each refusal with a passing control beside it. The plan below no longer contains a
+> `grantRoles` step, and `screenAgentGrant` now **refuses** to build one, by name
+> (`GRANT_ROLES_NOT_THE_DELEGATION_PATH`), so the mistake cannot come back by accident.
+>
+> Two figures in the original advisory did **not** survive re-measurement and are corrected here
+> rather than quietly replaced: the delegation was priced at 45,181 gas and the revocation at
+> 53,965. Executed, they are **89,280** and **41,622** — the grant is about twice the estimate
+> because it writes two cold words, and the revocation is cheaper because clearing them earns a
+> refund. Both were measured by running the calldata this repository's own encoder produces, which
+> was first compared byte-for-byte against an independent encoder, and a one-byte corruption of it
+> was rejected by the contract so the acceptance means something.
+>
+> See `docs/ensv2/MERCHANT-CONFIG.md` § "The finding this design is shaped by" for the full table of
+> what was executed and what the chain did.
 
-The consequence is not subtle: **there is no such thing, on this deployment, as "may write only the
-key `unica:status`".** The smallest permission anyone can be given is *every record on one name*.
+There is **one** resource formula on the resolver, and the scope is decided entirely by its second
+input:
 
-So the separation is structural rather than permissional. The agent is granted `SET_TEXT` at the
-resource of a **leaf name that carries nothing anyone settles against**, and nothing at all at the
-resources of `merchant.`, `pay.` or `treasury.`. The payment recipient, the executor and the chain
-id live on `pay.`, where the agent holds no role, which is why it cannot change them.
+```
+resource = keccak256(abi.encode(node, scopeHash))
 
-`DENIAL_MATRIX` in `roles.mjs` states the residual out loud: on its own leaf, the agent may write any
-text key. The suite fails if that sentence is ever quietly emptied.
+  scopeHash = bytes32(0)                              the NAME level — every record on the name
+  scopeHash = keccak256(bytes(key))                   ONE text key      (role SET_TEXT,  1<<4)
+  scopeHash = keccak256(abi.encode(uint256(coin)))    ONE addr coin     (role SET_ADDR,  1<<0)
+  scopeHash = keccak256(bytes(key))                   ONE data key      (role SET_DATA,  1<<36)
+```
+
+Every row was established by executing the matching `authorize*` call on a pinned fork and then
+finding the granted bit at the resource the formula predicts. The addr row is spelled out because
+the obvious guess for it is **wrong**: the coin type is hashed as an ABI word, not used as one.
+Guessing it lands the grant at a resource nobody holds anything at — which reads back as "the agent
+has no authority", the safe-looking answer and the wrong one. At coin type 0 the wrong formula also
+collides with the name-level resource, which would silently widen the grant to the whole name.
+
+So the separation is now **both** structural and permissional, and the two rings are independent:
+
+- the agent is delegated at the resource of **one key** on a **leaf name that carries nothing anyone
+  settles against** — proven by the agent writing its key and being refused on another key of the
+  same name, with the other key reading back empty;
+- and it holds nothing at all at the resources of `merchant.`, `pay.` or `treasury.`, which is why
+  it cannot touch the payment recipient, the executor or the chain id.
+
+**The blanket shape still exists, and the planner is what keeps it away.** `authorizeNameRoles`
+takes a bitmap and writes it at the NAME level; an agent given `SET_TEXT` that way was observed
+writing a key nobody had authorised. That call is refused by name
+(`NAME_LEVEL_METHOD_FORBIDDEN`) before any argument is read. `DENIAL_MATRIX` in `roles.mjs` states
+that remaining residual out loud, and the suite fails if it is ever quietly emptied.
 
 ---
 
@@ -79,16 +138,25 @@ rather than trusted. Two modes, both parameterised on the parent:
 1. **`setSubregistry`** on the parent, so labels can exist under it.
 2. **`register(merchantLabel, …)`** — ownership, and every admin role the merchant will ever hold.
 3. **`setResolver`** — the Permissioned Resolver, in its own reviewable transaction.
-4. **subnames** — registered (`subregistry` mode) or a verification that the resolver accepts a write
-   at an unregistered subname's resource (`subtree` mode).
+4. **subnames** — registered (`subregistry` mode) or, in `subtree` mode, relying on the fact that
+   the resolver accepts a write at an **unregistered** subname's node. That is no longer an open
+   question: executed on the fork, a `setText` at `pay.merchant.raffy.eth` — a name nobody
+   registered — was accepted from the parent's owner and read back, and a delegation at an
+   unregistered subname was accepted too. The corollary is a trap worth stating plainly: because
+   wildcard resolution answers for unregistered subnames as well, **a successful resolve is not
+   evidence that a name is registered**, and nothing in this plan may treat it as such.
 5. **the merchant's records** on `pay.` and `treasury.` — protected; the agent gets nothing here.
 6. **the agent's metadata** on the leaf, written by the merchant *while the agent still holds nothing*.
-7. **`grantRoles`** — the delegation. One role, one resource, one account.
+7. **`authorizeTextRoles(dnsName, key, agent, true)`** — the delegation. One key, one account, on
+   one leaf. Not `grantRoles`: this deployment refuses that call even from the name owner.
 8. **verify resolution** — the payer's reading is the one the merchant wrote.
 9. **verify the refusal** — three simulated writes from the agent that must revert, and one that must
    be **accepted**. Without that fourth row, the three refusals would prove only that the agent's
    address is broken.
-10. **the revocation**, built at the same moment as the grant and held until needed.
+10. **the revocation** — `authorizeTextRoles(dnsName, key, agent, false)`, the same function with
+    the flag flipped, built at the same moment as the grant and held until needed. On this
+    deployment the undo is the same call, which is a small mercy: there is no second permission to
+    have forgotten to arrange.
 
 ### Step 2 is the one that cannot be undone
 
@@ -220,25 +288,86 @@ set of published things small enough to read.
 
 ---
 
+## What was open and is now SETTLED
+
+Three items below were carried as unknowns. A Sepolia fork pinned at block 11666085, against the
+live resolver proxy `0xc00E9189…35eeE`, closed them. They are recorded here rather than deleted,
+because a reader who once relied on the open version needs to see what replaced it.
+
+### SETTLED — the resolver DOES accept a write at an unregistered subname's name-level resource
+
+> Was: "*Phase 1 confirmed that an unregistered subname still resolves … It did **not** confirm that
+> the resolver accepts a write at such a name's resource.*"
+
+`setText` at `pay.merchant.raffy.eth` — a name nobody has registered — sent from `raffy.eth`'s owner
+was **ACCEPTED**, and the value read back through `text(bytes32,string)` at the same node. The
+name-level resource involved is `keccak256(node ‖ bytes32(0))` = `0x94691a03…54da`, derived from the
+namehash of a name with no registration behind it. `subtree` mode's premise holds.
+
+Step 4 keeps its simulation. A property that holds for one parent's resolver is not a property of
+every parent's resolver, and the plan is built for a parent the owner supplies, not for `raffy.eth`.
+
+### SETTLED — wildcard resolution returns for unregistered subnames, so a resolve is NOT evidence of registration
+
+> Was: carried alongside the item above as a premise about resolution only.
+
+Three names, one resolver, at the pinned block:
+
+| name | result |
+|---|---|
+| `raffy.eth` | RESOLVED, `addr 0x51050ec0…Aeeee` |
+| `definitely-not-registered-9c4f.raffy.eth` | RESOLVED, `addr 0x0` — no revert |
+| `pay.merchant.raffy.eth` | RESOLVED, `addr 0x0` — no revert |
+
+**Where this matters, concretely.** Any check that reads "the name resolved, therefore the name
+exists" is a defect on this deployment, and it is a defect in the unsafe direction: it reports a
+name as registered when nobody owns it, and an owner acting on that answer would be configuring
+settlement on a name a stranger can still register. Two consequences are already load-bearing here:
+
+- **`merchant-config.mjs` reads the pay name's `addr` and keeps it as one input to a judgement
+  rather than as a result** — its comment calls this "the wildcard trap" by name. That is the
+  correct handling and this measurement is its evidence.
+- **`plan.mjs` step 4 must not be satisfied by a successful resolve.** Registration is established
+  by the registry, or it is not established. A resolve that returns is compatible with both.
+
+A zero address from a wildcard and a zero address from a real name with no record set are the same
+bytes. Nothing downstream may distinguish them by resolution alone.
+
+### SETTLED — `EACRolesChanged` has now been observed, and its derived topic is correct
+
+> Was: "*No `EACRolesChanged` event has ever been seen. The topic is derived from its signature
+> string; Phase 1's log scan for it did not complete.*"
+
+`authorizeTextRoles(dns("raffy.eth"), "unica.treasury.status", agent, true)` emitted it. Topic 0 was
+`0x0d35bf72…ba3c` — byte-for-byte the topic this repository derives from
+`EACRolesChanged(uint256,address,uint256,uint256)`, so the derivation was right. Topic 1 carried the
+resource, topic 2 the account, and the data the old and new bitmaps (`0` → `0x10`).
+
+The record-writing steps still promise a read-back rather than a log. One observed event on one
+resolver is not a guarantee about every setter's emissions, and a read-back is evidence of the state
+that matters rather than of the notification about it.
+
+---
+
 ## What this does not know
 
 Honest gaps, carried in the code as evidence labels and repeated here:
 
-- **`subtree` mode rests on an unobserved premise.** Phase 1 confirmed that an unregistered subname
-  still *resolves* through its parent's resolver — `definitely-not-registered-9c4f.raffy.eth`
-  answered with `addr 0x0` and no revert. It did **not** confirm that the resolver *accepts a write*
-  at such a name's resource. Step 4 is where that is checked, by simulation, before any delegation
-  exists; if the accepted row does not come back accepted, use `--mode subregistry`.
-- **The resolver grant itself has never been exercised.** Phase 1 observed a *registry* `grantRoles`
-  accepted in simulation from a holder of the matching admin role. The equivalent on a resolver at a
-  name resource was not. It is a precondition (`merchantMayGrantAtAgentResource`), simulated before
-  the plan is signable rather than assumed, and the grant step carries the `INFERRED` label.
-- **No revocation has been exercised on this deployment.** `revokeRoles` is dispatched by the
-  resolver runtime; that is all that is known.
-- **No `EACRolesChanged` event has ever been seen.** The topic is derived from its signature string;
-  Phase 1's log scan for it did not complete. Every expected-event field says
-  `DERIVED_NOT_OBSERVED`, and the record-writing steps promise a read-back instead of a log, because
-  no event signature for this deployment's resolver was confirmed.
+- ~~**The resolver grant itself has never been exercised.**~~ **SETTLED.** It has now been executed
+  against the deployed bytecode on a pinned fork, using the calldata this repository emits:
+  `authorizeTextRoles` accepted from the name owner, the granted bit found at the per-key resource,
+  the agent's write on that key accepted and its write on another key refused. The precondition
+  `merchantMayGrantAtAgentResource` is kept anyway — a fork is not the merchant's own name, and the
+  merchant's authority on their own resolver is still theirs to demonstrate.
+- ~~**No revocation has been exercised on this deployment.**~~ **SETTLED.** The revocation was
+  executed too: accepted, the role word back to zero, and the agent's next write on that key
+  refused. Revocation is the half that usually goes untested because nothing breaks when it is
+  missing until the day it is needed.
+- **What a delegation needs from the SENDER is now known, and it is not obvious.**
+  `authorizeTextRoles` requires `adminRole(SET_TEXT)` — `1 << 132`. A holder of the plain
+  `SET_TEXT` bit is **refused**, while that same account's own `setText` is accepted, which is the
+  control that makes the refusal about the admin bit rather than about the account. This is why the
+  `register()` bitmap below is load-bearing rather than merely tidy.
 - **A second full-authority account exists on a per-name resolver and was not identified.**
   `roleCount(ROOT_RESOURCE)` on a live resolver proxy returned two assignees on all 64 roles. The
   owner is one of them. This plan does not change that and cannot.
