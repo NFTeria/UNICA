@@ -18,11 +18,16 @@ The permission is commonly called **"bit 10"**. In a hook **address** it is **bi
 `beforeSwapReturnDelta` is the eleventh field of `Hooks.Permissions` — index 10 — which is where the
 number comes from. But the address flags are numbered from the other end:
 
-```
-lib/uniswap-hooks/lib/v4-core/src/libraries/Hooks.sol:44
-    uint160 internal constant BEFORE_SWAP_RETURNS_DELTA_FLAG = 1 << 3;
-lib/uniswap-hooks/lib/v4-core/src/libraries/Hooks.sol:33
-    uint160 internal constant AFTER_ADD_LIQUIDITY_FLAG       = 1 << 10;
+Read it in the vendored source rather than here — this repository cites prior art and does not
+reproduce it, so the two lines are named by position and left where they live:
+
+| What it defines | Where | Shift |
+|---|---|---|
+| the before-swap returns-delta flag | `lib/uniswap-hooks/lib/v4-core/src/libraries/Hooks.sol`, line 44 | one shifted left by **3** |
+| the after-add-liquidity flag | the same file, line 33 | one shifted left by **10** |
+
+```sh
+sed -n '33p;44p' lib/uniswap-hooks/lib/v4-core/src/libraries/Hooks.sol
 ```
 
 **Address bit 10 is `afterAddLiquidity`.** A reviewer who tests a hook address for bit 10 learns

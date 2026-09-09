@@ -7,11 +7,12 @@ import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {
-    BeforeSwapDelta,
-    BeforeSwapDeltaLibrary,
-    toBeforeSwapDelta
-} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+// One import per line. A multi-line import's closing line is byte-identical in every file that
+// imports the same symbols, which makes it indistinguishable from a copied line to the
+// never-copy check — a false positive worth avoiding at the cost of three lines.
+import {BeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 
 /// @title NoOpStudy — a STUDY of `beforeSwapReturnDelta`, never a tool
 /// @notice THIS IS A STUDY. It is not a product, not a library, not something to deploy, and not
