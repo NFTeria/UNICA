@@ -1,0 +1,186 @@
+WEBVTT
+
+NOTE
+UNICA demo video captions. Verbatim to docs/submission-media/video/script.md.
+Cue times are derived from a 140 words-per-minute delivery of the measured 421-word
+narration (3:00 total). If the recorded delivery differs, re-time the cues against the
+recorded audio before upload — do not ship these unchecked.
+Section boundaries: 00:17 / 00:55 / 01:21 / 01:48 / 02:24 / 02:49 / 03:00.
+
+NOTE PROBLEM
+
+1
+00:00:00.000 --> 00:00:04.300
+A barbershop takes money all day.
+
+2
+00:00:04.300 --> 00:00:11.500
+It lands in a till, in one currency, and sits there —
+idle until somebody moves it by hand.
+
+3
+00:00:11.500 --> 00:00:16.700
+We wanted the till to become a portfolio,
+and the portfolio to still spend.
+
+NOTE LIVE SETTLEMENT ON SEPOLIA
+
+4
+00:00:16.700 --> 00:00:23.400
+So we built UNICA: a settlement hook for Uniswap v4,
+live and source-verified on Ethereum Sepolia.
+
+5
+00:00:23.400 --> 00:00:31.500
+One disclosure first — the specification and threat model
+were written before the event; every line of code
+was written during it.
+
+6
+00:00:31.500 --> 00:00:37.000
+Here is the settlement that ran.
+The payer sent one thousandth of an ETH.
+
+7
+00:00:37.000 --> 00:00:42.400
+The merchant received exactly 2.003660 USDC —
+not about, exactly.
+
+8
+00:00:42.400 --> 00:00:50.400
+Uniswap did the conversion: the swap's sender is
+Uniswap's own Universal Router, and our hook admits no other.
+
+9
+00:00:50.400 --> 00:00:54.800
+The order is Settled, and paying it again reverts.
+
+NOTE VERIFICATION
+
+10
+00:00:54.800 --> 00:01:00.100
+You do not have to trust that receipt.
+Our verifier rebuilds it.
+
+11
+00:01:00.100 --> 00:01:04.900
+The quote digest is recomputed
+from the quote's own fields.
+
+12
+00:01:04.900 --> 00:01:10.500
+The merchant's address is recovered from a signature
+over that rebuilt digest.
+
+13
+00:01:10.500 --> 00:01:15.100
+The pool id is rebuilt from the whole pool key.
+Only then is anything compared with the log.
+
+14
+00:01:15.100 --> 00:01:21.400
+Thirty-seven checks, and nothing is read back
+and agreed with.
+
+NOTE TREASURY — BEING BUILT
+
+15
+00:01:21.400 --> 00:01:26.000
+The portfolio half is being built.
+Here is where it stands.
+
+16
+00:01:26.000 --> 00:01:34.400
+On Circle's Arc we read the live chain and modelled
+a merchant treasury: a reserve floor, a per-action cap,
+one permitted transfer.
+
+17
+00:01:34.400 --> 00:01:39.400
+Twenty live reads,
+a hundred and seventy-seven offline rows.
+
+18
+00:01:39.400 --> 00:01:43.800
+No UNICA contract exists on Arc.
+We broadcast nothing there.
+
+19
+00:01:43.800 --> 00:01:48.400
+The tool renders the transaction
+an owner would sign, then stops.
+
+NOTE CONFIDENTIAL STRATEGY
+
+20
+00:01:48.400 --> 00:01:56.200
+The strategy above it is confidential.
+This is a Chainlink CRE Confidential Workflow,
+registered with handlerInTee.
+
+21
+00:01:56.200 --> 00:02:00.700
+Five private policy values
+load inside the handler.
+
+22
+00:02:00.700 --> 00:02:09.300
+What leaves it is a policy commitment, an action class
+and a reason category — no threshold reaches
+any published field.
+
+23
+00:02:09.300 --> 00:02:17.100
+That run just happened: exit zero,
+"Handler requested TEE Execution",
+evidence grade CRE_CONFIDENTIAL_SIMULATION.
+
+24
+00:02:17.100 --> 00:02:21.500
+Chainlink's own CLI says plainly
+that this simulator is not a real TEE.
+
+25
+00:02:21.500 --> 00:02:24.100
+Nothing here has run in an enclave.
+
+NOTE STATUS
+
+26
+00:02:24.100 --> 00:02:29.400
+Where each piece stands.
+Uniswap: live, one settlement receipted.
+
+27
+00:02:29.400 --> 00:02:33.400
+Chainlink: simulated,
+deploy access pending review.
+
+28
+00:02:33.400 --> 00:02:39.000
+ENSv2: seventy-eight live Sepolia reads —
+and we own no ENS name.
+
+29
+00:02:39.000 --> 00:02:44.100
+The Graph: written, never deployed;
+no live read has ever been observed.
+
+30
+00:02:44.100 --> 00:02:49.800
+Arc: nothing broadcast. And V2 is frozen at release
+candidate one, and blocked, by a Critical
+we found and published ourselves.
+
+NOTE CLOSE
+
+31
+00:02:49.800 --> 00:02:55.100
+A merchant's till becomes a portfolio —
+and the portfolio still spends.
+
+32
+00:02:55.100 --> 00:03:00.400
+Exact settlement today. Merchant-controlled treasury
+automation is being built.
+UNICA, by NFTeria: independent, MIT-licensed.

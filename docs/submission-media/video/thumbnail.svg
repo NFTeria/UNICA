@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="t d">
+<title id="t">UNICA — a merchant's till becomes a portfolio, and the portfolio still spends</title>
+<desc id="d">Demo video thumbnail, 1280 by 720. Large wordmark UNICA, the brand line at a size that survives a small preview, and one status line marking exact settlement as live on Ethereum Sepolia.</desc>
+
+<!-- UNICA demo video THUMBNAIL, 1280x720 (16:9, the standard video-preview frame).
+     Hand-written SVG: no script, no external reference, no web font. Same palette as the other
+     two cards, taken from the product's own web/index.html :root.
+
+     A THUMBNAIL IS READ AT ABOUT 320 PIXELS WIDE, so this card carries a QUARTER of the title
+     card's content at nearly the same optical size. Everything that would go grey and unreadable
+     at that scale — the status list, the licence line, the disclaimers — is deliberately absent.
+     What survives: the name, the promise, and the one word that is true today.
+     The single accent mark is still spent on the one live claim, and nothing else. -->
+
+<rect width="1280" height="720" fill="#FBFBFA"/>
+<rect x="1.5" y="1.5" width="1277" height="717" fill="none" stroke="#E4E4E1" stroke-width="3"/>
+
+<g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+
+  <text x="104" y="222" font-size="148" font-weight="700" letter-spacing="4.4" fill="#14161A">UNICA</text>
+  <line x1="104" y1="276.5" x2="1176" y2="276.5" stroke="#E4E4E1" stroke-width="3"/>
+
+  <text x="104" y="382" font-size="66" font-weight="600" fill="#14161A">A merchant's till</text>
+  <text x="104" y="458" font-size="66" font-weight="600" fill="#14161A">becomes a portfolio —</text>
+  <text x="104" y="534" font-size="66" font-weight="600" fill="#5B6169">and the portfolio still spends.</text>
+
+  <line x1="104" y1="600.5" x2="1176" y2="600.5" stroke="#E4E4E1" stroke-width="3"/>
+
+  <circle cx="118" cy="654" r="13" fill="#0B6E4F"/>
+  <text x="162" y="666" font-size="36" font-weight="600" fill="#14161A">Exact settlement — live on Ethereum Sepolia</text>
+
+</g>
+</svg>

@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1060" viewBox="0 0 1600 1060" role="img" aria-labelledby="t d">
+<title id="t">UNICA banner safe area — what survives a centre crop</title>
+<desc id="d">Crop guide for the 1600x900 banner. Shows the safe area x 350 to 1250 by y 31 to 869, the content bounding box x 395 to 1203 by y 172 to 852, and the 1:1, 4:3, 1.91:1 and 4:5 centre-crop windows.</desc>
+
+<!-- UNICA banner CROP GUIDE. Overlay for unica-banner-1600x900.svg, drawn at the banner's own
+     scale (the top 1600x900 of this canvas IS the banner frame), so every coordinate printed here
+     can be read straight off the artwork with no conversion.
+     Every number below was MEASURED from the rendered PNG (ink bounding box after trimming the
+     background), not estimated from font metrics. The measurement is reproducible; see the repo
+     note in this folder's README for the command.
+     The lower band is the legend and is not part of the banner. -->
+
+<rect width="1600" height="1060" fill="#FBFBFA"/>
+
+<!-- the safe area: the INTERSECTION of every crop the artwork survives -->
+<rect x="350" y="31" width="900" height="838" fill="#0B6E4F" fill-opacity="0.05"/>
+
+<g font-family='ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'>
+
+  <!-- ghost of the real artwork, so the guide shows WHAT sits where -->
+  <g opacity="0.22">
+    <text x="396" y="248" font-size="104" font-weight="700" letter-spacing="4.2" fill="#14161A">UNICA</text>
+    <line x1="396" y1="296.5" x2="1203" y2="296.5" stroke="#14161A" stroke-width="1"/>
+    <text x="396" y="376" font-size="46" font-weight="400" fill="#14161A">A merchant's till becomes a portfolio —</text>
+    <text x="396" y="440" font-size="46" font-weight="400" fill="#14161A">and the portfolio still spends.</text>
+    <circle cx="404" cy="623" r="7.5" fill="#14161A"/>
+    <text x="434" y="632" font-size="25" font-weight="500" fill="#14161A">Exact settlement through Uniswap v4 is live on Ethereum Sepolia.</text>
+    <line x1="396" y1="663.5" x2="1203" y2="663.5" stroke="#14161A" stroke-width="1"/>
+    <circle cx="404" cy="687" r="6.75" fill="none" stroke="#14161A" stroke-width="1.5"/>
+    <text x="434" y="696" font-size="25" font-weight="400" fill="#14161A">Treasury automation and confidential execution are being built.</text>
+    <line x1="396" y1="812.5" x2="1203" y2="812.5" stroke="#14161A" stroke-width="1"/>
+    <text x="396" y="848" font-size="16" font-weight="400" fill="#14161A">Built by NFTeria · Independent — not affiliated with or endorsed by Uniswap.</text>
+  </g>
+
+  <!-- the banner edge -->
+  <rect x="0.5" y="0.5" width="1599" height="899" fill="none" stroke="#14161A" stroke-width="1"/>
+
+  <!-- crops the artwork SURVIVES -->
+  <rect x="200.5" y="0.5" width="1199" height="899" fill="none" stroke="#0B6E4F" stroke-width="1" stroke-dasharray="2 4"/>
+  <rect x="0.5" y="31.5" width="1599" height="837" fill="none" stroke="#0B6E4F" stroke-width="1" stroke-dasharray="2 4"/>
+  <rect x="350.5" y="0.5" width="899" height="899" fill="none" stroke="#0B6E4F" stroke-width="2"/>
+
+  <!-- the crop it does NOT survive -->
+  <rect x="440.5" y="0.5" width="719" height="899" fill="none" stroke="#8A1C1C" stroke-width="1.5" stroke-dasharray="6 4"/>
+
+  <!-- measured content bounding box -->
+  <rect x="395.5" y="172.5" width="807" height="679" fill="none" stroke="#5B6169" stroke-width="1" stroke-dasharray="1 3"/>
+
+  <g font-size="13" font-weight="500">
+    <text x="358" y="22" fill="#0B6E4F">1:1  350–1250</text>
+    <text x="208" y="22" fill="#0B6E4F">4:3</text>
+    <text x="448" y="22" fill="#8A1C1C">4:5 clips</text>
+    <text x="1592" y="48" fill="#0B6E4F" text-anchor="end">1.91:1  y 31–869</text>
+    <text x="403" y="167" fill="#5B6169">content  395–1203 / 172–852</text>
+  </g>
+
+  <!-- legend -->
+  <line x1="0" y1="900.5" x2="1600" y2="900.5" stroke="#E4E4E1" stroke-width="1"/>
+  <text x="396" y="938" font-size="19" font-weight="700" fill="#14161A">Safe area — what survives a centre crop</text>
+
+  <g font-size="14" font-weight="400" fill="#14161A">
+    <rect x="396" y="960" width="10" height="10" fill="#0B6E4F" fill-opacity="0.35"/>
+    <text x="418" y="970">SAFE AREA x 350–1250, y 31–869 — the intersection of the 1:1, 4:3 and 1.91:1 centre crops. Keep anything that must be read inside it.</text>
+
+    <rect x="396" y="986" width="10" height="10" fill="none" stroke="#5B6169" stroke-dasharray="1 3"/>
+    <text x="418" y="996">This banner's content occupies x 395–1203, y 172–852. Clearance on the square crop is 45px per side, measured from the rendered PNG.</text>
+
+    <rect x="396" y="1012" width="10" height="10" fill="none" stroke="#8A1C1C" stroke-dasharray="3 2"/>
+    <text x="418" y="1022" fill="#8A1C1C">A 4:5 portrait crop (x 440–1160) does NOT survive: the brand line overhangs it by 45px per side.</text>
+
+    <text x="418" y="1048" fill="#5B6169">To make 4:5 survive, re-set the brand line at 39px or smaller and the two status rows at 21px or smaller, then re-measure.</text>
+  </g>
+
+</g>
+</svg>

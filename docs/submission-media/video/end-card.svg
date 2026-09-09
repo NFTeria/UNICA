@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="t d">
+<title id="t">UNICA — where each piece actually stands, and where to read the code</title>
+<desc id="d">Demo video end card, 1920 by 1080. The brand line, five status rows stating the true current state of each integration, the repository address, and the independence and licence line.</desc>
+
+<!-- UNICA demo video END CARD, 1920x1080. Hand-written SVG: no script, no external reference, no
+     web font. Same palette and the same visual argument as title-card.svg.
+
+     WHAT THIS CARD IS FOR. It is the last thing a judge sees, so it is the place a claim is most
+     likely to outrun its evidence. Every row below is copied from a status this repository can
+     prove with one command (docs/submission-media/video/timeline.md) and from docs/CLAIMS.md.
+     Exactly ONE row gets the filled accent dot, because exactly one of these is live.
+     The V2 row is the last one on purpose: a blocked Critical we found ourselves is not a footnote. -->
+
+<rect width="1920" height="1080" fill="#FBFBFA"/>
+
+<g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+
+  <text x="480" y="176" font-size="82" font-weight="700" letter-spacing="2.6" fill="#14161A">UNICA</text>
+  <line x1="480" y1="214.5" x2="1800" y2="214.5" stroke="#E4E4E1" stroke-width="2"/>
+
+  <text x="480" y="286" font-size="40" font-weight="500" fill="#14161A">A merchant's till becomes a portfolio — and the portfolio still spends.</text>
+  <text x="480" y="338" font-size="28" fill="#5B6169">Exact settlement today. Merchant-controlled treasury automation is being built.</text>
+
+  <line x1="480" y1="392.5" x2="1800" y2="392.5" stroke="#E4E4E1" stroke-width="2"/>
+
+  <!-- Uniswap — the only live row, and the only accent on this card -->
+  <circle cx="497" cy="446" r="10" fill="#0B6E4F"/>
+  <text x="534" y="456" font-size="30" font-weight="600" fill="#14161A">Uniswap v4</text>
+  <text x="820" y="456" font-size="26" fill="#5B6169">live on Ethereum Sepolia · one settlement receipted · 31 of 31 re-proved</text>
+
+  <line x1="480" y1="490.5" x2="1800" y2="490.5" stroke="#E4E4E1" stroke-width="1.5"/>
+
+  <circle cx="497" cy="544" r="9.5" fill="none" stroke="#5B6169" stroke-width="2.5"/>
+  <text x="534" y="554" font-size="30" font-weight="600" fill="#5B6169">Chainlink CRE</text>
+  <text x="820" y="554" font-size="26" fill="#5B6169">runs in Chainlink's simulator, which is not a real TEE · deploy pending</text>
+
+  <line x1="480" y1="588.5" x2="1800" y2="588.5" stroke="#E4E4E1" stroke-width="1.5"/>
+
+  <circle cx="497" cy="642" r="9.5" fill="none" stroke="#5B6169" stroke-width="2.5"/>
+  <text x="534" y="652" font-size="30" font-weight="600" fill="#5B6169">ENSv2</text>
+  <text x="820" y="652" font-size="26" fill="#5B6169">78 live Sepolia reads · UNICA owns no ENS name</text>
+
+  <line x1="480" y1="686.5" x2="1800" y2="686.5" stroke="#E4E4E1" stroke-width="1.5"/>
+
+  <circle cx="497" cy="740" r="9.5" fill="none" stroke="#5B6169" stroke-width="2.5"/>
+  <text x="534" y="750" font-size="30" font-weight="600" fill="#5B6169">The Graph</text>
+  <text x="820" y="750" font-size="26" fill="#5B6169">subgraph not deployed · no live read has ever been observed</text>
+
+  <line x1="480" y1="784.5" x2="1800" y2="784.5" stroke="#E4E4E1" stroke-width="1.5"/>
+
+  <circle cx="497" cy="838" r="9.5" fill="none" stroke="#5B6169" stroke-width="2.5"/>
+  <text x="534" y="848" font-size="30" font-weight="600" fill="#5B6169">Arc</text>
+  <text x="820" y="848" font-size="26" fill="#5B6169">treasury flow and unit system · nothing broadcast · no contract on Arc</text>
+
+  <line x1="480" y1="882.5" x2="1800" y2="882.5" stroke="#E4E4E1" stroke-width="1.5"/>
+
+  <circle cx="497" cy="936" r="9.5" fill="none" stroke="#5B6169" stroke-width="2.5"/>
+  <text x="534" y="946" font-size="30" font-weight="600" fill="#5B6169">UNICA V2</text>
+  <text x="820" y="946" font-size="26" fill="#5B6169">frozen at v2.0.0-rc1 · BLOCKED by an open Critical we found ourselves</text>
+
+  <line x1="480" y1="980.5" x2="1800" y2="980.5" stroke="#E4E4E1" stroke-width="2"/>
+
+  <text x="480" y="1022" font-size="27" font-weight="600" fill="#14161A">github.com/NFTeria/UNICA</text>
+  <text x="900" y="1022" font-size="25" fill="#5B6169">MIT · built by NFTeria · independent, not endorsed or reviewed by any sponsor</text>
+
+</g>
+</svg>

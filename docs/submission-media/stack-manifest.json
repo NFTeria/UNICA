@@ -1,0 +1,446 @@
+{
+  "$comment": "UNICA tech stack, machine-readable. The prose twin is ./tech-stack.md and the two must agree. Every version was read from a real file (foundry.toml, package.json, bun.lock, a submodule SHA) or from --version output on 2026-09-08; none is written from memory. Every entry carries the command that re-derives it.",
+  "schemaVersion": "1.0.0",
+  "project": "UNICA",
+  "owner": "NFTeria",
+  "license": "MIT",
+  "repository": "https://github.com/NFTeria/UNICA",
+  "verifiedOn": "2026-09-08",
+  "verifiedAtCommit": "d16ae2f48f54d2e2c30774196d6202b2e8b3c6ab",
+  "brand": {
+    "core": "A merchant's till becomes a portfolio — and the portfolio still spends.",
+    "supporting": "Exact settlement today. Merchant-controlled treasury automation is being built."
+  },
+  "independence": "Built by NFTeria. Independent — not commissioned by, affiliated with, endorsed by or reviewed by Uniswap or any sponsor.",
+  "audit": "No part of UNICA has been audited.",
+  "statusVocabulary": {
+    "LIVE_AND_VERIFIED": "deployed on a public chain, source verified, and a transaction proves it ran",
+    "LIVE_BUILD_TIME": "part of the live artifact's build, but not itself a deployed thing",
+    "LIVE_CI": "runs on every push against this repository",
+    "IMPLEMENTED_SIMULATOR_ONLY": "the code runs, in a vendor simulator that the vendor states is not the real execution environment; nothing has run in production",
+    "IMPLEMENTED_LIVE_READ_ONLY": "local tests plus read-only reads against a live public chain; nothing is written and nothing is deployed",
+    "IMPLEMENTED_NOT_DEPLOYED": "the code exists and named tests exercise it; nothing is deployed anywhere",
+    "IMPLEMENTED_FORK_TESTS_NOT_SHIPPED": "exercised against a local fork of live chain state; not shipped, and blocked",
+    "IMPLEMENTED_LOCAL_TESTS": "the code exists and named tests exercise it locally; nothing is deployed",
+    "IMPLEMENTED_PUBLISH_OWNER_GATED": "the code exists; making it public is an owner action that has not been confirmed",
+    "TOOLING_DEPENDENCY": "not part of the product; required to re-run the verification"
+  },
+  "urlProvenanceVocabulary": {
+    "in-tree": "the URL is cited in this repository",
+    "deployment-record": "the URL addresses an artifact this repository deployed and can be read back from the chain",
+    "package-registry": "constructed from the package name in a lockfile, not read from this tree",
+    "well-known": "the project's canonical home; not read from this tree"
+  },
+  "coreLive": [
+    {
+      "id": "solidity",
+      "technology": "Solidity",
+      "role": "The settlement hook and the settlement executor — the whole on-chain guarantee.",
+      "sourcePaths": ["src/V4SettlementHook.sol", "src/SettlementExecutor.sol", "src/libraries/UniswapDeployments.sol"],
+      "evidenceCommand": "grep -n _version foundry.toml",
+      "status": "LIVE_AND_VERIFIED",
+      "version": "solc 0.8.30, evm_version cancun, via_ir false, bytecode_hash none, cbor_metadata false",
+      "versionSource": "foundry.toml",
+      "publicUrl": "https://soliditylang.org",
+      "urlProvenance": "well-known",
+      "notes": "cancun is required: Uniswap v4 uses transient storage (EIP-1153). bytecode_hash=none and cbor_metadata=false are what make a mined CREATE2 salt reproducible on any machine."
+    },
+    {
+      "id": "foundry",
+      "technology": "Foundry (forge, cast, anvil)",
+      "role": "Build, test, fuzz, script, deploy and verify. There is no other build system in this repository.",
+      "sourcePaths": ["foundry.toml", "Makefile", "script/"],
+      "evidenceCommand": "forge --version ; grep -n 'version: v1' .github/workflows/ci.yml",
+      "status": "LIVE_AND_VERIFIED",
+      "version": "CI pins v1.5.1 via foundry-rs/foundry-toolchain@v1; the machine this manifest was verified on ran forge 1.3.5-foundry-zksync-v0.1.9",
+      "versionSource": ".github/workflows/ci.yml and `forge --version`",
+      "publicUrl": "https://getfoundry.sh",
+      "urlProvenance": "well-known",
+      "notes": "The two differ. CI's pinned run is the authority; the 182/0 Solidity result recorded here was produced by the local build. Recorded rather than smoothed over.",
+      "fuzzRuns": 10000
+    },
+    {
+      "id": "uniswap-v4-core",
+      "technology": "Uniswap v4 — v4-core",
+      "role": "PoolManager, Hooks, PoolKey, BalanceDelta, BeforeSwapDelta, and the flash-accounting lock the executor settles inside.",
+      "sourcePaths": ["lib/uniswap-hooks/lib/v4-core"],
+      "remapping": "@uniswap/v4-core/ and v4-core/",
+      "evidenceCommand": "git -C lib/uniswap-hooks/lib/v4-core rev-parse HEAD && git -C lib/uniswap-hooks/lib/v4-core describe --tags",
+      "status": "LIVE_AND_VERIFIED",
+      "version": "d153b048868a60c2403a3ef5b2301bb247884d46 (v4.0.0-19-gd153b048)",
+      "versionSource": "submodule HEAD",
+      "liveAddresses": {"PoolManager (Sepolia)": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543"},
+      "publicUrl": "https://github.com/Uniswap/v4-core",
+      "urlProvenance": "in-tree"
+    },
+    {
+      "id": "uniswap-v4-periphery",
+      "technology": "Uniswap v4 — v4-periphery",
+      "role": "IV4Router, Actions, ActionConstants and IMsgSender — the official Universal Router path the hook admits and everything else it refuses.",
+      "sourcePaths": ["lib/uniswap-hooks/lib/v4-periphery"],
+      "remapping": "@uniswap/v4-periphery/ and v4-periphery/",
+      "evidenceCommand": "git -C lib/uniswap-hooks/lib/v4-periphery rev-parse HEAD",
+      "status": "LIVE_AND_VERIFIED",
+      "version": "7ebd04b161745b75ed0c24ba2df3bc7c25f65606 (no tag on this commit)",
+      "versionSource": "submodule HEAD",
+      "liveAddresses": {"UniversalRouter (Sepolia)": "0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b"},
+      "publicUrl": "https://github.com/Uniswap/v4-periphery",
+      "urlProvenance": "in-tree"
+    },
+    {
+      "id": "openzeppelin-uniswap-hooks",
+      "technology": "OpenZeppelin uniswap-hooks",
+      "role": "BaseHook, the base class the live hook inherits, and IHookEvents — the standard HookFee event the receipt emits alongside UNICA's own SettlementReceipt, so a generic indexer sees the settlement too.",
+      "sourcePaths": ["lib/uniswap-hooks"],
+      "remapping": "@openzeppelin/uniswap-hooks/",
+      "evidenceCommand": "git -C lib/uniswap-hooks describe --tags",
+      "status": "LIVE_AND_VERIFIED",
+      "version": "v1.1.1 = bd5287c4a9f5c22c2393f7587a9b357662916115",
+      "versionSource": "submodule HEAD; the SHA is asserted byte-for-byte in .github/workflows/ci.yml",
+      "publicUrl": "https://github.com/OpenZeppelin/uniswap-hooks",
+      "urlProvenance": "in-tree",
+      "transitiveDependency": {
+        "technology": "OpenZeppelin Contracts",
+        "version": "v5.5.0 = fcbae5394ae8ad52d8e580a3477db99814b9d565",
+        "note": "Present and remapped, but no file under src/ imports @openzeppelin/contracts directly. Listed as transitive, not as a direct dependency."
+      }
+    },
+    {
+      "id": "hookmate",
+      "technology": "hookmate",
+      "role": "AddressConstants — chain-id to canonical v4 addresses inside the live contracts, which is what lets the hook take a zero-argument constructor and keep one address per chain. Also supplies the official PoolManager runtime bytecode the test base deploys instead of recompiling it.",
+      "sourcePaths": ["lib/hookmate", "src/V4SettlementHook.sol", "src/SettlementExecutor.sol", "test/utils/SettlementTestBase.sol"],
+      "remapping": "hookmate/",
+      "evidenceCommand": "git -C lib/hookmate describe --tags",
+      "status": "LIVE_AND_VERIFIED",
+      "version": "v0.6.0 = ef3e9845e0b2bc9cd5810644d7d337b00c47bc75",
+      "versionSource": "submodule HEAD",
+      "publicUrl": "https://github.com/akshatmittal/hookmate",
+      "urlProvenance": "in-tree"
+    },
+    {
+      "id": "forge-std",
+      "technology": "forge-std",
+      "role": "Test and script standard library.",
+      "sourcePaths": ["lib/forge-std"],
+      "remapping": "forge-std/",
+      "evidenceCommand": "git -C lib/forge-std describe --tags",
+      "status": "LIVE_BUILD_TIME",
+      "version": "452bdecf8772bf113532f67c5cf3accb71895cd0 (v1.16.2-17-g452bdec)",
+      "versionSource": "submodule HEAD",
+      "publicUrl": "https://github.com/foundry-rs/forge-std",
+      "urlProvenance": "in-tree"
+    },
+    {
+      "id": "ethereum-sepolia",
+      "technology": "Ethereum Sepolia",
+      "role": "The only chain UNICA is deployed to. Every script refuses any chain id that is not a listed testnet, by construction.",
+      "sourcePaths": ["script/Chains.sol", "src/libraries/UniswapDeployments.sol", "broadcast/"],
+      "evidenceCommand": "bash docs/proof/verify-live.sh",
+      "status": "LIVE_AND_VERIFIED",
+      "version": "chain id 11155111",
+      "versionSource": "src/libraries/UniswapDeployments.sol",
+      "liveAddresses": {
+        "V4SettlementHook": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0",
+        "SettlementExecutor": "0x044bc8a8773EC7b9B8de2467766636dFFCaC6210",
+        "PoolManager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+        "UniversalRouter": "0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b",
+        "StateView": "0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C"
+      },
+      "publicUrl": "https://sepolia.etherscan.io/address/0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0",
+      "additionalUrls": [
+        "https://sepolia.etherscan.io/address/0x044bc8a8773EC7b9B8de2467766636dFFCaC6210",
+        "https://sepolia.etherscan.io/tx/0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83",
+        "https://sourcify.dev/server/v2/contract/11155111/0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"
+      ],
+      "urlProvenance": "deployment-record",
+      "notes": "V1 is live and source-verified, with exactly one settlement receipted on chain. There is no mainnet deployment and no path to one in this tree."
+    },
+    {
+      "id": "circle-usdc-sepolia",
+      "technology": "Circle USDC (Ethereum Sepolia testnet)",
+      "role": "The one payout currency a V1 settlement may deliver, resolved from the chain id and not configurable — so nobody can stand up a pool of their own devising and mint a receipt naming a recipient who received something worthless.",
+      "sourcePaths": ["src/libraries/UniswapDeployments.sol"],
+      "evidenceCommand": "cast call 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238 'decimals()(uint8)' --rpc-url https://ethereum-sepolia-rpc.publicnode.com",
+      "status": "LIVE_AND_VERIFIED",
+      "version": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238, 6 decimals",
+      "versionSource": "src/libraries/UniswapDeployments.sol:payoutCurrency",
+      "publicUrl": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+      "urlProvenance": "in-tree",
+      "notes": "Sepolia testnet USDC. A different chain and a different contract from the Arc entry below; the two are never interchangeable."
+    },
+    {
+      "id": "javascript-node",
+      "technology": "JavaScript (ES modules) on Node.js",
+      "role": "Every off-chain tool: the read-only receipt verifier, the client signing tool, the ENS resolution chain, the Arc treasury model, the CRE policy engine, the subgraph consistency checks, the interface-freeze and tool-ledger validators, and the checkout surface.",
+      "sourcePaths": ["tools/", "integrations/", "script/*.mjs", "web/"],
+      "evidenceCommand": "grep -rhE \"^import .*from ['\\\"][^.]\" --include='*.mjs' tools/ integrations/ script/ web/ --exclude-dir=node_modules | sort -u",
+      "status": "LIVE_CI",
+      "version": "Node.js v22.12.0 measured 2026-09-08",
+      "versionSource": "`node --version`",
+      "publicUrl": "https://nodejs.org",
+      "urlProvenance": "well-known",
+      "notes": "Zero third-party runtime dependencies. The evidence command returns only node: builtins (node:child_process, node:fs, node:http, node:path, node:process, node:url). There is no package.json at the repository root. 1,543 rows across 14 suites, 0 failed."
+    },
+    {
+      "id": "github-actions",
+      "technology": "GitHub Actions",
+      "role": "The gate on every push: one shared definition with `make gate`, plus a fresh-clone lane that clones like a stranger, a provenance lane that checks authorship over the whole history, and a shared secret scan.",
+      "sourcePaths": [".github/workflows/ci.yml", ".github/workflows/pages.yml"],
+      "evidenceCommand": "make gate",
+      "status": "LIVE_CI",
+      "version": "jobs: gate, fresh-clone, provenance; the Solidity test count is asserted, not assumed",
+      "versionSource": ".github/workflows/ci.yml",
+      "publicUrl": "https://github.com/NFTeria/UNICA/actions",
+      "urlProvenance": "in-tree"
+    }
+  ],
+  "implementedLocalOrOwnerGated": [
+    {
+      "id": "chainlink-cre",
+      "technology": "Chainlink CRE (Confidential Workflow)",
+      "role": "handlerInTee reads five private policy values inside the handler and publishes a commitment, an action class and a reason category — never a threshold.",
+      "sourcePaths": [
+        "integrations/chainlink-cre-guardian/workflow/main.ts",
+        "integrations/chainlink-cre-guardian/workflow/guardian.ts",
+        "integrations/chainlink-cre-guardian/workflow/workflow.yaml",
+        "integrations/chainlink-cre-guardian/policy.mjs",
+        "integrations/chainlink-cre-guardian/evidence.mjs"
+      ],
+      "evidenceCommand": "cd integrations/chainlink-cre-guardian/workflow && bun test",
+      "additionalEvidenceCommands": [
+        "node integrations/chainlink-cre-guardian/test.mjs",
+        "node integrations/chainlink-cre-guardian/adapter-test.mjs"
+      ],
+      "status": "IMPLEMENTED_SIMULATOR_ONLY",
+      "statusText": "The workflow RUNS in Chainlink's own simulator: `cre workflow simulate` exits 0, the simulator reports 'Handler requested TEE Execution', secrets load inside the handler, and no threshold reaches any published field. Evidence grade CRE_CONFIDENTIAL_SIMULATION. THE CLI STATES ITS SIMULATOR IS NOT A REAL TEE. Nothing has run in an enclave. Deploy access requested, pending Chainlink's review.",
+      "measured": {"bun tests": "30 pass, 0 fail, 860 expect() calls", "policy rows": 88, "adapter rows": 86},
+      "version": "@chainlink/cre-sdk 1.18.0; viem 2.56.3; typescript 5.9.3; runtime bun with engines.bun >= 1.2.21 declared (this machine: bun 1.2.5)",
+      "versionSource": "integrations/chainlink-cre-guardian/workflow/package.json and bun.lock",
+      "publicUrl": "https://www.npmjs.com/package/@chainlink/cre-sdk",
+      "urlProvenance": "package-registry",
+      "notes": "TypeScript appears in this repository only here. The evidence grade TEE_ATTESTED exists in evidence.mjs and is deliberately not what this workflow returns."
+    },
+    {
+      "id": "ensv2",
+      "technology": "ENSv2 (Universal Resolver v2, Permissioned Resolver, Enhanced Access Control)",
+      "role": "Merchant discovery: a payer types a name, the surface resolves it and shows the address before payment; and the harder question — who may change that record — read live from the deployed Permissioned Resolver.",
+      "sourcePaths": ["integrations/ensv2/", "web/ensv2/resolve.mjs", "src/v2/MerchantConfig.sol"],
+      "evidenceCommand": "node integrations/ensv2/permissioned-test.mjs",
+      "additionalEvidenceCommands": [
+        "node integrations/ensv2/test.mjs",
+        "node integrations/ensv2/identity-test.mjs",
+        "make gate-live"
+      ],
+      "status": "IMPLEMENTED_LIVE_READ_ONLY",
+      "statusText": "278 offline rows plus 78 live read-only Sepolia rows. The authorization contrast is observed on the deployed resolver: the same setAddr calldata is ACCEPTED from the account holding ROLE_SET_ADDR and REFUSED from a derived probe. Nothing is ever written. UNICA OWNS NO ENS NAME — every live row reads a name somebody else registered.",
+      "measured": {"offline rows": 278, "resolution rows": 136, "identity chain rows": 95, "live rows": 78},
+      "version": "UpgradableUniversalResolverProxy 0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe on Sepolia; 2,491 bytes of runtime read back 2026-09-05, codehash 0xf7ead24f8e5e731683ed38f7cd5052db9e3e8150fb2b5bc76c1a1bb450af74c5",
+      "versionSource": "web/ensv2/resolve.mjs",
+      "publicUrl": "https://docs.ens.domains/ensv2/universal-resolver-v2",
+      "additionalUrls": [
+        "https://docs.ens.domains/ensv2/permissioned-resolver",
+        "https://docs.ens.domains/ensv2/enhanced-access-control"
+      ],
+      "urlProvenance": "in-tree",
+      "notes": "No ENS implementation source is copied; ensdomains/contracts-v2 publishes no licence, so only the documented signatures are used. Per-text-key and per-coin-type resource derivations are marked DOCUMENTED_NOT_OBSERVED and the offline suite fails if anyone promotes them without a measurement."
+    },
+    {
+      "id": "the-graph",
+      "technology": "The Graph / GraphQL",
+      "role": "Two subgraphs — V1 settlement receipts and V2 invoice settlements — plus a live Graph client and a deterministic treasury copilot over the indexed rows.",
+      "sourcePaths": [
+        "integrations/graph/subgraph.yaml",
+        "integrations/graph/schema.graphql",
+        "integrations/graph/src/mapping.ts",
+        "integrations/graph-v2/subgraph.yaml",
+        "integrations/graph-v2/schema.graphql",
+        "integrations/graph-v2/src/mapping.ts",
+        "integrations/graph-v2/queries.graphql"
+      ],
+      "evidenceCommand": "node integrations/graph-v2/check.mjs",
+      "additionalEvidenceCommands": [
+        "node integrations/graph-v2/provider-test.mjs",
+        "node integrations/graph-v2/copilot-test.mjs",
+        "make graph-v2-test"
+      ],
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "statusText": "NO SUBGRAPH HAS BEEN DEPLOYED TO SUBGRAPH STUDIO AND NO SUCCESSFUL LIVE READ HAS EVER BEEN OBSERVED. `make graph-v2-live` exits non-zero with UNICA_SUBGRAPH_URL unset, so an absent endpoint can never read as a pass. The Studio deploy is an owner action.",
+      "measured": {"consistency checks": 40, "live-provider rows": 147, "copilot rows": 115},
+      "version": "@graphprotocol/graph-cli 0.98.1; @graphprotocol/graph-ts 0.38.2; matchstick-as 0.6.0; manifest specVersion 1.0.0, mapping apiVersion 0.0.9, language wasm/assemblyscript",
+      "versionSource": "integrations/graph/package.json and integrations/graph-v2/package.json",
+      "publicUrl": "https://thegraph.com/studio/",
+      "additionalUrls": ["https://www.npmjs.com/package/@graphprotocol/graph-cli"],
+      "urlProvenance": "in-tree",
+      "notes": "The address in graph-v2/subgraph.yaml is the FORK-LOCAL executor from test/fork. V2 is not deployed to any public chain."
+    },
+    {
+      "id": "arc-circle-usdc",
+      "technology": "Arc / Circle USDC (Arc testnet)",
+      "role": "A merchant treasury flow on Arc: read the position, decide one bounded action from a closed vocabulary, render the transaction a wallet would sign — then stop. Plus a nanopayments vector check that verifies a vector Circle's own SDK signed, without importing that SDK.",
+      "sourcePaths": [
+        "integrations/arc-treasury/units.mjs",
+        "integrations/arc-treasury/split.mjs",
+        "integrations/arc-treasury/treasury.mjs",
+        "integrations/arc-treasury/app.html",
+        "integrations/arc-nanopayments/protocol.mjs",
+        "docs/ARC-FACTS.md"
+      ],
+      "evidenceCommand": "node integrations/arc-treasury/test.mjs",
+      "additionalEvidenceCommands": [
+        "node integrations/arc-treasury/split-test.mjs",
+        "node integrations/arc-nanopayments/test.mjs",
+        "make gate-live"
+      ],
+      "status": "IMPLEMENTED_LOCAL_TESTS",
+      "statusText": "NOTHING BROADCAST. There is no UNICA contract on Arc and no swap path there. Local tests plus a read-only live check that exits non-zero when it reaches nothing.",
+      "measured": {"treasury units and policy rows": 177, "split parity rows": 26, "nanopayments rows": 141},
+      "version": "Arc testnet only, chain id 5042002. Native gas asset is USDC carried at 18 decimals; the ERC-20 USDC at 0x3600000000000000000000000000000000000000 answers decimals() = 6. The unit system makes the two representations structurally non-interchangeable.",
+      "versionSource": "docs/ARC-FACTS.md (official rows and observed RPC rows, retrieved 2026-09-08)",
+      "publicUrl": "https://rpc.testnet.arc.io",
+      "additionalUrls": ["https://faucet.circle.com", "https://testnet.arcscan.app"],
+      "urlProvenance": "in-tree",
+      "notes": "Arc mainnet does not exist. An earlier revision of docs/ARC-FACTS.md overclaimed that USDC is 18 decimals natively on Arc; correcting that is the reason integrations/arc-treasury exists, and the correction is left visible."
+    },
+    {
+      "id": "permit2",
+      "technology": "Permit2",
+      "role": "In V2 ONLY: the payer's witness-bound signature transfer that moves funds from the payer straight to the PoolManager, between sync and settle, so the executor never takes custody.",
+      "sourcePaths": [
+        "src/v2/QuoteSettlementExecutor.sol",
+        "src/v2/interfaces/IPermit2Transfer.sol",
+        "src/v2/interfaces/IQuoteSettlement.sol",
+        "integrations/permit2/digest.mjs",
+        "test/v2/Permit2Witness.t.sol"
+      ],
+      "evidenceCommand": "grep -rn -i permit2 src/SettlementExecutor.sol src/V4SettlementHook.sol src/libraries/",
+      "additionalEvidenceCommands": ["node integrations/permit2/test.mjs", "forge test --match-path 'test/v2/*'"],
+      "status": "IMPLEMENTED_FORK_TESTS_NOT_SHIPPED",
+      "statusText": "THE PRESENTED VERSION DOES NOT USE PERMIT2 — the evidence command returns no match against V1's sources. Permit2 appears only under src/v2/, and V2 is frozen as v2.0.0-rc1 and BLOCKED by an open Critical the team found, reproduced and published itself. Not shipped.",
+      "measured": {"offline digest vector rows": 20},
+      "version": "submodule cc56ad0f3439c502c246fc5cfcc3db92bb8b7219 (transitive, under v4-periphery). Canonical deployment address 0x000000000022D473030F116dDEE9F6B43aC78BA3.",
+      "versionSource": "submodule HEAD and src/v2/interfaces/IPermit2Transfer.sol",
+      "publicUrl": "https://developers.uniswap.org/docs/protocols/permit2/concepts/signature-transfer",
+      "urlProvenance": "in-tree",
+      "notes": "The interface is re-declared rather than imported: Permit2's source pins pragma solidity 0.8.17 and this tree pins 0.8.30. The digest is derived twice — once in JavaScript, once in Solidity — because a digest a wallet computes differently from the contract is rejected in the wallet, not in the test suite."
+    },
+    {
+      "id": "vyper-moccasin",
+      "technology": "Vyper + Moccasin",
+      "role": "The settlement and merchant-split model. merchant_policy.vy is the truth for the split; the JavaScript an Arc console would show a merchant is checked against 26 rows of what the Vyper actually computed, because the place the two can disagree is rounding.",
+      "sourcePaths": ["vy/src/unica/merchant_policy.vy", "vy/src/unica/payany_router.vy", "vy/tests/", "vy/moccasin.toml"],
+      "evidenceCommand": "cd vy && mox test -q",
+      "additionalEvidenceCommands": ["node integrations/arc-treasury/split-test.mjs"],
+      "status": "IMPLEMENTED_LOCAL_TESTS",
+      "statusText": "82 passed, 0 failed. Nothing deployed. vy/moccasin.toml has no live network section at all, so no command in that workspace can be pointed at a chain by accident.",
+      "measured": {"tests": 82, "failed": 0},
+      "version": "vyper 0.4.0+commit.e9db8d9; Moccasin CLI v0.4.4 (in-process pyevm)",
+      "versionSource": "`vyper --version` and `mox --version`",
+      "publicUrl": "https://vyperlang.org",
+      "additionalUrls": ["https://pypi.org/project/moccasin/"],
+      "urlProvenance": "well-known",
+      "notes": "Two further .vy files sit in vy/src/unica/ untracked and are not part of the repository."
+    },
+    {
+      "id": "web-surface",
+      "technology": "HTML / CSS checkout surface (no framework)",
+      "role": "The one page: type a merchant name, see the resolved address, pay in ETH, the recipient is paid in USDC, read the receipt back from the chain.",
+      "sourcePaths": ["web/index.html", "web/ensv2/resolve.mjs", "web/ensv2/keccak.mjs", ".github/workflows/pages.yml"],
+      "evidenceCommand": "bash script/check-surface.sh",
+      "status": "IMPLEMENTED_PUBLISH_OWNER_GATED",
+      "measured": {"surface checks": 23, "failed": 0},
+      "statusText": "NOT CONFIRMED PUBLISHED. The Pages deploy job is skipped until the owner enables GitHub Pages and sets the repository variable PAGES_ENABLED=true; the check job runs on every push regardless.",
+      "version": "651 lines. No framework, no build step, no bundler, no backend, no web font, no external stylesheet.",
+      "versionSource": "wc -l web/index.html",
+      "publicUrl": null,
+      "wouldBeUrl": "https://nfteria.github.io/UNICA/",
+      "urlProvenance": "in-tree",
+      "notes": "wouldBeUrl is what docs/PUBLISHING.md says the address will be once the owner enables Pages. It is not confirmed live and must not be presented as such."
+    },
+    {
+      "id": "python3",
+      "technology": "Python 3",
+      "role": "Not a product technology — a dependency of the verification tooling. Moccasin runs on it and docs/proof/*.sh parse JSON receipts with it.",
+      "sourcePaths": ["docs/proof/verify-live.sh", "docs/proof/verify-day1.sh", "vy/"],
+      "evidenceCommand": "python3 --version",
+      "status": "TOOLING_DEPENDENCY",
+      "version": "3.9.7 on this machine",
+      "versionSource": "`python3 --version`",
+      "publicUrl": "https://python.org",
+      "urlProvenance": "well-known"
+    }
+  ],
+  "excluded": [
+    {
+      "technology": "IPFS",
+      "verdict": "NOT WIRED INTO ANY SHIPPED PATH",
+      "detail": "Appears only as ipfs/kubo:v0.34.1 in integrations/graph/local/docker-compose.yml and integrations/graph/local-e2e.sh — a local graph-node harness for reconstructing an index offline. No UNICA artifact is pinned to IPFS and nothing UNICA ships reads from it.",
+      "evidenceCommand": "grep -rn -i ipfs --include='*.mjs' --include='*.yml' --include='*.sh' . --exclude-dir=lib --exclude-dir=node_modules --exclude-dir=out --exclude-dir=.claude"
+    },
+    {
+      "technology": "AWS / CloudFront / S3",
+      "verdict": "ABSENT FROM THIS REPOSITORY'S SOURCE",
+      "detail": "No bucket, no distribution, no SDK, no credential. Every apparent match is either a vendored lockfile under lib/ or the English word 'withdraws'.",
+      "evidenceCommand": "grep -rn -iE 'cloudfront|aws|s3[.]amazonaws' --include='*.mjs' --include='*.ts' --include='*.sol' --include='*.sh' --include='*.yml' . --exclude-dir=lib --exclude-dir=node_modules --exclude-dir=out --exclude-dir=.claude"
+    },
+    {
+      "technology": "Docker",
+      "verdict": "LOCAL HARNESS ONLY",
+      "detail": "Same file as IPFS above. Not required to build, test, deploy or verify UNICA.",
+      "evidenceCommand": "find . -name 'docker-compose.yml' -not -path './lib/*' -not -path './.claude/*' -not -path './*/node_modules/*'"
+    },
+    {
+      "technology": "TypeScript in the live path",
+      "verdict": "NOT USED",
+      "detail": "The live contracts are Solidity and every shipped off-chain tool is plain .mjs. TypeScript appears only in the Chainlink CRE workflow; the subgraph mappings are AssemblyScript compiled by graph-cli.",
+      "evidenceCommand": "find src script tools web -name '*.ts'"
+    },
+    {
+      "technology": "Any mainnet deployment",
+      "verdict": "NONE EXISTS",
+      "detail": "Testnet only, by construction: _need-network in the Makefile refuses any --network that is not sepolia, and UniswapDeployments.sol reverts UnsupportedChainId for every chain but 11155111.",
+      "evidenceCommand": "make deploy ARGS=\"--network mainnet\""
+    }
+  ],
+  "counts": {
+    "solidityTests": {"run": 182, "failed": 0, "suites": 21, "command": "forge test --no-match-path 'test/fork/*'"},
+    "solidityForkTests": {"declared": 44, "note": "excluded from CI on purpose — they need archive state at a pinned block; run with `make fork`"},
+    "vyperTests": {"run": 82, "failed": 0, "command": "cd vy && mox test -q"},
+    "javascriptRows": {
+      "run": 1543,
+      "failed": 0,
+      "suites": 14,
+      "breakdown": {
+        "ENS resolution": 136,
+        "ENS identity chain": 95,
+        "Permit2 digest vectors": 20,
+        "ENSv2 permissioned resolver": 278,
+        "V2 indexer consistency": 40,
+        "V2 live Graph provider": 147,
+        "V2 treasury copilot": 115,
+        "Arc treasury units and policy": 177,
+        "Arc split parity with Vyper": 26,
+        "Arc nanopayments": 141,
+        "signing tool vectors": 81,
+        "receipt verifier": 113,
+        "CRE guardian policy": 88,
+        "CRE adapter": 86
+      }
+    },
+    "creWorkflowTests": {"run": 30, "failed": 0, "expectCalls": 860, "command": "cd integrations/chainlink-cre-guardian/workflow && bun test"},
+    "proof": {
+      "day1": {"passed": 14, "of": 14},
+      "live": {"passed": 31, "of": 31},
+      "command": "make proof"
+    }
+  },
+  "limitations": [
+    "The Foundry version differs between CI (pinned v1.5.1) and the machine this manifest was verified on (forge 1.3.5-foundry-zksync-v0.1.9). The 182/0 Solidity result was produced by the local build; CI's own run is the authority on the pinned toolchain.",
+    "The 78 live ENSv2 rows were not re-run for this manifest — they require a Sepolia endpoint via `make gate-live`. Only the 278 offline rows were executed.",
+    "`make proof`'s 14/14 and 31/31 were not re-run for this manifest — both scripts are pure chain reads and need an endpoint. The row counts in each script were confirmed by reading the scripts.",
+    "The Arc live-check rows were not re-run — they need the Arc testnet RPC.",
+    "The public URL for the checkout surface is unconfirmed: the Pages deploy job is gated on a repository variable this manifest cannot read.",
+    "Package-registry URLs (npmjs.com, pypi.org) and well-known project homes are constructed from the package name or the project name, not read from this tree; urlProvenance records which is which.",
+    "`make graph-v2-test` (matchstick mapping tests) was not run — it needs node_modules that a fresh clone does not have. The manifest, ABI and query checks that do not need them were run."
+  ]
+}

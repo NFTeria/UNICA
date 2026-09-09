@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="t d">
+<title id="t">UNICA — a merchant's till becomes a portfolio, and the portfolio still spends</title>
+<desc id="d">Demo video title card, 1920 by 1080. The wordmark UNICA, the brand line, one filled accent marker on the claim that is live today and one hollow marker on the claim that is being built, and the independence and licence line.</desc>
+
+<!-- UNICA demo video TITLE CARD, 1920x1080 (1080p, the resolution ETHGlobal requires).
+     Hand-written SVG. No <script>, no external <image>, no web font, no network reference of any
+     kind: it renders identically offline, in a browser, in Preview, and inside a video editor.
+     Type uses a generic family stack and falls back to sans-serif on a machine without those faces.
+
+     Identity taken from the product's own web/index.html :root — not reinvented here:
+       ink #14161A   paper #FBFBFA   accent #0B6E4F   muted #5B6169   line #E4E4E1
+
+     THE VISUAL ARGUMENT, which is the same argument as docs/CLAIMS.md: the single accent colour is
+     spent on exactly ONE thing — the filled dot beside the claim that is actually live. The claim
+     that is not shipped gets a hollow ring in muted grey. A viewer who reads nothing else can still
+     see which half of the sentence is true today. -->
+
+<rect width="1920" height="1080" fill="#FBFBFA"/>
+
+<g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+
+  <!-- wordmark -->
+  <text x="480" y="330" font-size="152" font-weight="700" letter-spacing="4.6" fill="#14161A">UNICA</text>
+  <line x1="480" y1="388.5" x2="1440" y2="388.5" stroke="#E4E4E1" stroke-width="2"/>
+
+  <!-- the brand line, broken at the em dash so the first half survives a square crop -->
+  <text x="480" y="486" font-size="54" font-weight="500" fill="#14161A">A merchant's till becomes a portfolio —</text>
+  <text x="480" y="556" font-size="54" font-weight="500" fill="#14161A">and the portfolio still spends.</text>
+
+  <!-- the two status rows: separated only BETWEEN each other, never boxed -->
+  <line x1="480" y1="646.5" x2="1440" y2="646.5" stroke="#E4E4E1" stroke-width="2"/>
+
+  <!-- LIVE — the one filled accent mark on this card -->
+  <circle cx="497" cy="712" r="11" fill="#0B6E4F"/>
+  <text x="536" y="724" font-size="32" font-weight="600" fill="#14161A">Exact settlement</text>
+  <text x="536" y="770" font-size="28" fill="#5B6169">live and source-verified on Ethereum Sepolia, one settlement receipted</text>
+
+  <line x1="480" y1="812.5" x2="1440" y2="812.5" stroke="#E4E4E1" stroke-width="2"/>
+
+  <!-- BEING BUILT — hollow, muted, deliberately not the accent -->
+  <circle cx="497" cy="878" r="10.5" fill="none" stroke="#5B6169" stroke-width="2.5"/>
+  <text x="536" y="890" font-size="32" font-weight="600" fill="#5B6169">Merchant-controlled treasury automation</text>
+  <text x="536" y="936" font-size="28" fill="#5B6169">being built — nothing broadcast, nothing deployed</text>
+
+  <line x1="480" y1="978.5" x2="1440" y2="978.5" stroke="#E4E4E1" stroke-width="2"/>
+
+  <!-- provenance and independence -->
+  <text x="480" y="1024" font-size="25" fill="#5B6169">Built by NFTeria · independent, and not endorsed by or reviewed by any sponsor · MIT</text>
+
+</g>
+</svg>

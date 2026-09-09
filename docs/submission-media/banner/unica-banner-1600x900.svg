@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="t d">
+<title id="t">UNICA — a merchant's till becomes a portfolio, and the portfolio still spends</title>
+<desc id="d">Project banner. Wordmark UNICA, the brand line, and two status rows: exact settlement through Uniswap v4 is live on Ethereum Sepolia; treasury automation and confidential execution are being built. Built by NFTeria, independent.</desc>
+
+<!-- UNICA project banner, 1600x900. Hand-written SVG: no script, no external references, no web fonts.
+     PALETTE is the product's, lifted from web/index.html :root and not reinvented:
+       ink #14161A · paper #FBFBFA · accent #0B6E4F · muted #5B6169 · line #E4E4E1
+     Measured on this ground: ink 17.49:1, muted 6.04:1, accent 6.04:1 (all pass WCAG AA).
+     LAYOUT quotes the product page: a centred column of LEFT-aligned content (the page's
+     `main { max-width:34rem; margin:0 auto }`), a header hairline under the wordmark, rows
+     separated only BETWEEN each other (`.row + .row { border-top }`), and a footer hairline.
+     The column is x 396..1203 — sized so every line survives a 1:1 centre crop (see safe-area.svg).
+     THE ACCENT is the product's one colour, spent on one thing: the filled dot on the claim that
+     is actually live. The claim that is not yet shipped gets a hollow ring in muted. The form and
+     the words say the same thing, which is the same thing docs/CLAIMS.md says.
+     TYPE is the product's own stack, generic-terminated; no font is embedded or fetched. -->
+
+<rect width="1600" height="900" fill="#FBFBFA"/>
+<rect x="0.5" y="0.5" width="1599" height="899" fill="none" stroke="#E4E4E1"/>
+
+<g font-family='ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'>
+
+  <text x="396" y="248" font-size="104" font-weight="700" letter-spacing="4.2" fill="#14161A">UNICA</text>
+  <line x1="396" y1="296.5" x2="1203" y2="296.5" stroke="#E4E4E1" stroke-width="1"/>
+
+  <text x="396" y="376" font-size="46" font-weight="400" fill="#14161A">A merchant's till becomes a portfolio —</text>
+  <text x="396" y="440" font-size="46" font-weight="400" fill="#14161A">and the portfolio still spends.</text>
+
+  <circle cx="404" cy="623" r="7.5" fill="#0B6E4F"/>
+  <text x="434" y="632" font-size="25" font-weight="500" fill="#14161A">Exact settlement through Uniswap v4 is live on Ethereum Sepolia.</text>
+
+  <line x1="396" y1="663.5" x2="1203" y2="663.5" stroke="#E4E4E1" stroke-width="1"/>
+
+  <circle cx="404" cy="687" r="6.75" fill="none" stroke="#5B6169" stroke-width="1.5"/>
+  <text x="434" y="696" font-size="25" font-weight="400" fill="#5B6169">Treasury automation and confidential execution are being built.</text>
+
+  <line x1="396" y1="812.5" x2="1203" y2="812.5" stroke="#E4E4E1" stroke-width="1"/>
+  <text x="396" y="848" font-size="16" font-weight="400" fill="#5B6169">Built by NFTeria · Independent — not affiliated with or endorsed by Uniswap.</text>
+
+</g>
+</svg>

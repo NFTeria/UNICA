@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="unica-t unica-d">
+  <title id="unica-t">UNICA</title>
+  <desc id="unica-d">Three bars of unequal length and one upright block. The block has exactly the same area as the three bars together: many takings settled into exactly one asset.</desc>
+  <g fill="#14161A"><rect x="10" y="8" width="10" height="14"/><rect x="10" y="25" width="16" height="14"/><rect x="10" y="42" width="22" height="14"/></g>
+  <rect x="40" y="8" width="14" height="48" fill="#0B6E4F"/>
+</svg>
