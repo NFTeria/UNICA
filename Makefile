@@ -12,7 +12,8 @@
 -include .env
 
 .PHONY: help all deps doctor build test fuzz snapshot format fmt gate gate-live clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
-        rehearse deploy init-pool seed settle topup live readback verify balances _need-deployer _need-signing
+        rehearse deploy init-pool seed settle topup live readback verify balances _need-deployer _need-signing \
+        predict-v3 deploy-v3 deploy-v3-check _deploy-v3-broadcast _need-v3-chain _need-v3-signing
 
 # ── configuration ─────────────────────────────────────────────────────────────
 SEPOLIA_RPC_URL  ?= https://ethereum-sepolia-rpc.publicnode.com
@@ -74,6 +75,14 @@ help:
 	@echo "    make topup-live       the pre-flight, then approve + modifyLiquidity on Sepolia, within the bounds in script/LiveFire.s.sol"
 	@echo "    make tag-green TAG=<name> MSG=<file>   cut a milestone tag only after CI, proof and the docs that name it are all in"
 	@echo "    make proof            re-prove both deployments and the settlement from the chain (verify-day1, verify-live)"
+	@echo ""
+	@echo "  V3, THE MULTI-CHAIN DEPLOY (one command per chain; keystore password prompted)"
+	@echo "    make predict-v3       the ONE hook and executor address this creation code lands on, every chain, offline"
+	@echo "    make deploy-v3-check CHAIN=<alias>   the pre-flight only, against that chain. Sends nothing"
+	@echo "    make deploy-v3       CHAIN=<alias>   the pre-flight, then hook + executor on that chain"
+	@echo "      CHAIN is a foundry.toml rpc alias, never a URL. Deployable today:"
+	@echo "        sepolia_testnet  unichain_testnet  base_testnet  arbitrum_testnet"
+	@echo "      robinhood_testnet is REFUSED by name: no payout currency verified on chain 46630."
 	@echo ""
 	@echo "  SEPOLIA, one stage at a time (real transactions; keystore password prompted)"
 	@echo "    make deploy ARGS=\"--network sepolia\"      (and init-pool / seed / settle / live the same way)"
@@ -324,6 +333,48 @@ proof:
 
 rehearse: _need-deployer
 	DEPLOYER=$(DEPLOYER) SEPOLIA_RPC_URL=$(SEPOLIA_RPC_URL) bash script/rehearse-anvil.sh
+
+# ── V3: the multi-chain deploy, one command per chain ─────────────────────────────────────────
+#
+# The same shape as go-live / go-live-check, with one difference that matters: THE CHAIN IS NAMED
+# BY THE CALLER AND HAS NO DEFAULT. V1 deploys to Sepolia and only Sepolia, so `go-live.sh` can
+# carry the chain in the file. V3 resolves five chains, so a default here would be a deploy that
+# reaches the wrong chain by omission. CHAIN is a foundry.toml rpc ALIAS, never a URL: a provider
+# URL carries its API key in the path and this repository is public.
+#
+# `script/v3/DeployV3.s.sol` defines no zero-argument `run()`, so the bare `forge script` a stray
+# command line would produce cannot deploy anything — it fails to find a function instead.
+#
+# Verification is deliberately NOT wired into this path. V1's Sepolia target adds --verify when
+# ETHERSCAN_API_KEY is set; four chains do not share one verifier, and a flag that silently
+# verifies on one chain and silently does not on another is worse than a separate step.
+# BLOCK is the chain's own head, read by script/v3/deploy-v3.sh with `cast block-number` and passed
+# in. It is not an optimisation: without it, forge pins its fork to the block number the EVM reports,
+# and on Arbitrum that is the L1 block, so the simulation runs against years-old L2 state. See the
+# note in script/v3/deploy-v3.sh for the measurement.
+V3_NETWORK_ARGS := --rpc-url $(CHAIN) $(if $(BLOCK),--fork-block-number $(BLOCK),) --account $(DEPLOYER_ACCOUNT) --sender $(DEPLOYER) --broadcast -vvvv
+
+# Offline: the one hook and executor address, and the init-code hash to compare across a change.
+predict-v3: _need-deps
+	FOUNDRY_BROADCAST=.rehearsal/predict-v3 forge script script/v3/MineHookV3.s.sol:MineHookV3 --sig "run()" -vv
+
+deploy-v3-check: _need-v3-chain
+	DRY_RUN=1 CHAIN=$(CHAIN) DEPLOYER=$(DEPLOYER) bash script/v3/deploy-v3.sh
+
+deploy-v3: _need-v3-signing
+	CHAIN=$(CHAIN) DEPLOYER=$(DEPLOYER) DEPLOYER_ACCOUNT=$(DEPLOYER_ACCOUNT) bash script/v3/deploy-v3.sh
+
+# The one broadcast line, reached only from deploy-v3.sh after its pre-flight passed. Keystore only:
+# --account prompts for the password, and there is no private-key path in this file.
+_deploy-v3-broadcast: _need-v3-signing
+	forge script script/v3/DeployV3.s.sol:DeployV3 --sig "run(string)" $(CHAIN) $(V3_NETWORK_ARGS)
+
+_need-v3-chain: _need-deployer
+	@test -n "$(CHAIN)" || { echo "CHAIN is not set: name the foundry.toml rpc alias, e.g. CHAIN=sepolia_testnet (there is no default)"; exit 1; }
+
+_need-v3-signing: _need-v3-chain
+	@test -n "$(DEPLOYER_ACCOUNT)" || { echo "DEPLOYER_ACCOUNT (keystore name) is not set"; exit 1; }
+	@echo "$(CHAIN): signing with keystore '$(DEPLOYER_ACCOUNT)' as $(DEPLOYER); the password will be prompted"
 
 # ── the four stages (local fork by default; ARGS="--network sepolia" for the real thing) ───────
 deploy    : _need-network ; $(RUN_ENV) forge script script/DeploySettlement.s.sol:DeploySettlement  $(NETWORK_ARGS)
