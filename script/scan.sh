@@ -111,8 +111,26 @@ chk "no private location mentioned"      "! git grep --untracked -nE '$marks' --
 #   tools/unica-verify/fixtures/                 a settlement captured off a fork
 #   integrations/ensv2/fixtures/                 ENSv2 Sepolia wire bytes, three real refusals among them
 #   integrations/arc-treasury/transcript.json    an Arc RPC request/response transcript
-artifacts="':!broadcast/' ':!tools/unica-verify/fixtures/' ':!integrations/ensv2/fixtures/' ':!integrations/arc-treasury/transcript.json'"
-bare=$(eval "git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' $artifacts ':!script/scan.sh'" | grep -viE "$label" || true)
+#   tools/unica-sign/vectors.json                hand-authored EIP-712 signing vectors
+#   integrations/arc-nanopayments/vectors.json   hand-authored authorization vectors
+#
+# The two vectors.json files are named INDIVIDUALLY and not by a `*/vectors.json` glob, on purpose.
+# They were exempt by accident until 2026-09-09: the label filter ran on git grep's whole output
+# line, the alternation contains `vector`, and the FILENAME supplied the match — so every 32-byte
+# value in them was invisible to this rule, and so was anything in any `*.txt` (the alternation also
+# contains `tx`). Naming them is a decision; inheriting an exemption from a filename is an accident.
+artifacts="':!broadcast/' ':!tools/unica-verify/fixtures/' ':!integrations/ensv2/fixtures/' ':!integrations/arc-treasury/transcript.json' ':!tools/unica-sign/vectors.json' ':!integrations/arc-nanopayments/vectors.json'"
+# The label filter must see ONLY the line's CONTENT, never the "path:lineno:" prefix that
+# `git grep -n` prepends. It used to be applied to the whole line, and the alternation contains
+# `tx` — so every file whose PATH contained a label word was silently exempt from this rule.
+# `.txt` was the one that found it: a bare 32-byte value in any `notes.txt` was never reported.
+# A guard that a filename can switch off is not a guard, and the two controls below are what stop
+# this coming back.
+bare=$(eval "git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- . ':!lib' $artifacts ':!script/scan.sh'" | while IFS= read -r line; do
+  content=${line#*:}; content=${content#*:}
+  printf '%s\n' "$content" | grep -qiE "$label" || printf '%s\n' "$line"
+done || true)
+chk "control: a label word in the PATH does not exempt the line" "d=\$(mktemp -d ./scanprobe-XXXX); printf 'const k = \"0x%064d\";\\n' 1 > \$d/notes.txt; r=0; git grep --untracked -nE '0x[a-fA-F0-9]{64}' -- \$d | while IFS= read -r l; do c=\${l#*:}; c=\${c#*:}; printf '%s\\n' \"\$c\" | grep -qiE \"\$label\" || exit 9; done; [ \$? -eq 9 ] && r=1; rm -rf \$d; [ \$r -eq 1 ]"
 chk "no bare 32-byte value without a label on its line" "[ -z \"\$bare\" ]"
 [ -n "$bare" ] && echo "$bare"
 
