@@ -1184,7 +1184,7 @@
       ],
       "networks": ["ethereum-sepolia"],
       "sponsorRoles": ["ens"],
-      "lastVerifiedCommit": "b7d8b1206a51ac362844a7009cc3ac36ff283a0d",
+      "lastVerifiedCommit": "b5882411b0003aa8639030cffa55b5bc7bd84a0a",
       "dependencies": ["ensv2-permissioned-resolver"],
       "tests": [
         "integrations/ensv2/plan-test.mjs",
