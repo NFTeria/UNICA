@@ -5,6 +5,7 @@
 #   bash script/verify-v3.sh                # all four chains
 #   bash script/verify-v3.sh --offline      # only the rows that need no endpoint at all
 #   bash script/verify-v3.sh --self-test    # sabotage the instrument and prove each row can go red
+#   bash script/verify-v3.sh --etherscan    # ALSO ask Etherscan which CONTRACT NAME it has verified
 #   bash script/verify-v3.sh sepolia_testnet base_testnet   # a subset, by foundry.toml alias
 #
 # Shape borrowed from docs/proof/verify-live.sh, deliberately: PASS/FAIL per row, one row per fact,
@@ -21,6 +22,10 @@
 # prove EXERCISED: `receiptCount()` and `orderCount()` are 0 on all four, this script prints those
 # zeros as zeros, and no row here asserts that a settlement has happened. If one ever does, the two
 # VALUE rows change and nothing else does.
+#
+# The --etherscan rows do not move that line either. An explorer verification is a claim that SOURCE
+# matches BYTECODE. It is not a claim that the bytecode has ever run. Eight verifications and zero
+# settlements is the true state of this deployment and both halves are printed on every run.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -32,6 +37,12 @@ HOOK=0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0
 EXEC=0x015692C9E43ca19a2504F79368D1156A56680517
 HOOK_BYTES=10634
 EXEC_BYTES=12953
+
+# The names the explorer must report for each address. Not cosmetic: an address that is verified as
+# SOMETHING ELSE is the exact confusion the V1/V3 sabotage row below exists to catch, and a row that
+# only asked "is it verified?" would go green on the wrong contract.
+HOOK_NAME=UnicaHookV3
+EXEC_NAME=UnicaExecutorV3
 
 # alias | chain id | that chain's official v4 PoolManager | hook runtime keccak | executor runtime keccak
 #
@@ -107,6 +118,46 @@ lower() { printf '%s' "$1" | tr 'A-Z' 'a-z'; }
 
 # The low fourteen bits of an address, as a decimal number. Pure arithmetic on a string: NO RPC.
 low14() { python3 -c "import sys;print(int(sys.argv[1],16)&0x3fff)" "$1" 2>/dev/null; }
+
+# ------------------------------------------------------------------------------------------------
+# ETHERSCAN. Two functions, split on purpose: the parser is separable from the network so the
+# self-test can feed it the bodies the explorer really returns, offline and with no key.
+#
+# THREE OUTCOMES, KEPT APART, because collapsing them is how a check starts lying:
+#   the explorer names a contract              -> that name; the row is scored against it
+#   the explorer answers "not verified"        -> the literal UNVERIFIED; the row goes RED
+#   nobody answered (network, rate limit, junk) -> NOTHING; the row is a SKIP, not a failure
+#
+# THE KEY NEVER LEAVES etherscan_name. $ETHERSCAN_API_KEY is expanded by curl inside the command and
+# is never echoed, never written to a file, and never interpolated into a row's text. curl's stderr
+# is discarded on purpose: a curl error can quote the URL it was handed, and that URL carries the
+# key. The cost of discarding it is nothing, because an unanswered call is already an empty body and
+# an empty body is already a SKIP that says so.
+es_name() { # reads a getsourcecode body on stdin
+  python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)                       # unparseable body -> print nothing -> the row SKIPs
+if str(d.get("status")) != "1":
+    raise SystemExit(0)                       # rate limit or error -> nobody answered
+r = d.get("result")
+r = r[0] if isinstance(r, list) and r else r
+if not isinstance(r, dict):
+    raise SystemExit(0)
+if str(r.get("ABI", "")).startswith("Contract source code not verified"):
+    print("UNVERIFIED"); raise SystemExit(0)  # a DEFINITE no from the explorer -> the row goes RED
+name = str(r.get("ContractName", ""))
+print(name if name else "UNVERIFIED")
+' 2>/dev/null
+}
+
+etherscan_name() { # chain-id address
+  curl -sS --max-time 30 \
+    "https://api.etherscan.io/v2/api?chainid=$1&module=contract&action=getsourcecode&address=$2&apikey=$ETHERSCAN_API_KEY" \
+    2>/dev/null | es_name
+}
 
 # Blank the pinned immutable runs and return the code as 0x-hex, so it can be hashed.
 # Any run that reaches past the end of the code raises, prints nothing, and the row becomes a SKIP
@@ -208,6 +259,27 @@ if [ "${1:-}" = "--self-test" ]; then
   t "mask_hex at a DIFFERENT offset gives a different body"    "[ \"$GOT_MASKED_AT_0\" != \"$GOT_MASKED_AT_8\" ]"
   t "mask_hex refuses a run past the end (prints nothing)"     "[ -z \"\$(mask_hex $BODY '60:20')\" ]"
   t "a byte changed OUTSIDE every masked run survives the mask" "[ \"$GOT_MASKED_AT_0\" != \"$GOT_MASKED_CHANGED\" ]"
+  # The Etherscan parser, against the four bodies that endpoint really returns. Offline: no network,
+  # no key, no address. Every value is computed HERE and not inside the eval string — the mask rows
+  # above record what happened the one time that discipline was skipped.
+  ES_VERIFIED='{"status":"1","message":"OK","result":[{"ContractName":"UnicaHookV3","ABI":"[{\"x\":1}]"}]}'
+  ES_UNVERIFIED='{"status":"1","message":"OK","result":[{"ContractName":"","ABI":"Contract source code not verified"}]}'
+  ES_RATELIMIT='{"status":"0","message":"NOTOK","result":"Max rate limit reached"}'
+  ES_GOT_VERIFIED=$(printf '%s' "$ES_VERIFIED" | es_name)
+  ES_GOT_UNVERIFIED=$(printf '%s' "$ES_UNVERIFIED" | es_name)
+  ES_GOT_RATELIMIT=$(printf '%s' "$ES_RATELIMIT" | es_name)
+  ES_GOT_GARBAGE=$(printf 'not json at all' | es_name)
+  ES_SCORE_UNVERIFIED=$(score "$HOOK_NAME" "$ES_GOT_UNVERIFIED")
+  ES_SCORE_WRONGNAME=$(score "$HOOK_NAME" "$EXEC_NAME")
+  ES_SCORE_RIGHTNAME=$(score "$HOOK_NAME" "$HOOK_NAME")
+  ES_SCORE_RATELIMIT=$(score "$HOOK_NAME" "$ES_GOT_RATELIMIT")
+  t "es_name reads the ContractName out of a verified body"     "[ \"$ES_GOT_VERIFIED\" = $HOOK_NAME ]"
+  t "es_name says UNVERIFIED when the explorer has not verified" "[ \"$ES_GOT_UNVERIFIED\" = UNVERIFIED ]"
+  t "an UNVERIFIED explorer answer scores RED, never green"     "[ \"$ES_SCORE_UNVERIFIED\" = '0 1 0' ]"
+  t "the WRONG contract name at the right address scores RED"   "[ \"$ES_SCORE_WRONGNAME\" = '0 1 0' ]"
+  t "the RIGHT contract name scores GREEN"                      "[ \"$ES_SCORE_RIGHTNAME\" = '1 0 0' ]"
+  t "a rate-limited body prints NOTHING, so its row SKIPs"      "[ -z \"$ES_GOT_RATELIMIT\" ] && [ \"$ES_SCORE_RATELIMIT\" = '0 0 1' ]"
+  t "an unparseable body prints NOTHING too"                    "[ -z \"$ES_GOT_GARBAGE\" ]"
   # The record reader must not invent a row when the record is missing.
   t "record_row on a missing file prints nothing"              "[ -z \"\$(record_row /nonexistent.json UnicaHookV3)\" ]"
   echo "checks run: $((t_ok+t_fail)), passed: $t_ok, failed: $t_fail"
@@ -221,7 +293,15 @@ fi
 . docs/proof/retry.sh
 
 OFFLINE_ONLY=0
-if [ "${1:-}" = "--offline" ]; then OFFLINE_ONLY=1; shift; fi
+ETHERSCAN_ROWS=0
+# Flags first, in any order; whatever is left is the chain-alias subset.
+while [ $# -gt 0 ]; do
+  case "${1:-}" in
+    --offline)   OFFLINE_ONLY=1; shift ;;
+    --etherscan) ETHERSCAN_ROWS=1; shift ;;
+    *) break ;;
+  esac
+done
 WANT="$*"
 
 echo "# UNICA V3 four-chain verification, $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -242,6 +322,7 @@ expect "bit $BIT_AFTER_ADD_LIQUIDITY AFTER_ADD_LIQUIDITY is CLEAR in the address
 echo
 
 if [ "$OFFLINE_ONLY" = 1 ]; then
+  [ "$ETHERSCAN_ROWS" = 1 ] && skipped "the eight Etherscan rows: --etherscan was given together with --offline. Those rows need the network and a key, so the two flags contradict each other and --offline wins, out loud."
   echo "checks run: $((ok+fail+skip)), passed: $ok, failed: $fail, skipped: $skip"
   echo "note: --offline was given, so every chain row was skipped by request, not by failure."
   [ "$fail" = 0 ]
@@ -341,10 +422,51 @@ else
   echo
 fi
 
+# ---- ETHERSCAN. OPT-IN, because these rows need the network AND a key. --------------------------
+#
+# One row per contract per chain, eight in all. Each asks Etherscan's V2 multichain endpoint which
+# CONTRACT NAME it has verified at this address on this chain, and requires the answer to be the name
+# this repository deployed. Asking only "is it verified?" would go green on a verification of some
+# other contract at the same address, which is precisely the confusion the V1-versus-V3 sabotage row
+# in --self-test exists to name.
+#
+# THEY CANNOT REACH `make gate`. The gate runs exactly two invocations of this script —
+# `bash script/verify-v3.sh --self-test` and `bash script/verify-v3.sh --offline`, the two lines
+# immediately above the gate's closing echo in the Makefile — and neither passes --etherscan. The way
+# in is `make proof-v3-etherscan`, beside `make proof-v3`, where the other network rows already live.
+#
+# NO KEY IS A SKIP, PRINTED AS A SKIP, ONE PER ROW. Eight visible absences, never one silent gap and
+# never a pass: a reader can count them. And a key that IS set but answers nothing — rate limit,
+# outage, junk body — is also a SKIP, because "the explorer did not answer" and "the explorer says
+# this is not verified" are different sentences and only the second may print red.
+if [ "$ETHERSCAN_ROWS" = 1 ]; then
+  echo "-- etherscan (opt-in; needs the network AND \$ETHERSCAN_API_KEY, which is never printed)"
+  for entry in "${CHAINS[@]}"; do
+    IFS='|' read -r alias cid pm hhash ehash <<<"$entry"
+    [ -n "$WANT" ] && ! printf '%s\n' $WANT | grep -qx "$alias" && continue
+    for pair in "$HOOK|$HOOK_NAME" "$EXEC|$EXEC_NAME"; do
+      IFS='|' read -r es_addr es_name_want <<<"$pair"
+      if [ -z "${ETHERSCAN_API_KEY:-}" ]; then
+        skipped "$alias ($cid): Etherscan ContractName at $es_addr — ETHERSCAN_API_KEY is unset, so nobody was asked. Not a pass and not a failure."
+        continue
+      fi
+      expect "$alias ($cid): Etherscan has verified $es_addr and calls it $es_name_want" \
+        "$es_name_want" "$(etherscan_name "$cid" "$es_addr")"
+      sleep 0.25
+    done
+  done
+  echo
+else
+  skipped "the eight Etherscan rows: --etherscan was not given. They need the network and a key, which is why they are opt-in and why the gate cannot reach them. \`make proof-v3-etherscan\` runs them."
+  echo
+fi
+
 echo "checks run: $((ok+fail+skip)), passed: $ok, failed: $fail, skipped: $skip"
 report_retries
-echo "DEPLOYED and BOUND is what these rows reach. EXERCISED is not: the two VALUE rows above are the"
-echo "settlement counters, and they are the honest state of this deployment, whatever they say."
+echo "DEPLOYED and BOUND is what these rows reach. With --etherscan, VERIFIED as well: the explorer"
+echo "agrees the source matches the bytecode. EXERCISED is still NOT reached by any row here — the two"
+echo "VALUE rows above are the settlement counters, and they are the honest state of this deployment,"
+echo "whatever they say. Verification is about source; the counters are about use; they never merge."
 if [ "$skip" != 0 ]; then
   echo "NOTE: $skip row(s) were skipped, not passed and not failed. Read the SKIP lines for why."
 fi

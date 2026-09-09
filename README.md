@@ -305,8 +305,10 @@ the first two on four chains and the third on none.
 One mined CREATE2 address carries both contracts on every chain: hook
 `0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0` (10,634 bytes, flags `0x20C0`), executor
 `0x015692C9E43ca19a2504F79368D1156A56680517` (12,953 bytes). `bash script/verify-v3.sh` re-proves
-every row below from the chain — **65 checks, 0 failed** on the run that produced this table — and
-`make proof-v3` is the same thing through the Makefile.
+every row below from the chain — **66 checks: 65 passed, 0 failed, 1 skipped** on the run that
+produced this table, the one skip being the eight explorer rows saying out loud that they were not
+asked for; **73 checks, 0 failed, 0 skipped** with `--etherscan`, which asks for them. `make
+proof-v3` and `make proof-v3-etherscan` are those two runs through the Makefile.
 
 | Item | Value | Rung | Re-verify |
 |---|---|---|---|
@@ -317,10 +319,50 @@ every row below from the chain — **65 checks, 0 failed** on the run that produ
 | Unichain Sepolia, 1301 | hook [`0xe949fcd4…c08e`](https://unichain-sepolia.blockscout.com/tx/0xe949fcd49f95b20217b85b3145827e6998fbc1e298a372bb08d8705c5989c08e) 2,664,479 gas; executor [`0x1304be3b…ed7a`](https://unichain-sepolia.blockscout.com/tx/0x1304be3b6f39588d34790d284dfc77c1abde04d6b79b279c833ef5ed5f26ed7a) 2,892,000 gas; both in block 62101542. `poolManager()` = `0x00B036B58a818B1BC34d502D3fE730Db729e62AC` | DEPLOYED | `cast receipt 0xe949fcd49f95b20217b85b3145827e6998fbc1e298a372bb08d8705c5989c08e --rpc-url $RPC status` prints `1 (success)` |
 | Base Sepolia, 84532 | hook [`0xa82e8351…c038`](https://base-sepolia.blockscout.com/tx/0xa82e8351f7dd0c506c00f4bc0e18e69396f859f99d352016987cb38597c4c038) 2,664,548 gas; executor [`0xa4d01c6e…6cc4`](https://base-sepolia.blockscout.com/tx/0xa4d01c6ee5f9fc8003f851f2b39a8bfbbe18ff3e1d028c1ef873d4dd92cf6cc4) 2,892,046 gas; both in block 46592814. `poolManager()` = `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` | DEPLOYED | `cast receipt 0xa82e8351f7dd0c506c00f4bc0e18e69396f859f99d352016987cb38597c4c038 --rpc-url $RPC status` prints `1 (success)` |
 | Arbitrum Sepolia, 421614 | hook [`0xe22b2bcf…48d9`](https://arbitrum-sepolia.blockscout.com/tx/0xe22b2bcf652b3e0826ff5f593c022c9e166cef04a30a3eebd8e7d439838a48d9) 2,674,223 gas in block 307058865; executor [`0x6115e9dd…8d8d`](https://arbitrum-sepolia.blockscout.com/tx/0x6115e9dd9119245cbb7dee318a60b9fb88c1b104074f6b9cd35dfa63ce1b8d8d) 2,897,511 gas in block **307058867** — two blocks, not one, unlike the other three chains. `poolManager()` = `0xFB3e0C6F74eB1a21CC1Da29aeC80D2Dfe6C9a317` | DEPLOYED | `cast receipt 0xe22b2bcf652b3e0826ff5f593c022c9e166cef04a30a3eebd8e7d439838a48d9 --rpc-url $RPC status` prints `1 (success)` |
-| Source verification, hook | Sourcify, all four chains: `match` on creation and runtime. **This is Sourcify's partial tier, not `exact_match`** — see the note below | VERIFIED (partial) | `curl -s https://sourcify.dev/server/v2/contract/11155111/0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0` prints `"match":"match"`; swap in 1301, 84532, 421614 |
-| Source verification, executor | Sourcify, all four chains: `match` on creation and runtime, same partial tier | VERIFIED (partial) | `curl -s https://sourcify.dev/server/v2/contract/11155111/0x015692C9E43ca19a2504F79368D1156A56680517` prints `"match":"match"`; swap in the other three chain ids |
+| Source verification, all eight | Etherscan: verified on all four chains, each explorer reporting the contract's own name. Sourcify: `match` on all four — **Sourcify's PARTIAL tier, not `exact_match`**. The two words are not the same claim; the eight-row table below keeps them in separate columns | VERIFIED — source matches bytecode, which says nothing about the code ever having run | `make proof-v3-etherscan` asserts the Etherscan name on all eight; the per-row curl commands are in the table below |
 | **Settlement counters** | **`receiptCount()` = 0 and `orderCount()` = 0 on all four chains.** V3 has never settled a swap, created an order, or emitted a receipt on any chain | **NOT EXERCISED** | `cast call 0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0 'receiptCount()(uint256)' --rpc-url $RPC` prints `0`; `cast call 0x015692C9E43ca19a2504F79368D1156A56680517 'orderCount()(uint256)' --rpc-url $RPC` prints `0` |
 | Broadcast records | [`broadcast/DeployV3.s.sol/<chainid>/run-latest.json`](broadcast/DeployV3.s.sol) for each of 11155111, 1301, 84532, 421614: two transactions, two receipts, all status 1 | committed | `bash script/verify-v3.sh` reads each record and compares the recorded block and status against the chain |
+
+#### The eight verifications, one row per contract per chain
+
+A judge can click every link. **Every row is a claim about SOURCE matching BYTECODE and nothing
+else** — no row here says the contract has ever been used, and the settlement counters two rows up
+are still 0 on all four chains.
+
+| Chain · id | Contract | Explorer (click) | Etherscan | Sourcify tier |
+|---|---|---|---|---|
+| Ethereum Sepolia · 11155111 | `UnicaHookV3` | [sepolia.etherscan.io/address/0x5d6AdF56…](https://sepolia.etherscan.io/address/0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0#code) | **Verified**, reports ContractName `UnicaHookV3`, solc `v0.8.30+commit.73712a01`, optimizer off, cancun | **`match`** — the partial tier, not `exact_match` |
+| Ethereum Sepolia · 11155111 | `UnicaExecutorV3` | [sepolia.etherscan.io/address/0x015692C9…](https://sepolia.etherscan.io/address/0x015692C9E43ca19a2504F79368D1156A56680517#code) | **Verified**, reports ContractName `UnicaExecutorV3`, solc `v0.8.30+commit.73712a01`, optimizer off, cancun | **`match`** — the partial tier, not `exact_match` |
+| Unichain Sepolia · 1301 | `UnicaHookV3` | [sepolia.uniscan.xyz/address/0x5d6AdF56…](https://sepolia.uniscan.xyz/address/0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0#code) | **Verified**, reports ContractName `UnicaHookV3`, solc `v0.8.30+commit.73712a01`, optimizer off, cancun | **`match`** — the partial tier, not `exact_match` |
+| Unichain Sepolia · 1301 | `UnicaExecutorV3` | [sepolia.uniscan.xyz/address/0x015692C9…](https://sepolia.uniscan.xyz/address/0x015692C9E43ca19a2504F79368D1156A56680517#code) | **Verified**, reports ContractName `UnicaExecutorV3`, solc `v0.8.30+commit.73712a01`, optimizer off, cancun | **`match`** — the partial tier, not `exact_match` |
+| Base Sepolia · 84532 | `UnicaHookV3` | [sepolia.basescan.org/address/0x5d6AdF56…](https://sepolia.basescan.org/address/0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0#code) | **Verified**, reports ContractName `UnicaHookV3`, solc `v0.8.30+commit.73712a01`, optimizer off, cancun | **`match`** — the partial tier, not `exact_match` |
+| Base Sepolia · 84532 | `UnicaExecutorV3` | [sepolia.basescan.org/address/0x015692C9…](https://sepolia.basescan.org/address/0x015692C9E43ca19a2504F79368D1156A56680517#code) | **Verified**, reports ContractName `UnicaExecutorV3`, solc `v0.8.30+commit.73712a01`, optimizer off, cancun | **`match`** — the partial tier, not `exact_match` |
+| Arbitrum Sepolia · 421614 | `UnicaHookV3` | [sepolia.arbiscan.io/address/0x5d6AdF56…](https://sepolia.arbiscan.io/address/0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0#code) | **Verified**, reports ContractName `UnicaHookV3`, solc `v0.8.30+commit.73712a01`, optimizer off, cancun | **`match`** — the partial tier, not `exact_match` |
+| Arbitrum Sepolia · 421614 | `UnicaExecutorV3` | [sepolia.arbiscan.io/address/0x015692C9…](https://sepolia.arbiscan.io/address/0x015692C9E43ca19a2504F79368D1156A56680517#code) | **Verified**, reports ContractName `UnicaExecutorV3`, solc `v0.8.30+commit.73712a01`, optimizer off, cancun | **`match`** — the partial tier, not `exact_match` |
+
+Re-run all eight against the explorer in one command — it needs the four endpoints **and**
+`ETHERSCAN_API_KEY`, and prints eight loud `SKIP` lines rather than eight silent passes if the key
+is unset:
+
+```sh
+make proof-v3-etherscan      # 73 checks, 0 failed, 0 skipped on the run that produced this table
+```
+
+and the Sourcify tier for any one of the eight, with the address and chain id swapped in:
+
+```sh
+curl -s https://sourcify.dev/server/v2/contract/11155111/0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0 \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['match'], d['verifiedAt'])"
+```
+
+**"Verified" on Etherscan and `match` on Sourcify are not the same sentence, and this page will
+not let them blur.** Etherscan publishes one verdict — the source is published and it compiles to
+this bytecode — and all eight have it. Sourcify grades, and all eight sit at `match` rather than
+`exact_match`, because `foundry.toml` sets `bytecode_hash = "none"` and `cbor_metadata = false`, so
+the deployed code carries no metadata hash for Sourcify to check the metadata against. That setting
+is exactly what makes the init-code hash reproducible and lets one mined CREATE2 address land on
+four chains. **Full-tier Sourcify and one-address-on-four-chains cannot both be had under this
+build; this repository deliberately chose the address.**
 
 **Why the runtime hash differs on every chain, and why that is correct.** The runtime code is *not*
 byte-identical across the four. It is the same 10,634 and 12,953 bytes everywhere, but the keccak
@@ -368,8 +410,9 @@ here as a fixed pair of numbers.
 routed on any of the four chains. The 6 rows in `test/v3/DeploymentsV3Fork.t.sol` exercise the
 deployment against a fork, not against these live addresses, and they are outside `make gate` for
 the endpoint reason given above. `make proof-v3` needs all four endpoints and is therefore also
-outside the gate; the gate runs only the 22 self-test rows and 3 address-arithmetic rows, which need
-no network at all.
+outside the gate; the gate runs only the 29 self-test rows and 3 address-arithmetic rows, which need
+no network at all. The eight Etherscan rows are outside it twice over — they need an endpoint *and* a
+key — so they sit behind the script's own `--etherscan` flag, which neither gate line passes.
 
 ## Proof: Ethereum Sepolia (chain id 11155111)
 

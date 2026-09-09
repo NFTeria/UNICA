@@ -14,7 +14,7 @@
 .PHONY: help all deps doctor build test fuzz snapshot format fmt gate gate-live clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
         rehearse deploy init-pool seed settle topup live readback verify balances _need-deployer _need-signing \
         predict-v3 deploy-v3 deploy-v3-check _deploy-v3-broadcast _need-v3-chain _need-v3-signing \
-        proof-v3 proof-v3-offline proof-v3-self-test
+        proof-v3 proof-v3-offline proof-v3-self-test proof-v3-etherscan
 
 # ── configuration ─────────────────────────────────────────────────────────────
 SEPOLIA_RPC_URL  ?= https://ethereum-sepolia-rpc.publicnode.com
@@ -79,6 +79,7 @@ help:
 	@echo "    make proof-v3         re-prove the V3 four-chain deployment from the chain (needs all four endpoints)"
 	@echo "    make proof-v3-offline the 3 rows of that proof which need no endpoint at all (also run by make gate)"
 	@echo "    make proof-v3-self-test  sabotage the V3 proof's own comparators and require each to go red (also run by make gate)"
+	@echo "    make proof-v3-etherscan  the same proof PLUS 8 explorer rows; needs the four endpoints AND ETHERSCAN_API_KEY"
 	@echo ""
 	@echo "  V3, THE MULTI-CHAIN DEPLOY (one command per chain; keystore password prompted)"
 	@echo "    make predict-v3       the ONE hook and executor address this creation code lands on, every chain, offline"
@@ -348,7 +349,7 @@ proof: proof-v3
 #
 # WHICH ROWS NEED THE NETWORK, so nobody puts the wrong half in the offline gate:
 #
-#   NEEDS AN ENDPOINT (all four aliases) — `proof-v3`. 62 of the 65 rows: chain id, code presence
+#   NEEDS AN ENDPOINT (all four aliases) — `proof-v3`. 62 of its 66 rows: chain id, code presence
 #   and byte counts, both runtime hashes per chain, the masked cross-chain hashes, both bindings,
 #   poolManager, getHookPermissions read from the deployed contract, the deploy receipts, and the
 #   two counter VALUES. These belong here, beside verify-day1 and verify-live, and NOT in `gate`.
@@ -357,7 +358,16 @@ proof: proof-v3
 #
 #   NEEDS NOTHING — `proof-v3-offline` (3 rows: the hook address's low 14 bits are 0x20C0, and
 #   bits 3 and 10 are clear, all pure arithmetic on the address string) and `proof-v3-self-test`
-#   (22 rows of sabotage against the script's own comparators). Both are in `gate` below.
+#   (29 rows of sabotage against the script's own comparators, 7 of them the Etherscan parser fed
+#   the four bodies that endpoint really returns). Both are in `gate` below.
+#
+#   NEEDS AN ENDPOINT **AND A KEY** — `proof-v3-etherscan`. Eight more rows, one per contract per
+#   chain, each asserting the CONTRACT NAME Etherscan reports at that address. They are opt-in
+#   behind the script's own `--etherscan` flag, and THAT IS WHAT KEEPS THEM OUT OF THE GATE: the
+#   two gate lines are `bash script/verify-v3.sh --self-test` and `bash script/verify-v3.sh
+#   --offline`, and neither passes the flag, so no `make gate` can reach a row that needs a key.
+#   Without ETHERSCAN_API_KEY the eight print as eight SKIP lines and the script still runs to the
+#   end — a reader can count the absences instead of inferring them from a gap.
 #
 # It joins `make proof` because `proof` already reaches four chains' worth of somebody else's
 # uptime and is invoked deliberately, never on every build. Its self-test does NOT wait for that:
@@ -370,6 +380,12 @@ proof-v3-offline:
 
 proof-v3-self-test:
 	bash script/verify-v3.sh --self-test
+
+# The four-chain proof plus the eight explorer rows. Not reachable from `gate` by construction —
+# see the note above — because it needs somebody else's endpoint AND a key. ETHERSCAN_API_KEY is
+# read from the environment and never printed by anything in this path.
+proof-v3-etherscan:
+	bash script/verify-v3.sh --etherscan
 
 rehearse: _need-deployer
 	DEPLOYER=$(DEPLOYER) SEPOLIA_RPC_URL=$(SEPOLIA_RPC_URL) bash script/rehearse-anvil.sh
