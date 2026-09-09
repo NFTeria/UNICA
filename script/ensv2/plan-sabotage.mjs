@@ -72,10 +72,10 @@ const SABOTAGE = [
     replace: "  if (false) {",
   },
   {
-    what: "the grant resource is taken from the caller instead of derived from the namehash",
+    what: "the delegation resource is taken from the caller instead of derived from node and key",
     file: ROLES,
-    find: "  const resource = P.resolverNameResource(agentNode);",
-    replace: "  const resource = opts.resource ?? P.resolverNameResource(agentNode);",
+    find: "  const scope = delegationScope({node: agentNode, kind: \"text\", key: recordKey});",
+    replace: "  const scope = opts.scope ?? delegationScope({node: agentNode, kind: \"text\", key: recordKey});",
   },
   {
     what: "the protected-resource list is ignored",
@@ -104,8 +104,8 @@ const SABOTAGE = [
   {
     what: "the text-key residual is emptied out of the denial matrix",
     file: ROLES,
-    find: "    residual:\n      \"On its OWN leaf the agent may write any text key.",
-    replace: "    residual: null, unusedResidual:\n      \"On its OWN leaf the agent may write any text key.",
+    find: "    residual:\n      \"Per-key scoping holds only for a delegation made with authorizeTextRoles.",
+    replace: "    residual: null, unusedResidual:\n      \"Per-key scoping holds only for a delegation made with authorizeTextRoles.",
   },
   {
     what: "the preview trusts each step's own admin/root flags instead of recomputing them",
@@ -130,7 +130,7 @@ const SABOTAGE = [
   {
     what: "a plan with no prepared revocation is allowed to be signable",
     file: PREVIEW,
-    find: "  if (!preview.rows.some((r) => r.kind === STEP_KIND.PREPARED && r.method === \"revokeRoles\")) return false;",
+    find: "  if (!preview.rows.some((r) => r.kind === STEP_KIND.PREPARED && REVOKING_METHODS.has(String(r.method ?? \"\")))) return false;",
     replace: "",
   },
   {
@@ -183,6 +183,32 @@ const SABOTAGE = [
     file: PLAN,
     find: "    merchantRegistryBitmap |= BigInt(row.bit) | P.adminRole(BigInt(row.bit));",
     replace: "    merchantRegistryBitmap |= BigInt(row.bit);",
+  },
+  {
+    // The guard that closes the hole per-key resources opened: protectedResources can only ever
+    // name ONE scope per protected name, and a delegation now lands at a per-key resource that is
+    // not in that list. Before this guard existed, screening a delegation at the pay name's
+    // per-key resource was ACCEPTED.
+    what: "protected names are checked only by resource, not by node, so a per-key resource slips past",
+    file: ROLES,
+    find: "  if (g?.node !== undefined && g?.node !== null && protectedNodes.has(lower(g.node))) {",
+    replace: "  if (false) {",
+  },
+  {
+    // The bitmap losing its admin bits is caught above by the plan's own rows. THIS row removes the
+    // GUARD instead, which is the mutation that matters: a registration missing its admin half is
+    // unrepairable, so the check that refuses it has to be the thing that screams, not a downstream
+    // assertion about a value that happened to be right.
+    what: "the irreversible-registration guard stops refusing a bitmap with no admin half",
+    file: PLAN,
+    find: "  if (missingAdmin.length > 0) {",
+    replace: "  if (false && missingAdmin.length > 0) {",
+  },
+  {
+    what: "the delegation reverts to grantRoles, the call this deployment refuses",
+    file: ROLES,
+    find: "  if (method === \"grantRoles\" || method === \"revokeRoles\") {",
+    replace: "  if (false) {",
   },
 ];
 

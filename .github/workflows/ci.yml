@@ -76,10 +76,30 @@ jobs:
           set -o pipefail
           make gate 2>&1 | tee gate.log
           total=$(grep -oE '\(([0-9]+) total tests\)' gate.log | grep -oE '[0-9]+')
-          expected=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | grep -c . | tr -d ' ')
-          fork=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test/fork --include='*.t.sol' | grep -c . | tr -d ' ')
-          expected=$(( expected - fork ))
-          echo "tests run: ${total:-0}, declared outside test/fork: $expected (fork suites: $fork)"
+          # ONE definition of what the gate skips. This counter used to keep its own list, and twice
+          # the Makefile learned a new exclusion while CI did not — first the fork suites, then
+          # test/compat/ and the v3 fork file — each time turning a correct gate fix into a red push
+          # on tests the gate never ran. So the list is now READ OUT OF THE MAKEFILE and cannot drift.
+          # Nothing here relies on an unquoted variable splitting into words: zsh does not split, and
+          # that has cost this repository three separate defects.
+          pat=$(grep -oE "no-match-path '\{[^}]*\}'" Makefile | head -1 | sed "s/^[^{]*{//; s/}'$//")
+          declared=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | grep -c . | tr -d ' ')
+          excluded=0
+          IFS=',' read -r -a globs <<< "$pat"
+          for g in "${globs[@]}"; do
+            for f in $g; do
+              [ -e "$f" ] || continue
+              if [ -d "$f" ]; then
+                n=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' "$f" --include='*.t.sol' 2>/dev/null | grep -c .)
+              else
+                case "$f" in *.t.sol) n=$(grep -ohE 'function test[A-Za-z0-9_]*\(' "$f" | grep -c .);; *) n=0;; esac
+              fi
+              excluded=$(( excluded + n ))
+            done
+          done
+          expected=$(( declared - excluded ))
+          echo "tests run: ${total:-0}; declared $declared, excluded by the Makefile $excluded, expected $expected"
+          echo "  the gate's own exclusion list, read from the Makefile: $pat"
           test "${total:-0}" -eq "$expected"
 
       # The fork suites are NOT run here, and the reason is not squeamishness. They read historical
@@ -115,10 +135,31 @@ jobs:
           set -o pipefail
           make gate 2>&1 | tee gate.log
           total=$(grep -oE '\(([0-9]+) total tests\)' gate.log | grep -oE '[0-9]+')
-          expected=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | grep -c . | tr -d ' ')
-          fork=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test/fork --include='*.t.sol' | grep -c . | tr -d ' ')
-          expected=$(( expected - fork ))
-          echo "tests run on the fresh clone: ${total:-0}, declared outside test/fork: $expected"
+          # ONE definition of what the gate skips. This counter used to keep its own list, and twice
+          # the Makefile learned a new exclusion while CI did not — first the fork suites, then
+          # test/compat/ and the v3 fork file — each time turning a correct gate fix into a red push
+          # on tests the gate never ran. So the list is now READ OUT OF THE MAKEFILE and cannot drift.
+          # Nothing here relies on an unquoted variable splitting into words: zsh does not split, and
+          # that has cost this repository three separate defects.
+          pat=$(grep -oE "no-match-path '\{[^}]*\}'" Makefile | head -1 | sed "s/^[^{]*{//; s/}'$//")
+          declared=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' test --include='*.t.sol' | grep -c . | tr -d ' ')
+          excluded=0
+          IFS=',' read -r -a globs <<< "$pat"
+          for g in "${globs[@]}"; do
+            for f in $g; do
+              [ -e "$f" ] || continue
+              if [ -d "$f" ]; then
+                n=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' "$f" --include='*.t.sol' 2>/dev/null | grep -c .)
+              else
+                case "$f" in *.t.sol) n=$(grep -ohE 'function test[A-Za-z0-9_]*\(' "$f" | grep -c .);; *) n=0;; esac
+              fi
+              excluded=$(( excluded + n ))
+            done
+          done
+          expected=$(( declared - excluded ))
+          echo "tests run on the fresh clone: ${total:-0}; declared $declared, excluded by the Makefile $excluded, expected $expected"
+          echo "  the gate's own exclusion list, read from the Makefile: $pat"
+          test "${total:-0}" -eq "$expected"
           test "${total:-0}" -eq "$expected"
 
   provenance:
