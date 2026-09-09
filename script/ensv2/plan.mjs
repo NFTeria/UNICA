@@ -857,8 +857,8 @@ export function buildPlan(cfg = {}) {
        expect: `REVERT ${P.ERROR_SELECTOR.EACUnauthorizedAccountRoles} EACUnauthorizedAccountRoles(${resource.pay}, ${asWord(P.RESOLVER_ROLE.SET_ADDR.bit)}, ${agentAddress})`},
       {read: `eth_call setText(${node.treasury}, "${RECORD_KEYS.policyCommitment}", …) from ${agentAddress}`,
        expect: `REVERT naming ${resource.treasury}`},
-      {read: `eth_call grantRoles(${resource.agent}, ${asWord(agentBits.bitmap)}, <anyone>) from ${agentAddress}`,
-       expect: `REVERT ${P.ERROR_SELECTOR.EACCannotGrantRoles} — the agent holds no admin role, so it can pass its authority to nobody`},
+      {read: `eth_call ${SIGNATURES.authorizeTextRoles} — the same delegation the owner sent, re-sent from ${agentAddress}`,
+       expect: `REVERT ${P.ERROR_SELECTOR.EACCannotGrantRoles} naming ${resource.agent}, ${asWord(agentBits.bitmap)}, ${agentAddress} — the agent holds no admin role, so it can pass its authority to nobody`},
       {read: `eth_call setText(${node.agent}, "${RECORD_KEYS.agentCapabilities}", …) from ${agentAddress}`,
        expect: "ACCEPTED — the CONTROL. Without it, three refusals prove only that the agent's address is broken, not that the scoping works."},
     ],
@@ -954,7 +954,14 @@ export function buildPlan(cfg = {}) {
     {
       name: "the merchant may actually grant this role at this resource",
       required: true,
-      read: `eth_call grantRoles(${resource.agent}, ${asWord(agentBits.bitmap)}, ${agentAddress}) from ${merchantOwner}`,
+      // The screen names the call the plan actually SENDS. It used to print `grantRoles`, which is
+      // the one call this deployment refuses outright — an operator following that instruction gets
+      // EACCannotGrantRoles and reads a working delegation as a broken one. The precondition and the
+      // transaction now name one method, because a precondition that screens a different call than
+      // the one signed screens nothing.
+      read: `eth_call ${SIGNATURES.authorizeTextRoles} — dnsName ${dnsEncode(agentName)}, ` +
+            `key "${RECORD_KEYS.agentCapabilities}", account ${agentAddress}, granted true — ` +
+            `sent to ${resolver} from ${merchantOwner}; ACCEPTED means it returns a value rather than reverting`,
       observed: o.merchantMayGrantAtAgentResource === undefined ? null : String(o.merchantMayGrantAtAgentResource),
       satisfied: o.merchantMayGrantAtAgentResource === true,
       why: "granting a role requires holding its ADMIN role. On a per-account resolver the owner holds all of them at ROOT_RESOURCE — Phase 1 decoded 0x1111…1111 on a live one — but the ACCEPTANCE of a resolver grant at a name resource was never exercised, so it is simulated before the plan is signable rather than assumed.",

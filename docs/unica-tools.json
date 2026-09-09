@@ -1173,7 +1173,7 @@
     {
       "id": "ensv2-delegation-planner",
       "name": "ENSv2 delegation planner and role screen",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "status": "IMPLEMENTED — LOCAL TESTS",
       "paths": [
         "script/ensv2/plan.mjs",
