@@ -1,19 +1,24 @@
 /**
  * UNICA treasury guardian — the workflow's logic, and everything the tests read.
  *
- * WHY THIS IS A SEPARATE FILE FROM main.ts, which is the only reason the split exists.
- * The CRE toolchain bundles this workflow and hands it to Javy, which compiles JavaScript to
- * WASM — and Javy refuses to compile a module whose EXPORTS take parameters:
+ * WHY THIS IS A SEPARATE FILE FROM main.ts — and why the reason first written here was WRONG.
+ *
+ * The split was made on 2026-09-08 after hitting
  *
  *     Error: Exported functions with parameters are not supported
  *
- * Only the ENTRY module's exports become WASM exports. `decide`, `policyCommitment`,
- * `onCronTrigger` and `initWorkflow` all take arguments, and all four must stay exported so the
- * suite can drive them directly rather than through the runtime. So they live here, one import
- * away from the entry, where Javy never sees them as exports at all.
+ * and the note recorded here at the time called that a real constraint of the Javy compiler. It is
+ * not. Chainlink's own `hello-world-ts` template exports `onCronTrigger(runtime)` and
+ * `initWorkflow(config)` straight from its entry module and compiles without complaint. The error
+ * was an artifact of running bun 1.2.5 against an SDK that declares `engines.bun >= 1.2.21`.
+ * `docs/feedback/chainlink.md` retracts the claim in full and records the control experiment —
+ * running the sponsor's own unmodified template — that overturned it.
  *
- * That is a real constraint of the compiler and not a style choice: with all of this in main.ts
- * the workflow typechecks, bundles, and then fails at the WASM step with the line above.
+ * The split is KEPT, on its own merits: an entry point should be an entry point, and the logic the
+ * suite drives should be importable without dragging the runtime in. But it is kept for that
+ * reason and not the one originally given, because a comment asserting a false fact about a
+ * sponsor's toolchain, inside the source file that sponsor is being asked to read, is worse than
+ * no comment at all.
  *
  * WHAT MAKES THIS CONFIDENTIAL, AND WHY THE PREVIOUS VERSION DID NOT COUNT.
  * `integrations/chainlink-cre-guardian/*.mjs` is a deterministic policy with a secrets-shaped

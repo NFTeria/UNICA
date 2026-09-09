@@ -96,11 +96,22 @@ carried forward from an earlier one.
 | `flash_liquidator.vy` | **BLOCKED** | [`docs/v3/FLASH-LIQUIDATOR-GAP.md`](docs/v3/FLASH-LIQUIDATOR-GAP.md) | the lending protocol it liquidates is not in this repository; zero tests |
 | `settlement_hook.vy` | **SUPERSEDED PRIOR ART** | `docs/PRIOR-ART.md` | replaced by the frozen V2 hook; not a V3 |
 | finance math library | **BLOCKED** | — | three sources arrived damaged; awaiting authoritative copies |
-| Vyper settlement model + art | locally demonstrated | 80 rows, `cd vy && mox test` | in-process EVM only |
+| Vyper settlement model + art | locally demonstrated | 82 rows, `cd vy && mox test` | in-process EVM only |
 
-Totals from that gate run: **167** Solidity tests, **80** Vyper tests, and **669** JavaScript rows
-across eight suites, plus the secret scan, the copied-source scan, the interface freeze and the
-tool ledger. The 44 fork rows are deliberately **outside** the gate — they need a Sepolia endpoint,
+Totals from that gate run: **182** Solidity tests, **82** Vyper tests, and **1,543** JavaScript
+rows across fourteen suites, plus the secret scan, the copied-source scan, the interface freeze and
+the tool ledger. Re-derive every one of them:
+
+```sh
+grep -rhoE 'function test[A-Za-z0-9_]*\(' test/ | wc -l          # 226 total, minus the 44 in test/fork/
+cd vy && mox test -q                                             # 82 passed
+grep -c 'run_row,node' Makefile                                  # 17 node rows in the gate
+```
+
+Those three figures previously read 167, 80 and 669 across eight suites. All three were stale — a
+hand-typed aggregate under a line promising the numbers were recomputed — and six independent
+readers each found them in under a minute. They are the cheapest claim in this repository to check,
+which is exactly why they were the worst ones to get wrong. The 44 fork rows are deliberately **outside** the gate — they need a Sepolia endpoint,
 and a gate that depends on a third party's uptime is a status page rather than a gate. Run them
 with `make fork`.
 
