@@ -90,9 +90,12 @@ jobs:
             for f in $g; do
               [ -e "$f" ] || continue
               if [ -d "$f" ]; then
-                n=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' "$f" --include='*.t.sol' 2>/dev/null | grep -c .)
+                # `grep -c` EXITS 1 when the count is zero, and these blocks run under `set -e`, so a
+                # directory holding no *.t.sol (test/compat/util/) aborted the whole step. Counting
+                # zero is a legitimate answer, not a failure.
+                n=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' "$f" --include='*.t.sol' 2>/dev/null | grep -c . || true)
               else
-                case "$f" in *.t.sol) n=$(grep -ohE 'function test[A-Za-z0-9_]*\(' "$f" | grep -c .);; *) n=0;; esac
+                case "$f" in *.t.sol) n=$(grep -ohE 'function test[A-Za-z0-9_]*\(' "$f" | grep -c . || true);; *) n=0;; esac
               fi
               excluded=$(( excluded + n ))
             done
@@ -149,9 +152,12 @@ jobs:
             for f in $g; do
               [ -e "$f" ] || continue
               if [ -d "$f" ]; then
-                n=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' "$f" --include='*.t.sol' 2>/dev/null | grep -c .)
+                # `grep -c` EXITS 1 when the count is zero, and these blocks run under `set -e`, so a
+                # directory holding no *.t.sol (test/compat/util/) aborted the whole step. Counting
+                # zero is a legitimate answer, not a failure.
+                n=$(grep -rhoE 'function test[A-Za-z0-9_]*\(' "$f" --include='*.t.sol' 2>/dev/null | grep -c . || true)
               else
-                case "$f" in *.t.sol) n=$(grep -ohE 'function test[A-Za-z0-9_]*\(' "$f" | grep -c .);; *) n=0;; esac
+                case "$f" in *.t.sol) n=$(grep -ohE 'function test[A-Za-z0-9_]*\(' "$f" | grep -c . || true);; *) n=0;; esac
               fi
               excluded=$(( excluded + n ))
             done
