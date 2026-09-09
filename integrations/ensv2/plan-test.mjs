@@ -1270,6 +1270,85 @@ console.log("\n— these files cannot broadcast, and the scanner that says so ca
   }
 }
 
+// ── the preview against its own bytes ─────────────────────────────────────────────────────────
+//
+// The row a human reads and the bytes a wallet signs are built by two different functions from one
+// set of inputs, and two functions over one input drift silently. `calldataAgreesWithArguments`
+// decodes the bytes with a SECOND decoder that knows nothing about what the row claims, and these
+// rows are its sabotage: the control first, then one mutation per side of the comparison. A guard
+// with no failing row is decoration.
+{
+  const SIG = "authorizeTextRoles(bytes,string,address,bool)";
+  const DNS = dnsEncode("agent.treasury.merchant.unica.eth");
+  const KEY = "unica:capabilities";
+  const ACCT = "0x19E56831a10d43CfF5d77f886c799C6b916da7Ae";
+  const good = R.encodeAuthorizeTextRolesCall(DNS, KEY, ACCT, true);
+  const args = [
+    {name: "dnsName", value: DNS}, {name: "key", value: KEY},
+    {name: "account", value: ACCT}, {name: "granted", value: "true"},
+  ];
+
+  // THE CONTROL, and it is built first on purpose. A suite whose control fails is telling you the
+  // suite is broken, never that the protocol is.
+  check("control: the real delegation calldata AGREES with its printed arguments",
+        V.calldataAgreesWithArguments(SIG, good, args)?.ok === true);
+  check("control: the decoder reads all four arguments back",
+        V.decodeCalldata(SIG, good)?.length === 4);
+  check("control: the decoded key is the key, character for character",
+        V.decodeCalldata(SIG, good)?.[1] === KEY);
+
+  // Mutate the BYTES, leave the row alone — an operator reading the preview would see the agent
+  // they expect while signing a grant to somebody else.
+  const otherAcct = ACCT.slice(0, -1) + (ACCT.slice(-1) === "e" ? "f" : "e");
+  const tamperedBytes = R.encodeAuthorizeTextRolesCall(DNS, KEY, otherAcct, true);
+  const s1 = V.calldataAgreesWithArguments(SIG, tamperedBytes, args);
+  check("sabotage: a changed account in the CALLDATA is caught", s1?.ok === false);
+  check("sabotage: and the mismatch names the account argument",
+        s1?.rows?.filter((r) => !r.agrees).map((r) => r.name).join(",") === "account");
+
+  // Mutate the ROW, leave the bytes alone — the mirror, and the likelier direction: a label edited
+  // for readability that quietly stops describing the transaction.
+  const s2 = V.calldataAgreesWithArguments(SIG, good, args.map((a) => a.name === "key" ? {...a, value: "unica:capabilitles"} : a));
+  check("sabotage: a changed key in the PRINTED row is caught", s2?.ok === false);
+
+  // One word, and it is the word that decides whether this grants or revokes.
+  const s3 = V.calldataAgreesWithArguments(SIG, R.encodeAuthorizeTextRolesCall(DNS, KEY, ACCT, false), args);
+  check("sabotage: granted true against a calldata carrying false is caught", s3?.ok === false);
+  check("sabotage: and the mismatch names the granted argument",
+        s3?.rows?.filter((r) => !r.agrees).map((r) => r.name).join(",") === "granted");
+
+  // Not every disagreement is a real one. These must stay quiet or the check becomes noise nobody
+  // reads, which is the same as no check at all.
+  check("control: an address written in a different case still AGREES",
+        V.calldataAgreesWithArguments(SIG, good, args.map((a) => a.name === "account" ? {...a, value: ACCT.toLowerCase()} : a))?.ok === true);
+  const staticSig = "setAddr(bytes32,address)";
+  check("control: a static-only signature decodes too",
+        V.decodeCalldata(staticSig, "0xd5fa2b00" + "bed6d7078442c8974d1a79821b57e17b72191463f06ff6b27b65b17c6c801320" + "000000000000000000000000a121e1ef31bbf0826aa67dc01e7977e80af58d73")?.length === 2);
+  check("control: a signature naming a type this decoder does not handle returns null, not a false pass",
+        V.decodeCalldata("mystery(uint256[])", "0x00000000" + "0".repeat(64)) === null);
+
+  // The selector is checkable on EVERY row whatever the argument types are, and it is the check
+  // that matters most: a row whose printed method is not the method in the bytes describes a
+  // different transaction entirely.
+  const wrongSelector = "0xdeadbeef" + good.slice(10);
+  const s5 = V.calldataAgreesWithArguments(SIG, wrongSelector, args);
+  check("sabotage: a calldata whose SELECTOR is not the row's method is caught", s5?.ok === false);
+  check("sabotage: and it says so even before the arguments are read", s5?.rows?.length === 0);
+
+  // An argument type outside this decoder is UNCHECKED, and unchecked must not render as checked.
+  // register() carries a uint64 expiry and an array-free but six-argument shape; multicall carries
+  // bytes[]. The first must now decode; the second must say plainly that it did not.
+  const regSig = "register(string,address,address,address,uint256,uint64)";
+  check("control: register()'s uint64 no longer defeats the decoder",
+        V.decodeCalldata(regSig, "0x" + "00".repeat(4) + "00".repeat(32 * 6)) !== null);
+  const arr = V.calldataAgreesWithArguments("multicall(bytes[])", "0xac9650d8" + "0".repeat(64), [{name: "calls", value: "…"}]);
+  check("an unsupported ARGUMENT type is reported as unchecked, not as agreement",
+        arr?.checked === false && arr?.selectorAgrees === true);
+  check("...and an unchecked row still refuses nothing, because it found nothing wrong",
+        arr?.ok === true);
+  check("...and it says WHY it could not check", typeof arr?.detail === "string" && arr.detail.includes("bytes[]"));
+}
+
 } catch (e) {
   // A throw is a failure with a reason, not a crash. Without this the summary and the exit status
   // vanish with the first bad call, and a piped run reads as a pass.

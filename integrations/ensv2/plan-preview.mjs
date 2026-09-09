@@ -28,6 +28,7 @@
 // NOTHING HERE SIGNS OR BROADCASTS. It formats. `permissioned-test.mjs` scans this directory and
 // fails if that stops being true.
 
+import {bytesFromHex, readAddress, readBool, readBytes32, readUint, selectorOf} from "../../tools/unica-sign/abi.mjs";
 import {SIGNATURES} from "./permissioned.mjs";
 import {ROLE_TABLE, describeBitmap} from "./roles.mjs";
 import * as P from "./profile.mjs";
@@ -56,6 +57,127 @@ export const STEP_KIND = {
   OWNER_ACTION: "owner-action",
 };
 
+// ── the bytes, read back ──────────────────────────────────────────────────────────────────────
+//
+// A preview earns its name only if the arguments it PRINTS are the arguments the calldata CARRIES.
+// Everything above this line builds the row from the planner's inputs; the calldata is built from
+// the same inputs by a different function, and two functions over one input drift silently. So the
+// row is checked against the bytes rather than beside them: the signature is parsed into types, the
+// calldata is decoded against those types with no knowledge of what the row claims, and the two are
+// compared. A mismatch REFUSES the row, which makes the plan unsignable — the only useful response
+// to "the preview and the transaction disagree" is to sign neither.
+//
+// This is deliberately a SECOND decoder rather than a re-run of the encoder. Re-encoding the row's
+// own arguments and comparing to the calldata would pass happily if the row and the encoder shared
+// a wrong assumption, which is precisely the failure worth catching.
+
+// Every fixed-width integer and byte string is one 32-byte word, so the width only matters for how
+// the value is PRINTED, never for how it is read. `uint64` was the type that first broke this:
+// register() carries an expiry and the decoder called the whole row undecodable over it.
+const isStaticScalar = (t) =>
+  t === "address" || t === "bool" ||
+  /^u?int(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)$/.test(t) ||
+  /^bytes([1-9]|[12][0-9]|3[0-2])$/.test(t);
+const isDynamic = (t) => t === "string" || t === "bytes";
+const canRead = (t) => isStaticScalar(t) || isDynamic(t);
+
+const splitTypes = (signature) => {
+  const open = signature.indexOf("(");
+  if (open < 0 || !signature.endsWith(")")) return null;
+  const inner = signature.slice(open + 1, -1);
+  return inner === "" ? [] : inner.split(",");
+};
+
+/// Decode ABI calldata against a flat, non-tuple signature. Returns an array of canonical strings,
+/// or null if the signature names a type this decoder does not handle — null is "unchecked", and
+/// the caller turns it into a refusal rather than a pass.
+export function decodeCalldata(signature, hex) {
+  const types = splitTypes(String(signature ?? ""));
+  if (!types || types.some((t) => !canRead(t))) return null;
+  const all = bytesFromHex(hex);
+  if (all.length < 4) return null;
+  const data = all.slice(4);
+  const out = [];
+  for (let i = 0; i < types.length; i++) {
+    const at = i * 0x20;
+    if (at + 0x20 > data.length) return null;
+    const t = types[i];
+    if (t === "address") out.push(String(readAddress(data, at)).toLowerCase());
+    else if (t === "bool") out.push(readBool(data, at) ? "true" : "false");
+    else if (/^u?int/.test(t)) out.push(readUint(data, at).toString(10));
+    else if (/^bytes\d+$/.test(t)) out.push(String(readBytes32(data, at)).toLowerCase());
+    else {
+      // Dynamic. The head word is an offset from the start of the argument block.
+      const off = Number(readUint(data, at));
+      if (off + 0x20 > data.length) return null;
+      const len = Number(readUint(data, off));
+      if (off + 0x20 + len > data.length) return null;
+      const body = data.slice(off + 0x20, off + 0x20 + len);
+      out.push(t === "bytes"
+        ? "0x" + Array.from(body, (b) => b.toString(16).padStart(2, "0")).join("")
+        : new TextDecoder().decode(body));
+    }
+  }
+  return out;
+}
+
+/// Compare one printed argument with one decoded one. Values arrive as strings from two different
+/// places, so the comparison normalises what is genuinely the same value written two ways — hex
+/// case, an address checksum, a uint written short — and nothing else. It does NOT normalise a
+/// string argument, because a text record key that differs by one character is a different key.
+const sameValue = (type, printed, decoded) => {
+  const a = String(printed ?? ""), b = String(decoded ?? "");
+  if (type === "string") return a === b;
+  if (type === "bool") return a.toLowerCase() === b;
+  if (/^u?int/.test(type)) {
+    // A uint is one number written any number of ways — 0x1000000, 16777216, or with the leading
+    // zeroes a 32-byte word carries. Compare the NUMBER, or every hex-formatted row is a false
+    // mismatch and the check gets switched off for being noisy.
+    try { return BigInt(a) === BigInt(b); } catch { return false; }
+  }
+  if (/^bytes\d+$/.test(type)) {
+    // A fixed-width bytes value is right-padded into its word, so a row printing the short form and
+    // a calldata carrying the padded one are the same value.
+    const norm = (x) => x.toLowerCase().replace(/^0x/, "").replace(/0+$/, "");
+    return norm(a) === norm(b);
+  }
+  return a.toLowerCase() === b.toLowerCase();
+};
+
+/// null when nothing could be checked, otherwise {ok, rows} with one row per argument.
+export function calldataAgreesWithArguments(signature, hex, args) {
+  if (!hex || !signature || !Array.isArray(args) || args.length === 0) return null;
+  const types = splitTypes(String(signature));
+
+  // The selector is checkable for EVERY row, whatever the argument types are, and it is the check
+  // that matters most: a row whose printed method is not the method in the bytes is describing a
+  // different transaction entirely.
+  const expected = selectorOf(String(signature));
+  const actual = String(hex).slice(0, 10).toLowerCase();
+  if (expected.toLowerCase() !== actual) {
+    return {ok: false, checked: true, rows: [], detail: `the row says ${signature} (${expected}) and the calldata begins ${actual}`};
+  }
+
+  const decoded = types ? decodeCalldata(signature, hex) : null;
+  if (!types || !decoded) {
+    // NOT a refusal, and not a pass either. An array or a tuple is outside this decoder, and
+    // "I could not check this" must be said out loud rather than folded into either verdict —
+    // an unchecked row that renders like a checked one is worse than no check at all.
+    const why = !types ? "the signature could not be parsed"
+      : `${(types.filter((t) => !canRead(t))[0] ?? "a type")} is outside this decoder`;
+    return {ok: true, checked: false, selectorAgrees: true, rows: [], detail: why};
+  }
+  if (types.length !== args.length) {
+    return {ok: false, checked: true, rows: [], detail: `${args.length} printed argument(s) against ${types.length} in the signature`};
+  }
+  const rows = types.map((t, i) => ({
+    name: args[i]?.name ?? `arg${i}`, type: t,
+    printed: String(args[i]?.value ?? ""), decoded: decoded[i],
+    agrees: sameValue(t, args[i]?.value, decoded[i]),
+  }));
+  return {ok: rows.every((r) => r.agrees), checked: true, selectorAgrees: true, rows};
+}
+
 export const PREVIEW_REFUSAL = {
   BATCH_CARRIES_ROLE_CHANGE: "BATCH_CARRIES_ROLE_CHANGE",
   BATCH_CROSSES_TARGETS: "BATCH_CROSSES_TARGETS",
@@ -64,6 +186,8 @@ export const PREVIEW_REFUSAL = {
   NO_ROLLBACK: "NO_ROLLBACK",
   BAD_TARGET: "BAD_TARGET",
   VALUE_MUST_BE_ZERO: "VALUE_MUST_BE_ZERO",
+  CALLDATA_DISAGREES: "CALLDATA_DISAGREES",
+  CALLDATA_UNDECODABLE: "CALLDATA_UNDECODABLE",
 };
 
 export const PREVIEW_REFUSAL_EXPLAIN = {
@@ -74,6 +198,8 @@ export const PREVIEW_REFUSAL_EXPLAIN = {
   NO_ROLLBACK: "This step changes state and names no way back. Anything hard to undo must say how it is undone before it is signed.",
   BAD_TARGET: "The target is not a 20-byte address.",
   VALUE_MUST_BE_ZERO: "None of these calls is payable; a preview carrying value is refused.",
+  CALLDATA_DISAGREES: "The bytes this row would sign do not decode to the arguments this row prints. The preview and the transaction have drifted apart, and the printed one is the one nobody is sending.",
+  CALLDATA_UNDECODABLE: "The row's calldata could not be decoded against its own signature, so the printed arguments are unchecked prose beside an opaque blob.",
 };
 
 // ── whose contract is this, and how well do we know it ────────────────────────────────────────
@@ -223,6 +349,19 @@ export function previewStep(step, opts = {}) {
            note: "an estimate is a simulation at one block; it is not a promise about the block this lands in"});
   if (isTransaction && gas.status === GAS_STATUS.NOT_ESTIMATED) refuse(PREVIEW_REFUSAL.MISSING_GAS, null);
 
+  // The row against its own bytes. Checked for anything that carries calldata, not only the rows
+  // that get signed: a `prepared` revocation whose preview has drifted is a revocation the owner
+  // would reach for in the one moment they cannot afford to read it carefully.
+  const calldataCheck = calldataAgreesWithArguments(
+    call?.signature ?? (call?.method ? SIGNATURES[call.method] ?? null : null), call?.data, step?.arguments,
+  );
+  if (calldataCheck && !calldataCheck.ok) {
+    refuse(
+      PREVIEW_REFUSAL.CALLDATA_DISAGREES,
+      calldataCheck.detail ?? calldataCheck.rows.filter((r) => !r.agrees).map((r) => `${r.name}: printed ${r.printed}, calldata carries ${r.decoded}`),
+    );
+  }
+
   return {
     ordinal: step?.ordinal ?? null,
     kind: step?.kind ?? null,
@@ -258,6 +397,7 @@ export function previewStep(step, opts = {}) {
     detail: step?.detail ?? null,
     note: step?.note ?? null,
     data: call?.data ?? null,
+    calldataCheck,
     marker: isSignedEventually ? OWNER_MARKER : null,
     refusals,
     ok: refusals.length === 0,
@@ -382,6 +522,17 @@ export function renderPlanPreview(preview) {
     if (r.roles.revoked.length) out.push(`   revokes      ${r.roles.revoked.join("|")}  ${r.roles.bitmap}`);
     out.push(`   admin role   ${r.involvesAdminRole ? "YES" : "no"}        ROOT_RESOURCE  ${r.involvesRootResource ? "YES" : "no"}`);
     if (r.kind === "transaction") out.push(`   value        ${r.value}        gas  ${r.gas.status === "ESTIMATED" ? r.gas.estimateDecimal : r.gas.status}`);
+    if (r.data) {
+      out.push(`   calldata     ${r.data}`);
+      out.push(`                ${(r.data.length - 2) / 2} bytes — these are the bytes signed; everything above is this line, decoded`);
+      if (r.calldataCheck) {
+        out.push(!r.calldataCheck.ok
+          ? `   DECODES TO   MISMATCH — ${r.calldataCheck.detail ?? r.calldataCheck.rows.filter((x) => !x.agrees).map((x) => `${x.name}=${x.decoded}`).join(", ")}`
+          : r.calldataCheck.checked === false
+            ? `   decodes to   selector agrees; ARGUMENTS NOT CHECKED — ${r.calldataCheck.detail}. Read these bytes yourself.`
+            : `   decodes to   the ${r.calldataCheck.rows.length} argument(s) printed above, re-read from the calldata by a second decoder`);
+      }
+    }
     if (r.batch) {
       out.push(`   batch        ${r.batch.count} calls, each decoded below`);
       for (const c of r.batch.calls) out.push(`     · ${c.signature}  ${c.arguments.map((a) => `${a.name}=${a.value}`).join(", ")}`);
