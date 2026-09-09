@@ -214,3 +214,6 @@ integrations/chainlink-cre-guardian/workflow/.cre_build_tmp.*
 
 # Vendored agent skills (Uniswap/uniswap-ai). Tooling we consult, not project code.
 .agents/
+
+# The skills installer's lockfile, for content that is itself ignored.
+skills-lock.json
