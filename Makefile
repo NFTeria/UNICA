@@ -131,9 +131,12 @@ if command -v $(1) >/dev/null 2>&1; then $(2); 	else echo "SKIP  $(3): $(1) is n
 endef
 
 gate     : _need-deps
-	@# The fork suites are excluded on purpose. They need a Sepolia endpoint, and a gate that
+	@# The fork suites are excluded on purpose. They need somebody else's endpoint, and a gate that
 	@# depends on a third party's uptime is not a gate — it is a status page. `make fork` runs them.
-	forge build && forge test --no-match-path 'test/fork/*' && forge fmt --check
+	@# test/compat/ is excluded for the same reason and was missed when it was added: it forks THREE
+	@# chains, so without this line every `make gate` opened sockets to Sepolia, Unichain and
+	@# Robinhood. Caught by the adversarial verifier, not by the gate going red.
+	forge build && forge test --no-match-path '{test/fork/*,test/compat/*}' && forge fmt --check
 	bash script/scan.sh
 	bash script/no-copied-source.sh
 	bash script/size-budget.sh
