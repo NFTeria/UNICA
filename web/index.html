@@ -80,6 +80,58 @@
     .ens .row button { flex: 0 0 auto; margin: 0; width: auto; padding: .6rem 1rem; }
     .ens .rows { margin-top: .75rem; }
     @media (max-width: 30rem) { .ens .row { flex-direction: column; } .ens .row button { width: 100%; } }
+
+  /* ── The scrollytelling story ───────────────────────────────────────────────
+     Scrollama does the same job as twenty lines of IntersectionObserver, and this page may not
+     load an external script at all: script/check-surface.sh blocks every external tag shape and
+     every CDN host, because a page that connects a wallet must not execute third-party code.
+     Vendoring the library's source would break the never-copy rule, so the behaviour is written
+     here from what it does — observe steps against a band in the middle of the viewport, report
+     the active index, and let a sticky figure react. No dependency, no build step.
+     The brand is untouched: the same ink/paper/accent, the same 4px radius, the accent still
+     spent only where it was already spent. */
+  .story { margin: 64px 0; }
+  .story-lead { max-width: 34rem; margin: 0 0 48px; }
+  .scrolly { display: grid; gap: 32px; }
+  @media (min-width: 900px) { .scrolly { grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; } }
+  .figure-wrap { position: sticky; top: 12vh; }
+  @media (prefers-reduced-motion: reduce) { .figure-wrap { position: static; } }
+  .figure {
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+    padding: 24px; min-height: 260px; display: flex; flex-direction: column; justify-content: center;
+  }
+  .fig-panel { display: none; }
+  .fig-panel[data-on="1"] { display: block; }
+  .fig-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
+  .chip {
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper);
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+  }
+  .chip.on { border-color: var(--accent); }
+  .chip.off { color: var(--muted); }
+  .arrow { color: var(--muted); font-size: 14px; }
+  .fig-note { color: var(--muted); font-size: 14px; margin: 12px 0 0; }
+  .fig-num { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .steps { display: flex; flex-direction: column; gap: 4px; }
+  .step {
+    padding: 28px 0 28px 16px; border-left: 2px solid var(--line);
+    opacity: .45; transition: opacity .2s ease, border-color .2s ease;
+  }
+  .step[data-active="1"] { opacity: 1; border-left-color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { .step { opacity: 1; transition: none; } }
+  .step h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
+  .step p { margin: 0; max-width: 32rem; }
+  .step .k { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 4px; }
+  .proof { margin-top: 12px; font-size: 14px; }
+  .proof code { font-size: 13px; word-break: break-all; }
+  .live-tag {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .04em;
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 2px 6px; color: var(--muted);
+  }
+  .live-tag.ok { border-color: var(--accent); color: var(--accent); }
+  table.roles { border-collapse: collapse; width: 100%; font-size: 14px; margin-top: 8px; }
+  table.roles th, table.roles td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.roles td.num { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -88,6 +140,82 @@
     <h1>Pay with UNICA</h1>
     <p class="sub">You pay in ETH. The recipient is paid in USDC. One transaction, on Uniswap v4.</p>
   </header>
+
+  <section class="story" aria-labelledby="story-h">
+    <div class="story-lead">
+      <h2 id="story-h">What happens when you press pay</h2>
+      <p class="sub">UNICA demonstrates a live, verified USDC settlement flow on Uniswap v4 Sepolia, with order-bound full-fill enforcement and an indexable receipt.</p>
+    </div>
+
+    <div class="scrolly">
+      <div class="figure-wrap">
+        <div class="figure" id="figure" aria-live="polite">
+          <div class="fig-panel" data-fig="0" data-on="1">
+            <div class="fig-row"><span class="chip">the till</span><span class="arrow">— no path —</span><span class="chip off">the treasury</span></div>
+            <p class="fig-note">A merchant either holds what they are paid, or converts it and pays for the privilege.</p>
+          </div>
+          <div class="fig-panel" data-fig="1">
+            <div class="fig-row"><span class="chip on">order</span></div>
+            <p class="fig-note">recipient · payout asset · <span class="fig-num">exact amount</span> · deadline. Written by an authenticated call, never by the payer.</p>
+          </div>
+          <div class="fig-panel" data-fig="2">
+            <div class="fig-row"><span class="chip">0.001 ETH</span><span class="arrow">→</span><span class="chip">Uniswap v4 pool</span></div>
+            <p class="fig-note">The payer arrives holding something else entirely and swaps through the official Universal Router.</p>
+          </div>
+          <div class="fig-panel" data-fig="3">
+            <div class="fig-row"><span class="chip on">hook</span><span class="arrow">exact fill</span><span class="chip">paid</span></div>
+            <div class="fig-row"><span class="chip off">hook</span><span class="arrow">anything less</span><span class="chip off">revert</span></div>
+            <p class="fig-note">Enforced inside the swap. There is no window between "the swap worked" and "the merchant was paid", because they are one transaction.</p>
+          </div>
+          <div class="fig-panel" data-fig="4">
+            <div class="fig-row"><span class="chip on">receipt</span><span class="arrow">→</span><span class="chip">indexed</span></div>
+            <p class="fig-note"><span class="fig-num">2.003660</span> USDC, fee <span class="fig-num">0</span>, emitted in the same transaction and queried back out of a subgraph.</p>
+          </div>
+          <div class="fig-panel" data-fig="5">
+            <div class="fig-row"><span class="chip on">merchant keeps the name</span></div>
+            <div class="fig-row"><span class="chip">agent</span><span class="arrow">one text key</span><span class="chip off">nothing else</span></div>
+            <p class="fig-note">The merchant is an ENSv2 name, not an address. A delegate gets one record key and no authority over the money.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="steps" id="steps">
+        <article class="step" data-step="0" data-active="1">
+          <span class="k">The problem</span>
+          <h3>The till and the treasury are two places</h3>
+          <p>A merchant accepting crypto either holds the asset and takes the risk, or converts immediately and pays a spread to do it. The gap between the two is where the money goes.</p>
+        </article>
+        <article class="step" data-step="1">
+          <span class="k">The quote</span>
+          <h3>The merchant names an exact amount</h3>
+          <p>Recipient, payout asset, exact amount, deadline — registered by an authenticated call. The payer supplies only an order id, so nothing a caller sends can change who gets paid.</p>
+        </article>
+        <article class="step" data-step="2">
+          <span class="k">The swap</span>
+          <h3>The payer brings whatever they hold</h3>
+          <p>The swap runs through Uniswap's official Universal Router into a v4 pool whose hook admits only this path.</p>
+        </article>
+        <article class="step" data-step="3">
+          <span class="k">The enforcement</span>
+          <h3>Exact fill, or nobody moves</h3>
+          <p>The hook checks the realised output against the order inside the swap. Short fill reverts the whole transaction. It holds no custody, takes no fee, returns no delta and runs no oracle — and its permission bits are readable from its address alone, with no RPC call and no trust in us.</p>
+          <p class="proof"><span class="live-tag" id="tag-bits">checking…</span> <code id="bits-note">hook flags 0x20C0</code></p>
+        </article>
+        <article class="step" data-step="4">
+          <span class="k">The proof</span>
+          <h3>A receipt, and somewhere to read it</h3>
+          <p>One receipt per settlement, carrying the order id, emitted inside the swap. A subgraph indexes it, so the merchant's record of what settled is a query rather than a promise.</p>
+          <div class="proof" id="graph-live"><span class="live-tag">querying the subgraph…</span></div>
+        </article>
+        <article class="step" data-step="5">
+          <span class="k">The identity</span>
+          <h3>A merchant is a name, and a delegate is not the owner</h3>
+          <p>The merchant holds an ENSv2 name on Sepolia and never transfers it. A delegate is authorised for one text record key — not the name, not the payment address, and not the ability to pass that authority to anyone else.</p>
+          <div class="proof" id="ens-live"><span class="live-tag">reading the resolver…</span></div>
+        </article>
+      </div>
+    </div>
+  </section>
 
   <div id="view"><p class="sub">Reading the order from Ethereum Sepolia…</p></div>
 
@@ -129,6 +257,17 @@ const CFG = {
   release: { tag: "live-green", commit: "5e1d843" },
   amountIn: 10n ** 15n, // the fixed 0.001 ETH input of every order this page registers
   receiptTx: "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83", // the canonical receipt
+  // The subgraph that indexes the hook above. Deployed to Subgraph Studio 2026-09-09; the version
+  // is in the path, so a redeploy is a new URL and a stale one fails loudly rather than quietly.
+  subgraph: "https://api.studio.thegraph.com/query/1755384/unica-settlements/v1-632f2e3",
+  // ENSv2 on Sepolia. `unica.eth` is a TESTNET name registered by this project's deployer; ENSv2's
+  // registries hold zero bytes on mainnet, and no ownership of or affiliation with any mainnet name
+  // is claimed. The three resource ids are derived from the names and are recomputable by anyone.
+  ensResolver: "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+  ensAgent: "0x19E56831a10d43CfF5d77f886c799C6b916da7Ae",
+  ensPerKeyResource: "0x9b289d4e553d53cae7128b89eba6a145403bcf03abd52b51158be2191e070e6f", // agent leaf, key "unica:capabilities" — where the grant lands
+  ensNameResource: "0x1ab7299e2f7f2c26e85bcf47365146b44828be79be8035d32737f9403ab755e8",  // the same leaf, name level — stays empty
+  ensPayResource: "0xa4c00ea601a909af0e73a924061b704d33112b787811b8e4ed0c700e1ad479a2",   // pay.merchant.unica.eth — the agent must hold nothing here
   // Function selectors, each computed with `cast sig "<signature>"` and pinned with its signature.
   sel: {
     orders: "0x9c3f1e90",             // orders(bytes32)                                  on the executor
@@ -137,6 +276,7 @@ const CFG = {
     orderCount: "0x2453ffa8",         // orderCount()                                     on the executor
     hookOf: "0xa54eb242",             // HOOK()                                           on the executor
     settlementExecutor: "0x8dec7ecc", // SETTLEMENT_EXECUTOR()                            on the hook
+    roles: "0x5adf4724",              // roles(uint256,address)                           on the ENSv2 resolver
     poolManagerOf: "0xdc4c90d3",      // poolManager()                                    on StateView
     getSlot0: "0xc815641c",           // getSlot0(bytes32)                                on StateView
     getLiquidity: "0xfa6793d5"        // getLiquidity(bytes32)                            on StateView
@@ -644,6 +784,116 @@ function renderReceipt(r, hash) {
       recipient was paid. <a href="${CFG.explorer}/tx/${hash}#eventlog">See it on the explorer</a>.</p>
     </div>`;
 }
+
+// ── The story: steps, and the three live rows under them ──────────────────────────────────────
+//
+// Scrollama's contract in one paragraph: watch a set of steps against a horizontal band in the
+// viewport, and report which one is currently in it. That is an IntersectionObserver with a
+// rootMargin that collapses the viewport to a band, so it is written here rather than fetched —
+// this page may not load anything from another origin (script/check-surface.sh, five checks with
+// their controls), and copying the library's source in would break the never-copy rule. Written
+// from the behaviour, not from the bytes.
+function wireStory() {
+  const steps = [...document.querySelectorAll(".step")];
+  const panels = [...document.querySelectorAll(".fig-panel")];
+  if (!steps.length || !("IntersectionObserver" in window)) return; // no observer: every step stays legible
+
+  const show = (i) => {
+    steps.forEach((s) => s.setAttribute("data-active", s.dataset.step === String(i) ? "1" : "0"));
+    panels.forEach((f) => f.setAttribute("data-on", f.dataset.fig === String(i) ? "1" : "0"));
+  };
+
+  // The band is the middle ~20% of the viewport. A step is "active" while it crosses it, which is
+  // what makes exactly one step light up rather than several at once on a tall screen.
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) show(Number(e.target.dataset.step));
+  }, { rootMargin: "-40% 0px -40% 0px", threshold: 0 });
+  steps.forEach((s) => io.observe(s));
+  show(0);
+}
+
+// The hook's permission bits, computed from the address alone. No RPC call: this is the claim the
+// story makes one step earlier, so the page proves it in front of the reader rather than asserting
+// it. Bit 3 is BEFORE_SWAP_RETURNS_DELTA and bit 10 is AFTER_ADD_LIQUIDITY — the two that a hook
+// which could consume the payer's swap would need.
+function renderBits() {
+  const tag = document.getElementById("tag-bits"), note = document.getElementById("bits-note");
+  if (!tag || !note) return;
+  const flags = BigInt(CFG.hook) & 0x3fffn;
+  const b3 = (flags >> 3n) & 1n, b10 = (flags >> 10n) & 1n;
+  const ok = flags === 0x20c0n && b3 === 0n && b10 === 0n;
+  tag.textContent = ok ? "computed from the address" : "UNEXPECTED";
+  tag.className = "live-tag" + (ok ? " ok" : "");
+  note.textContent = "flags 0x" + flags.toString(16).toUpperCase()
+    + " = beforeInitialize|beforeSwap|afterSwap · return-delta bits 3 and 10 both clear";
+}
+
+// The subgraph, queried live. A failure says so; it never renders an empty result as "no
+// settlements", because an unreachable endpoint and a chain with nothing on it look identical.
+async function renderGraph() {
+  const el = document.getElementById("graph-live");
+  if (!el) return;
+  try {
+    const r = await fetch(CFG.subgraph, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "{ settlements { id amountIn amountOut fee } }" }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const rows = j?.data?.settlements;
+    if (!Array.isArray(rows)) throw new Error("no settlements field in the answer");
+    if (!rows.length) { el.innerHTML = '<span class="live-tag">the subgraph answered, and holds no settlement yet</span>'; return; }
+    const s0 = rows[0];
+    el.innerHTML = '<span class="live-tag ok">live from the subgraph</span> '
+      + '<span class="fig-num">' + esc(fmt(BigInt(s0.amountIn), 18, 3)) + '</span> ETH in, '
+      + '<span class="fig-num">' + esc(fmt(BigInt(s0.amountOut), 6, 6)) + '</span> USDC out, fee '
+      + '<span class="fig-num">' + esc(s0.fee) + '</span><br><code>' + esc(s0.id) + '</code>'
+      + '<br><span class="sub">the entity id is the settlement transaction hash followed by the log position it was emitted at</span>';
+  } catch (e) {
+    el.innerHTML = '<span class="live-tag">the subgraph could not be reached — ' + esc(e.message)
+      + '. This is a failed read, not an empty result.</span>';
+  }
+}
+
+// The delegation, read from the resolver. Four resources, and the three zeros are the point: an
+// agent that can write one key and holds nothing anywhere else.
+async function renderEns() {
+  const el = document.getElementById("ens-live");
+  if (!el) return;
+  const roles = async (resource) => {
+    const data = CFG.sel.roles + resource.slice(2).padStart(64, "0")
+      + CFG.ensAgent.slice(2).toLowerCase().padStart(64, "0");
+    const out = await rpc("eth_call", [{ to: CFG.ensResolver, data }, "latest"]);
+    if (!out || out === "0x") throw new Error("the resolver returned no data");
+    return BigInt(out);
+  };
+  try {
+    const [perKey, nameLevel, pay, root] = await Promise.all([
+      roles(CFG.ensPerKeyResource), roles(CFG.ensNameResource), roles(CFG.ensPayResource),
+      roles("0x0000000000000000000000000000000000000000000000000000000000000000"),
+    ]);
+    const ok = perKey === 16n && nameLevel === 0n && pay === 0n && root === 0n;
+    const row = (what, v, expect) =>
+      "<tr><td>" + what + "</td><td class=\"num\">" + v.toString()
+      + "</td><td class=\"sub\">" + expect + "</td></tr>";
+    el.innerHTML = '<span class="live-tag' + (ok ? " ok" : "") + '">'
+      + (ok ? "read from the resolver, now" : "UNEXPECTED — read it yourself") + "</span>"
+      + '<table class="roles"><tr><th>resource</th><th>role word</th><th></th></tr>'
+      + row("one text key", perKey, "16 = SET_TEXT, the delegation")
+      + row("the whole name", nameLevel, "0 — the delegation is not here")
+      + row("the payment name", pay, "0 — the agent cannot move the money")
+      + row("ROOT_RESOURCE", root, "0 — no blanket authority")
+      + "</table>";
+  } catch (e) {
+    el.innerHTML = '<span class="live-tag">the resolver could not be read — ' + esc(e.message)
+      + ". Unread authority is not absent authority.</span>";
+  }
+}
+
+wireStory();
+renderBits();
+renderGraph();
+renderEns();
 
 main().catch((e) => renderMissing("Could not read the chain", esc(e.message)));
 </script>
