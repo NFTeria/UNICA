@@ -121,7 +121,8 @@
         "docs/proof/verify-live.sh",
         "docs/proof/verify-day1.sh",
         "script/readback.sh"
-      ],
+      ,
+        "docs/proof/retry.sh"],
       "networks": [
         "ethereum-sepolia"
       ],
@@ -142,7 +143,7 @@
       "sponsorRoles": [
         "uniswap"
       ],
-      "lastVerifiedCommit": "316df1c6f89cabc1d486c3cbe493bafb9eaa22f3"
+      "lastVerifiedCommit": "e3c0c4ecc00974badb4135ad2331dd8eb5400979"
     },
     {
       "id": "v1-graph-indexer",

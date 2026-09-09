@@ -12,6 +12,10 @@
 # first run lost it to a deadline (docs/DEPLOYMENT.md). Control after the rewrite, on a fork of the
 # chain before any settlement: the settlement rows fail and the deploy rows pass.
 set -uo pipefail
+# Every `cast` below is retried on an empty answer. See docs/proof/retry.sh for the measurement
+# that made this necessary: this script scored 28/31, 24/31, 28/31 in one minute against a chain
+# that had not changed.
+. "$(dirname "$0")/retry.sh"
 RPC="${1:-https://ethereum-sepolia-rpc.publicnode.com}"
 DEPLOY_RECORD="${2:-broadcast/LiveFire.s.sol/11155111/run-latest.json}"
 SETTLE_RECORD="${3:-broadcast/Interactions.s.sol/11155111/run-latest.json}"
@@ -110,3 +114,4 @@ chk "no residual USDC on the router" "[ \"\$(call $USDC \"$SIG_BAL\" $ROUTER)\" 
 chk "Sourcify: hook source verified" "curl -sf https://sourcify.dev/server/v2/contract/11155111/$HOOK | grep -q '\"match\":\"'"
 chk "Sourcify: executor source verified" "curl -sf https://sourcify.dev/server/v2/contract/11155111/$EXECUTOR | grep -q '\"match\":\"'"
 echo "checks run: $((ok+fail)), passed: $ok, failed: $fail"
+report_retries
