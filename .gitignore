@@ -211,3 +211,6 @@ integrations/chainlink-cre-guardian/workflow/node_modules/
 # compiles that to .cre_build_tmp.wasm beside the source. Both are regenerated on every run and
 # the .js is a 0.79 MB bundle of the whole dependency tree — build output, not source.
 integrations/chainlink-cre-guardian/workflow/.cre_build_tmp.*
+
+# Vendored agent skills (Uniswap/uniswap-ai). Tooling we consult, not project code.
+.agents/
