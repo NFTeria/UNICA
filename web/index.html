@@ -81,47 +81,44 @@
     .ens .rows { margin-top: .75rem; }
     @media (max-width: 30rem) { .ens .row { flex-direction: column; } .ens .row button { width: 100%; } }
 
-  /* ── The scrollytelling story ───────────────────────────────────────────────
-     Scrollama does the same job as twenty lines of IntersectionObserver, and this page may not
-     load an external script at all: script/check-surface.sh blocks every external tag shape and
-     every CDN host, because a page that connects a wallet must not execute third-party code.
-     Vendoring the library's source would break the never-copy rule, so the behaviour is written
-     here from what it does — observe steps against a band in the middle of the viewport, report
-     the active index, and let a sticky figure react. No dependency, no build step.
-     The brand is untouched: the same ink/paper/accent, the same 4px radius, the accent still
-     spent only where it was already spent. */
-  .story { margin: 64px 0; }
-  .story-lead { max-width: 34rem; margin: 0 0 48px; }
-  .scrolly { display: grid; gap: 32px; }
-  @media (min-width: 900px) { .scrolly { grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; } }
-  .figure-wrap { position: sticky; top: 12vh; }
-  @media (prefers-reduced-motion: reduce) { .figure-wrap { position: static; } }
-  .figure {
-    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
-    padding: 24px; min-height: 260px; display: flex; flex-direction: column; justify-content: center;
+  /* ── The story: flat, stacked, always readable ──────────────────────────────
+     This started as a scrollytelling section — a sticky figure and steps that faded to 45%
+     opacity until they were the active one. That is the convention, and the convention is
+     wrong here: dimmed text is harder to read, and a figure pinned over the page fights the
+     reader instead of helping them. Both are gone. What is left is six sections stacked down
+     the page, alternating side to side, every word at full contrast, and no JavaScript
+     deciding what you are allowed to see. It works with scripting off.
+     The brand is unchanged: same ink, paper, accent, 4px radius, accent still cta-only. */
+  .story { margin: 56px 0; }
+  .story-lead { max-width: 34rem; margin: 0 0 40px; }
+  .beat {
+    display: grid; gap: 20px; padding: 28px 0;
+    border-top: 1px solid var(--line); align-items: center;
   }
-  .fig-panel { display: none; }
-  .fig-panel[data-on="1"] { display: block; }
-  .fig-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
+  @media (min-width: 820px) {
+    .beat { grid-template-columns: 1fr 1fr; gap: 40px; }
+    .beat.flip .beat-fig { order: -1; }
+  }
+  .beat h3 { margin: 0 0 8px; font-size: 19px; font-weight: 700; }
+  .beat p { margin: 0; max-width: 34rem; }
+  .beat .k {
+    font-size: 12px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .08em; display: block; margin-bottom: 6px; font-weight: 500;
+  }
+  .beat-fig {
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+    padding: 20px;
+  }
+  .fig-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
   .chip {
     border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper);
-    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    padding: 7px 11px; font-size: 14px; font-weight: 500;
   }
   .chip.on { border-color: var(--accent); }
   .chip.off { color: var(--muted); }
   .arrow { color: var(--muted); font-size: 14px; }
-  .fig-note { color: var(--muted); font-size: 14px; margin: 12px 0 0; }
+  .fig-note { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
   .fig-num { font-variant-numeric: tabular-nums; font-weight: 700; }
-  .steps { display: flex; flex-direction: column; gap: 4px; }
-  .step {
-    padding: 28px 0 28px 16px; border-left: 2px solid var(--line);
-    opacity: .45; transition: opacity .2s ease, border-color .2s ease;
-  }
-  .step[data-active="1"] { opacity: 1; border-left-color: var(--accent); }
-  @media (prefers-reduced-motion: reduce) { .step { opacity: 1; transition: none; } }
-  .step h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
-  .step p { margin: 0; max-width: 32rem; }
-  .step .k { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 4px; }
   .proof { margin-top: 12px; font-size: 14px; }
   .proof code { font-size: 13px; word-break: break-all; }
   .live-tag {
@@ -132,6 +129,16 @@
   table.roles { border-collapse: collapse; width: 100%; font-size: 14px; margin-top: 8px; }
   table.roles th, table.roles td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
   table.roles td.num { font-variant-numeric: tabular-nums; }
+  /* The mark, and the row of what this is built on. */
+  .brandbar svg { width: 44px; height: 44px; display: block; margin-bottom: 14px; }
+  .brandbar h2 { margin: 0; }
+  .builton { margin: 40px 0 0; padding-top: 20px; border-top: 1px solid var(--line); }
+  .builton ul { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .builton li {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px;
+    font-size: 14px; font-weight: 500; background: var(--surface);
+  }
+  .builton li span { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -143,77 +150,70 @@
 
   <section class="story" aria-labelledby="story-h">
     <div class="story-lead">
-      <h2 id="story-h">What happens when you press pay</h2>
+      <div class="brandbar">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="UNICA"><rect width="64" height="64" rx="6" fill="#FBFBFA"/><g fill="#14161A"><rect x="10" y="8" width="10" height="14"/><rect x="10" y="25" width="16" height="14"/><rect x="10" y="42" width="22" height="14"/></g><rect x="40" y="8" width="14" height="48" fill="#0B6E4F"/></svg>
+        <h2 id="story-h">What happens when you press pay</h2></div>
       <p class="sub">UNICA demonstrates a live, verified USDC settlement flow on Uniswap v4 Sepolia, with order-bound full-fill enforcement and an indexable receipt.</p>
     </div>
 
-    <div class="scrolly">
-      <div class="figure-wrap">
-        <div class="figure" id="figure" aria-live="polite">
-          <div class="fig-panel" data-fig="0" data-on="1">
-            <div class="fig-row"><span class="chip">the till</span><span class="arrow">— no path —</span><span class="chip off">the treasury</span></div>
-            <p class="fig-note">A merchant either holds what they are paid, or converts it and pays for the privilege.</p>
-          </div>
-          <div class="fig-panel" data-fig="1">
-            <div class="fig-row"><span class="chip on">order</span></div>
-            <p class="fig-note">recipient · payout asset · <span class="fig-num">exact amount</span> · deadline. Written by an authenticated call, never by the payer.</p>
-          </div>
-          <div class="fig-panel" data-fig="2">
-            <div class="fig-row"><span class="chip">0.001 ETH</span><span class="arrow">→</span><span class="chip">Uniswap v4 pool</span></div>
-            <p class="fig-note">The payer arrives holding something else entirely and swaps through the official Universal Router.</p>
-          </div>
-          <div class="fig-panel" data-fig="3">
-            <div class="fig-row"><span class="chip on">hook</span><span class="arrow">exact fill</span><span class="chip">paid</span></div>
-            <div class="fig-row"><span class="chip off">hook</span><span class="arrow">anything less</span><span class="chip off">revert</span></div>
-            <p class="fig-note">Enforced inside the swap. There is no window between "the swap worked" and "the merchant was paid", because they are one transaction.</p>
-          </div>
-          <div class="fig-panel" data-fig="4">
-            <div class="fig-row"><span class="chip on">receipt</span><span class="arrow">→</span><span class="chip">indexed</span></div>
-            <p class="fig-note"><span class="fig-num">2.003660</span> USDC, fee <span class="fig-num">0</span>, emitted in the same transaction and queried back out of a subgraph.</p>
-          </div>
-          <div class="fig-panel" data-fig="5">
-            <div class="fig-row"><span class="chip on">merchant keeps the name</span></div>
-            <div class="fig-row"><span class="chip">agent</span><span class="arrow">one text key</span><span class="chip off">nothing else</span></div>
-            <p class="fig-note">The merchant is an ENSv2 name, not an address. A delegate gets one record key and no authority over the money.</p>
-          </div>
-        </div>
+    <article class="beat">
+      <div>
+        <span class="k">The problem</span>
+        <h3>The till and the treasury are two places</h3>
+        <p>A merchant accepting crypto either holds the asset and takes the risk, or converts immediately and pays a spread to do it. The gap between the two is where the money goes.</p>
       </div>
+      <div class="beat-fig"><div class="fig-row"><span class="chip">the till</span><span class="arrow">— no path —</span><span class="chip off">the treasury</span></div><p class="fig-note">Two places, and the merchant pays to move between them.</p></div>
+    </article>
+    <article class="beat flip">
+      <div>
+        <span class="k">The quote</span>
+        <h3>The merchant names an exact amount</h3>
+        <p>Recipient, payout asset, exact amount, deadline — registered by an authenticated call. The payer supplies only an order id, so nothing a caller sends can change who gets paid.</p>
+      </div>
+      <div class="beat-fig"><div class="fig-row"><span class="chip on">order</span></div><p class="fig-note">recipient · payout asset · <span class="fig-num">exact amount</span> · deadline</p></div>
+    </article>
+    <article class="beat">
+      <div>
+        <span class="k">The swap</span>
+        <h3>The payer brings whatever they hold</h3>
+        <p>The swap runs through Uniswap's official Universal Router into a v4 pool whose hook admits only this path.</p>
+      </div>
+      <div class="beat-fig"><div class="fig-row"><span class="chip">0.001 ETH</span><span class="arrow">→</span><span class="chip">Uniswap v4 pool</span></div><p class="fig-note">The payer never has to hold what the merchant wants.</p></div>
+    </article>
+    <article class="beat flip">
+      <div>
+        <span class="k">The enforcement</span>
+        <h3>Exact fill, or nobody moves</h3>
+        <p>The hook checks the realised output against the order inside the swap. A short fill reverts the whole transaction. It holds no custody, takes no fee, returns no delta and runs no oracle — and its permission bits are readable from its address alone, with no RPC call and no trust in us.</p>
+      </div>
+      <div class="beat-fig"><div class="fig-row"><span class="chip on">hook</span><span class="arrow">exact fill</span><span class="chip">paid</span></div><div class="fig-row"><span class="chip off">hook</span><span class="arrow">anything less</span><span class="chip off">revert</span></div><div class="proof"><span class="live-tag" id="tag-bits">checking…</span> <code id="bits-note">hook flags 0x20C0</code></div></div>
+    </article>
+    <article class="beat">
+      <div>
+        <span class="k">The proof</span>
+        <h3>A receipt, and somewhere to read it</h3>
+        <p>One receipt per settlement, carrying the order id, emitted inside the swap. A subgraph indexes it, so the merchant's record of what settled is a query rather than a promise.</p>
+      </div>
+      <div class="beat-fig"><div class="fig-row"><span class="chip on">receipt</span><span class="arrow">→</span><span class="chip">indexed</span></div><div class="proof" id="graph-live"><span class="live-tag">querying the subgraph…</span></div></div>
+    </article>
+    <article class="beat flip">
+      <div>
+        <span class="k">The identity</span>
+        <h3>A merchant is a name, and a delegate is not the owner</h3>
+        <p>The merchant holds an ENSv2 name on Sepolia and never transfers it. A delegate is authorised for one text record key — not the name, not the payment address, and not the ability to pass that authority to anyone else.</p>
+      </div>
+      <div class="beat-fig"><div class="fig-row"><span class="chip on">merchant keeps the name</span></div><div class="fig-row"><span class="chip">agent</span><span class="arrow">one text key</span><span class="chip off">nothing else</span></div><div class="proof" id="ens-live"><span class="live-tag">reading the resolver…</span></div></div>
+    </article>
 
-      <div class="steps" id="steps">
-        <article class="step" data-step="0" data-active="1">
-          <span class="k">The problem</span>
-          <h3>The till and the treasury are two places</h3>
-          <p>A merchant accepting crypto either holds the asset and takes the risk, or converts immediately and pays a spread to do it. The gap between the two is where the money goes.</p>
-        </article>
-        <article class="step" data-step="1">
-          <span class="k">The quote</span>
-          <h3>The merchant names an exact amount</h3>
-          <p>Recipient, payout asset, exact amount, deadline — registered by an authenticated call. The payer supplies only an order id, so nothing a caller sends can change who gets paid.</p>
-        </article>
-        <article class="step" data-step="2">
-          <span class="k">The swap</span>
-          <h3>The payer brings whatever they hold</h3>
-          <p>The swap runs through Uniswap's official Universal Router into a v4 pool whose hook admits only this path.</p>
-        </article>
-        <article class="step" data-step="3">
-          <span class="k">The enforcement</span>
-          <h3>Exact fill, or nobody moves</h3>
-          <p>The hook checks the realised output against the order inside the swap. Short fill reverts the whole transaction. It holds no custody, takes no fee, returns no delta and runs no oracle — and its permission bits are readable from its address alone, with no RPC call and no trust in us.</p>
-          <p class="proof"><span class="live-tag" id="tag-bits">checking…</span> <code id="bits-note">hook flags 0x20C0</code></p>
-        </article>
-        <article class="step" data-step="4">
-          <span class="k">The proof</span>
-          <h3>A receipt, and somewhere to read it</h3>
-          <p>One receipt per settlement, carrying the order id, emitted inside the swap. A subgraph indexes it, so the merchant's record of what settled is a query rather than a promise.</p>
-          <div class="proof" id="graph-live"><span class="live-tag">querying the subgraph…</span></div>
-        </article>
-        <article class="step" data-step="5">
-          <span class="k">The identity</span>
-          <h3>A merchant is a name, and a delegate is not the owner</h3>
-          <p>The merchant holds an ENSv2 name on Sepolia and never transfers it. A delegate is authorised for one text record key — not the name, not the payment address, and not the ability to pass that authority to anyone else.</p>
-          <div class="proof" id="ens-live"><span class="live-tag">reading the resolver…</span></div>
-        </article>
-      </div>
+    <div class="builton">
+      <h3 style="margin:0;font-size:15px">Built on</h3>
+      <ul>
+        <li>Uniswap v4<span>the settlement mechanism — hook, PoolManager, Universal Router</span></li>
+        <li>ENSv2 on Sepolia<span>merchant identity and the scoped delegation</span></li>
+        <li>The Graph<span>the receipt, indexed and queried back</span></li>
+        <li>Chainlink CRE<span>a confidential treasury workflow, at a seam</span></li>
+      </ul>
+      <p class="note" style="margin-top:12px">Named in text rather than as logo art: this page may load nothing from another origin, and drawing somebody else's trademark from memory is worse than not showing it.</p>
     </div>
   </section>
 
@@ -785,32 +785,9 @@ function renderReceipt(r, hash) {
     </div>`;
 }
 
-// ── The story: steps, and the three live rows under them ──────────────────────────────────────
-//
-// Scrollama's contract in one paragraph: watch a set of steps against a horizontal band in the
-// viewport, and report which one is currently in it. That is an IntersectionObserver with a
-// rootMargin that collapses the viewport to a band, so it is written here rather than fetched —
-// this page may not load anything from another origin (script/check-surface.sh, five checks with
-// their controls), and copying the library's source in would break the never-copy rule. Written
-// from the behaviour, not from the bytes.
-function wireStory() {
-  const steps = [...document.querySelectorAll(".step")];
-  const panels = [...document.querySelectorAll(".fig-panel")];
-  if (!steps.length || !("IntersectionObserver" in window)) return; // no observer: every step stays legible
-
-  const show = (i) => {
-    steps.forEach((s) => s.setAttribute("data-active", s.dataset.step === String(i) ? "1" : "0"));
-    panels.forEach((f) => f.setAttribute("data-on", f.dataset.fig === String(i) ? "1" : "0"));
-  };
-
-  // The band is the middle ~20% of the viewport. A step is "active" while it crosses it, which is
-  // what makes exactly one step light up rather than several at once on a tall screen.
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) if (e.isIntersecting) show(Number(e.target.dataset.step));
-  }, { rootMargin: "-40% 0px -40% 0px", threshold: 0 });
-  steps.forEach((s) => io.observe(s));
-  show(0);
-}
+// The three live rows under the story. There is no scroll engine any more: the story is six
+// stacked sections, every one legible at all times, and nothing here decides what a reader may
+// see. Only the chain reads remain.
 
 // The hook's permission bits, computed from the address alone. No RPC call: this is the claim the
 // story makes one step earlier, so the page proves it in front of the reader rather than asserting
@@ -890,7 +867,6 @@ async function renderEns() {
   }
 }
 
-wireStory();
 renderBits();
 renderGraph();
 renderEns();
