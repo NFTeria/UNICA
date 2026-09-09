@@ -13,8 +13,62 @@ forge test --no-match-path '{test/fork/*,test/compat/*,test/v3/DeploymentsV3Fork
 bash script/scan.sh | tail -1
 ```
 
-At the commit this file lands on: **282 commits · 298 tests passing across 33 suites, 0 failed ·
-31 scan checks.**
+At the commit this file lands on: **302 commits · 298 tests passing across 33 suites, 0 failed ·
+31 scan checks.** Three tags: `v1.0.0` live on Sepolia, `v2.0.0-rc1` never deployed, `v3.0.0`
+current and live on four chains.
+
+---
+
+## UNICA in five beats
+
+Read this first. Everything below it is evidence for these five sentences.
+
+**1 · The problem is a choice nobody should have to make.** A merchant accepting crypto either
+holds the asset and takes the risk, or converts immediately and pays for the privilege. The till and
+the treasury are two places, and the gap between them is where the money goes.
+
+**2 · UNICA closes the gap inside the pool.** A merchant registers a quote — recipient, payout
+asset, exact amount, deadline. A payer arrives holding something else and swaps through a Uniswap v4
+pool. The hook enforces the merchant's half *during* the swap: the recipient resolves from
+authenticated storage and never from caller-supplied data, the fill is exact or the transaction
+reverts, and an indexable receipt is emitted.
+
+**3 · Being a hook is the whole point.** There is no window between "the swap succeeded" and "the
+merchant was paid" for anything to go wrong, because they are the same transaction. The hook holds
+no custody, takes no fee, returns no delta and runs no oracle. Its permission bits are `0x20C0`, and
+the two dangerous return-delta bits are provably clear — computable from the deployed address alone,
+with no RPC call and no trust in us.
+
+**4 · It is live, and the proof re-runs.** V1 on Ethereum Sepolia has settled a real swap: 0.001 ETH
+in, 2.216294 USDC out, receipt on chain. V3 is deployed at one CREATE2 address across four
+testnets — Ethereum, Unichain, Base and Arbitrum Sepolia — verified 8 of 8 on Etherscan. `make
+proof` and `bash script/verify-v3.sh` re-read all of it from the chain and print "N run, 0 failed"
+rather than a blank panel.
+
+**5 · What it refuses to claim is the point of the whole thing.** V3 has settled nothing, and says
+so in a table row rather than a footnote. The experimental nano-authorization hook is published
+alongside the measurement showing it is uneconomic on L1 at any plausible gas price. Two sponsor
+tracks are declined outright below. Every guard here has been broken on purpose and watched to
+fail — a check that has never failed is not a check.
+
+## Where this is strongest
+
+**Uniswap — Best Uniswap Stack Contribution (From Scratch).** This is the track the evidence
+actually supports, and it is not close.
+
+It is a v4 hook rather than a wrapper around one: deployed and source-verified on four chains,
+settling through the official PoolManager and Universal Router, with the permission bits a reviewer
+can check offline. And it carries three findings back upstream, each reproducible from this
+repository — the router's five-versus-six-field layout change and the empty revert it causes, the
+native-pool case where the wrong layout is silently ACCEPTED and hookData is dropped while the swap
+succeeds, and the returns-delta bit number that is commonly cited wrong. That last one is a security
+correction, not a feature request: a reviewer checking bit 10 for return-delta is reading
+AFTER_ADD_LIQUIDITY and would green-light a hook that can consume the payer's swap.
+
+**Chainlink** is second on the strength of a confidential workflow that runs today, with its
+evidence graded rather than asserted. **ENS** is third and its demo is the most legible of the three
+— an agent updates one record, is refused the payment recipient, and loses access the instant the
+merchant revokes — but it needs one testnet name registered first.
 
 ---
 
