@@ -40,7 +40,7 @@ import {fileURLToPath} from "node:url";
 
 import {keccak256, toHex} from "../../web/ensv2/keccak.mjs";
 import {utf8, wordAddress, wordUint} from "../../integrations/permit2/digest.mjs";
-import {namehash, normalizeName} from "../../web/ensv2/resolve.mjs";
+import {namehash, normalizeName, dnsEncode} from "../../web/ensv2/resolve.mjs";
 import {
   SELECTOR, SIGNATURES, encodeSetAddrCall, encodeSetTextCall,
   EAC_ROLES_CHANGED_SIGNATURE, EAC_ROLES_CHANGED_TOPIC,
@@ -49,7 +49,7 @@ import {
   AGENT_DEFAULT_ROLES, DENIAL_MATRIX, RECORD_KEYS, ROLE_TABLE,
   agentRoleBitmap, commitPolicy, planAgentGrant, planAgentRevoke, screenPlanForAgentAuthority,
 } from "../../integrations/ensv2/roles.mjs";
-import {previewPlan, renderPlanPreview, planPreviewIsSignable} from "../../integrations/ensv2/plan-preview.mjs";
+import {previewPlan, renderPlanPreview, planPreviewIsSignable, REVOKING_METHODS} from "../../integrations/ensv2/plan-preview.mjs";
 import * as P from "../../integrations/ensv2/profile.mjs";
 
 const hexBody = (h) => String(h ?? "").replace(/^0x/, "").toLowerCase();
@@ -114,6 +114,7 @@ export const PLAN_STATUS = {
   PRECONDITION_UNMET: "PRECONDITION_UNMET",
   AGENT_GRANT_REFUSED: "AGENT_GRANT_REFUSED",
   BAD_MODE: "BAD_MODE",
+  REGISTRATION_MISSING_ADMIN_ROLES: "REGISTRATION_MISSING_ADMIN_ROLES",
 };
 
 export const PLAN_MODE = {
@@ -292,6 +293,46 @@ export function buildPlan(cfg = {}) {
     observed: P.REGISTRY_ROLE_CAN_TRANSFER_ADMIN.observed,
     note: "already shifted — the chain shows raffy.eth's owner holding bit 156 and not bit 28, so writing it unshifted would be a different permission",
   });
+  // An optional caller-supplied bitmap, which exists so the guard below is REACHABLE. A check that
+  // can only ever see a value this same function just computed correctly is not a check; the
+  // sabotage row feeds a bitmap with the admin half stripped and requires a refusal by name.
+  if (cfg.registryRoleBitmap !== undefined && cfg.registryRoleBitmap !== null) {
+    merchantRegistryBitmap = BigInt(cfg.registryRoleBitmap);
+  }
+
+  // ── THE ONE-SHOT, IRREVERSIBLE CHECK ────────────────────────────────────────────────────────
+  //
+  // Per-name ADMIN roles can only ever be assigned in the `register()` roleBitmap. Granting an
+  // admin role AFTERWARDS is refused: on the fork, `grantRoles(nameResource, adminRole(bit), x)`
+  // sent by the name owner reverted with EACCannotGrantRoles (0xd1a3b355), while the SAME owner
+  // granting the matching REGULAR bit to the SAME account was ACCEPTED. That accepted control is
+  // what makes the refusal decisive rather than a story about a badly-authorised caller.
+  //
+  // So a registration that omits the admin half is not a smaller registration — it is a name the
+  // merchant can never fully administer, with no repair short of losing the name. It fails closed
+  // and loudly here rather than being discovered the first time someone tries to revoke an agent.
+  const missingAdmin = merchantRegistryRoles
+    .filter((r) => r.admin !== null && (merchantRegistryBitmap & BigInt(r.admin)) === 0n)
+    .map((r) => r.name);
+  if (missingAdmin.length > 0) {
+    return refusePlan(PLAN_STATUS.REGISTRATION_MISSING_ADMIN_ROLES, {
+      missingAdmin,
+      roleBitmap: asWord(merchantRegistryBitmap),
+      why: "register() is the ONLY place a per-name admin role can be set. grantRoles(resource, adminRole(bit), account) " +
+           "is refused with EACCannotGrantRoles even from the name owner — observed, with the matching regular grant " +
+           "accepted as a control. A registration without these bits cannot be repaired.",
+      consequence: "the merchant could never revoke a delegated agent, and the name would have to be abandoned",
+    });
+  }
+  if ((merchantRegistryBitmap >> P.ADMIN_SHIFT) === 0n) {
+    return refusePlan(PLAN_STATUS.REGISTRATION_MISSING_ADMIN_ROLES, {
+      missingAdmin: ["<the entire admin half>"],
+      roleBitmap: asWord(merchantRegistryBitmap),
+      why: "no bit at or above 128 is set, so this registration assigns no admin role at all",
+      consequence: "the merchant could never revoke a delegated agent, and the name would have to be abandoned",
+    });
+  }
+
   const permanentOmissions = Object.entries(P.REGISTRY_ROLE)
     .filter(([n, r]) => !REGISTRY_GRANT.includes(n) && r.observed === P.OBSERVED.DOCUMENTED_NOT_OBSERVED)
     .map(([n, r]) => ({name: n, bit: asWord(r.bit)}))
@@ -303,12 +344,28 @@ export function buildPlan(cfg = {}) {
   if (!agentBits.ok) return refusePlan(PLAN_STATUS.AGENT_GRANT_REFUSED, agentBits);
 
   const protectedResources = [resource.merchant, resource.pay, resource.treasury];
+  // The same three names, as NODES. The resource list can only name one scope each; the node list
+  // covers every scope those names will ever have, including per-key resources nobody has thought
+  // of yet.
+  const protectedNodes = [node.merchant, node.pay, node.treasury];
   const registryAddresses = [parentSubregistry, cfg.merchantSubregistry, cfg.treasurySubregistry]
     .filter(isAddress);
 
+  // The key the delegation is SCOPED to. On this deployment a delegation is not "SET_TEXT on the
+  // agent's leaf" but "SET_TEXT on ONE key of the agent's leaf", so the plan has to name the key,
+  // and naming it is what makes the scope reviewable: an owner reading the preview sees the exact
+  // string the agent will be able to write, and nothing else.
+  const agentRecordKey = cfg.agentRecordKey ?? RECORD_KEYS.agentCapabilities;
+  // Where the delegation ACTUALLY lands. `resource.agent` beside it is the NAME-level resource of
+  // the same name, and the two are deliberately both present: several steps below are about the
+  // name, and exactly one is about the key.
+  resource.agentKey = P.resolverScopedResource(node.agent, P.textScopeHash(agentRecordKey));
+
   const grantOpts = {
-    resolver, agentNode: node.agent, agentAddress, merchantAddress: merchantOwner,
-    roleNames: agentRoleNames, protectedResources, registryAddresses,
+    resolver, agentNode: node.agent, agentDnsName: dnsEncode(agentName),
+    agentAddress, merchantAddress: merchantOwner,
+    recordKey: agentRecordKey,
+    roleNames: agentRoleNames, protectedResources, protectedNodes, registryAddresses,
     agentRootRoles: cfg.observations?.agentRootRolesAtResolver,
     assigneeReading: cfg.observations?.assigneeReading,
   };
@@ -602,29 +659,45 @@ export function buildPlan(cfg = {}) {
   const grantOrdinal = Math.floor(agentStepOrdinals[agentStepOrdinals.length - 1]) + 1;
   steps.push({
     ordinal: grantOrdinal, kind: "transaction", signer: "merchant", dependsOn: [agentStepOrdinals[agentStepOrdinals.length - 1]],
-    title: `grant the agent ${agentRoleNames.join("|")} at ${agentName}'s resource, and nowhere else`,
+    title: `authorise the agent to write ONE key — "${agentRecordKey}" on ${agentName} — and nothing else`,
     call: grant.call,
-    arguments: [uint("resource", grant.call.resource, `keccak256(abi.encode(namehash("${agentName}"), bytes32(0))) — the name-level resource of the LEAF, not of the merchant`),
-                uint("roleBitmap", agentBits.bitmap, `${agentRoleNames.join("|")} — regular roles only; the upper 128 bits are zero, so no admin role is granted`),
-                addr("account", agentAddress, "the agent")],
-    affects: {name: agentName, node: node.agent, resource: resource.agent, resourceKind: "resolver name-level"},
+    // The arguments shown to the owner are the arguments the CALLDATA carries. They used to be
+    // resource/roleBitmap/account, which were the arguments of a different function: correct-looking
+    // rows describing bytes that did not contain them. A preview is only worth reading if the bytes
+    // under it mean what the decoded row says.
+    arguments: [
+      {name: "dnsName", type: "bytes", value: dnsEncode(agentName),
+       meaning: `the DNS wire encoding of "${agentName}" — checked to hash to the same namehash this step is screened against`},
+      {name: "key", type: "string", value: agentRecordKey,
+       meaning: `the ONE text key the agent may write. Any other key on the same name is refused by the resolver.`},
+      addr("account", agentAddress, "the agent"),
+      {name: "granted", type: "bool", value: "true", meaning: "true grants; the prepared revocation is this same call with false"},
+    ],
+    affects: {name: agentName, node: node.agent, resource: resource.agentKey, resourceKind: "resolver per-key"},
     roles: {granted: agentRoleNames, revoked: []},
     value: "0x0",
     expectedEvent: {signature: EAC_ROLES_CHANGED_SIGNATURE, topic0: EAC_ROLES_CHANGED_TOPIC,
-                    observed: "DERIVED_NOT_OBSERVED — the topic is derived from the signature string; Phase 1's log scan for it did not complete, so no instance of this event has been seen"},
+                    observed: "DERIVED_NOT_OBSERVED — the topic is derived from the signature string; no instance of this event has been decoded from a log"},
     expectedPostState: [
-      {read: `hasRoles(${resource.agent}, ${asWord(agentBits.bitmap)}, ${agentAddress})`, expect: "true"},
+      // The reads that matter, and the three that LOOK like they matter and do not. A validator
+      // that checks only the name level or ROOT_RESOURCE sees zero here while the agent can write.
+      {read: `roles(${resource.agentKey}, ${agentAddress})`, expect: `${asWord(agentBits.bitmap)} — the per-KEY resource, which is where the grant lands`},
+      {read: `hasRoles(${resource.agentKey}, ${asWord(agentBits.bitmap)}, ${agentAddress})`, expect: "true"},
+      {read: `roles(${resource.agent}, ${agentAddress})`,
+       expect: "0 — the NAME-level resource stays empty. This is not a failure and must not be read as one: the delegation is invisible here."},
       {read: `hasRoles(${resource.pay}, ${asWord(agentBits.bitmap)}, ${agentAddress})`, expect: "false — the agent has nothing on the payment name"},
       {read: `roles(${asWord(P.ROOT_RESOURCE)}, ${agentAddress})`, expect: "0 — unchanged; no root authority was granted"},
     ],
-    rollback: {how: `the prepared revokeRoles transaction, built at the same time as this grant`, irreversible: false},
+    rollback: {how: `the prepared authorizeTextRoles(..., false) transaction, built at the same time as this grant`, irreversible: false},
     detail: {
       headroom: grant.headroom,
       resourceDerivation: grant.resourceDerivation,
+      resourceNote: grant.resourceNote,
+      requiresOfSender: grant.requiresOfSender,
       residual: DENIAL_MATRIX.find((d) => d.residual)?.residual ?? null,
     },
-    evidence: {label: STEP_EVIDENCE.INFERRED,
-               detail: "grantRoles is dispatched by the resolver runtime and Phase 1 observed a REGISTRY grantRoles accepted in simulation from a holder of the matching admin role. The equivalent acceptance on a RESOLVER at a name resource was not exercised; step 4's accepted row is what checks it before this one is signed."},
+    evidence: {label: STEP_EVIDENCE.OBSERVED,
+               detail: "authorizeTextRoles was EXECUTED against the deployed resolver bytecode on a pinned Sepolia fork, using the calldata this planner emits: accepted from the name owner, the granted bit found at the per-key resource, the agent's write on that key accepted, and its write on a different key of the same name refused with EACUnauthorizedAccountRoles. A one-byte corruption of the same calldata was rejected, so the acceptance is evidence rather than a call that happened not to revert."},
   });
 
   // 8 — resolution works.
@@ -669,21 +742,26 @@ export function buildPlan(cfg = {}) {
     ordinal: grantOrdinal + 3, kind: "prepared", signer: "merchant", dependsOn: [grantOrdinal],
     title: "the revocation — built now, held until needed",
     call: revoke.call,
-    arguments: [uint("resource", revoke.call.resource, "the same leaf resource the grant named; a revocation aimed anywhere else does not revoke"),
-                uint("roleBitmap", agentBits.bitmap, "the same bitmap"),
-                addr("account", agentAddress, "the agent")],
-    affects: {name: agentName, node: node.agent, resource: resource.agent, resourceKind: "resolver name-level"},
+    arguments: [
+      {name: "dnsName", type: "bytes", value: dnsEncode(agentName),
+       meaning: `the same name the grant named; a revocation aimed anywhere else does not revoke`},
+      {name: "key", type: "string", value: agentRecordKey, meaning: "the same key the grant scoped to"},
+      addr("account", agentAddress, "the agent"),
+      {name: "granted", type: "bool", value: "false", meaning: "false REVOKES — this is the grant call with one word changed"},
+    ],
+    affects: {name: agentName, node: node.agent, resource: resource.agentKey, resourceKind: "resolver per-key"},
     roles: {granted: [], revoked: agentRoleNames},
     value: "0x0",
     expectedEvent: {signature: EAC_ROLES_CHANGED_SIGNATURE, topic0: EAC_ROLES_CHANGED_TOPIC,
                     observed: "DERIVED_NOT_OBSERVED"},
     expectedPostState: [
-      {read: `hasRoles(${resource.agent}, ${asWord(agentBits.bitmap)}, ${agentAddress})`, expect: "false"},
-      {read: `text(${node.agent}, "${RECORD_KEYS.agentCapabilities}")`, expect: "unchanged — revoking the authority does not remove what was written with it"},
+      {read: `roles(${resource.agentKey}, ${agentAddress})`, expect: "0 — the per-key role word is cleared"},
+      {read: `hasRoles(${resource.agentKey}, ${asWord(agentBits.bitmap)}, ${agentAddress})`, expect: "false"},
+      {read: `text(${node.agent}, "${agentRecordKey}")`, expect: "unchanged — revoking the authority does not remove what was written with it"},
     ],
     rollback: {how: "re-send the grant to delegate again", refersToOrdinal: grantOrdinal, irreversible: false},
-    evidence: {label: STEP_EVIDENCE.INFERRED,
-               detail: "revokeRoles is dispatched by the resolver runtime; no revocation has been exercised on this deployment. It is built at the same moment as the grant so that a delegation is never handed over without its undo."},
+    evidence: {label: STEP_EVIDENCE.OBSERVED,
+               detail: "the revocation was EXECUTED on a pinned fork using this planner's own calldata: accepted, the per-key role word back to zero, and the agent's next write on that key refused. Revocation is the half that usually goes untested, because nothing breaks when it is missing until the day it is needed."},
   });
 
   // Ordinals are assigned here, once, after every step exists. They are built above with sortable
@@ -713,7 +791,12 @@ export function buildPlan(cfg = {}) {
 
   // ── the screen, run over the assembled plan rather than trusted from the constructors ────────
   const screen = screenPlanForAgentAuthority(steps, {
-    agentResource: resource.agent, agentAddress, merchantAddress: merchantOwner,
+    // The PER-KEY resource, because that is where the delegation lands. Passing the name-level
+    // one here was caught by this very screen the moment the delegation moved: the plan's second
+    // pass rejected its own first pass's step with WRONG_RESOURCE. A screen that can catch the
+    // author of the thing it screens is worth the cost of writing it twice.
+    agentResource: resource.agentKey, agentAddress, merchantAddress: merchantOwner,
+    protectedNodes,
     protectedResources, registryAddresses,
     agentRootRoles: cfg.observations?.agentRootRolesAtResolver,
   });
@@ -790,7 +873,7 @@ export function planIsSignable(plan, preview) {
   return Boolean(
     plan && plan.ok === true && plan.status === PLAN_STATUS.PLANNED &&
     plan.screen?.ok === true && plan.unmetPreconditions.length === 0 &&
-    plan.steps.some((s) => s.kind === "prepared" && s.call?.method === "revokeRoles") &&
+    plan.steps.some((s) => s.kind === "prepared" && REVOKING_METHODS.has(String(s.call?.method ?? ""))) &&
     planPreviewIsSignable(preview),
   );
 }

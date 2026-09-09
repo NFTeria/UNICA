@@ -29,7 +29,7 @@ import {readFileSync, readdirSync} from "node:fs";
 
 import {keccak256, toHex} from "../../web/ensv2/keccak.mjs";
 import {utf8} from "../permit2/digest.mjs";
-import {namehash} from "../../web/ensv2/resolve.mjs";
+import {namehash, dnsEncode} from "../../web/ensv2/resolve.mjs";
 import {SELECTOR, selectorFor, SIGNATURES} from "./permissioned.mjs";
 import * as P from "./profile.mjs";
 import * as R from "./roles.mjs";
@@ -132,14 +132,25 @@ const CFG = {
 };
 
 const AGENT_NODE = namehash("agent.treasury.merchant.owner-chosen-parent.eth");
-const AGENT_RESOURCE = P.resolverNameResource(AGENT_NODE);
-const PAY_RESOURCE = P.resolverNameResource(namehash("pay.merchant.owner-chosen-parent.eth"));
-const TREASURY_RESOURCE = P.resolverNameResource(namehash("treasury.merchant.owner-chosen-parent.eth"));
-const MERCHANT_RESOURCE = P.resolverNameResource(namehash("merchant.owner-chosen-parent.eth"));
+// The resource a delegation ACTUALLY lands at on this deployment: the per-KEY one, not the
+// name-level one. The name-level resource is kept beside it because several rows below exist to
+// prove that a grant aimed there is refused — and because a validator reading it sees zero while
+// the agent can write, which is the whole of CRITICAL 2.
+const AGENT_KEY = R.RECORD_KEYS.agentCapabilities;
+const AGENT_RESOURCE = P.resolverScopedResource(AGENT_NODE, P.textScopeHash(AGENT_KEY));
+const AGENT_NAME_RESOURCE = P.resolverNameResource(AGENT_NODE);
+const AGENT_DNS = dnsEncode("agent.treasury.merchant.owner-chosen-parent.eth");
+const PAY_NODE = namehash("pay.merchant.owner-chosen-parent.eth");
+const TREASURY_NODE = namehash("treasury.merchant.owner-chosen-parent.eth");
+const MERCHANT_NODE = namehash("merchant.owner-chosen-parent.eth");
+const PAY_RESOURCE = P.resolverNameResource(PAY_NODE);
+const TREASURY_RESOURCE = P.resolverNameResource(TREASURY_NODE);
+const MERCHANT_RESOURCE = P.resolverNameResource(MERCHANT_NODE);
 
 const grantOpts = (over = {}) => ({
-  resolver: RESOLVER, agentNode: AGENT_NODE, agentAddress: AGENT, merchantAddress: MERCHANT,
-  roleNames: ["SET_TEXT"],
+  resolver: RESOLVER, agentNode: AGENT_NODE, agentDnsName: AGENT_DNS,
+  agentAddress: AGENT, merchantAddress: MERCHANT,
+  recordKey: AGENT_KEY, roleNames: ["SET_TEXT"],
   protectedResources: [MERCHANT_RESOURCE, PAY_RESOURCE, TREASURY_RESOURCE],
   registryAddresses: [PARENT_REGISTRY, MERCHANT_SUBREGISTRY, TREASURY_SUBREGISTRY],
   agentRootRoles: "0x0",
@@ -155,8 +166,10 @@ const screenCtx = (over = {}) => ({
   ...over,
 });
 
+// The EFFECTIVE triple an authorizeTextRoles delegation writes. The screen is fed this rather
+// than the calldata, because the calldata names neither a resource nor a bitmap.
 const goodCall = (over = {}) => ({
-  method: "grantRoles", to: RESOLVER, resource: AGENT_RESOURCE,
+  method: "authorizeTextRoles", to: RESOLVER, resource: AGENT_RESOURCE,
   roleBitmap: asWord(SET_TEXT), account: AGENT, ...over,
 });
 
@@ -302,6 +315,25 @@ console.log("\n— the screen: the control first, then every way a grant is refu
               R.screenAgentGrant(goodCall({resource: MERCHANT_RESOURCE}), screenCtx()), R.GRANT_STATUS.PROTECTED_RESOURCE);
   refusedWith("a grant at the payment name's resource is refused as protected",
               R.screenAgentGrant(goodCall({resource: PAY_RESOURCE}), screenCtx()), R.GRANT_STATUS.PROTECTED_RESOURCE);
+  // The gap this row exists for, found by inspection after the delegation moved to per-key
+  // resources: `protectedResources` lists NAME-LEVEL resources, and a per-key resource on a
+  // protected name is not one of them. Screening a delegation at the pay name's per-key resource
+  // against that list PASSED. The screen now checks the protected NAMES by node, at any scope.
+  {
+    const payPerKey = P.resolverScopedResource(PAY_NODE, P.textScopeHash(R.RECORD_KEYS.executor));
+    refusedWith("a delegation at a PER-KEY resource on the payment name is refused as protected",
+                R.screenAgentGrant(
+                  goodCall({resource: payPerKey, node: PAY_NODE}),
+                  screenCtx({agentResource: payPerKey, protectedNodes: [MERCHANT_NODE, PAY_NODE, TREASURY_NODE]})),
+                R.GRANT_STATUS.PROTECTED_RESOURCE);
+    check("CONTROL the same shape on the AGENT's own name is accepted, so the row above is about the name",
+          R.screenAgentGrant(goodCall({node: AGENT_NODE}),
+                             screenCtx({protectedNodes: [MERCHANT_NODE, PAY_NODE, TREASURY_NODE]})).ok === true);
+    check("... and the refusal names the NODE, so a reader can tell which name it was",
+          R.screenAgentGrant(
+            goodCall({resource: payPerKey, node: PAY_NODE}),
+            screenCtx({agentResource: payPerKey, protectedNodes: [PAY_NODE]})).node === PAY_NODE);
+  }
   refusedWith("a grant at the treasury's resource is refused as protected",
               R.screenAgentGrant(goodCall({resource: TREASURY_RESOURCE}), screenCtx()), R.GRANT_STATUS.PROTECTED_RESOURCE);
   refusedWith("a grant at some other resource entirely is refused as the wrong resource",
@@ -327,6 +359,51 @@ console.log("\n— the screen: the control first, then every way a grant is refu
   eq("a call that names ROOT_RESOURCE and an admin bit reports the root resource first",
      R.screenAgentGrant(goodCall({resource: asWord(0n), roleBitmap: asWord(P.adminRole(SET_TEXT))}), screenCtx()).status,
      R.GRANT_STATUS.ROOT_RESOURCE_FORBIDDEN);
+
+  // ── the call this deployment REFUSES, refused here too ────────────────────────────────────
+  //
+  // A perfectly scoped grantRoles — right resource, right bitmap, right account — is still
+  // refused, because on this deployment it reverts. Emitting it would produce a transaction the
+  // owner signs and pays for and that fails, leaving the agent with no authority while the plan
+  // reports success. The CONTROL beside it is the identical call under the accepted method, which
+  // is what proves the refusal is about the method and not about the arguments.
+  refusedWith("a correctly scoped grantRoles is refused: it is not the delegation path here",
+              R.screenAgentGrant(goodCall({method: "grantRoles"}), screenCtx()),
+              R.GRANT_STATUS.GRANT_ROLES_NOT_THE_DELEGATION_PATH);
+  refusedWith("... and so is revokeRoles, which fails the same way",
+              R.screenAgentGrant(goodCall({method: "revokeRoles"}), screenCtx()),
+              R.GRANT_STATUS.GRANT_ROLES_NOT_THE_DELEGATION_PATH);
+  check("CONTROL the identical call under authorizeTextRoles passes, so it is the METHOD that is refused",
+        R.screenAgentGrant(goodCall({method: "authorizeTextRoles"}), screenCtx()).ok === true);
+  // The wide sibling: accepted by the chain, and refused here by NAME before any argument is read.
+  refusedWith("authorizeNameRoles is refused by name — it writes at the name level",
+              R.screenAgentGrant(goodCall({method: "authorizeNameRoles"}), screenCtx()),
+              R.GRANT_STATUS.NAME_LEVEL_METHOD_FORBIDDEN);
+  // Ordering: a grantRoles that is ALSO dangerous must report the danger, not the method.
+  refusedWith("a grantRoles naming ROOT_RESOURCE still reports ROOT_RESOURCE first",
+              R.screenAgentGrant(goodCall({method: "grantRoles", resource: asWord(0n)}), screenCtx()),
+              R.GRANT_STATUS.ROOT_RESOURCE_FORBIDDEN);
+  refusedWith("a grantRoles carrying an admin bit still reports the admin bit first",
+              R.screenAgentGrant(goodCall({method: "grantRoles", roleBitmap: asWord(P.adminRole(SET_TEXT))}), screenCtx()),
+              R.GRANT_STATUS.ADMIN_ROLE_FORBIDDEN);
+
+  // ── the scope key ─────────────────────────────────────────────────────────────────────────
+  refusedWith("a delegation with no record key is refused rather than falling back to the name level",
+              R.planAgentGrant({...grantOpts(), recordKey: undefined}), R.GRANT_STATUS.SCOPE_KEY_MISSING);
+  refusedWith("a delegation scoped to a key outside the published vocabulary is refused",
+              R.planAgentGrant({...grantOpts(), recordKey: "unica:not-a-published-key"}),
+              R.GRANT_STATUS.SCOPE_KEY_NOT_ALLOWLISTED);
+  refusedWith("a DNS name that does not hash to the agent node is refused",
+              R.planAgentGrant({...grantOpts(), agentDnsName: dnsEncode("someone.else.eth")}),
+              R.GRANT_STATUS.WRONG_RESOURCE);
+  check("CONTROL the matching DNS name and node are accepted, so the row above is not vacuous",
+        R.planAgentGrant(grantOpts()).ok === true);
+  // The DNS decoder, checked both ways round.
+  eq("a DNS-encoded name hashes back to its namehash", R.namehashFromDns(AGENT_DNS), AGENT_NODE);
+  eq("trailing rubbish after the DNS terminator is rejected, not ignored",
+     R.namehashFromDns(AGENT_DNS + "ff"), null);
+  eq("a DNS name with no terminator is rejected", R.namehashFromDns("0x05726166667903657468"), null);
+
 }
 
 console.log("\n— the assignee cap, read from the contract's own second word —");
@@ -365,6 +442,16 @@ console.log("\n— the constructors derive the resource and refuse to be told it
   // correct-looking grant at the merchant's own name. It is ignored, and the row proves it.
   const told = R.planAgentGrant({...grantOpts(), resource: PAY_RESOURCE});
   eq("a caller-supplied resource is ignored; the derivation wins", told.call?.resource, AGENT_RESOURCE);
+  // The delegation resource is now derived through `delegationScope`, so the injection a caller
+  // would actually reach for is a pre-built scope. Sabotage proved this row was missing: with the
+  // derivation replaced by `opts.scope ?? …` the whole suite stayed green.
+  const toldScope = R.planAgentGrant({...grantOpts(), scope: {
+    resource: PAY_RESOURCE, roleName: "SET_TEXT", scope: "someone else's name", derivation: "handed in",
+  }});
+  eq("a caller-supplied SCOPE is ignored too; node and key decide the resource",
+     toldScope.call?.resource, AGENT_RESOURCE);
+  eq("... and the derivation reported is the computed one, not the one handed in",
+     toldScope.resourceDerivation, `keccak256(abi.encode(node, keccak256(bytes("${AGENT_KEY}"))))`);
 
   const rv = R.planAgentRevoke(grantOpts());
   check("CONTROL the revocation is built at the same resource with the same bitmap",
@@ -381,6 +468,126 @@ console.log("\n— the constructors derive the resource and refuse to be told it
               R.planAgentGrant({...grantOpts(), agentNode: "0x1234"}), R.GRANT_STATUS.WRONG_RESOURCE);
   refusedWith("a grant whose resolver is not an address is refused",
               R.planAgentGrant({...grantOpts(), resolver: "the resolver"}), R.GRANT_STATUS.BAD_ACCOUNT);
+}
+
+console.log("\n— every step's DECLARED arguments are the arguments its calldata actually carries —");
+{
+  // This suite was fully green while the delegation step declared `resource / roleBitmap / account`
+  // over calldata for `authorizeTextRoles(bytes,string,address,bool)` — three rows describing
+  // arguments the bytes did not contain, in the one transaction that hands an agent authority. The
+  // owner reads these rows to decide whether to sign. Nothing compared them to the bytes, so
+  // nothing caught it. This block is that comparison.
+  const plan = PLAN.buildPlan(CFG);
+  check("CONTROL the plan builds", plan.ok === true);
+
+  const withData = plan.steps.filter((s) => s.call?.data && Array.isArray(s.arguments) && s.arguments.length);
+  check("there are steps with both calldata and declared arguments to compare", withData.length > 0,
+        String(withData.length));
+
+  // The signature is the source of truth for how many arguments there are and what they are called.
+  let compared = 0;
+  const mismatches = [];
+  for (const st of withData) {
+    const sig = st.call.signature;
+    if (!sig) { mismatches.push(`${st.ordinal}: no signature on the call`); continue; }
+    const types = sig.slice(sig.indexOf("(") + 1, sig.lastIndexOf(")"));
+    const declared = types.length ? types.split(",") : [];
+    compared++;
+    if (declared.length !== st.arguments.length) {
+      mismatches.push(`${st.ordinal} ${sig}: signature has ${declared.length} argument(s), the row declares ${st.arguments.length}`);
+      continue;
+    }
+    declared.forEach((t, i) => {
+      const got = st.arguments[i]?.type;
+      // uint256/bytes32 are both rendered as words; the rows say which they mean, and the only
+      // thing being checked here is that the row is not describing a DIFFERENT argument.
+      const same = t === got || (t === "uint256" && got === "uint256") || (t === "bytes32" && got === "bytes32");
+      if (!same) mismatches.push(`${st.ordinal} ${sig}: argument ${i} is ${t} in the signature, "${got}" in the row`);
+    });
+    // And the selector on the row is the selector of the signature it claims.
+    if (st.call.data.slice(0, 10) !== selectorFor(sig)) {
+      mismatches.push(`${st.ordinal}: selector ${st.call.data.slice(0, 10)} is not selectorFor("${sig}")`);
+    }
+  }
+  check(`every step's declared arguments match its signature and selector (${compared} compared)`,
+        mismatches.length === 0, mismatches.join(" | "));
+
+  // The delegation step specifically, because it is the one that matters and the one that was wrong.
+  const del = plan.steps.find((s) => s.call?.method === "authorizeTextRoles");
+  eq("the delegation step declares four arguments", del.arguments.length, 4);
+  eq("... the first is the DNS name", del.arguments[0].name, "dnsName");
+  eq("... the second is the single key it is scoped to", del.arguments[1].value, R.RECORD_KEYS.agentCapabilities);
+  eq("... the third is the agent", del.arguments[2].value, AGENT);
+  eq("... and the fourth is the granted flag", del.arguments[3].value, "true");
+  check("the delegation step reports the PER-KEY resource, not the name-level one",
+        del.affects.resource === AGENT_RESOURCE && del.affects.resource !== AGENT_NAME_RESOURCE,
+        `${del.affects.resource} vs name-level ${AGENT_NAME_RESOURCE}`);
+  check("... and warns that the name-level read will show nothing",
+        /invisible/i.test(del.detail?.resourceNote ?? ""), del.detail?.resourceNote);
+  check("... and names what the SENDER must hold to send it",
+        /adminRole\(SET_TEXT\)|admin/i.test(del.detail?.requiresOfSender?.why ?? ""), j(del.detail?.requiresOfSender));
+
+  // A post-state row that says the name-level resource stays 0 is not a bug report; make sure the
+  // plan says so, because otherwise the first person to check it will think the delegation failed.
+  const nameLevelRow = del.expectedPostState.find((r) => r.read.includes(AGENT_NAME_RESOURCE));
+  check("the plan predicts the name-level read is ZERO and says that is expected",
+        nameLevelRow !== undefined && /must not be read as one|not a failure/i.test(nameLevelRow.expect),
+        j(nameLevelRow));
+
+  // The revocation is the same call with one word different, and the rows must say so.
+  const rev = plan.steps.find((s) => s.kind === "prepared");
+  eq("the revocation declares the same four arguments", rev.arguments.length, 4);
+  eq("... with granted = false", rev.arguments[3].value, "false");
+  eq("... the same key", rev.arguments[1].value, del.arguments[1].value);
+  check("... and the same selector as the grant, because it is the same function",
+        rev.call.data.slice(0, 10) === del.call.data.slice(0, 10));
+  check("... but NOT the same calldata, or it would grant again",
+        rev.call.data !== del.call.data);
+}
+
+console.log("\n— the register() bitmap is one-shot, so a registration without admin bits is refused —");
+{
+  // The most expensive mistake available anywhere in this plan. Per-name admin roles can ONLY be
+  // set in register(); granting one afterwards is refused by the chain — observed, with the
+  // matching REGULAR grant from the same owner accepted as the control that makes it decisive. So
+  // a registration that omits them produces a name the merchant can never fully administer, and
+  // there is no repair short of abandoning the name.
+  const good = PLAN.buildPlan(CFG);
+  const registerSteps = good.steps.filter((s) => s.call?.method === "register");
+  check("CONTROL the ordinary plan is planned, and every registration carries admin bits",
+        good.ok === true && registerSteps.length > 0 &&
+        registerSteps.every((s) => (BigInt(s.call.roleBitmap) >> P.ADMIN_SHIFT) !== 0n));
+
+  // The three regular bits the plan grants, with the admin half deliberately stripped off.
+  const REG = [1n << 16n, 1n << 20n, 1n << 24n];          // RENEW, SET_SUBREGISTRY, SET_RESOLVER
+  const regular = REG.reduce((a, b) => a | b, 0n) | BigInt(P.REGISTRY_ROLE_CAN_TRANSFER_ADMIN.bit);
+
+  const stripped = PLAN.buildPlan({...CFG, registryRoleBitmap: asWord(regular)});
+  check("a registration bitmap with no admin half is REFUSED",
+        stripped.ok === false && stripped.status === PLAN.PLAN_STATUS.REGISTRATION_MISSING_ADMIN_ROLES,
+        j(stripped).slice(0, 300));
+  check("... and the refusal NAMES which admin roles are missing",
+        Array.isArray(stripped.refusal?.missingAdmin) && stripped.refusal.missingAdmin.length === 3,
+        j(stripped.refusal?.missingAdmin));
+  check("... and says why it cannot be repaired later, naming the observed refusal and its control",
+        /EACCannotGrantRoles/.test(stripped.refusal?.why ?? "") && /control/i.test(stripped.refusal?.why ?? ""));
+  check("... and names the consequence in terms of the merchant, not of a bitmap",
+        /revoke/i.test(stripped.refusal?.consequence ?? ""));
+
+  // A partial admin half is not "mostly fine": one missing bit is still an unrepairable name.
+  const onlyOneMissing = regular | P.adminRole(REG[0]) | P.adminRole(REG[1]);
+  const partial = PLAN.buildPlan({...CFG, registryRoleBitmap: asWord(onlyOneMissing)});
+  check("a registration missing ONE admin role is refused too, and names exactly that one",
+        partial.ok === false &&
+        partial.status === PLAN.PLAN_STATUS.REGISTRATION_MISSING_ADMIN_ROLES &&
+        partial.refusal.missingAdmin.length === 1 && partial.refusal.missingAdmin[0] === "SET_RESOLVER",
+        j(partial.refusal?.missingAdmin));
+
+  // And the guard is not simply refusing everything it is handed.
+  const full = PLAN.buildPlan({...CFG, registryRoleBitmap: asWord(
+    regular | P.adminRole(REG[0]) | P.adminRole(REG[1]) | P.adminRole(REG[2]))});
+  check("CONTROL a bitmap WITH every admin bit is accepted, so the guard is not refusing everything",
+        full.ok === true, j(full).slice(0, 200));
 }
 
 console.log("\n— the whole-plan screen catches a step the constructors did not build —");
@@ -440,22 +647,32 @@ console.log("\n— every capability the agent must not have, fed to the planner 
           Object.values(R.DENIAL).includes(d.denial), d.denial);
   }
 
-  // The honest half. Phase 1 found that setText's refusal named the NAME-LEVEL resource, so there
-  // is no per-key scope on this deployment and an agent holding SET_TEXT at its leaf may write any
-  // key ON THAT LEAF. The matrix says so. If that sentence is ever quietly deleted, this fails.
+  // The honest half — CORRECTED, together with the claim it used to pin.
+  //
+  // These rows used to require the residual to say "the agent may write any text key on its own
+  // leaf", and to require the profile to record the per-key derivation as DOCUMENTED_NOT_OBSERVED.
+  // Both are refuted: executing authorizeTextRoles on a pinned fork showed the grant landing at the
+  // per-KEY resource, and the agent being refused on a second key of the same name. A test that
+  // pins a refuted claim is worse than no test, because it makes the claim expensive to correct —
+  // so the test moved with the finding rather than holding it in place.
+  //
+  // What is still pinned, and matters more: the residual must not be EMPTIED. The denial is now
+  // narrower but it is not total, and the row below fails if anyone quietly turns it into null.
   const residuals = R.DENIAL_MATRIX.filter((d) => d.residual);
   eq("exactly one denial carries a residual, and it is the text-key one", residuals.length, 1);
   // Read through `?? ""` so that an emptied residual fails THIS row rather than throwing and
   // taking every row after it down with the summary. Measured while sabotaging exactly that.
   const residualText = residuals[0]?.residual ?? "";
-  check("... and the residual states that the agent may write any key on its own leaf",
-        /any text key/i.test(residualText) && /leaf/i.test(residualText), residualText);
-  check("... and it says WHY: no per-key resource has ever been named on this deployment",
-        /per-key/i.test(residualText));
+  check("... and the residual names the WIDE call that per-key scoping does not protect against",
+        /authorizeNameRoles/i.test(residualText), residualText);
+  check("... and says the denial there is this planner's doing, not the chain's",
+        /planner refuses/i.test(residualText) && /NAME_LEVEL_METHOD_FORBIDDEN/.test(residualText), residualText);
   // And the claim it rests on is checked against the profile rather than restated from memory.
   const perKey = P.RESOURCE_DERIVATIONS.find((d) => /keccak256\(bytes\(key\)\)/.test(d.formula));
-  eq("the profile still records the per-key derivation as unobserved, which is what the residual rests on",
-     perKey.observed, P.OBSERVED.DOCUMENTED_NOT_OBSERVED);
+  eq("the profile records the per-key derivation as EXECUTED, which is what the narrower denial rests on",
+     perKey.observed, P.OBSERVED.FORK_EXECUTED);
+  check("... and the text-key denial is the chain's, not merely structural",
+        residuals[0].denial === R.DENIAL.CHAIN_ENFORCED, residuals[0].denial);
 }
 
 console.log("\n— the plan: parameterised on the parent, never on a name this repository owns —");
@@ -505,7 +722,13 @@ console.log("\n— the plan: parameterised on the parent, never on a name this r
         ordinals.every((o, i) => o === i + 1), ordinals.join(","));
   const backwards = plan.steps.flatMap((s) => (s.dependsOn ?? []).filter((d) => d >= s.ordinal).map((d) => `${s.ordinal}<-${d}`));
   eq("every dependency points at an earlier step", backwards.length, 0);
-  const grantStep = plan.steps.find((s) => s.call?.method === "grantRoles");
+  // The delegation step is now authorizeTextRoles. Found by method rather than by ordinal so that
+  // adding a step above it does not silently point this ordering check at the wrong transaction.
+  const grantStep = plan.steps.find((s) => s.call?.method === "authorizeTextRoles");
+  check("the plan contains exactly one delegation step, and it is authorizeTextRoles",
+        plan.steps.filter((s) => s.call?.method === "authorizeTextRoles").length === 1 && grantStep !== undefined);
+  check("and the plan contains NO grantRoles step — the call this deployment refuses",
+        plan.steps.every((s) => s.call?.method !== "grantRoles"));
   const agentRecordSteps = plan.steps.filter((s) => s.affects?.resource === plan.resources.agent && s.call?.method?.startsWith("set"));
   check("the agent's records are written BEFORE the agent is given any authority",
         agentRecordSteps.length > 0 && agentRecordSteps.every((s) => s.ordinal < grantStep.ordinal));
@@ -541,8 +764,13 @@ console.log("\n— the plan: parameterised on the parent, never on a name this r
 
   check("every transaction step names a way back", plan.steps.filter((s) => s.kind === "transaction").every((s) => s.rollback));
   check("every step carries an evidence label", plan.steps.every((s) => s.evidence || s.kind === "transaction"));
+  // The undo is the SAME function with the flag flipped, so it is matched on the revoking
+  // vocabulary rather than on a second method name that no longer exists.
   check("the plan ends with a prepared revocation",
-        plan.steps.some((s) => s.kind === "prepared" && s.call.method === "revokeRoles"));
+        plan.steps.some((s) => s.kind === "prepared" && V.REVOKING_METHODS.has(s.call.method)));
+  check("... and the revocation is the same call as the grant, with granted=false",
+        plan.steps.some((s) => s.kind === "prepared" && s.call.method === "authorizeTextRoles:revoke" &&
+                               s.call.selector === grantStep.call.selector));
   const preparedStep = plan.steps.find((s) => s.kind === "prepared");
   check("the prepared revocation names the same resource and bitmap as the grant",
         preparedStep?.call?.resource === grantStep.call.resource &&

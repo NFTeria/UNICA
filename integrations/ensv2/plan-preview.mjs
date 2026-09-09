@@ -121,8 +121,25 @@ export function describeTarget(address, discovered = {}) {
 // exactly the failure this recomputation exists to catch, and the suite sabotages a step to prove
 // the recomputation wins.
 
+/// Every method that moves authority, in ONE place. Three lists used to be spelled out inline at
+/// three call sites, and when the delegation moved to authorizeTextRoles two of them were updated
+/// and one was not — which is the argument for naming them once.
+export const GRANTING_METHODS = new Set([
+  "grantRoles", "grantRootRoles",
+  "authorizeTextRoles", "authorizeAddrRoles", "authorizeDataRoles", "authorizeNameRoles",
+]);
+export const REVOKING_METHODS = new Set([
+  "revokeRoles", "revokeRootRoles",
+  "authorizeTextRoles:revoke", "authorizeAddrRoles:revoke", "authorizeDataRoles:revoke",
+]);
+export const ROLE_CHANGE_METHODS = new Set([...GRANTING_METHODS, ...REVOKING_METHODS]);
+
 export function roleFlags(call, roleTable = ROLE_TABLE.RESOLVER) {
-  const isRoleChange = ["grantRoles", "revokeRoles", "grantRootRoles", "revokeRootRoles"].includes(call?.method);
+  // The authorize* calls move authority just as much as the EAC ones do, and on this deployment
+  // they are the only ones that WORK. Leaving them out of this list made the preview render the
+  // delegation as an ordinary write with no roles named — the owner would have been shown a
+  // transaction that grants an agent authority, with the authority column blank.
+  const isRoleChange = ROLE_CHANGE_METHODS.has(String(call?.method ?? ""));
   const bitmap = call?.roleBitmap === undefined || call?.roleBitmap === null ? null : BigInt(call.roleBitmap);
   const resource = call?.resource === undefined || call?.resource === null ? null : BigInt(call.resource);
   return {
@@ -170,7 +187,7 @@ export function previewStep(step, opts = {}) {
   const batchRows = [];
   if (batch) {
     for (const inner of batch) {
-      if (["grantRoles", "revokeRoles", "grantRootRoles", "revokeRootRoles"].includes(inner?.method)) {
+      if (ROLE_CHANGE_METHODS.has(String(inner?.method ?? ""))) {
         refuse(PREVIEW_REFUSAL.BATCH_CARRIES_ROLE_CHANGE, inner.method);
       }
       if (inner?.to !== undefined && lower(inner.to) !== lower(call?.to)) {
@@ -221,8 +238,8 @@ export function previewStep(step, opts = {}) {
     arguments: step?.arguments ?? [],
     affects: step?.affects ?? null,
     roles: {
-      granted: step?.roles?.granted ?? (call?.method === "grantRoles" ? flags.roleNames?.named ?? [] : []),
-      revoked: step?.roles?.revoked ?? (call?.method === "revokeRoles" ? flags.roleNames?.named ?? [] : []),
+      granted: step?.roles?.granted ?? (GRANTING_METHODS.has(String(call?.method ?? "")) ? flags.roleNames?.named ?? [] : []),
+      revoked: step?.roles?.revoked ?? (REVOKING_METHODS.has(String(call?.method ?? "")) ? flags.roleNames?.named ?? [] : []),
       bitmap: flags.roleBitmap,
       table: step?.roleTable ?? ROLE_TABLE.RESOLVER,
       // A bit with no name is the most interesting bit in the word, so it gets its own field
@@ -319,7 +336,7 @@ export function planPreviewIsSignable(preview) {
   if (preview.summary.rowsInvolvingRootResource.length !== 0) return false;
   // A delegation handed over without its undo is not a plan, it is a one-way door with a preview
   // attached. The prepared revocation is required by presence, not by hope that someone writes it.
-  if (!preview.rows.some((r) => r.kind === STEP_KIND.PREPARED && r.method === "revokeRoles")) return false;
+  if (!preview.rows.some((r) => r.kind === STEP_KIND.PREPARED && REVOKING_METHODS.has(String(r.method ?? "")))) return false;
   for (const r of preview.rows) {
     if (!r.ok) return false;
     if (r.kind !== STEP_KIND.TRANSACTION && r.kind !== STEP_KIND.PREPARED) continue;
