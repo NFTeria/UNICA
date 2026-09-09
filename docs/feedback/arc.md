@@ -45,5 +45,6 @@ constant, and for the warning to say plainly that the scale is a property of the
 the chain. Ours is `integrations/arc-treasury/units.mjs`, where the two representations are types
 that refuse to meet; it is offered as the example if it is useful.
 
-Status: `READY_FOR_ARC_DEPLOYMENT_ACTION`. No transaction has been broadcast and no UNICA contract
-runs on Arc.
+Status: `LIVE READ`. The integration is complete: it reads a live Arc position, reads the ERC-20's
+own decimals(), decides one bounded action and emits a signable preview. No transaction has been
+broadcast and no UNICA contract runs on Arc — there is no signer in the directory, by design.

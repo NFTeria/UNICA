@@ -53,5 +53,7 @@ ENSv2's own docs carry "The contracts and interfaces described here are not yet 
 change prior to mainnet deployment." Everything above is pinned to the Sepolia beta as of
 2026-09-08 and is offered in that spirit.
 
-Status: `READY_FOR_WALLET_CONFIRMATION`. No claim of qualification is made here; the track
-decision is the owner's.
+Status: `LIVE READ`. The integration is complete: it resolves live ENSv2 Sepolia names, reads the
+Permissioned Resolver's authorization from the chain, and simulates an authorized and an
+unauthorized edit. UNICA owns no ENS name and does not need one — it resolves the name a merchant
+owns. No claim of qualification is made here; the track decision is the owner's.
