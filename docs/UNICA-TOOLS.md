@@ -53,7 +53,7 @@ a claim and a wish.
 | native-input settlement | **live** — Ethereum Sepolia |
 | USDC payout | **live** |
 | canonical V1 receipt | **live** — one on chain |
-| live verification scripts | **live** — `make proof`, 36 of 36 |
+| live verification scripts | **live** — `make proof`, 14 of 14 plus 31 of 31 |
 | Graph indexer | **local** — implemented, matchstick-tested, not deployed |
 
 ### UNICA V2
@@ -186,7 +186,7 @@ The claims this product may make in public, with their evidence and their limits
 - Dependencies: `cast`.
 - Networks: Ethereum Sepolia.
 - Status: LIVE AND VERIFIED
-- Evidence: `make proof` prints 36 of 36 against `0x11202071…0Ea0C0` and tx `0x1120af18…ee0ecb83`.
+- Evidence: `make proof` prints 14 of 14 (day-1) and 31 of 31 (live) against `0x11202071…0Ea0C0` and tx `0x1120af18…ee0ecb83`.
 - Tests: `docs/proof/verify-live.sh` is its own test; it fails loudly on a wrong value.
 - Deployment: none; it runs locally against the live chain.
 - Limitations: needs a public RPC.
