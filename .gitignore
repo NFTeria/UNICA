@@ -217,3 +217,7 @@ integrations/chainlink-cre-guardian/workflow/.cre_build_tmp.*
 
 # The skills installer's lockfile, for content that is itself ignored.
 skills-lock.json
+
+# The submission packet is strategy, not product: which tracks to enter, which to decline,
+# and where we think we are strongest. It lives in the war room and is kept out of a public repo.
+docs/submission/
