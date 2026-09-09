@@ -29,7 +29,8 @@ import {keccak256, toHex} from "../../web/ensv2/keccak.mjs";
 import {utf8} from "../permit2/digest.mjs";
 import {dnsEncode, encodeResolveCall, namehash, ENSV2} from "../../web/ensv2/resolve.mjs";
 import {
-  ERC1967_IMPLEMENTATION_SLOT, ROOT_RESOURCE, SELECTOR, nameLevelResource,
+  ERC1967_IMPLEMENTATION_SLOT, ROOT_RESOURCE, SELECTOR, coinTypeResource, nameLevelResource,
+  textResource,
 } from "./permissioned.mjs";
 import * as PROFILE from "./profile.mjs";
 import * as R from "./records.mjs";
@@ -108,10 +109,24 @@ function makeWorld(parent = PARENT) {
       [N.names.agent]: {resolver: RESOLVER, addr: null, texts: {[R.RECORD_KEY.agent]: enc("agent", AGENT_RECORD)}},
     },
     eac: {
-      rolesAtName: 0n,      // what roles(payResource, agent) returns
-      rolesAtRoot: 0n,      // what roles(ROOT_RESOURCE, agent) returns
-      hasRoles: null,       // null: derive it honestly from the union. A value forces a disagreement.
-      unreadable: false,    // make every EAC read come back empty
+      // FOUR RESOURCES, BECAUSE THE CHAIN HAS FOUR. This stub used to model `hasRoles` as
+      // consulting rolesAtName from ANY resource, which is not what the deployment does. Measured
+      // on a Sepolia fork at block 11666085: an account holding SET_TEXT at the name-level
+      // resource reads back roles()=0 AND hasRoles()=false at the per-key resource — the resolver
+      // does the widening in its own setter, not in EAC. An account holding roles at
+      // ROOT_RESOURCE, by contrast, reads hasRoles()=true at every resource while roles() there
+      // returns 0. So the honest model is: roles() is per-resource, hasRoles() is
+      // (resource | ROOT).
+      rolesAtName: 0n,          // roles(nameLevelResource(payNode), agent)
+      rolesAtRoot: 0n,          // roles(ROOT_RESOURCE, agent)
+      rolesAtPayTextKey: 0n,    // roles(textResource(payNode, RECORD_KEY.pay), agent)
+      rolesAtPayAddrCoin: 0n,   // roles(coinTypeResource(payNode, 60), agent)
+      hasRoles: null,           // null: derive it honestly. A value forces a disagreement.
+      unreadable: false,        // make every EAC read come back empty
+      // Make ONE scope unreadable. Global unreadability proves the reader refuses when the whole
+      // resolver is dark; this proves it refuses when exactly the scope carrying the delegation
+      // goes dark, which is the failure that would otherwise read as a comfortable zero.
+      unreadableAt: null,       // null | "NAME" | "ROOT" | "PAY_TEXT_KEY" | "PAY_ADDR_COIN"
     },
     transportThrows: false,
   };
@@ -159,7 +174,24 @@ function makeTransport(world) {
     }
   }
 
-  const payResource = BigInt((world.namesOf ?? NAMES).resources.pay);
+  const named = world.namesOf ?? NAMES;
+  const payResource = BigInt(named.resources.pay);
+  const payTextKeyResource = BigInt(textResource(named.nodes.pay, R.RECORD_KEY.pay));
+  const payAddrCoinResource = BigInt(coinTypeResource(named.nodes.pay, 60));
+  const scopeOf = (resource) => {
+    if (resource === ROOT_RESOURCE) return "ROOT";
+    if (resource === payResource) return "NAME";
+    if (resource === payTextKeyResource) return "PAY_TEXT_KEY";
+    if (resource === payAddrCoinResource) return "PAY_ADDR_COIN";
+    return null;
+  };
+  const rolesAt = (resource) => {
+    if (resource === ROOT_RESOURCE) return world.eac.rolesAtRoot;
+    if (resource === payResource) return world.eac.rolesAtName;
+    if (resource === payTextKeyResource) return world.eac.rolesAtPayTextKey;
+    if (resource === payAddrCoinResource) return world.eac.rolesAtPayAddrCoin;
+    return 0n;
+  };
 
   return {
     stats,
@@ -196,14 +228,15 @@ function makeTransport(world) {
         const sel = "0x" + hexBody(data).slice(0, 8);
         if (sel === SELECTOR.roles) {
           const resource = BigInt("0x" + hexBody(data).slice(8, 72));
-          if (resource === ROOT_RESOURCE) return "0x" + word(world.eac.rolesAtRoot);
-          if (resource === payResource) return "0x" + word(world.eac.rolesAtName);
-          return "0x" + word(0);
+          if (world.eac.unreadableAt && scopeOf(resource) === world.eac.unreadableAt) return "0x";
+          return "0x" + word(rolesAt(resource));
         }
         if (sel === SELECTOR.hasRoles) {
+          const resource = BigInt("0x" + hexBody(data).slice(8, 72));
+          if (world.eac.unreadableAt && scopeOf(resource) === world.eac.unreadableAt) return "0x";
           const bitmap = BigInt("0x" + hexBody(data).slice(72, 136));
-          const union = world.eac.rolesAtName | world.eac.rolesAtRoot;
-          const honest = (union & bitmap) === bitmap;
+          const effective = rolesAt(resource) | world.eac.rolesAtRoot;
+          const honest = (effective & bitmap) === bitmap;
           return "0x" + word(world.eac.hasRoles === null ? (honest ? 1 : 0) : (world.eac.hasRoles ? 1 : 0));
         }
         return "0x";
@@ -339,8 +372,25 @@ async function runChecks(impl, emit) {
     ["the agent holds contract-wide authority at ROOT_RESOURCE",
      {mutate: (w) => { w.eac.rolesAtRoot = PROFILE.RESOLVER_ROLE.SET_ADDR.bit; }},
      MC.PREFLIGHT_STATUS.AGENT_HOLDS_ROOT_RESOURCE],
+    // CRITICAL 2. Before the four-scope read these three worlds were ACCEPTED: the reader asked
+    // only roles(payResource) and roles(ROOT), and an authorizeTextRoles / authorizeAddrRoles
+    // delegation lands at neither. The agent could write the settlement configuration while the
+    // validator reported no agent authority — a failure in the UNSAFE direction.
+    ["the chain says the agent holds a PER-KEY delegation on the pay record's text key",
+     {mutate: (w) => { w.eac.rolesAtPayTextKey = PROFILE.RESOLVER_ROLE.SET_TEXT.bit; }},
+     MC.PREFLIGHT_STATUS.PROTECTED_FIELD_UNDER_AGENT_CONTROL],
+    ["the chain says the agent holds a PER-COIN-TYPE delegation on the pay name's addr record",
+     {mutate: (w) => { w.eac.rolesAtPayAddrCoin = PROFILE.RESOLVER_ROLE.SET_ADDR.bit; }},
+     MC.PREFLIGHT_STATUS.PROTECTED_FIELD_UNDER_AGENT_CONTROL],
+    ["the agent holds the ADMIN of SET_TEXT at the pay key — the same authority, one grant away",
+     {mutate: (w) => { w.eac.rolesAtPayTextKey = PROFILE.adminRole(PROFILE.RESOLVER_ROLE.SET_TEXT.bit); }},
+     MC.PREFLIGHT_STATUS.PROTECTED_FIELD_UNDER_AGENT_CONTROL],
     ["who may edit the records could not be read at all",
      {mutate: (w) => { w.eac.unreadable = true; }}, MC.PREFLIGHT_STATUS.AUTHORITY_UNKNOWN],
+    ["the per-key scope alone went dark, which is the read that used to be missing entirely",
+     {mutate: (w) => { w.eac.unreadableAt = "PAY_TEXT_KEY"; }}, MC.PREFLIGHT_STATUS.AUTHORITY_UNKNOWN],
+    ["the per-coin-type scope alone went dark",
+     {mutate: (w) => { w.eac.unreadableAt = "PAY_ADDR_COIN"; }}, MC.PREFLIGHT_STATUS.AUTHORITY_UNKNOWN],
     ["roles() and hasRoles() disagree about the same account",
      {mutate: (w) => { w.eac.hasRoles = true; }}, MC.PREFLIGHT_STATUS.AUTHORITY_READ_DISAGREES],
     ["a verified deployment was required and nobody re-read one",
@@ -411,6 +461,88 @@ async function runChecks(impl, emit) {
   emit("a caller cannot point the authority check at an address other than the published agent",
        pointedElsewhere.verdict.status === MC.PREFLIGHT_STATUS.PROTECTED_FIELD_UNDER_AGENT_CONTROL,
        `got ${pointedElsewhere.verdict.status} — the caller's address was used instead of the record's`);
+
+  // ── 3b. CRITICAL 2: the per-key delegation, and the proof it used to be invisible ───────────
+  //
+  // THE INSTRUMENT IS VALIDATED BEFORE THE ROW IS BELIEVED. The two reads the old
+  // `readAgentAuthority` made — roles(payResource) and roles(ROOT_RESOURCE) — are issued here
+  // against the SAME world the refusal row above uses. Both must come back zero. If they did not,
+  // the row above would be catching the delegation through the old path and would prove nothing
+  // about the new one.
+  const perKeyWorld = makeWorld();
+  perKeyWorld.eac.rolesAtPayTextKey = PROFILE.RESOLVER_ROLE.SET_TEXT.bit;
+  const perKey = await runCase(impl, {world: perKeyWorld});
+  const {transport: perKeyTransport} = makeTransport(perKeyWorld);
+  const rolesWord = async (resource) => {
+    const hex = await perKeyTransport("eth_call", [{
+      to: RESOLVER,
+      data: SELECTOR.roles + word(resource) + addrWord(AGENT),
+    }, "latest"]);
+    return BigInt(hex);
+  };
+  const oldReadAtName = await rolesWord(BigInt(NAMES.resources.pay));
+  const oldReadAtRoot = await rolesWord(ROOT_RESOURCE);
+  emit("the two reads the OLD authority check made are both blind to a per-key delegation",
+       oldReadAtName === 0n && oldReadAtRoot === 0n,
+       `roles(payResource)=0x${oldReadAtName.toString(16)} roles(ROOT)=0x${oldReadAtRoot.toString(16)} — ` +
+       "if either is non-zero this world does not reproduce CRITICAL 2 and the row below proves nothing");
+  emit("   and the read that DOES see it returns the delegated bitmap",
+       (await rolesWord(BigInt(textResource(NAMES.nodes.pay, R.RECORD_KEY.pay)))) === PROFILE.RESOLVER_ROLE.SET_TEXT.bit,
+       "roles() at the per-key resource did not return SET_TEXT");
+  emit("   so the validator REFUSES a delegation the old two-scope read reported as no authority",
+       perKey.verdict.ok === false &&
+       perKey.verdict.status === MC.PREFLIGHT_STATUS.PROTECTED_FIELD_UNDER_AGENT_CONTROL,
+       `got ${perKey.verdict.status}`);
+  emit("   and it names the scope the authority was found at, rather than just refusing",
+       Array.isArray(perKey.verdict.via) && perKey.verdict.via.includes(MC.AUTHORITY_SCOPE.PAY_TEXT_KEY),
+       show(perKey.verdict.via));
+
+  // ── 3c. IT FAILS CLOSED. Same delegation, same world, one difference: the read that sees it is
+  //        made to fail. The answer must be a NAMED refusal, never a comfortable zero.
+  const darkWorld = makeWorld();
+  darkWorld.eac.rolesAtPayTextKey = PROFILE.RESOLVER_ROLE.SET_TEXT.bit;
+  darkWorld.eac.unreadableAt = "PAY_TEXT_KEY";
+  const dark = await runCase(impl, {world: darkWorld});
+  emit("FAIL-CLOSED — with the delegation present and its read made to fail, UNICA REFUSES",
+       dark.verdict.ok === false && dark.verdict.status === MC.PREFLIGHT_STATUS.AUTHORITY_UNKNOWN,
+       `got ${dark.verdict.status} — a read that failed must never be reported as no authority`);
+  emit("   and the refusal names the scope that went dark",
+       dark.bundle.authority?.failedScope === MC.AUTHORITY_SCOPE.PAY_TEXT_KEY,
+       show(dark.bundle.authority));
+  emit("   the authority read did NOT return a zero bitmap",
+       dark.bundle.authority?.status === MC.AUTHORITY_STATUS.UNREADABLE &&
+       dark.bundle.authority?.union === undefined,
+       show(dark.bundle.authority?.status));
+
+  // The pair above is only a pair if the SEEING half really sees. Stated as its own row so an
+  // "everything refuses" regression cannot masquerade as fail-closed behaviour.
+  emit("   CONTROL for the pair — the same delegation, read successfully, is REFUSED for the right reason",
+       perKey.verdict.status === MC.PREFLIGHT_STATUS.PROTECTED_FIELD_UNDER_AGENT_CONTROL &&
+       dark.verdict.status !== perKey.verdict.status,
+       "the seeing half and the dark half returned the same status, so neither says anything");
+
+  // ── 3d. a reader given no pay node cannot derive the per-key resources, and says so ─────────
+  const noNode = await MC.readAgentAuthority({
+    reader: perKey.reader, resolver: RESOLVER,
+    payResource: NAMES.resources.pay, agentAddress: AGENT,
+  });
+  emit("FAIL-CLOSED — readAgentAuthority with no pay node REFUSES rather than degrading to two scopes",
+       noNode.status === MC.AUTHORITY_STATUS.NO_PAY_NODE,
+       `got ${noNode.status} — without the node it would silently be the old, blind check`);
+  const noNodeVerdict = impl.preflight({...perKey.bundle, authority: noNode}, BASE_POLICY);
+  emit("   and the preflight turns that into a named refusal",
+       noNodeVerdict.ok === false && noNodeVerdict.status === MC.PREFLIGHT_STATUS.AUTHORITY_UNKNOWN,
+       `got ${noNodeVerdict.status}`);
+
+  // ── 3e. the four scopes are the four the chain has, and the answer says it is not exhaustive ─
+  emit("the authority read names all four scopes it asked about",
+       Object.keys(harmlessAgent.verdict.authority?.scopes ?? {}).length === 4 &&
+       Object.keys(MC.AUTHORITY_SCOPE).every((k) => k in (harmlessAgent.verdict.authority?.scopes ?? {})),
+       show(Object.keys(harmlessAgent.verdict.authority?.scopes ?? {})));
+  emit("the authority read does not claim to be exhaustive, because it cannot be",
+       harmlessAgent.verdict.authority?.exhaustive === false &&
+       typeof harmlessAgent.verdict.authority?.notEnumerable === "string",
+       show(harmlessAgent.verdict.authority?.exhaustive));
 
   // ── 4. ENS IS LOAD-BEARING ──────────────────────────────────────────────────────────────────
   //
@@ -645,6 +777,41 @@ const SABOTAGE = [
     impl: () => ({...REAL, preflight: (b, p) => {
       const patched = b && b.authority ? {...b, authority: {...b.authority, mayEditPay: false}} : b;
       return MC.preflight(patched, p);
+    }}),
+  },
+  {
+    // THE CRITICAL 2 MUTANT. This is the validator as it actually shipped: an authority read that
+    // asks only the name-level and root resources. It must turn this suite red, or the four-scope
+    // read is untested and the rows above are passing for some other reason.
+    what: "the authority read asks only the two scopes the old, blind version asked",
+    impl: () => ({...REAL, readMerchantEvidence: async (a, r, o) => {
+      const b = await MC.readMerchantEvidence(a, r, o);
+      if (b && b.authority && b.authority.status === MC.AUTHORITY_STATUS.READ) {
+        const scopes = b.authority.scopes ?? {};
+        const nameBits = BigInt(scopes[MC.AUTHORITY_SCOPE.NAME]?.roles ?? "0x0");
+        const rootBits = BigInt(scopes[MC.AUTHORITY_SCOPE.ROOT]?.roles ?? "0x0");
+        const union = nameBits | rootBits;
+        b.authority = {
+          ...b.authority, union: "0x" + union.toString(16),
+          mayEditPay: (union & MC.ANY_EDIT_MASK) !== 0n,
+          mayEditPayVia: [MC.AUTHORITY_SCOPE.NAME, MC.AUTHORITY_SCOPE.ROOT]
+            .filter((k) => (BigInt(scopes[k]?.roles ?? "0x0") & MC.ANY_EDIT_MASK) !== 0n),
+        };
+      }
+      return b;
+    }}),
+  },
+  {
+    // The other half of CRITICAL 2: an unreadable per-key scope reported as a comfortable zero.
+    what: "an unreadable authority scope is reported as no authority instead of as a refusal",
+    impl: () => ({...REAL, readMerchantEvidence: async (a, r, o) => {
+      const b = await MC.readMerchantEvidence(a, r, o);
+      if (b && b.authority && b.authority.status === MC.AUTHORITY_STATUS.UNREADABLE) {
+        b.authority = {status: MC.AUTHORITY_STATUS.READ, agentAddress: b.authority.agentAddress ?? null,
+                       resolver: b.authority.resolver ?? null, union: "0x0", unionNames: null,
+                       holdsRoot: false, mayEditPay: false, mayEditPayVia: [], exhaustive: false};
+      }
+      return b;
     }}),
   },
   {

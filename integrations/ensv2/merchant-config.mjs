@@ -13,19 +13,35 @@
 // Every function takes the parent; a missing one is a refusal that names it as a required owner
 // action, not a default that quietly resolves somebody else's tree.
 //
-// WHY `pay` IS A SEPARATE NAME FROM `treasury`, WHICH IS THE WHOLE DESIGN. The Phase 1 survey
-// established, from five live refusals, that this deployment's Permissioned Resolver scopes every
-// record write to the NAME-LEVEL resource keccak256(node ‖ bytes32(0)) — including `setText` and
-// `setAddr(bytes32,uint256,bytes)`, where the documentation leads you to expect something finer.
-// Nothing observed on this deployment has ever named a per-key or per-coin-type resource. So an
-// agent granted SET_TEXT anywhere may rewrite EVERY text record on that name. There is no
-// permission narrow enough to say "this agent may write the treasury key and not the pay key".
+// WHY `pay` IS A SEPARATE NAME FROM `treasury`, WHICH IS STILL THE WHOLE DESIGN.
 //
-// The mitigation therefore cannot be a permission. It has to be structural: the settlement
-// configuration lives on a name the agent has no authority over at all. That is why `pay` and
-// `treasury` are siblings rather than two keys on one name, and it is why the check below that
-// matters most is not "is the agent's bitmap small" but "does the agent have ANY authority over
-// the name carrying the recipient".
+// THIS FILE USED TO SAY, IN BOLD, AND IT WAS WRONG — left here because this repository corrects a
+// refuted claim in place rather than deleting it:
+//
+//   "Nothing observed on this deployment has ever named a per-key or per-coin-type resource. So an
+//    agent granted SET_TEXT anywhere may rewrite EVERY text record on that name. There is no
+//    permission narrow enough to say 'this agent may write the treasury key and not the pay key'."
+//
+// WHAT REFUTED IT. A Sepolia fork pinned at block 11666085, against the live resolver proxy
+// 0xc00E9189…35eeE. `authorizeTextRoles(dnsName, key, account, true)` emitted EACRolesChanged
+// naming keccak256(node ‖ keccak256(key)) — a PER-KEY resource — and granted SET_TEXT there and
+// nowhere else. The delegated account then wrote that one key and was REFUSED, with
+// EACUnauthorizedAccountRoles (0x4b27a133), on a different key and on `setAddr`. Per-key scoping
+// IS available on this deployment. `authorizeAddrRoles` is the same story per coin type;
+// `authorizeNameRoles` is the name-level one.
+//
+// WHAT SURVIVES, AND IT IS THE HALF THAT MATTERS. The blanket exposure is real for a NAME-LEVEL
+// grant: an account holding SET_TEXT at keccak256(node ‖ bytes32(0)) wrote `unica.pay`,
+// `unica.treasury`, `avatar` and an arbitrary key on the same fork. So "SET_TEXT lets an agent
+// rewrite every text record" is true of a name-level grant and false of a per-key one, and the
+// original claim's mistake was believing the deployment offered only the former.
+//
+// The mitigation is still structural rather than permissional, for a reason that did not change:
+// per-key scoping protects a key, and the settlement configuration is worth protecting even from
+// an agent whose grant is scoped somewhere else entirely. `pay` and `treasury` stay siblings, and
+// the check below that matters most is still "does the agent have ANY authority over the name
+// carrying the recipient" — asked now at four resources instead of two, because two of them could
+// not see the mechanism this deployment actually accepts.
 //
 // EVERY REFUSAL HAS A CONTROL. `merchant-config-test.mjs` builds one evidence bundle that is
 // ACCEPTED, then breaks exactly one thing per row and requires exactly the matching refusal. A
@@ -43,8 +59,8 @@ import {keccak256, toHex} from "../../web/ensv2/keccak.mjs";
 import {concat, utf8, wordAddress, wordBytes32, wordUint} from "../permit2/digest.mjs";
 import {ENSV2, normalizeName, namehash} from "../../web/ensv2/resolve.mjs";
 import {
-  ERC1967_IMPLEMENTATION_SLOT, PROBE, ROOT_RESOURCE, encodeHasRolesCall, encodeRolesCall,
-  nameLevelResource, probe, roleName, uintAt, boolAt,
+  ERC1967_IMPLEMENTATION_SLOT, PROBE, ROOT_RESOURCE, coinTypeResource, encodeHasRolesCall,
+  encodeRolesCall, nameLevelResource, probe, roleName, textResource, uintAt, boolAt,
 } from "./permissioned.mjs";
 import * as PROFILE from "./profile.mjs";
 import {PAYOUT_CURRENCIES} from "./build.mjs";
@@ -289,6 +305,7 @@ export async function readMerchantEvidence({parent, merchant}, reader, opts = {}
   bundle.authority = await readAgentAuthority({
     reader, resolver: payResolver,
     payResource: named.resources.pay,
+    payNode: named.nodes.pay,
     agentAddress: agentAddressFrom(bundle, opts),
   });
 
@@ -327,66 +344,168 @@ export const AUTHORITY_STATUS = {
   READ: "READ",
   NO_RESOLVER: "NO_RESOLVER",
   NO_AGENT: "NO_AGENT",
+  NO_PAY_NODE: "NO_PAY_NODE",
   UNREADABLE: "UNREADABLE",
   DISAGREES: "DISAGREES",
 };
 
-/// Read what the agent may do on the merchant's pay name.
+/// The four resources an account could hold authority over the settlement configuration at.
 ///
-/// TWO READS, AND THE DIFFERENCE BETWEEN THEM IS THE POINT. Phase 1 found that `roles(resource,
-/// account)` and `hasRoles(resource, bitmap, account)` do not answer the same question, and that
-/// the difference fails unsafe: `roles` at a name resource returns 0 for an account that holds
-/// everything at ROOT_RESOURCE, and an integration reading only `roles` concludes the account is
-/// harmless. So the union of `roles(nameResource)` and `roles(ROOT_RESOURCE)` is what is judged,
-/// and a single `hasRoles` is asked as well — if `hasRoles` says yes about a bit the union says is
-/// clear, the union is still missing something and NEITHER read is relied on.
-export async function readAgentAuthority({reader, resolver, payResource, agentAddress}) {
+/// This deployment derives an EAC resource from the namehash and a second word that selects the
+/// GRANULARITY, and all three shapes are live. Reading only the name-level one is what CRITICAL 2
+/// was: a delegation made with `authorizeTextRoles` lands at a resource the name-level read cannot
+/// see, so the reader reported "no agent authority" about an agent that could write.
+export const AUTHORITY_SCOPE = {
+  NAME: "NAME",                    // nameLevelResource(payNode)  — blanket over that whole name
+  ROOT: "ROOT",                    // ROOT_RESOURCE               — blanket over every name
+  PAY_TEXT_KEY: "PAY_TEXT_KEY",    // textResource(payNode, RECORD_KEY.pay)
+  PAY_ADDR_COIN: "PAY_ADDR_COIN",  // coinTypeResource(payNode, ADDR_COIN_TYPE)
+};
+
+/// The coin type behind `addr(bytes32)`. `readAddr` asks the resolver for exactly this record, so
+/// this is the coin type an agent would have to be delegated on to move the address UNICA read.
+export const ADDR_COIN_TYPE = 60n;
+
+/// Read what the agent may do to the merchant's SETTLEMENT CONFIGURATION.
+///
+/// FOUR SCOPES, BECAUSE THREE OF THEM WERE INVISIBLE BEFORE AND ONE OF THOSE IS THE MECHANISM THIS
+/// DEPLOYMENT ACTUALLY ACCEPTS. Measured on a Sepolia fork pinned at block 11666085, against the
+/// live resolver proxy 0xc00E9189…35eeE:
+///
+///   authorizeTextRoles(dnsName, key, account, true)   -> EACRolesChanged names
+///                                                        keccak256(node ‖ keccak256(key))
+///   authorizeAddrRoles(dnsName, coinType, …)          -> keccak256(node ‖ keccak256(uint256 coin))
+///   authorizeNameRoles(dnsName, bitmap, …)            -> keccak256(node ‖ bytes32(0))
+///
+/// The implementation's dispatch table carries NO read dedicated to an `authorize*` grant — the
+/// only role reads it exposes are roles/hasRoles/hasRootRoles/roleCount/hasAssignees/
+/// getAssigneeCount. So the read that sees a per-key delegation is the ordinary `roles(uint256,
+/// address)`, asked at the DERIVED resource. That is what this function now does.
+///
+/// TWO READS PER SCOPE, AND THE DIFFERENCE BETWEEN THEM IS STILL THE POINT. Phase 1 found that
+/// `roles(resource, account)` and `hasRoles(resource, bitmap, account)` do not answer the same
+/// question, and that the difference fails unsafe: `roles` at a name resource returns 0 for an
+/// account that holds everything at ROOT_RESOURCE. So every scope is asked both ways, and if any
+/// `hasRoles` says yes about a bit that scope's `roles` says is clear, NEITHER read is relied on.
+///
+/// IT FAILS CLOSED, DELIBERATELY AND AT EVERY EXIT. A missing chain view, a missing resolver, a
+/// missing pay node, a probe that reverts, an endpoint that drops the body, a return the decoder
+/// refuses — each is a NAMED status the preflight turns into a refusal. None of them returns a
+/// zero bitmap, because a comfortable zero is exactly how CRITICAL 2 read as safe.
+///
+/// WHAT IT DOES NOT CLAIM. A per-key grant on some OTHER text key, or a per-coin grant on some
+/// other coin type, is not read here and cannot be: this deployment offers no way to enumerate the
+/// resources an account holds roles at. It is not an omission — such a grant is authority over a
+/// record UNICA does not settle against. The result says so in `exhaustive: false` rather than
+/// letting a reader assume the four scopes are all the scopes there are.
+export async function readAgentAuthority({reader, resolver, payResource, payNode, agentAddress}) {
   if (!reader || !reader.chain) return {status: AUTHORITY_STATUS.UNREADABLE, why: "no chain view on the reader"};
   if (!resolver) return {status: AUTHORITY_STATUS.NO_RESOLVER};
   if (!agentAddress) return {status: AUTHORITY_STATUS.NO_AGENT};
+  // No pay node means the per-key and per-coin resources cannot be derived, and this function
+  // would silently degrade to the two reads that missed the delegation in the first place. That is
+  // a refusal, not a fallback.
+  if (!payNode) {
+    return {status: AUTHORITY_STATUS.NO_PAY_NODE, agentAddress, resolver,
+            why: "the pay name's node is required to derive the per-key and per-coin-type resources"};
+  }
 
   const chain = reader.chain;
-  const atName = await probe(chain, resolver, encodeRolesCall(BigInt(payResource), agentAddress), (h) => uintAt(h, 0));
-  const atRoot = await probe(chain, resolver, encodeRolesCall(ROOT_RESOURCE, agentAddress), (h) => uintAt(h, 0));
-  if (atName.observation !== PROBE.DECODED || atRoot.observation !== PROBE.DECODED) {
-    return {
-      status: AUTHORITY_STATUS.UNREADABLE, agentAddress, resolver,
-      probes: {atName: atName.observation, atRoot: atRoot.observation},
-    };
-  }
-  const nameRoles = atName.value ?? 0n;
-  const rootRoles = atRoot.value ?? 0n;
-  const union = nameRoles | rootRoles;
+  const scopes = [
+    {scope: AUTHORITY_SCOPE.NAME, resource: BigInt(nameLevelResource(payNode)),
+     what: "every record on the pay name"},
+    {scope: AUTHORITY_SCOPE.ROOT, resource: ROOT_RESOURCE,
+     what: "every record on every name this resolver serves"},
+    {scope: AUTHORITY_SCOPE.PAY_TEXT_KEY, resource: BigInt(textResource(payNode, RECORD_KEY.pay)),
+     what: `the text key ${RECORD_KEY.pay}, which carries the settlement configuration`},
+    {scope: AUTHORITY_SCOPE.PAY_ADDR_COIN, resource: BigInt(coinTypeResource(payNode, ADDR_COIN_TYPE)),
+     what: `the addr record at coin type ${ADDR_COIN_TYPE}`},
+  ];
 
-  const corroborate = await probe(
-    chain, resolver, encodeHasRolesCall(BigInt(payResource), CORROBORATION_BIT, agentAddress), (h) => boolAt(h, 0),
-  );
-  if (corroborate.observation !== PROBE.DECODED) {
-    return {
-      status: AUTHORITY_STATUS.UNREADABLE, agentAddress, resolver,
-      probes: {corroborate: corroborate.observation},
-    };
+  // A resource is a 32-byte WORD. `toString(16)` drops leading zeroes, which printed the pinned
+  // name-level resource 0x0bfd…5e61 as 0xbfd…5e61 — a value that no longer matches the constant a
+  // reader would compare it against. Padded, so a printed resource is a comparable resource.
+  const asWord = (v) => "0x" + v.toString(16).padStart(64, "0");
+  const read = {};
+  let union = 0n;
+  for (const s of scopes) {
+    const r = await probe(chain, resolver, encodeRolesCall(s.resource, agentAddress), (h) => uintAt(h, 0));
+    if (r.observation !== PROBE.DECODED) {
+      return {
+        status: AUTHORITY_STATUS.UNREADABLE, agentAddress, resolver,
+        failedScope: s.scope, failedResource: asWord(s.resource),
+        probes: {[s.scope]: r.observation},
+        why: `roles() at the ${s.scope} resource could not be read, and unread authority is not absent authority`,
+      };
+    }
+    const bits = r.value ?? 0n;
+    read[s.scope] = {resource: asWord(s.resource), roles: "0x" + bits.toString(16),
+                     roleNames: roleName(bits), covers: s.what};
+    union |= bits;
   }
-  const unionSaysYes = (union & CORROBORATION_BIT) === CORROBORATION_BIT;
-  if (corroborate.value !== unionSaysYes) {
-    return {
-      status: AUTHORITY_STATUS.DISAGREES, agentAddress, resolver,
-      hasRoles: corroborate.value, unionSaysYes,
-      nameRoles: "0x" + nameRoles.toString(16), rootRoles: "0x" + rootRoles.toString(16),
-    };
+
+  // The corroborating read, once per scope. A scope whose two reads disagree poisons the whole
+  // answer: the union is then known to be incomplete and no part of it may be trusted.
+  //
+  // WHAT `hasRoles` ACTUALLY CONSULTS, measured on the fork rather than assumed. For the account
+  // holding roles at ROOT_RESOURCE, `roles(textResource)` returned 0 while
+  // `hasRoles(textResource, SET_TEXT)` returned TRUE — at all four resources. So `hasRoles` answers
+  // about `roles(resource) | roles(ROOT_RESOURCE)`, and the honest comparison is against that
+  // union and not against the scope's own bitmap. Comparing against the scope alone would have
+  // reported DISAGREES for every root-holding account, which is a true refusal reached by a false
+  // reason — and it would have masked AGENT_HOLDS_ROOT_RESOURCE, the precise one.
+  const rootBits = BigInt(read[AUTHORITY_SCOPE.ROOT].roles);
+  for (const s of scopes) {
+    const c = await probe(
+      chain, resolver, encodeHasRolesCall(s.resource, CORROBORATION_BIT, agentAddress), (h) => boolAt(h, 0),
+    );
+    if (c.observation !== PROBE.DECODED) {
+      return {
+        status: AUTHORITY_STATUS.UNREADABLE, agentAddress, resolver,
+        failedScope: s.scope, probes: {[`corroborate:${s.scope}`]: c.observation},
+        why: `hasRoles() at the ${s.scope} resource could not be read`,
+      };
+    }
+    const effective = BigInt(read[s.scope].roles) | rootBits;
+    const rolesSaysYes = (effective & CORROBORATION_BIT) === CORROBORATION_BIT;
+    if (c.value !== rolesSaysYes) {
+      return {
+        status: AUTHORITY_STATUS.DISAGREES, agentAddress, resolver,
+        scope: s.scope, hasRoles: c.value, unionSaysYes: rolesSaysYes,
+        rolesAtScope: read[s.scope].roles,
+        nameRoles: read[AUTHORITY_SCOPE.NAME].roles, rootRoles: read[AUTHORITY_SCOPE.ROOT].roles,
+      };
+    }
   }
+
+  const rootRoles = BigInt(read[AUTHORITY_SCOPE.ROOT].roles);
+  const editingScopes = scopes
+    .map((s) => s.scope)
+    .filter((k) => (BigInt(read[k].roles) & ANY_EDIT_MASK) !== 0n);
 
   return {
     status: AUTHORITY_STATUS.READ, agentAddress, resolver,
-    nameRoles: "0x" + nameRoles.toString(16),
-    rootRoles: "0x" + rootRoles.toString(16),
+    scopes: read,
+    // Kept under their original names so every existing reader of this result still works, and
+    // still means exactly what it used to mean: the name-level and root bitmaps alone.
+    nameRoles: read[AUTHORITY_SCOPE.NAME].roles,
+    rootRoles: read[AUTHORITY_SCOPE.ROOT].roles,
+    payTextKeyRoles: read[AUTHORITY_SCOPE.PAY_TEXT_KEY].roles,
+    payAddrCoinRoles: read[AUTHORITY_SCOPE.PAY_ADDR_COIN].roles,
     union: "0x" + union.toString(16),
     unionNames: roleName(union),
     holdsRoot: rootRoles !== 0n,
     mayEditPay: (union & ANY_EDIT_MASK) !== 0n,
+    mayEditPayVia: editingScopes,
     confirmedEditBits: "0x" + (union & CONFIRMED_EDIT_MASK).toString(16),
+    // Said out loud so no reader mistakes four scopes for all of them.
+    exhaustive: false,
+    enumeratedKeys: [RECORD_KEY.pay],
+    enumeratedCoinTypes: [Number(ADDR_COIN_TYPE)],
+    notEnumerable: "a per-key or per-coin grant on a record UNICA does not settle against is not read here and cannot be enumerated on this deployment",
   };
 }
+
 
 // ── the preflight ─────────────────────────────────────────────────────────────────────────────
 
@@ -610,6 +729,11 @@ export function preflight(bundle, policy = {}) {
                    why: "roles() and hasRoles() answered differently about the same account; the safe reading is that neither is complete"});
   }
   if (auth.status === AUTHORITY_STATUS.NO_RESOLVER) return refuse(PREFLIGHT_STATUS.NO_RESOLVER);
+  // A missing pay node means the per-key and per-coin-type scopes were never asked about. That is
+  // the CRITICAL 2 blindness itself, so it refuses rather than accepting a partial read.
+  if (auth.status === AUTHORITY_STATUS.NO_PAY_NODE) {
+    return refuse(PREFLIGHT_STATUS.AUTHORITY_UNKNOWN, {why: auth.why, resolver});
+  }
   // NO_AGENT is not a refusal. A merchant with no delegated agent is the simplest valid case, and
   // refusing it would mean UNICA only worked for merchants who had delegated.
   if (auth.status === AUTHORITY_STATUS.READ) {
@@ -621,8 +745,10 @@ export function preflight(bundle, policy = {}) {
     if (auth.mayEditPay) {
       return refuse(PREFLIGHT_STATUS.PROTECTED_FIELD_UNDER_AGENT_CONTROL,
                     {agent: auth.agentAddress, union: auth.union, roles: auth.unionNames,
+                     via: auth.mayEditPayVia ?? null, scopes: auth.scopes ?? null,
                      source: "THE CHAIN",
-                     why: "this deployment scopes every resolver write to the whole NAME, so any edit role on the pay name is authority over the recipient"});
+                     why: "the agent holds an edit role at a resource that carries the settlement configuration — " +
+                          "the whole pay name, the whole resolver, the pay text key, or the pay addr record"});
     }
   }
 

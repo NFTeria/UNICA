@@ -1173,7 +1173,7 @@
     {
       "id": "ensv2-permissioned-resolver",
       "name": "ENSv2 Permissioned Resolver and Access Control",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "status": "IMPLEMENTED — LOCAL TESTS",
       "paths": [
         "integrations/ensv2/permissioned.mjs",
@@ -1187,7 +1187,7 @@
       "tests": ["integrations/ensv2/permissioned-test.mjs"],
       "evidence": [
         {"kind": "command", "value": "node integrations/ensv2/permissioned-test.mjs"},
-        {"kind": "measurement", "value": "278 rows, 278 passed, 0 failed, offline, no socket opened"},
+        {"kind": "measurement", "value": "305 rows, 305 passed, 0 failed, offline, no socket opened"},
         {"kind": "command", "value": "node integrations/ensv2/permissioned-live.mjs"},
         {"kind": "measurement", "value": "78 live rows against Sepolia, three of them real refusals decoded from the deployed contract"},
         {"kind": "address", "chainId": 11155111, "value": "0x9eae5c2730a7dd16bdd1dee6421a1b91e3b0365e"}

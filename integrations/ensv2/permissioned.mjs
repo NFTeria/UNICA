@@ -201,11 +201,11 @@ export function managedSubname(parent, label) {
 
 const hexBody = (h) => String(h ?? "").replace(/^0x/, "").toLowerCase();
 const w = (bytes) => hexBody(toHex(bytes));
-const tailBytes = (hex) => {
+export const tailBytes = (hex) => {
   const b = hexBody(hex);
   return w(wordUint(b.length / 2)) + b.padEnd(Math.ceil(b.length / 64) * 64, "0");
 };
-const tailString = (s) => tailBytes(toHex(utf8(String(s))));
+export const tailString = (s) => tailBytes(toHex(utf8(String(s))));
 
 export const encodeRolesCall = (resource, account) =>
   SELECTOR.roles + w(wordUint(resource)) + w(wordAddress(account));
