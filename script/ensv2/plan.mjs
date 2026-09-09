@@ -16,6 +16,35 @@
 // NOT_ESTIMATED and the plan is not signable. That is the honest state of the world for a namespace
 // nobody has registered.
 //
+// THE TWO MODES ASK THE CHAIN FOR DIFFERENT THINGS, AND ONLY ONE OF THEM NEEDS A REGISTRY.
+//
+//   `subregistry` registers a real name at every level. Each level needs its own PermissionedRegistry
+//   contract, supplied by the owner, and each registration is a one-shot roleBitmap that cannot be
+//   repaired. That is the right shape when the subnames must be OWNED — transferable, separately
+//   administrable, defended by a registration.
+//
+//   `subtree` registers nothing below the parent. The parent points at a Permissioned Resolver the
+//   owner controls, and that resolver answers for the whole subtree by wildcard; the owner writes
+//   every record at the subname NODES, and delegates one key there. A fork pinned at block 11666085
+//   executed this end to end against the deployed bytecode: `setText` at `pay.merchant.raffy.eth`, a
+//   name nobody registered, accepted from the parent's owner, read back, and returned to a payer
+//   through the fixed entry point; `authorizeTextRoles` at an unregistered leaf's per-key resource
+//   accepted, the granted bit landing at exactly the resource this file derives, the delegate's
+//   write on that key accepted and on another key refused; and the revocation accepted with the
+//   delegate's next write refused. So subtree mode demands NO registry and NO registration, and this
+//   planner used to demand three registries for it anyway. It no longer does.
+//
+//   WHY THE WRITES ARE ACCEPTED, WHICH IS NOT WHY IT LOOKS LIKE THEY ARE. The same fork chased a
+//   control that refused to fail — the parent's owner writing at a node OUTSIDE their own subtree was
+//   also accepted — and found the mechanism: on a per-name resolver proxy the owner holds all 64
+//   roles at ROOT_RESOURCE, so `hasRoles()` is true for ANY resource on that contract. The write side
+//   is therefore not name-scoped at all. What makes subtree mode sound is the RESOLUTION side: the
+//   entry point routes the subtree to this resolver and routes nothing else here, so a stray write
+//   lands in storage nobody reads. Two consequences are carried in the code rather than in a memory:
+//   the verify step below keeps its simulation, because a property of ONE parent's resolver proxy is
+//   not a property of every parent's; and subtree mode is sound exactly as far as the owner controls
+//   the resolver the parent points at, which is why that is a precondition and a transaction here.
+//
 // THE ORDER IS A SAFETY PROPERTY, NOT A CONVENIENCE. Each step names what it depends on, and the
 // preview checks the dependency graph rather than trusting it. Granting the agent a role before the
 // resolver is attached delegates authority over a name that resolves to nothing; writing the
@@ -140,10 +169,13 @@ export const STEP_EVIDENCE = {
 // ── the owner actions this plan cannot perform for anyone ─────────────────────────────────────
 
 export function ownerActions(cfg) {
+  const subtree = cfg.mode === PLAN_MODE.SUBTREE;
   return [
     {
       what: "choose and control the PARENT name",
-      detail: `\`${cfg.parent}\` must be a name the owner holds in a PermissionedRegistry, with ROLE_SET_SUBREGISTRY (0x100000) and ROLE_SET_RESOLVER (0x1000000) at its own name resource.`,
+      detail: subtree
+        ? `\`${cfg.parent}\` must be a name the owner holds in a PermissionedRegistry, with ROLE_SET_RESOLVER (0x1000000) at its own name resource. ROLE_SET_SUBREGISTRY is NOT needed in this mode: nothing is registered below the parent.`
+        : `\`${cfg.parent}\` must be a name the owner holds in a PermissionedRegistry, with ROLE_SET_SUBREGISTRY (0x100000) and ROLE_SET_RESOLVER (0x1000000) at its own name resource.`,
       why: "UNICA owns no ENSv2 Sepolia name. Every node, resource and token id below is computed from this input and from nothing else.",
     },
     {
@@ -151,11 +183,25 @@ export function ownerActions(cfg) {
       detail: `call findTokenId("${cfg.parentLabel}") on the registry holding the parent and compare it with ${cfg.parentTokenId}.`,
       why: "The token id is derived here as keccak256(label) with its low 32 bits zeroed, which is only equal to the resource while eacVersionId is 0. Phase 1 left the non-zero case unresolved, so it is confirmed rather than assumed.",
     },
-    {
+    // The registry line is the one this mode split removed. In `subtree` mode there is no registry
+    // to deploy, because there is nothing to register: the fork executed a record write and a
+    // delegation at UNREGISTERED subnames of a parent, so demanding a PermissionedRegistry here was
+    // demanding an input the chain does not ask for. It is still required, and still stated, in
+    // `subregistry` mode, where every level really is a registration.
+    ...(subtree ? [{
+      what: "point the PARENT at a Permissioned Resolver you control, and hold its ROOT_RESOURCE roles",
+      detail: `${cfg.resolver ?? "not supplied"} — step 1 below sends that setResolver; what the owner must bring is the resolver itself and every role at its ROOT_RESOURCE.`,
+      why: "In this mode NO registry is deployed and NO name below the parent is registered. Resolution reaches the whole subtree by wildcard from the parent's resolver, so that resolver is the entire authority boundary: the fork showed the write side is not name-scoped at all, and it is the resolution side — which names the owner routes here — that keeps the subtree the owner's.",
+    }] : [{
       what: "deploy or nominate the PermissionedRegistry that holds labels under the parent",
       detail: `${cfg.parentSubregistry ?? "not supplied"} — and hold ROLE_REGISTRAR (0x1) at its ROOT_RESOURCE, which is what lets register() below succeed.`,
       why: "ENSv2 gives every parent name its own registry contract. Nothing in this repository can deploy one.",
-    },
+    }]),
+    ...(subtree ? [{
+      what: "accept that this mode does not DEFEND the names, it only serves them",
+      detail: `nobody has registered ${cfg.merchantName ?? "the merchant name"} or anything under it, and getSubregistry("${cfg.parentLabel}") stays zero, so today no label can be registered under the parent by anyone.`,
+      why: "The records are real and a payer reads them, but the NAME is not held by a registration. If a subregistry is ever attached to the parent, a stranger who registers `merchant` there could setResolver and take over resolution for the whole subtree. Whether that capture actually works was NOT tested — it needs a deployed registry, which this repository will not deploy. Use --mode subregistry when the names must be owned.",
+    }] : []),
     {
       what: "deploy or nominate the Permissioned Resolver for the merchant",
       detail: `${cfg.resolver ?? "not supplied"} — the merchant must hold every role it needs at that resolver's ROOT_RESOURCE, which is how a per-account resolver is normally set up.`,
@@ -252,8 +298,32 @@ export function buildPlan(cfg = {}) {
   const agentAddress = cfg.agentAddress;
   const resolver = cfg.resolver;
   const parentSubregistry = cfg.parentSubregistry;
-  for (const [k, v] of Object.entries({merchantOwner, agentAddress, resolver, parentSubregistry})) {
+
+  // WHICH INPUTS ARE ACTUALLY REQUIRED IS A PROPERTY OF THE MODE, NOT OF THE FILE.
+  //
+  // This loop used to demand `parentSubregistry` unconditionally, before either branch below was
+  // reached. In `subtree` mode that made the planner refuse — BAD_INPUT, "not a 20-byte address" —
+  // until the owner deployed a PermissionedRegistry that this mode then never used, because it
+  // registers nothing. The fork settled that the chain does not need one: the records and the
+  // delegation were executed at unregistered subnames. So the requirement is now stated per mode.
+  //
+  // A supplied-but-malformed value is still refused rather than ignored. Dropping a requirement is
+  // not the same as accepting rubbish for it, and an owner who typed a truncated address into a
+  // field this mode does not read should be told, not quietly obeyed.
+  const required = {merchantOwner, agentAddress, resolver};
+  if (mode === PLAN_MODE.SUBREGISTRY) required.parentSubregistry = parentSubregistry;
+  for (const [k, v] of Object.entries(required)) {
     if (!isAddress(v)) return refusePlan(PLAN_STATUS.BAD_INPUT, {field: k, value: v ?? null, detail: "not a 20-byte address"});
+  }
+  for (const k of ["parentSubregistry", "merchantSubregistry", "treasurySubregistry"]) {
+    const v = cfg[k];
+    if (v === undefined || v === null || required[k] !== undefined) continue;
+    if (!isAddress(v)) {
+      return refusePlan(PLAN_STATUS.BAD_INPUT, {
+        field: k, value: v,
+        detail: `supplied but not a 20-byte address. \`${mode}\` mode does not use this field, and an unusable value is refused rather than dropped.`,
+      });
+    }
   }
   if (lower(merchantOwner) === lower(agentAddress)) {
     return refusePlan(PLAN_STATUS.BAD_INPUT, {field: "agentAddress", detail: "the agent and the merchant are the same account; a delegation to yourself cannot be revoked meaningfully"});
@@ -348,7 +418,12 @@ export function buildPlan(cfg = {}) {
   // covers every scope those names will ever have, including per-key resources nobody has thought
   // of yet.
   const protectedNodes = [node.merchant, node.pay, node.treasury];
-  const registryAddresses = [parentSubregistry, cfg.merchantSubregistry, cfg.treasurySubregistry]
+  // Every REGISTRY the plan knows about, so a grant aimed at one is refused by name. The parent's
+  // own registry is included, which it was not before: in `subtree` mode the three subregistries are
+  // absent by design, and a list that went empty would leave REGISTRY_TARGET_FORBIDDEN with nothing
+  // to fire on in the mode that is now the default. The parent's registry is a registry in both
+  // modes, so naming it here is a strict widening of the refusal rather than a mode-specific patch.
+  const registryAddresses = [parentRegistry, parentSubregistry, cfg.merchantSubregistry, cfg.treasurySubregistry]
     .filter(isAddress);
 
   // The key the delegation is SCOPED to. On this deployment a delegation is not "SET_TEXT on the
@@ -377,6 +452,14 @@ export function buildPlan(cfg = {}) {
   // ── the steps ───────────────────────────────────────────────────────────────────────────────
 
   const steps = [];
+  // WHO SIGNS THE RECORD WRITES AND THE DELEGATION, which is not the same account in the two modes.
+  //
+  // In `subregistry` mode the merchant OWNS merchant.<parent> and signs everything under it. In
+  // `subtree` mode the merchant owns no name at all: every write lands on the PARENT's resolver, and
+  // the fork showed authority there comes from holding roles at that resolver's ROOT_RESOURCE — the
+  // parent's owner. So in subtree mode `merchantOwner` must BE the parent's owner, and the rows say
+  // "owner" rather than "merchant" so nobody queues a transaction for a wallet that cannot send it.
+  const writer = mode === PLAN_MODE.SUBTREE ? "owner" : "merchant";
   const expiry = BigInt(cfg.expiry ?? 0n);
   const addr = (name, value, meaning) => ({name, type: "address", value, meaning});
   const uint = (name, value, meaning) => ({name, type: "uint256", value: asWord(value), meaning});
@@ -400,6 +483,14 @@ export function buildPlan(cfg = {}) {
     };
   };
 
+  // ── steps 1–3, and there are only three of them in ONE of the two modes ─────────────────────
+  //
+  // `subregistry` mode registers a name, so it needs a registry to register it in, an irreversible
+  // roleBitmap to register it with, and a resolver attached to it afterwards. `subtree` mode
+  // registers nothing, so it needs exactly one transaction: the parent pointed at the resolver that
+  // will answer for everything beneath it. The three-transaction opening was emitted in both modes
+  // for no reason the chain gave.
+  if (mode === PLAN_MODE.SUBREGISTRY) {
   // 1 — the parent gets a subregistry, so that a label may exist under it at all.
   steps.push({
     ordinal: 1, kind: "transaction", signer: "owner", dependsOn: [],
@@ -474,6 +565,37 @@ export function buildPlan(cfg = {}) {
     evidence: {label: STEP_EVIDENCE.OBSERVED,
                detail: "setResolver's refusal named ROLE_SET_RESOLVER 0x1000000 at the label-derived resource"},
   });
+  } else {
+    // 1, and the only registry transaction this mode has: the PARENT points at the resolver that
+    // will answer for the whole subtree. Nothing below it is registered, so nothing below it needs a
+    // registry, a token id or a one-shot bitmap.
+    //
+    // This is reversible, and that is worth saying out loud beside step 2 of the other mode: the
+    // owner can point the parent somewhere else in one transaction, whereas a registration made with
+    // the wrong roleBitmap can only be undone by losing the name.
+    steps.push({
+      ordinal: 1, kind: "transaction", signer: "owner", dependsOn: [],
+      title: `point ${parent} at the Permissioned Resolver that will answer for everything beneath it`,
+      call: {method: "setResolver", signature: P.REGISTRY_SIGNATURES.setResolver,
+             to: parentRegistry,
+             data: encodeSetResolverCall(tokenId.parent, resolver)},
+      arguments: [uint("tokenId", tokenId.parent, `the parent's token id — confirm with findTokenId("${parentLabel}")`),
+                  addr("resolver", resolver, "the Permissioned Resolver that answers for the parent and, by wildcard, for every unregistered name under it")],
+      affects: {name: parent, node: node.parent, resource: asWord(tokenId.parent), resourceKind: "registry (label-derived)"},
+      value: "0x0",
+      expectedEvent: null,
+      expectedPostState: [
+        {read: `getResolver("${parentLabel}")`, expect: resolver},
+        {read: `resolve("${payName}", addr) through ${P.byName("UpgradableUniversalResolverProxy").address}`,
+         expect: `answered by ${resolver} — and NOT evidence that any name below the parent is registered`},
+      ],
+      rollback: {how: `setResolver(${asWord(tokenId.parent)}, <the previous resolver>)`, irreversible: false,
+                 note: "reversible in one transaction, which is the whole difference between this mode's opening and the other mode's register()"},
+      note: "SKIP THIS STEP if the parent already points at this exact resolver — read getResolver first. It is emitted rather than assumed because a parent pointing somewhere else makes every record below it unreachable, and that failure is silent: resolution still returns, from the wrong resolver, with empty values.",
+      evidence: {label: STEP_EVIDENCE.OBSERVED,
+                 detail: "setResolver's refusal named ROLE_SET_RESOLVER 0x1000000 at the label-derived resource, and the fork resolved seven depths of unregistered subnames of a parent through the parent's own resolver at the fixed entry point"},
+    });
+  }
 
   // 4 — the subnames, or the explicit statement that this mode does not create any.
   if (mode === PLAN_MODE.SUBREGISTRY) {
@@ -553,24 +675,32 @@ export function buildPlan(cfg = {}) {
     });
   } else {
     steps.push({
-      ordinal: 4, kind: "verify", signer: null, dependsOn: [3],
-      title: "confirm the resolver answers for the subnames, and accepts a write at a subname's resource",
+      ordinal: 4, kind: "verify", signer: null, dependsOn: [1],
+      title: "confirm THIS parent's resolver answers for the subnames and accepts a write at one — the premise of this mode, checked before anything depends on it",
       arguments: [],
       affects: {name: agentName, node: node.agent, resource: resource.agent, resourceKind: "resolver name-level"},
       expectedPostState: [
-        {read: `resolve("${payName}", addr) through ${P.byName("UpgradableUniversalResolverProxy").address}`, expect: `answered by ${resolver}, no revert`},
+        {read: `getResolver("${parentLabel}") on ${parentRegistry}`, expect: `${resolver} — step 1's post-state, re-read here because everything below is worthless if the parent points elsewhere`},
+        {read: `resolve("${payName}", addr) through ${P.byName("UpgradableUniversalResolverProxy").address}`,
+         expect: `answered by ${resolver}, no revert — and NOT evidence of registration; a resolve returns for unregistered names too`},
         {read: `eth_call setText(${node.agent}, "${RECORD_KEYS.agentCapabilities}", …) from ${merchantOwner}`, expect: "ACCEPTED — returns 0x rather than reverting"},
         {read: `eth_call setText(${node.agent}, …) from an address holding nothing`, expect: `REFUSED with ${P.ERROR_SELECTOR.EACUnauthorizedAccountRoles} naming ${resource.agent}`},
+        {read: `roles(${asWord(P.ROOT_RESOURCE)}, ${merchantOwner}) on ${resolver}`,
+         expect: "every role — this is WHY the accepted row is accepted, and reading it turns a lucky acceptance into a known one"},
       ],
       rollback: null,
       evidence: {
-        label: STEP_EVIDENCE.INFERRED,
+        label: STEP_EVIDENCE.OBSERVED,
         detail:
-          "Phase 1 CONFIRMED that an unregistered subname still resolves through its parent's resolver — " +
-          "definitely-not-registered-9c4f.raffy.eth answered with addr 0x0 and no revert. It did NOT confirm that " +
-          "the resolver ACCEPTS A WRITE at an unregistered subname's name-level resource. This mode depends on that " +
-          "and this step is where it is checked, before any delegation exists. If the accepted row does not come " +
-          "back accepted, use --mode subregistry and register the subnames.",
+          "SETTLED on a fork pinned at block 11666085, and this step is kept anyway. What was observed: setText at " +
+          "pay.merchant.raffy.eth — a name nobody registered, under a parent whose getSubregistry reads zero — sent " +
+          "by the parent's owner, status 0x1, read back, and returned to a payer through the fixed entry point; the " +
+          "same write from a stranger REFUSED with EACUnauthorizedAccountRoles naming the derived name-level " +
+          "resource. Why the step survives that: the acceptance came from the owner holding all 64 roles at " +
+          "ROOT_RESOURCE on that ONE resolver proxy, which is a property of how that proxy was initialised and not " +
+          "of unregistered subnames. Whether every per-name resolver proxy is initialised that way was NOT " +
+          "established. So this is simulated against the owner's own resolver before any delegation exists. If the " +
+          "accepted row does not come back accepted, use --mode subregistry and register the subnames.",
       },
     });
   }
@@ -600,7 +730,7 @@ export function buildPlan(cfg = {}) {
   const recordStep = (ordinal, dependsOn, title, nodeHex, nameStr, calls, note) => {
     const batched = cfg.batchRecords === true;
     const base = {
-      ordinal, kind: "transaction", signer: "merchant", dependsOn, title,
+      ordinal, kind: "transaction", signer: writer, dependsOn, title,
       affects: {name: nameStr, node: nodeHex, resource: P.resolverNameResource(nodeHex), resourceKind: "resolver name-level"},
       value: "0x0",
       expectedEvent: null,
@@ -658,7 +788,7 @@ export function buildPlan(cfg = {}) {
   // 7 — the delegation itself.
   const grantOrdinal = Math.floor(agentStepOrdinals[agentStepOrdinals.length - 1]) + 1;
   steps.push({
-    ordinal: grantOrdinal, kind: "transaction", signer: "merchant", dependsOn: [agentStepOrdinals[agentStepOrdinals.length - 1]],
+    ordinal: grantOrdinal, kind: "transaction", signer: writer, dependsOn: [agentStepOrdinals[agentStepOrdinals.length - 1]],
     title: `authorise the agent to write ONE key — "${agentRecordKey}" on ${agentName} — and nothing else`,
     call: grant.call,
     // The arguments shown to the owner are the arguments the CALLDATA carries. They used to be
@@ -739,7 +869,7 @@ export function buildPlan(cfg = {}) {
 
   // 10 — the undo, built now rather than when it is needed.
   steps.push({
-    ordinal: grantOrdinal + 3, kind: "prepared", signer: "merchant", dependsOn: [grantOrdinal],
+    ordinal: grantOrdinal + 3, kind: "prepared", signer: writer, dependsOn: [grantOrdinal],
     title: "the revocation — built now, held until needed",
     call: revoke.call,
     arguments: [
@@ -838,6 +968,31 @@ export function buildPlan(cfg = {}) {
       why: `ENSv2 caps assignees per role per resource, and the contract states the cap itself — ${P.MAX_ASSIGNEES_SOURCE}.`,
     },
   ];
+
+  // ── the precondition that replaced three transactions ───────────────────────────────────────
+  //
+  // `subtree` mode emits no register(), so the one-shot roleBitmap argument is not this plan's to
+  // get right — it was the PARENT's, and it was spent before this plan existed. What survives is the
+  // consequence: if the parent was registered without ROLE_SET_RESOLVER (0x1000000) at its own
+  // resource, step 1 cannot be sent, nothing below it resolves through a resolver the owner
+  // controls, and there is no repair short of losing the parent. That is exactly the shape of the
+  // register() guard, moved from a bitmap this plan writes to a reading this plan requires.
+  //
+  // It is NOT added to `subregistry` mode. There the plan's first transaction is a registry write
+  // the owner will watch revert, by name, if the role is missing — today's behaviour, unchanged.
+  if (mode === PLAN_MODE.SUBTREE) {
+    const need = BigInt(P.REGISTRY_ROLE.SET_RESOLVER.bit);
+    const seen = o.ownerRolesAtParent === undefined || o.ownerRolesAtParent === null ? null : BigInt(o.ownerRolesAtParent);
+    preconditions.unshift({
+      name: "the owner holds ROLE_SET_RESOLVER at the PARENT's own resource",
+      required: true,
+      read: `roles(${asWord(tokenId.parent)}, ${merchantOwner}) on ${parentRegistry}`,
+      observed: seen === null ? null : asWord(seen),
+      satisfied: seen !== null && (seen & need) === need,
+      why: "This is the register() admin-bit decision, seen from the other side. Per-name roles can only ever be set in the roleBitmap of register(), which for the parent has already happened; a parent registered without this bit can never be pointed at a resolver, and every record and delegation in this plan is written through that resolver. It is CHECKED here rather than emitted, because this plan does not register the parent.",
+      note: `needs ${asWord(need)}. In this mode ${merchantOwner} must BE the parent's owner: there is no name below the parent for a separate merchant to hold.`,
+    });
+  }
   const unmet = preconditions.filter((p) => p.required && !p.satisfied);
 
   return {
@@ -850,19 +1005,43 @@ export function buildPlan(cfg = {}) {
     names: {parent, merchant: merchantName, pay: payName, treasury: treasuryName, agent: agentName},
     nodes: node,
     resources: {...resource, root: asWord(P.ROOT_RESOURCE)},
-    tokenIds: {parent: asWord(tokenId.parent), merchant: asWord(tokenId.merchant), treasury: asWord(tokenId.treasury)},
+    // Token ids are REGISTRY ids. In `subtree` mode nothing below the parent is registered, so the
+    // merchant's and the treasury's are words that address a token in no registry — printing them
+    // beside the parent's would invite somebody to send a transaction at one. Only the parent's is
+    // real in that mode, and the other two say why they are absent.
+    tokenIds: mode === PLAN_MODE.SUBREGISTRY
+      ? {parent: asWord(tokenId.parent), merchant: asWord(tokenId.merchant), treasury: asWord(tokenId.treasury)}
+      : {parent: asWord(tokenId.parent), merchant: null, treasury: null,
+         note: "subtree mode registers nothing below the parent, so no token id exists for the merchant or the treasury"},
     protectedResources,
-    accounts: {merchantOwner, agentAddress, resolver, parentSubregistry},
+    accounts: {merchantOwner, agentAddress, resolver,
+               parentSubregistry: mode === PLAN_MODE.SUBREGISTRY ? parentSubregistry : null},
     policyCommitment: {digest: commitment.digest, scheme: commitment.scheme, fields: commitment.fields, note: commitment.note},
     agentGrant: {roles: agentRoleNames, bitmap: asWord(agentBits.bitmap), resource: resource.agent},
     merchantRegistryRoles, permanentOmissions,
+    // WHAT THE REGISTRATION BITMAP IS FOR, WHICH DEPENDS ON THE MODE. The bitmap and its one-shot
+    // guard are computed in both modes on purpose: the rule they encode — a per-name admin role can
+    // only be set in register(), and a registration that omits it can never be repaired — is true of
+    // whichever registration this namespace rests on. In `subregistry` mode that is the register()
+    // steps in this plan. In `subtree` mode it is the PARENT's own registration, which happened
+    // before this plan and is checked as a precondition rather than emitted as a transaction.
+    registrationBitmap: {
+      bitmap: asWord(merchantRegistryBitmap),
+      appliesTo: mode === PLAN_MODE.SUBREGISTRY
+        ? "the register() steps in this plan"
+        : "the PARENT's registration, which this plan does not perform — see the ROLE_SET_RESOLVER precondition",
+      emittedAsATransaction: mode === PLAN_MODE.SUBREGISTRY,
+    },
     steps,
     screen,
     preconditions,
     unmetPreconditions: unmet.map((p) => p.name),
     denialMatrix: DENIAL_MATRIX,
-    ownerActions: ownerActions({parent, parentLabel, parentTokenId: asWord(tokenId.parent), parentSubregistry, resolver}),
-    broadcast: {byThisTool: false, whoSigns: "the owner and the merchant, each in their own wallet"},
+    ownerActions: ownerActions({parent, parentLabel, parentTokenId: asWord(tokenId.parent),
+                                parentSubregistry, resolver, mode, merchantName}),
+    broadcast: {byThisTool: false, whoSigns: mode === PLAN_MODE.SUBREGISTRY
+      ? "the owner and the merchant, each in their own wallet"
+      : "the parent's owner, alone — in this mode there is no name below the parent for a second signer to hold"},
   };
 }
 
@@ -915,6 +1094,9 @@ if (isMain) {
       expiry: "2000000000",
       observations: {
         agentRootRolesAtResolver: "0x0", resolverCodeSize: 77, merchantMayGrantAtAgentResource: true,
+        // A placeholder reading, like every other value in --demo: the regular SET_RESOLVER bit and
+        // its admin, which is what a parent registered correctly would show at its own resource.
+        ownerRolesAtParent: asWord(BigInt(P.REGISTRY_ROLE.SET_RESOLVER.bit) | P.adminRole(BigInt(P.REGISTRY_ROLE.SET_RESOLVER.bit))),
         // The shape getAssigneeCount returns: counts and maxima packed one nybble per role, in the
         // same nybble positions as the bitmap asked about. The maxima word is built from the bitmap
         // rather than typed, because a right-aligned 0x…0f is exactly the mistake Phase 1 had to
@@ -950,12 +1132,21 @@ if (isMain) {
     if (o && v) gas[Number(o)] = v;
   }
 
-  const preview = previewPlan(plan, {gas, discovered: {
-    [lower(plan.accounts.resolver)]: {name: "the merchant's Permissioned Resolver", role: "serves this name and, by wildcard, everything under it",
+  // The owner-supplied contracts the preview should label DISCOVERED rather than UNKNOWN. Built
+  // from the addresses that actually exist in this mode: `subtree` has no parent subregistry, and
+  // keying an object with `lower(null)` produced a literal "null" entry that matched no target and
+  // quietly claimed provenance for nothing.
+  const discovered = {
+    [lower(plan.accounts.resolver)]: {name: "the Permissioned Resolver the parent points at",
+                                      role: "serves this name and, by wildcard, everything under it",
                                       note: "supplied by the owner; not part of the pinned deployment survey"},
-    [lower(plan.accounts.parentSubregistry)]: {name: "the parent's PermissionedRegistry", role: "holds the labels registered under the parent",
-                                               note: "supplied by the owner; not part of the pinned deployment survey"},
-  }});
+  };
+  if (plan.accounts.parentSubregistry) {
+    discovered[lower(plan.accounts.parentSubregistry)] = {
+      name: "the parent's PermissionedRegistry", role: "holds the labels registered under the parent",
+      note: "supplied by the owner; not part of the pinned deployment survey"};
+  }
+  const preview = previewPlan(plan, {gas, discovered});
 
   if (has("json")) {
     console.log(JSON.stringify({plan, preview, signable: planIsSignable(plan, preview)}, null, 2));
@@ -973,5 +1164,10 @@ if (isMain) {
       console.log("  — gas estimates are an input to this tool and none were supplied, so no plan built here is signable until they are.");
     }
   }
-  process.exit(plan.steps ? 0 : 1);
+  // `process.exitCode`, never `process.exit()`. Node's stdout is a non-blocking pipe when this
+  // command is piped into anything, and process.exit() discards whatever has not drained — the
+  // --json plan is ~170 KB and came back cut off at exactly 65536 bytes to `| jq`, valid-looking
+  // JSON right up to the byte where it stopped. Setting the code lets the runtime flush and exit on
+  // its own. A tool whose output is silently truncated by a pipe is worse than one that fails.
+  process.exitCode = plan.steps ? 0 : 1;
 }

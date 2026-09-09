@@ -1,0 +1,139 @@
+{
+  "_what": [
+    "The owner's real ENSv2 delegation configuration, for the namespace UNICA will actually use.",
+    "",
+    "    node script/ensv2/plan.mjs --config script/ensv2/unica-sepolia.json",
+    "",
+    "As committed it REFUSES, and that is the correct output: `unica.eth` is not registered, so every",
+    "reading the planner needs is a reading of a chain that does not host the name yet. The refusal",
+    "names the first missing one. Fill the readings in, in the order under `_readings`, and the same",
+    "file produces the 17-step subtree plan.",
+    "",
+    "It will still say `signable: false` after that, for a second and separate reason: gas estimates",
+    "are an INPUT to this tool, gathered with eth_estimateGas once the names exist and handed back",
+    "with --gas. There is deliberately no flag that fills them in with a plausible number."
+  ],
+
+  "parent": "unica.eth",
+  "mode": "subtree",
+
+  "_mode": [
+    "subtree: nothing below the parent is registered. The parent points at a Permissioned Resolver",
+    "the owner controls, that resolver answers for the whole subtree by wildcard, and the owner writes",
+    "every record at the subname nodes. One registry transaction, no PermissionedRegistry to deploy,",
+    "nothing irreversible.",
+    "",
+    "The cost, stated rather than buried: the names are SERVED, not DEFENDED. getSubregistry(\"unica\")",
+    "stays zero, so today nobody can register a label under the parent — but the subnames are not held",
+    "by a registration either. Use \"subregistry\" instead when they must be owned; the planner keeps",
+    "that path in full and every one of its refusals."
+  ],
+
+  "merchantOwner": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+  "agentAddress": "0x19E56831a10d43CfF5d77f886c799C6b916da7Ae",
+
+  "_merchantOwner": [
+    "In subtree mode this account must BE the owner of unica.eth. There is no name below the parent",
+    "for a separate merchant to hold, and every write lands on the parent's resolver, where authority",
+    "comes from holding roles at that resolver's ROOT_RESOURCE. Every transaction in the plan is",
+    "signed by this one wallet."
+  ],
+
+  "resolver": null,
+  "_resolver": [
+    "The Permissioned Resolver the parent points at. It does not exist yet: ENSv2 gives a name its own",
+    "resolver proxy, and unica.eth is unregistered. Register the parent first, then read the proxy's",
+    "address off the registry and put it here. Do not guess it — an address with no code returns 0x to",
+    "every eth_call, and 0x decodes as \"no roles\", the safest-looking wrong answer in this interface."
+  ],
+
+  "settlement": {
+    "recipient": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+    "token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    "executor": "0x044bc8a8773EC7b9B8de2467766636dFFCaC6210"
+  },
+  "_settlement": [
+    "token: Circle's USDC on Ethereum Sepolia, the payout token UniswapDeployments.sol resolves for",
+    "chain 11155111. executor: the live V2 SettlementExecutor, 11,289 bytes, bound both ways to the",
+    "hook at 0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0. Both are published as PUBLIC records on",
+    "pay.merchant.unica.eth and are the resources the agent is deliberately granted nothing at.",
+    "",
+    "Confirm both from the chain before signing anything that publishes them. A payment record is",
+    "public forever from the moment it is written."
+  ],
+
+  "policy": {
+    "thresholdWei": null,
+    "allocationBps": null,
+    "reserveWei": null,
+    "salt": null
+  },
+  "_policy": [
+    "NOT IN THIS FILE, AND NOT IN THIS REPOSITORY. This repository is public. The threshold, the",
+    "allocation, the reserve and the salt are the merchant's, they are held off chain, and only a",
+    "keccak commitment over them is ever published — treasury.merchant.unica.eth carries the digest",
+    "and the scheme string, never a value.",
+    "",
+    "Fill these in on the owner's own machine, in an untracked copy of this file, and never commit",
+    "that copy. commitPolicy refuses to commit over a missing field, so the planner will say so."
+  ],
+
+  "expiry": null,
+  "_expiry": [
+    "The owner's chosen expiry, as a uint64 seconds timestamp. It is only read by register(), which",
+    "subtree mode does not emit, so it is left null here. Supply it if you switch to subregistry mode."
+  ],
+
+  "observations": {
+    "ownerRolesAtParent": null,
+    "agentRootRolesAtResolver": null,
+    "resolverCodeSize": null,
+    "merchantMayGrantAtAgentResource": null,
+    "assigneeReading": null,
+    "parentTokenId": null
+  },
+  "_readings": [
+    "Every value above is a READ against the chain, and none of them can be taken until unica.eth is",
+    "registered. `null` means unread. Unread is not the same as satisfied, and the planner refuses",
+    "rather than assuming — which is why this file refuses today.",
+    "",
+    "  parentTokenId               findTokenId(\"unica\") on the ETHRegistry",
+    "                              0xBDC85dD5b15D7ecb354cd7cb6f2c50b4f2c4F0E2. Compare it with the",
+    "                              planner's own derivation rather than trusting either alone.",
+    "",
+    "  ownerRolesAtParent          roles(<that token id>, 0xA121e1eF…8D73) on the same registry.",
+    "                              MUST carry ROLE_SET_RESOLVER 0x1000000. This is the register()",
+    "                              one-shot seen from the other side: per-name roles can only ever be",
+    "                              set in the roleBitmap of register(), which for the parent has",
+    "                              already happened. A parent registered without this bit can never be",
+    "                              pointed at a resolver, and there is no repair short of losing it.",
+    "",
+    "  resolverCodeSize            eth_getCode(<the resolver>) length in bytes. Non-zero.",
+    "",
+    "  agentRootRolesAtResolver    roles(0, 0x19E56831…a7Ae) on the resolver. MUST be 0. A",
+    "                              ROOT_RESOURCE grant applies to every resource on the contract, so a",
+    "                              narrow grant on top of one is decoration.",
+    "",
+    "  merchantMayGrantAtAgentResource",
+    "                              eth_call the grant from the owner and see it accepted rather than",
+    "                              assuming it. A fork proved the mechanism on somebody else's",
+    "                              resolver proxy; the owner's own is still theirs to demonstrate.",
+    "",
+    "  assigneeReading             getAssigneeCount(<the agent leaf's per-key resource>, <bitmap>) on",
+    "                              the resolver, kept as {roleBitmap, counts, maxima} — the contract",
+    "                              returns counts AND maxima, packed one nybble per role in the same",
+    "                              positions as the bitmap asked about. A reading taken for a different",
+    "                              role does not satisfy the grant."
+  ],
+
+  "_beforeSigning": [
+    "1. The plan broadcasts nothing. Nothing in this repository holds a key, and no file here names a",
+    "   writing JSON-RPC method — there is a scanner in the suite that fails if one ever does.",
+    "2. Read the preview row by row. The two flags — whether an admin role is involved and whether",
+    "   ROOT_RESOURCE is involved — are recomputed from each row's own calldata, not copied from what",
+    "   the step claims about itself, and they are printed on every row including where they are false.",
+    "3. Step 1 is skippable if the parent already points at this exact resolver. Read getResolver first.",
+    "4. The delegation is one key, one account, one leaf, and the revocation is built at the same",
+    "   moment and held. A plan with no prepared revocation is never signable."
+  ]
+}

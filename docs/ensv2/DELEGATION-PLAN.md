@@ -8,13 +8,16 @@ Nothing in this repository signs or broadcasts any of it.
 - Planner — [`script/ensv2/plan.mjs`](../../script/ensv2/plan.mjs)
 - Role planner — [`integrations/ensv2/roles.mjs`](../../integrations/ensv2/roles.mjs)
 - Owner preview — [`integrations/ensv2/plan-preview.mjs`](../../integrations/ensv2/plan-preview.mjs)
-- Suite — [`integrations/ensv2/plan-test.mjs`](../../integrations/ensv2/plan-test.mjs) · 263 checks
-- Sabotage — [`script/ensv2/plan-sabotage.mjs`](../../script/ensv2/plan-sabotage.mjs) · 19 mutations
+- Suite — [`integrations/ensv2/plan-test.mjs`](../../integrations/ensv2/plan-test.mjs) · 378 checks
+- Sabotage — [`script/ensv2/plan-sabotage.mjs`](../../script/ensv2/plan-sabotage.mjs) · 26 mutations
+- The owner's own configuration — [`script/ensv2/unica-sepolia.json`](../../script/ensv2/unica-sepolia.json)
 
 ```sh
-node script/ensv2/plan.mjs --demo          # a complete plan with placeholder inputs
-node integrations/ensv2/plan-test.mjs      # checks run: 263, passed: 263, failed: 0
-node script/ensv2/plan-sabotage.mjs        # breaks every guard and requires the suite to notice
+node script/ensv2/plan.mjs --demo                                   # placeholder inputs, both modes
+node script/ensv2/plan.mjs --demo --mode subregistry                # the registering path
+node script/ensv2/plan.mjs --config script/ensv2/unica-sepolia.json # the real namespace
+node integrations/ensv2/plan-test.mjs      # checks run: 378, passed: 378, failed: 0
+node script/ensv2/plan-sabotage.mjs        # 26 mutations; each must turn the suite red
 ```
 
 Everything here builds on [`DEPLOYMENT-PROFILE.md`](./DEPLOYMENT-PROFILE.md), which pins what a live
@@ -130,21 +133,35 @@ that remaining residual out loud, and the suite fails if it is ever quietly empt
 Ordinals are assigned once, after every step exists, and every dependency is checked by the preview
 rather than trusted. Two modes, both parameterised on the parent:
 
-| mode | subnames | transactions |
-|---|---|---|
-| `subtree` (default) | not registered — the merchant's resolver answers for the whole subtree by wildcard | 15 |
-| `subregistry` | each level registered in its own `PermissionedRegistry`, supplied by the owner | 20 |
+| mode | subnames | registries the owner must deploy | transactions | steps | signs |
+|---|---|---|---|---|---|
+| `subtree` (default) | **not registered** — the parent's resolver answers for the whole subtree by wildcard | **none** | **13** | 17 | the parent's owner, alone |
+| `subregistry` | each level registered in its own `PermissionedRegistry` | **three** | 20 | 23 | the owner, then the merchant |
+
+**Which one to use.** `subtree` when the subnames must be *served* — a payer resolves them, the
+records are real, and nothing needs to be transferable. `subregistry` when they must be *owned*:
+registration is the only thing that owns a name, and this mode keeps that path in full.
+
+### `subtree` — thirteen transactions, nothing irreversible
+
+1. **`setResolver`** on the **parent**, so the resolver the owner controls answers for everything
+   beneath it. One registry transaction, reversible in one more, on a name the owner already holds.
+   Skippable if the parent already points there — read `getResolver` first.
+2. **verify** — this parent's resolver really does answer for the subnames and really does accept a
+   write at one, with a refusal from an unauthorised address beside the acceptance. Kept as a
+   simulation for a reason given below, not because the premise is open.
+3. **the merchant's records** on `pay.` and `treasury.` — protected; the agent gets nothing here.
+4. **the agent's metadata** on the leaf, written *while the agent still holds nothing*.
+5. **`authorizeTextRoles`**, then the two verifications, then the prepared revocation — steps 7–10
+   below, identical in both modes.
+
+### `subregistry` — twenty transactions, four of them one-shot
 
 1. **`setSubregistry`** on the parent, so labels can exist under it.
 2. **`register(merchantLabel, …)`** — ownership, and every admin role the merchant will ever hold.
 3. **`setResolver`** — the Permissioned Resolver, in its own reviewable transaction.
-4. **subnames** — registered (`subregistry` mode) or, in `subtree` mode, relying on the fact that
-   the resolver accepts a write at an **unregistered** subname's node. That is no longer an open
-   question: executed on the fork, a `setText` at `pay.merchant.raffy.eth` — a name nobody
-   registered — was accepted from the parent's owner and read back, and a delegation at an
-   unregistered subname was accepted too. The corollary is a trap worth stating plainly: because
-   wildcard resolution answers for unregistered subnames as well, **a successful resolve is not
-   evidence that a name is registered**, and nothing in this plan may treat it as such.
+4. **subnames** — a registry attached at each level, then `pay.`, `treasury.` and the agent leaf
+   registered, each with the same one-shot bitmap.
 5. **the merchant's records** on `pay.` and `treasury.` — protected; the agent gets nothing here.
 6. **the agent's metadata** on the leaf, written by the merchant *while the agent still holds nothing*.
 7. **`authorizeTextRoles(dnsName, key, agent, true)`** — the delegation. One key, one account, on
@@ -158,7 +175,90 @@ rather than trusted. Two modes, both parameterised on the parent:
     deployment the undo is the same call, which is a small mercy: there is no second permission to
     have forgotten to arrange.
 
-### Step 2 is the one that cannot be undone
+---
+
+## What changed, and why: the planner demanded an input the chain does not need
+
+`subtree` mode used to refuse with `BAD_INPUT: parentSubregistry — not a 20-byte address`. The
+validation loop ran before either mode's branch, so the mode that registers **nothing** could not
+build a plan until the owner deployed a `PermissionedRegistry` it would then never use. On top of
+that it emitted a `setSubregistry`, a `register()` and a `setResolver` in both modes — three
+transactions and one irreversible one-shot argument, to create a name this mode does not need.
+
+That was wrong about the chain, and a fork pinned at block 11666085 says so, against the deployed
+bytecode, with a passing control beside every failing row:
+
+| what was executed, at an **unregistered** subname | result |
+|---|---|
+| `setText` at `pay.merchant.raffy.eth` from the parent's owner | **status 0x1**, 64,847 gas, read back, and returned to a payer through the fixed entry point |
+| the same `setText` from a stranger | **REVERT** `EACUnauthorizedAccountRoles` naming the derived name-level resource — so the acceptance is not "it accepts anything" |
+| `authorizeTextRoles` at the agent leaf's per-key resource | **status 0x1**, 91,395 gas; `EACRolesChanged` topic 1 = exactly the resource this repository derives |
+| the delegate's write on the granted key, before / after that grant | **REFUSED**, then **ACCEPTED** — the control that makes the acceptance evidence |
+| `authorizeTextRoles(…, false)` and the delegate's next write | **status 0x1**, the role word back to zero, the write **REFUSED** |
+| write and resolve at 1, 2, 3, 4, 5, 6, 7, 10, 20 and 40 labels under the parent | every one accepted and every one resolved |
+
+`getSubregistry("raffy")` reads **zero** throughout — there is no registry under that parent in
+which any of those labels could have been registered. So the chain asks for no registry here, and
+the planner now asks for none.
+
+**What subtree mode does still require, and it is one thing:** a Permissioned Resolver the parent
+points at, and the roles to point it there. That is step 1 and the precondition beside it.
+
+### The mechanism, which is not the one the acceptance suggests
+
+The same fork chased a control that refused to fail. The parent's owner writing at
+`a.b.c.vitalik.eth` — a node outside their own subtree — was **also accepted**. The cause:
+`roles(ROOT_RESOURCE, owner)` on that resolver proxy is `0x1111…1111`, all sixty-four roles, so
+`hasRoles()` returns true for **any** resource on that contract. Read directly:
+`roles(nameResource, owner)` is `0` while `hasRoles(nameResource, 1<<4, owner)` is `true`.
+
+**The write side is therefore not name-scoped at all.** What makes subtree mode sound is the
+*resolution* side: the entry point routes the subtree to this resolver and routes
+`a.b.c.vitalik.eth` somewhere else, so the stray write landed in storage nobody reads. (The real
+sabotage — the same owner calling `setText` on a *different* resolver contract — did revert, so
+"accepted" is not that instrument's universal answer.)
+
+Two consequences are carried in the code, not in a memory:
+
+- **Step 2 keeps its simulation.** A property of *one* per-name resolver proxy is not a property of
+  every one. Whether every proxy is initialised with the owner at `ROOT_RESOURCE` was **not**
+  established, so the owner's own resolver is asked directly before any delegation exists.
+- **Subtree mode is sound exactly as far as the owner controls the resolver the parent points at.**
+  That is why step 1 is a transaction and why the roles behind it are a precondition.
+
+### The register() one-shot did not go away; it moved to the parent
+
+`subtree` mode emits no `register()`, so the irreversible `roleBitmap` is not this plan's to get
+right — it was the **parent's**, and it was spent before the plan existed. What survives is the
+consequence, and it is checked rather than assumed:
+
+```
+roles(<the parent's token id>, <the owner>) on the parent's registry
+    MUST carry ROLE_SET_RESOLVER  0x1000000
+```
+
+A parent registered without that bit can never be pointed at a resolver, every record and delegation
+below it is unreachable, and there is no repair short of losing the parent. The planner refuses the
+whole plan as `PRECONDITION_UNMET` when that reading is missing or lacks the bit, and a sabotage row
+flips `required: true` to `false` and requires the suite to go red.
+
+`subregistry` mode does **not** gain that precondition. Its behaviour is unchanged in every respect:
+the two modes' outputs were diffed field by field, and outside one added informational field and one
+renamed label, every step, ordinal, calldata byte, role bitmap and refusal is identical to before.
+
+### What subtree mode costs, said plainly
+
+The names are **served**, not **defended**. Nobody has registered `merchant.unica.eth` or anything
+under it. `getSubregistry("unica")` stays zero, so today no label can be registered under the parent
+by anyone — but if a subregistry were ever attached, a stranger who registered `merchant` there could
+`setResolver` and take resolution for the whole subtree. **Whether that capture actually works was
+not tested**: establishing it needs a deployed `PermissionedRegistry`, which this repository will not
+deploy. It is a residual of the mode, it is printed in `plan.ownerActions`, and the honest answer
+when the names must be owned is `--mode subregistry`.
+
+---
+
+### Step 2 of `subregistry` mode is the one that cannot be undone
 
 Phase 1 observed, with its passing control beside its failing row, that `grantRoles` **refuses** an
 admin bit after registration — `EACCannotGrantRoles` — because granting an admin role would require
@@ -172,7 +272,10 @@ is permanently *not* setting are printed in `plan.permanentOmissions` rather tha
 bit whose meaning is unknown is a permission nobody chose.
 
 The step is marked `irreversible: true` with a reason and a mitigation, and the preview refuses to
-call any plan signable if an admin bit appears on any step other than a `register()`.
+call any plan signable if an admin bit appears on any step other than a `register()`. In `subtree`
+mode **no step carries an admin bit at all**, and the preview reports **no irreversible step** —
+both are asserted, each with the subregistry-mode control beside it that proves the row is about the
+mode and not about a check that stopped firing.
 
 ---
 
@@ -304,8 +407,15 @@ was **ACCEPTED**, and the value read back through `text(bytes32,string)` at the 
 name-level resource involved is `keccak256(node ‖ bytes32(0))` = `0x94691a03…54da`, derived from the
 namehash of a name with no registration behind it. `subtree` mode's premise holds.
 
-Step 4 keeps its simulation. A property that holds for one parent's resolver is not a property of
-every parent's resolver, and the plan is built for a parent the owner supplies, not for `raffy.eth`.
+The step that checks it keeps its simulation, and the reason is now sharper than "a property that
+holds for one parent's resolver is not a property of every parent's". The acceptance came from the
+owner holding all sixty-four roles at `ROOT_RESOURCE` on that resolver proxy — see *The mechanism,
+which is not the one the acceptance suggests* above. Whether every per-name proxy is initialised
+that way was **not** established, so the owner's own resolver is asked directly.
+
+**The planner no longer demands a registry for this mode.** That is the change this measurement
+paid for: `subtree` went from three registries and three opening transactions to no registry and
+one.
 
 ### SETTLED — wildcard resolution returns for unregistered subnames, so a resolve is NOT evidence of registration
 
@@ -327,8 +437,10 @@ settlement on a name a stranger can still register. Two consequences are already
 - **`merchant-config.mjs` reads the pay name's `addr` and keeps it as one input to a judgement
   rather than as a result** — its comment calls this "the wildcard trap" by name. That is the
   correct handling and this measurement is its evidence.
-- **`plan.mjs` step 4 must not be satisfied by a successful resolve.** Registration is established
-  by the registry, or it is not established. A resolve that returns is compatible with both.
+- **The plan's verify step must not be satisfied by a successful resolve.** Registration is
+  established by the registry, or it is not established; a resolve that returns is compatible with
+  both. The step says so on its own row — `answered by … — and NOT evidence of registration` — and
+  the suite asserts that wording is there.
 
 A zero address from a wildcard and a zero address from a real name with no record set are the same
 bytes. Nothing downstream may distinguish them by resolution alone.
@@ -373,13 +485,55 @@ Honest gaps, carried in the code as evidence labels and repeated here:
   owner is one of them. This plan does not change that and cannot.
 - **The 16th-assignee error is unknown.** The cap of 15 is confirmed; the enforcement path is not,
   because reaching it needs fifteen real grants.
+- **Subtree capture was NOT tested.** `subtree` mode leaves `getSubregistry(parentLabel)` at zero,
+  so today nobody can register a label under the parent. Whether a stranger who registered
+  `merchant` *after* a subregistry were ever attached could then `setResolver` and capture
+  resolution for the whole subtree is untested — establishing it needs a deployed
+  `PermissionedRegistry`, which this repository will not deploy. It is stated as a residual of the
+  mode in `plan.ownerActions`, not resolved.
+- **Every subtree observation is against ONE resolver proxy**, `0xc00E9189…35eeE`. The write side's
+  permissiveness is a property of how that proxy was initialised. This is exactly why the verify
+  step is a simulation against the owner's own resolver rather than a claim carried over.
+- **The gas figures are fork figures.** 64,847 / 63,645 / 91,395 / 43,475 were measured against
+  forked state at block 11666085 with warm and cold slots as that state left them. They are not a
+  quote for a later block, which is why gas remains an INPUT to the planner and why no plan is
+  signable without real estimates.
+
+---
+
+## The owner's own configuration
+
+[`script/ensv2/unica-sepolia.json`](../../script/ensv2/unica-sepolia.json) is the real namespace:
+parent `unica.eth`, merchant owner `0xA121e1eF…8D73`, agent `0x19E56831…a7Ae`, settlement in
+Circle's Sepolia USDC through the live V2 executor `0x044bc8a8…6210`.
+
+```sh
+node script/ensv2/plan.mjs --config script/ensv2/unica-sepolia.json
+```
+
+**As committed it REFUSES, and that is the correct output.** `unica.eth` is not registered, so the
+resolver the parent will point at does not exist yet and neither does any of the chain state the
+preconditions read. The refusal names the first hole — `BAD_INPUT: resolver` — and the file carries,
+beside each `null`, the exact read that fills it.
+
+With those readings supplied the same file produces the seventeen-step subtree plan for
+`merchant.unica.eth`, `pay.`, `treasury.` and `agent.treasury.` — status `PLANNED`, and
+**`signable: false`**, because gas estimates are a separate input gathered with `eth_estimateGas`
+once the names exist. Two independent reasons for an unsignable plan, and both are correct today.
+
+The policy values and the salt are **not** in that file and never will be: this repository is
+public, only a keccak commitment over them is ever published, and `commitPolicy` refuses to commit
+over a missing field so the planner says so rather than committing to nothing.
 
 ---
 
 ## The instruments
 
-`node script/ensv2/plan-sabotage.mjs` breaks nineteen guards one at a time and requires the suite to
-notice each. It copies the originals out first, restores in a `finally`, and ends by re-hashing every
+`node script/ensv2/plan-sabotage.mjs` breaks twenty-six guards one at a time and requires the suite
+to notice each. Four of them are the mode split: subtree made to demand `parentSubregistry` again,
+subtree made to emit the three-transaction registry opening again, the parent's `ROLE_SET_RESOLVER`
+reading made optional, and a supplied-but-malformed registry address silently ignored instead of
+refused. All four are caught. It copies the originals out first, restores in a `finally`, and ends by re-hashing every
 file against the hash taken before the first mutation — a restore that is asserted rather than
 verified is not a restore.
 
@@ -393,7 +547,7 @@ accepts can distinguish the broken version. That is a claim about the code, and 
 if the row ever flips to caught, the builder has started emitting a role change it does not screen at
 construction.
 
-Four real defects were found this way and are fixed:
+Six real defects were found this way and are fixed:
 
 1. The assignee cap read the maxima word right-aligned, so a `SET_TEXT` grant (nybble 1) was compared
    against nybble 0's maximum — caught by the *control* that a good grant passes, not by any row
@@ -403,3 +557,10 @@ Four real defects were found this way and are fixed:
    switching on `PLAN_STATUS` matched nothing.
 4. The register-bitmap assertion checked only that *some* admin bit was set;
    `CAN_TRANSFER_ADMIN` alone kept it green while every per-role admin was missing.
+5. `subtree` mode demanded a `PermissionedRegistry` the chain does not need — the defect this
+   document's *What changed* section is about. It was not found by sabotage but by executing the
+   mode's premise on a fork; the four sabotage rows above exist so it cannot come back quietly.
+6. The command truncated its own output. `plan.mjs --json | …` ended at exactly 65,536 bytes —
+   valid-looking JSON, cut off mid-string — because `process.exit()` discards whatever has not
+   drained from a non-blocking pipe. The plan is about 170 KB. It now sets `process.exitCode` and
+   lets the runtime flush. A tool silently truncated by a pipe is worse than one that fails.

@@ -128,8 +128,26 @@ const CFG = {
   observations: {
     agentRootRolesAtResolver: "0x0", resolverCodeSize: 77, merchantMayGrantAtAgentResource: true,
     assigneeReading: fullReading(SET_TEXT, 0),
+    // The reading `subtree` mode requires in place of the three registry transactions it no longer
+    // emits: the parent's own registration must have carried ROLE_SET_RESOLVER, because that is the
+    // only authority the whole mode rests on and register() is the only place it could have been set.
+    ownerRolesAtParent: asWord(BigInt(P.REGISTRY_ROLE.SET_RESOLVER.bit) | P.adminRole(BigInt(P.REGISTRY_ROLE.SET_RESOLVER.bit))),
   },
 };
+
+/// The same configuration in `subregistry` mode. Both modes are real and both are tested: the
+/// registration rows below belong to the mode that registers, and the mode that registers nothing
+/// has its own section. Keeping one fixture and reading register steps out of it is what let the
+/// planner demand a registry for a mode that never used one.
+const CFG_SUBREGISTRY = {...CFG, mode: PLAN.PLAN_MODE.SUBREGISTRY};
+
+/// And the subtree configuration with every registry field REMOVED, which is the point of the
+/// change: this mode must build with no PermissionedRegistry supplied at all.
+const CFG_NO_REGISTRIES = (() => {
+  const c = {...CFG};
+  delete c.parentSubregistry; delete c.merchantSubregistry; delete c.treasurySubregistry;
+  return c;
+})();
 
 const AGENT_NODE = namehash("agent.treasury.merchant.owner-chosen-parent.eth");
 // The resource a delegation ACTUALLY lands at on this deployment: the per-KEY one, not the
@@ -477,10 +495,15 @@ console.log("\n— every step's DECLARED arguments are the arguments its calldat
   // arguments the bytes did not contain, in the one transaction that hands an agent authority. The
   // owner reads these rows to decide whether to sign. Nothing compared them to the bytes, so
   // nothing caught it. This block is that comparison.
+  // Both modes, concatenated. `subregistry` carries register/setSubregistry calldata that `subtree`
+  // does not, and `subtree` carries a setResolver aimed at the PARENT that `subregistry` does not,
+  // so comparing only one mode's rows leaves the other mode's calldata undescribed.
   const plan = PLAN.buildPlan(CFG);
+  const planReg = PLAN.buildPlan(CFG_SUBREGISTRY);
   check("CONTROL the plan builds", plan.ok === true);
+  check("CONTROL the subregistry-mode plan builds too", planReg.ok === true);
 
-  const withData = plan.steps.filter((s) => s.call?.data && Array.isArray(s.arguments) && s.arguments.length);
+  const withData = [...plan.steps, ...planReg.steps].filter((s) => s.call?.data && Array.isArray(s.arguments) && s.arguments.length);
   check("there are steps with both calldata and declared arguments to compare", withData.length > 0,
         String(withData.length));
 
@@ -552,7 +575,10 @@ console.log("\n— the register() bitmap is one-shot, so a registration without 
   // matching REGULAR grant from the same owner accepted as the control that makes it decisive. So
   // a registration that omits them produces a name the merchant can never fully administer, and
   // there is no repair short of abandoning the name.
-  const good = PLAN.buildPlan(CFG);
+  // In `subregistry` mode, because that is the mode with a register() in it. The guard itself runs
+  // in both — the rule it encodes is true of whichever registration the namespace rests on — but a
+  // row that reads register steps out of a plan that emits none proves nothing.
+  const good = PLAN.buildPlan(CFG_SUBREGISTRY);
   const registerSteps = good.steps.filter((s) => s.call?.method === "register");
   check("CONTROL the ordinary plan is planned, and every registration carries admin bits",
         good.ok === true && registerSteps.length > 0 &&
@@ -562,7 +588,7 @@ console.log("\n— the register() bitmap is one-shot, so a registration without 
   const REG = [1n << 16n, 1n << 20n, 1n << 24n];          // RENEW, SET_SUBREGISTRY, SET_RESOLVER
   const regular = REG.reduce((a, b) => a | b, 0n) | BigInt(P.REGISTRY_ROLE_CAN_TRANSFER_ADMIN.bit);
 
-  const stripped = PLAN.buildPlan({...CFG, registryRoleBitmap: asWord(regular)});
+  const stripped = PLAN.buildPlan({...CFG_SUBREGISTRY, registryRoleBitmap: asWord(regular)});
   check("a registration bitmap with no admin half is REFUSED",
         stripped.ok === false && stripped.status === PLAN.PLAN_STATUS.REGISTRATION_MISSING_ADMIN_ROLES,
         j(stripped).slice(0, 300));
@@ -576,7 +602,7 @@ console.log("\n— the register() bitmap is one-shot, so a registration without 
 
   // A partial admin half is not "mostly fine": one missing bit is still an unrepairable name.
   const onlyOneMissing = regular | P.adminRole(REG[0]) | P.adminRole(REG[1]);
-  const partial = PLAN.buildPlan({...CFG, registryRoleBitmap: asWord(onlyOneMissing)});
+  const partial = PLAN.buildPlan({...CFG_SUBREGISTRY, registryRoleBitmap: asWord(onlyOneMissing)});
   check("a registration missing ONE admin role is refused too, and names exactly that one",
         partial.ok === false &&
         partial.status === PLAN.PLAN_STATUS.REGISTRATION_MISSING_ADMIN_ROLES &&
@@ -584,7 +610,7 @@ console.log("\n— the register() bitmap is one-shot, so a registration without 
         j(partial.refusal?.missingAdmin));
 
   // And the guard is not simply refusing everything it is handed.
-  const full = PLAN.buildPlan({...CFG, registryRoleBitmap: asWord(
+  const full = PLAN.buildPlan({...CFG_SUBREGISTRY, registryRoleBitmap: asWord(
     regular | P.adminRole(REG[0]) | P.adminRole(REG[1]) | P.adminRole(REG[2]))});
   check("CONTROL a bitmap WITH every admin bit is accepted, so the guard is not refusing everything",
         full.ok === true, j(full).slice(0, 200));
@@ -735,8 +761,11 @@ console.log("\n— the plan: parameterised on the parent, never on a name this r
   const payStep = plan.steps.find((s) => s.affects?.resource === plan.resources.pay && s.call?.method === "setAddr");
   check("the payment record is written before the delegation exists", payStep.ordinal < grantStep.ordinal);
 
-  // The one-shot step, and the fact that it is the only one carrying an admin bit.
-  const registerSteps = plan.steps.filter((s) => s.call?.method === "register");
+  // The one-shot step, and the fact that it is the only one carrying an admin bit. Read out of the
+  // `subregistry` plan: `subtree` mode emits no register() at all, which is the whole change, and is
+  // asserted directly in its own section below.
+  const regPlan = PLAN.buildPlan(CFG_SUBREGISTRY);
+  const registerSteps = regPlan.steps.filter((s) => s.call?.method === "register");
   check("every register step is marked irreversible with a reason and a mitigation",
         registerSteps.length > 0 && registerSteps.every((s) => s.rollback?.irreversible === true && s.rollback.why && s.rollback.mitigation));
   check("the register bitmap carries admin bits — the only place they can ever be set",
@@ -758,9 +787,11 @@ console.log("\n— the plan: parameterised on the parent, never on a name this r
         plan.permanentOmissions.length > 0 && plan.permanentOmissions.some((o) => o.name === "UNREGISTER"));
   check("... including the bit the chain uses that no documentation names",
         plan.permanentOmissions.some((o) => o.name === "UNNAMED_BIT_32"));
-  const withAdmin = plan.steps.filter((s) => s.call?.roleBitmap && (BigInt(s.call.roleBitmap) >> P.ADMIN_SHIFT) !== 0n);
-  check("no step other than register carries an admin bit",
+  const withAdmin = [...plan.steps, ...regPlan.steps].filter((s) => s.call?.roleBitmap && (BigInt(s.call.roleBitmap) >> P.ADMIN_SHIFT) !== 0n);
+  check("no step other than register carries an admin bit, in EITHER mode",
         withAdmin.every((s) => s.call.method === "register"), withAdmin.map((s) => s.ordinal).join(","));
+  check("... and in subtree mode no step carries one at all, because nothing is registered",
+        plan.steps.every((s) => !s.call?.roleBitmap || (BigInt(s.call.roleBitmap) >> P.ADMIN_SHIFT) === 0n));
 
   check("every transaction step names a way back", plan.steps.filter((s) => s.kind === "transaction").every((s) => s.rollback));
   check("every step carries an evidence label", plan.steps.every((s) => s.evidence || s.kind === "transaction"));
@@ -802,6 +833,202 @@ console.log("\n— the plan: parameterised on the parent, never on a name this r
         PLAN.buildPlan({...CFG, observations: {...CFG.observations, merchantMayGrantAtAgentResource: undefined}}).ok === false);
   check("every precondition is a READ against the chain, not an assumption",
         plan.preconditions.every((p) => typeof p.read === "string" && p.read.length > 0 && p.why));
+}
+
+console.log("\n— the two modes: `subtree` asks the chain for a resolver, `subregistry` asks it for registries —");
+{
+  // THE DEFECT THIS SECTION EXISTS FOR. The planner validated `parentSubregistry` in one
+  // unconditional loop before either mode's branch was reached, so `--mode subtree` refused with
+  // BAD_INPUT "not a 20-byte address" until the owner deployed a PermissionedRegistry — a contract
+  // that mode then never used, because it registers nothing. A fork pinned at block 11666085
+  // executed the whole subtree path against the deployed bytecode at UNREGISTERED subnames: the
+  // record writes accepted and read back, the delegation landing at the derived per-key resource,
+  // the stranger refused, the revocation accepted. The chain asks for one thing in this mode — a
+  // resolver the parent points at — and the planner now asks for exactly that and nothing else.
+  //
+  // Both modes are real and both are tested here. The strict path is not deleted: when the subnames
+  // must be OWNED rather than merely served, registration is the only thing that owns them.
+
+  const sub = PLAN.buildPlan(CFG_NO_REGISTRIES);
+  check("CONTROL subtree mode builds a plan with NO registry supplied at all — the refusal that was wrong",
+        sub.ok === true && sub.status === PLAN.PLAN_STATUS.PLANNED, j({ok: sub.ok, status: sub.status, refusal: sub.refusal}).slice(0, 300));
+  // The control that keeps the row above from being "the planner stopped checking things".
+  refusedWith("... while the SAME configuration in subregistry mode is still refused",
+              PLAN.buildPlan({...CFG_NO_REGISTRIES, mode: PLAN.PLAN_MODE.SUBREGISTRY}), PLAN.PLAN_STATUS.BAD_INPUT);
+  eq("... naming parentSubregistry, so the requirement moved rather than vanished",
+     PLAN.buildPlan({...CFG_NO_REGISTRIES, mode: PLAN.PLAN_MODE.SUBREGISTRY}).refusal?.field, "parentSubregistry");
+
+  // Dropping a requirement is not the same as accepting rubbish for it.
+  refusedWith("a supplied-but-malformed parentSubregistry is still refused in subtree mode, not ignored",
+              PLAN.buildPlan({...CFG, parentSubregistry: "0xnot-an-address"}), PLAN.PLAN_STATUS.BAD_INPUT);
+  refusedWith("... and so is a malformed treasurySubregistry the mode never reads",
+              PLAN.buildPlan({...CFG, treasurySubregistry: "0x1234"}), PLAN.PLAN_STATUS.BAD_INPUT);
+
+  const reg = PLAN.buildPlan(CFG_SUBREGISTRY);
+  const methods = (p) => p.steps.map((s) => s.call?.method).filter(Boolean);
+
+  check("subtree mode emits NO register() — nothing below the parent is registered",
+        !methods(sub).includes("register"), methods(sub).join(","));
+  check("subtree mode emits NO setSubregistry() — no registry is attached to anything",
+        !methods(sub).includes("setSubregistry"), methods(sub).join(","));
+  check("CONTROL subregistry mode still emits both, so the two rows above are about the mode",
+        methods(reg).includes("register") && methods(reg).includes("setSubregistry"));
+  eq("subregistry mode still registers four names: the merchant, pay, treasury and the agent leaf",
+     methods(reg).filter((m) => m === "register").length, 4);
+
+  // The one registry transaction subtree mode does have, checked against its own calldata rather
+  // than against its title.
+  const first = sub.steps[0];
+  eq("subtree mode's first step is setResolver", first.call?.method, "setResolver");
+  eq("... aimed at the registry holding the PARENT", first.call.to.toLowerCase(), P.byName("ETHRegistry").address.toLowerCase());
+  eq("... and its calldata's first word is the PARENT's token id, not the merchant's",
+     asWord(argUint(first.call.data, 0)), sub.tokenIds.parent);
+  eq("... and its second is the resolver the owner supplied", argAddr(first.call.data, 1).toLowerCase(), RESOLVER.toLowerCase());
+  eq("... and it is REVERSIBLE, unlike the registration it replaced", first.rollback.irreversible, false);
+  eq("subtree mode has exactly ONE registry-targeted transaction",
+     sub.steps.filter((s) => s.call?.to?.toLowerCase() === P.byName("ETHRegistry").address.toLowerCase()).length, 1);
+
+  // The counts, stated rather than implied. A stated negative beats an absence.
+  eq("subtree mode: 17 steps", sub.steps.length, 17);
+  eq("subtree mode: 13 transactions", sub.steps.filter((s) => s.kind === "transaction").length, 13);
+  eq("subregistry mode: 23 steps", reg.steps.length, 23);
+  eq("subregistry mode: 20 transactions", reg.steps.filter((s) => s.kind === "transaction").length, 20);
+  check("the mode that registers nothing is the SHORTER plan, which is the point",
+        sub.steps.length < reg.steps.length);
+
+  // Token ids are registry ids. In subtree mode two of the three address a token in no registry.
+  check("subtree mode publishes the parent's token id and REFUSES to publish the other two",
+        sub.tokenIds.parent !== null && sub.tokenIds.merchant === null && sub.tokenIds.treasury === null,
+        j(sub.tokenIds));
+  check("CONTROL subregistry mode publishes all three, because all three are real there",
+        reg.tokenIds.merchant !== null && reg.tokenIds.treasury !== null);
+  eq("subtree mode reports no parent subregistry rather than echoing an unused input",
+     sub.accounts.parentSubregistry, null);
+
+  // Who signs. In subtree mode there is no name below the parent for a second wallet to hold.
+  check("every subtree transaction is signed by the parent's OWNER, not by a merchant who owns nothing",
+        sub.steps.filter((s) => s.kind === "transaction").every((s) => s.signer === "owner"),
+        j([...new Set(sub.steps.map((s) => s.signer))]));
+  check("CONTROL subregistry mode still has the merchant signing under their own name",
+        reg.steps.some((s) => s.signer === "merchant"));
+
+  // The owner actions differ, and the difference is the registry.
+  const acts = (p) => p.ownerActions.map((a) => a.what).join(" | ");
+  check("subtree mode does NOT tell the owner to deploy a PermissionedRegistry",
+        !/PermissionedRegistry/.test(acts(sub)), acts(sub));
+  check("CONTROL subregistry mode still does",
+        /PermissionedRegistry/.test(acts(reg)));
+  check("subtree mode tells the owner to point the parent at a resolver they control",
+        /point the PARENT/.test(acts(sub)));
+  check("subtree mode states the residual it cannot remove: the names are SERVED, not DEFENDED",
+        sub.ownerActions.some((a) => /does not DEFEND/.test(a.what) && /stranger who registers/.test(a.why)));
+  check("... and says the capture was NOT tested rather than implying it cannot happen",
+        sub.ownerActions.some((a) => /NOT tested/.test(a.why ?? "")));
+
+  // The precondition that replaced the three transactions.
+  const NEED = BigInt(P.REGISTRY_ROLE.SET_RESOLVER.bit);
+  const parentPre = (p) => p.preconditions.find((x) => /ROLE_SET_RESOLVER at the PARENT/.test(x.name));
+  check("subtree mode CHECKS that the owner holds ROLE_SET_RESOLVER at the parent's own resource",
+        parentPre(sub) !== undefined && parentPre(sub).required === true && parentPre(sub).satisfied === true);
+  eq("... by reading roles() at the PARENT's token id on the parent's registry, not by assuming it",
+     parentPre(sub).read, `roles(${sub.tokenIds.parent}, ${MERCHANT}) on ${P.byName("ETHRegistry").address}`);
+  const noReading = PLAN.buildPlan({...CFG, observations: {...CFG.observations, ownerRolesAtParent: undefined}});
+  check("a subtree plan with NO such reading is PRECONDITION_UNMET, not quietly planned",
+        noReading.ok === false && noReading.status === PLAN.PLAN_STATUS.PRECONDITION_UNMET,
+        j({ok: noReading.ok, status: noReading.status}));
+  check("... and it names that precondition among the unmet ones",
+        noReading.unmetPreconditions.some((n) => /ROLE_SET_RESOLVER at the PARENT/.test(n)), j(noReading.unmetPreconditions));
+  const wrongBit = PLAN.buildPlan({...CFG, observations: {...CFG.observations,
+    ownerRolesAtParent: asWord(BigInt(P.REGISTRY_ROLE.SET_SUBREGISTRY.bit))}});
+  check("a reading that shows every OTHER role but not this one is still unmet",
+        wrongBit.ok === false && wrongBit.unmetPreconditions.some((n) => /ROLE_SET_RESOLVER at the PARENT/.test(n)));
+  check("CONTROL the bare regular bit, with no admin half, satisfies it — the guard is not refusing everything",
+        PLAN.buildPlan({...CFG, observations: {...CFG.observations, ownerRolesAtParent: asWord(NEED)}}).ok === true);
+  check("the precondition says it is the register() one-shot seen from the other side",
+        /register\(\)/.test(parentPre(sub).why) && /CHECKED here rather than emitted/.test(parentPre(sub).why));
+  eq("subregistry mode does NOT gain that precondition — its behaviour is unchanged",
+     parentPre(reg), undefined);
+
+  // The registration bitmap is still computed in both modes, and says which one it is about.
+  eq("subtree mode says the one-shot bitmap belongs to the PARENT's registration, not to this plan",
+     sub.registrationBitmap.emittedAsATransaction, false);
+  check("... and points the reader at the precondition that checks it",
+        /precondition/.test(sub.registrationBitmap.appliesTo));
+  eq("CONTROL subregistry mode says the bitmap belongs to steps in this plan", reg.registrationBitmap.emittedAsATransaction, true);
+  check("the bitmap itself is the same word in both modes — the rule did not change, only where it applies",
+        sub.registrationBitmap.bitmap === reg.registrationBitmap.bitmap);
+
+  // The verify step is kept, and it is kept for a stated reason.
+  const verify = sub.steps.find((s) => s.kind === "verify" && /premise of this mode/.test(s.title));
+  check("subtree mode still SIMULATES the resolver's acceptance before anything depends on it", verify !== undefined);
+  check("... including a refusal from an address holding nothing, so an acceptance means something",
+        verify.expectedPostState.some((x) => /REFUSED/.test(x.expect)) &&
+        verify.expectedPostState.some((x) => /ACCEPTED/.test(x.expect)));
+  check("... and it warns that a successful resolve is NOT evidence of registration",
+        verify.expectedPostState.some((x) => /NOT evidence/.test(x.expect)));
+  check("... and its evidence names the mechanism — ROOT_RESOURCE on that resolver proxy, not unregistered subnames",
+        /ROOT_RESOURCE/.test(verify.evidence.detail) && /NOT\s+established/.test(verify.evidence.detail));
+
+  // Every refusal still fires in the mode that no longer registers anything.
+  eq("subtree mode still screens exactly the grant and the revocation", sub.screen.screened, 2);
+  refusedWith("subtree mode still refuses an agent that already holds root roles",
+              PLAN.buildPlan({...CFG_NO_REGISTRIES, observations: {...CFG.observations, agentRootRolesAtResolver: "0x10"}}),
+              PLAN.PLAN_STATUS.AGENT_GRANT_REFUSED);
+  check("subtree mode still requires agent_root_roles to have been READ, not merely to be absent",
+        PLAN.buildPlan({...CFG_NO_REGISTRIES, observations: {...CFG.observations, agentRootRolesAtResolver: undefined}}).ok === false);
+  refusedWith("subtree mode still refuses an agent that is the merchant",
+              PLAN.buildPlan({...CFG_NO_REGISTRIES, agentAddress: MERCHANT}), PLAN.PLAN_STATUS.BAD_INPUT);
+  check("subtree mode still refuses a resolver with no code", 
+        PLAN.buildPlan({...CFG_NO_REGISTRIES, observations: {...CFG.observations, resolverCodeSize: 0}}).ok === false);
+  // The named refusals from the screen, asked of the subtree plan's own registry list. The parent's
+  // registry is in that list now: in this mode it is the ONLY registry there is, and a list that
+  // went empty would leave REGISTRY_TARGET_FORBIDDEN with nothing to fire on.
+  const subScreenCtx = {agentResource: AGENT_RESOURCE, agentAddress: AGENT, merchantAddress: MERCHANT,
+                        protectedResources: [MERCHANT_RESOURCE, PAY_RESOURCE, TREASURY_RESOURCE],
+                        protectedNodes: [MERCHANT_NODE, PAY_NODE, TREASURY_NODE],
+                        registryAddresses: [P.byName("ETHRegistry").address], agentRootRoles: "0x0"};
+  for (const [what, call, status] of [
+    ["a grant at ROOT_RESOURCE", goodCall({resource: asWord(0n)}), R.GRANT_STATUS.ROOT_RESOURCE_FORBIDDEN],
+    ["a grant of an admin role", goodCall({roleBitmap: asWord(P.adminRole(SET_TEXT))}), R.GRANT_STATUS.ADMIN_ROLE_FORBIDDEN],
+    ["a grant aimed at the parent's registry", goodCall({to: P.byName("ETHRegistry").address}), R.GRANT_STATUS.REGISTRY_TARGET_FORBIDDEN],
+    ["a grant on the payment name", goodCall({resource: PAY_RESOURCE}), R.GRANT_STATUS.PROTECTED_RESOURCE],
+    // The two refusals that are about the METHOD rather than about its arguments. They matter more
+    // in this mode, not less: `authorizeNameRoles` writes at the NAME level, and in subtree mode the
+    // name is unregistered, so a blanket grant there would hand the agent every text key on a leaf
+    // nobody owns. And `grantRoles` is the call this deployment refuses outright.
+    ["a NAME-level authorization instead of a per-key one", goodCall({method: "authorizeNameRoles"}), R.GRANT_STATUS.NAME_LEVEL_METHOD_FORBIDDEN],
+    ["a grantRoles delegation, the call this deployment refuses", goodCall({method: "grantRoles"}), R.GRANT_STATUS.GRANT_ROLES_NOT_THE_DELEGATION_PATH],
+    ["a grantRootRoles delegation", goodCall({method: "grantRootRoles"}), R.GRANT_STATUS.ROOT_ROLES_METHOD_FORBIDDEN],
+  ]) {
+    // The screen's own status is REJECTED; the specific reason lives one level down, per row, where
+    // it cannot collide with the plan-level vocabulary. Both are asserted.
+    const r = R.screenPlanForAgentAuthority([{ordinal: 999, call}], subScreenCtx);
+    check(`subtree mode still refuses ${what} — ${status}`,
+          r.ok === false && r.status === R.PLAN_SCREEN_STATUS.REJECTED && r.rejected[0]?.status === status,
+          j({ok: r.ok, status: r.status, reason: r.rejected?.[0]?.status}));
+  }
+  check("CONTROL the same screen accepts the delegation the subtree plan actually makes",
+        R.screenPlanForAgentAuthority([{ordinal: 999, call: goodCall()}], subScreenCtx).ok === true);
+
+  // And the whole subtree plan previews and can be signed once gas exists.
+  const subGas = Object.fromEntries(sub.steps.filter((s) => s.kind === "transaction").map((s) => [s.ordinal, "0x" + (50000).toString(16)]));
+  const subPrev = V.previewPlan(sub, {gas: subGas});
+  eq("the subtree plan previews every step", subPrev.rows.length, sub.steps.length);
+  check("... with no broken dependency, after the three opening steps became one", subPrev.brokenOrder.length === 0);
+  check("... no row involving ROOT_RESOURCE and no row involving an admin role",
+        subPrev.summary.rowsInvolvingRootResource.length === 0 && subPrev.summary.rowsInvolvingAdminRoles.length === 0,
+        j({root: subPrev.summary.rowsInvolvingRootResource, admin: subPrev.summary.rowsInvolvingAdminRoles}));
+  check("... and no irreversible step at all, because nothing is registered",
+        subPrev.summary.irreversibleSteps.length === 0, j(subPrev.summary.irreversibleSteps));
+  check("CONTROL subregistry mode DOES carry irreversible steps, so the row above is about the mode",
+        V.previewPlan(reg, {gas: Object.fromEntries(reg.steps.filter((s) => s.kind === "transaction").map((s) => [s.ordinal, "0x1"]))})
+          .summary.irreversibleSteps.length >= 4);
+  check("... and the subtree plan IS signable once every estimate is supplied",
+        PLAN.planIsSignable(sub, subPrev) === true);
+  check("CONTROL and is NOT signable without them, so the row above is not vacuous",
+        PLAN.planIsSignable(sub, V.previewPlan(sub, {gas: {}})) === false);
+  check("the subtree plan's registry row is still read against the REGISTRY role table",
+        subPrev.rows.find((r) => r.method === "setResolver").roles.table === R.ROLE_TABLE.REGISTRY);
 }
 
 console.log("\n— nothing secret reaches the chain, and the scanner that says so can fire —");
@@ -850,7 +1077,10 @@ console.log("\n— nothing secret reaches the chain, and the scanner that says s
 
 console.log("\n— the preview: the flags are recomputed from the calldata, not copied from the claim —");
 {
-  const plan = PLAN.buildPlan(CFG);
+  // `subregistry` mode, because this section's rows are about register() and setSubregistry rows —
+  // the registry-targeted rows whose bitmaps must be named against the REGISTRY role table. The same
+  // preview run over the `subtree` plan is a separate section below, so both modes are previewed.
+  const plan = PLAN.buildPlan(CFG_SUBREGISTRY);
   const gasFor = (p) => Object.fromEntries(p.steps.filter((s) => s.kind === "transaction").map((s) => [s.ordinal, "0x" + (50000).toString(16)]));
 
   const noGas = V.previewPlan(plan, {gas: {}});
@@ -931,7 +1161,7 @@ console.log("\n— the preview: the flags are recomputed from the calldata, not 
           .refusals.some((f) => f.code === V.PREVIEW_REFUSAL.BAD_TARGET));
 
   // The batch rules.
-  const batched = PLAN.buildPlan({...CFG, batchRecords: true});
+  const batched = PLAN.buildPlan({...CFG_SUBREGISTRY, batchRecords: true});
   const bPrev = V.previewPlan(batched, {gas: gasFor(batched)});
   const bRow = bPrev.rows.find((r) => r.batch);
   check("CONTROL a batch renders every inner call with named arguments",

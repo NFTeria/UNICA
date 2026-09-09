@@ -210,6 +210,36 @@ const SABOTAGE = [
     find: "  if (method === \"grantRoles\" || method === \"revokeRoles\") {",
     replace: "  if (false) {",
   },
+  // ── the mode split ─────────────────────────────────────────────────────────────────────────
+  //
+  // The four rows below break the change that stopped `subtree` mode demanding a PermissionedRegistry
+  // the chain never asked it for. Each puts the old defect back in a different way, and the suite has
+  // to notice each — otherwise the section that says "subtree mode builds with no registry at all" is
+  // a sentence rather than a check.
+  {
+    what: "subtree mode is made to demand parentSubregistry again — the original defect, restored",
+    file: PLAN,
+    find: "  if (mode === PLAN_MODE.SUBREGISTRY) required.parentSubregistry = parentSubregistry;",
+    replace: "  required.parentSubregistry = parentSubregistry;",
+  },
+  {
+    what: "subtree mode emits the three-transaction registry opening again",
+    file: PLAN,
+    find: "  if (mode === PLAN_MODE.SUBREGISTRY) {\n  // 1 — the parent gets a subregistry, so that a label may exist under it at all.",
+    replace: "  if (true) {\n  // 1 — the parent gets a subregistry, so that a label may exist under it at all.",
+  },
+  {
+    what: "the PARENT's ROLE_SET_RESOLVER reading stops being required, so an unmet plan reads as planned",
+    file: PLAN,
+    find: "      name: \"the owner holds ROLE_SET_RESOLVER at the PARENT's own resource\",\n      required: true,",
+    replace: "      name: \"the owner holds ROLE_SET_RESOLVER at the PARENT's own resource\",\n      required: false,",
+  },
+  {
+    what: "a supplied-but-malformed registry address is silently ignored instead of refused",
+    file: PLAN,
+    find: "    if (!isAddress(v)) {\n      return refusePlan(PLAN_STATUS.BAD_INPUT, {\n        field: k, value: v,",
+    replace: "    if (false) {\n      return refusePlan(PLAN_STATUS.BAD_INPUT, {\n        field: k, value: v,",
+  },
 ];
 
 const backupDir = mkdtempSync(join(tmpdir(), "unica-ensv2-sabotage-"));
