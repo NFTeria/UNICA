@@ -37,7 +37,11 @@ marks='unica-closet|claude-toolkit|SESSION-PROMPT|prize-watch/|/Users/'
 # `PRIVATE_KEY=` however the rest of the line reads; there is a control for exactly that below.
 # Every addition here is paired with a control below: the scan must still catch a value with none
 # of these words on its line, or the widening has quietly turned the check off.
-label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]:]|swap|receipt|topic|digest|witness|domain|vector|curve|signature'
+# `resource` joins the vocabulary for ENSv2: an Enhanced Access Control resource identifier is a
+# 32-byte value that is public by construction — it is derived from a name, and the whole point of
+# printing one is that a reader can recompute it. Same class as a pool id or a log topic, and the
+# two rows below prove the widening did not blunt the rule.
+label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]:]|swap|receipt|topic|digest|witness|domain|vector|curve|signature|resource'
 
 # The controls, first: each pattern must catch a planted bad input and pass a planted good one.
 chk "control: a labelled key is caught"        "printf 'PRIVATE_KEY=0x%064d\n' 1 | grep -qiE '$secrets'"
@@ -57,6 +61,12 @@ chk "control: a member expression is NOT caught"           "! (printf '  secrets
 chk "control: an env-substituted value is NOT caught"      "! (printf 'POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}\n'  | grep -qiE \"\$material\")"
 chk "control: a shell default substitution is NOT caught"  "! (printf 'POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:-graph-node-local}\n' | grep -qiE \"\$material\")"
 chk "control: ...but a literal beside one IS still caught"  "printf 'POSTGRES_PASSWORD: \${X:-y} PRIVATE_KEY=0x%064d\n' 1 | grep -qiE \"\$material\""
+# The bare-value rule, sabotaged both ways. A widened label vocabulary is the easiest way to turn
+# this check into decoration, so the negative row is the one that matters: an unlabelled word must
+# still be caught after every widening.
+chk "control: an UNLABELLED 32-byte value is still caught" "printf '  const x = \"0x%064d\";\n' 1 | grep -viE \"\$label\" | grep -qE '0x[a-fA-F0-9]{64}'"
+chk "control: a labelled resource id is NOT caught"        "! (printf '  registryResource = \"0x%064d\";\n' 1 | grep -viE \"\$label\" | grep -qE '0x[a-fA-F0-9]{64}')"
+
 # The stated gap, asserted so it is visible rather than believed closed.
 chk "KNOWN GAP: an all-alphabetic passphrase is NOT caught" "! (printf 'PASSWORD=correcthorse\n' | grep -qiE \"\$material\")"
 chk "control: a private name anywhere is caught" "printf 'docs/notes/privatenotes.md\n' | grep -qE '$names'"
