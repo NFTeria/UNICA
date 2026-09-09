@@ -80,7 +80,7 @@ track.** Each row says what exists, what is missing, and what only the owner can
 Direct non-DEX operations — a lending deposit, a debt repayment, a USDC transfer — are performed
 directly and are never routed through a pool to manufacture composition.
 
-### Chainlink CRE — PARTIAL, DEPLOYMENT BLOCKED
+### Chainlink CRE — PARTIAL, DEPLOYMENT BLOCKED · *NOT SELECTED — see section 7*
 
 | | |
 |---|---|
@@ -178,4 +178,33 @@ something.
 ### What did not change
 
 Uniswap, Chainlink and Circle read exactly as section 5 left them. The Chainlink workflow still runs
-only in the simulator and still stamps `CRE_CONFIDENTIAL_SIMULATION` on its own output.
+only in the simulator and still stamps `CRE_CONFIDENTIAL_SIMULATION` on its own output — and as of
+section 7 it is **not selected and not part of the submitted integration**.
+
+## 7. Final sponsor selection — 2026-09-09
+
+**The three submitted integrations are Uniswap v4, ENSv2 on Sepolia and The Graph.** Every row in
+section 5 and the update in section 6 stands as a record of what was built; this section is what is
+actually submitted.
+
+| Track | Why |
+|---|---|
+| **Uniswap v4** | the settlement mechanism. Live on Ethereum Sepolia with a real settled swap and a receipt |
+| **ENSv2 on Sepolia** | merchant identity and the scoped agent permission. Delegation broadcast, scope proven from the chain in six rows |
+| **The Graph** | the receipt indexed and queried back. Deployed, synced, one `Settlement` matching the raw log |
+
+**Chainlink CRE is NOT selected and is not part of the submitted integration.** The workflow runs
+in Chainlink's own simulator and has never executed in a TEE; a track claim needs execution
+evidence a judge can see. It stays in the tree, labelled simulator-only. **Circle** likewise:
+`integrations/arc-nanopayments/` is a local verifier and nothing was broadcast on Arc.
+
+**On x402:** UNICA complements x402 by enforcing the merchant's settlement rules on-chain; it does
+not implement the x402 protocol. It is not listed as a sponsor integration.
+
+## 8. Deployment status — unmistakable
+
+| | Status |
+|---|---|
+| **V1** | **DEPLOYED with verified settlement evidence.** Hook `0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0`, executor `0x044bc8a8773EC7b9B8de2467766636dFFCaC6210`, Ethereum Sepolia. One real swap settled: 0.001 ETH in, 2.003660 USDC out, receipt emitted inside the swap |
+| **V2** | **NOT DEPLOYED, and excluded from the submission.** It has no deployment target in this repository and an **open Critical** advisory — `docs/v2/SECURITY-ADVISORY-001.md` — that we found, reproduced, published and blocked our own release over. It is not part of the live demo |
+| **V3** | **DEPLOYED and verified on Sepolia**, hook `0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0`. **`receiptCount()` is 0** — V3 has completed no settlement on any chain, and nothing here should be read as saying it has |

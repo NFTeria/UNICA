@@ -1,7 +1,9 @@
 # UNICA — sponsor eligibility, by track
 
-Five submissions, each to a **from-scratch** pool, because this repository was created inside the
-build window and has no predecessor. The evidence for that is `docs/PROVENANCE-LEDGER.md`, and it
+**The three submitted integrations are Uniswap v4, ENSv2 on Sepolia and The Graph.** This file
+documents five integrations, because five were built; the other two are labelled where they appear
+and are not part of the submitted set. Each submission is to a **from-scratch** pool, because this
+repository was created inside the build window and has no predecessor. The evidence for that is `docs/PROVENANCE-LEDGER.md`, and it
 is one `git log` away.
 
 This file exists so a judge does not have to reconstruct which parts of UNICA are live, which are
@@ -55,9 +57,15 @@ hook that refuses anything short of a full fill.
 
 Remaining: the form itself.
 
-### 2. Chainlink — Best Confidential Workflow (From Scratch)
+### 2. Chainlink — NOT SELECTED, simulator-only
 
-**Status: `RUNS IN THE SPONSOR'S RUNTIME`**
+> **SUPERSEDED, 2026-09-09.** Chainlink is **not one of the three submitted integrations** and is
+> **not part of the submitted integration** set. The section below is kept as the record of what was
+> built and how honestly it was graded. The workflow runs in Chainlink's own simulator and has never
+> executed in a TEE, and a track claim needs execution evidence a judge can see. The three submitted
+> integrations are **Uniswap v4, ENSv2 on Sepolia and The Graph**.
+
+**Status: `RUNS IN THE SPONSOR'S RUNTIME` — simulator-only, not selected**
 
 A real CRE Confidential Workflow — a cron-triggered TEE handler that reads a merchant's treasury
 position, applies a deterministic bounded policy, and publishes a decision without publishing the
