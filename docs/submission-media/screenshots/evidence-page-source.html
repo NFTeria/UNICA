@@ -1,0 +1,57 @@
+<!doctype html><meta charset="utf-8"><title>UNICA evidence</title>
+<style>
+ :root{--ink:#14161A;--paper:#FBFBFA;--accent:#0B6E4F}
+ body{margin:0;background:#121212;color:#F2F2EF;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+ main{max-width:1180px;margin:0 auto;padding:34px 40px}
+ h1{font-size:26px;margin:0 0 4px} .sub{color:#9a9a95;margin:0 0 22px;font-size:14px}
+ .tag{display:inline-block;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:#9a9a95;border:1px solid #2b2b2b;border-radius:4px;padding:2px 7px;margin-right:6px}
+ h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:#8a8a85;margin:26px 0 9px;font-weight:600}
+ pre{background:#0d0d0d;border:1px solid #232323;border-radius:4px;padding:14px 16px;overflow:hidden;
+     font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#d9d9d4;white-space:pre-wrap;margin:0}
+ table{width:100%;border-collapse:collapse;font-size:13.5px}
+ td,th{text-align:left;padding:8px 10px;border-bottom:1px solid #232323;vertical-align:top}
+ th{color:#8a8a85;font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase}
+ .live{color:#35B888;font-weight:600} .block{color:#d98a5a;font-weight:600} .gate{color:#9a9a95;font-weight:600}
+ .note{color:#8a8a85;font-size:12.5px;margin-top:9px}
+</style>
+<main>
+<h1>UNICA — evidence</h1>
+<p class="sub">Captured from this repository at commit <b>8bf4115</b> on 2026-09-09. Every line below is
+real output from the command named above it, pasted verbatim. Nothing here is a mock-up.</p>
+<span class="tag">Binary hash: 0e5079e0f565884859efe1ed2914c1cbaf5f2c4caaf3cbe86a304db567ab657d</span><span class="tag">Config hash: bece38e7321bab5f104f7db19277b54b216940b97ce842960e0c65a85681769d</span>
+
+<h2>Chainlink CRE — confidential workflow, real simulator output</h2>
+<pre>$ cre workflow simulate workflow --target staging-settings --env workflow/.env
+│ Handler requested TEE Execution                                                                    │
+│ The simulator is not a real TEE, and is meant to debug.                                            │
+│ Do not use it for sensitive information.                                                           │
+│ During real execution, user logs for this trigger will not be visible, and will not leave the TEE. │
+│ They are presented in the simulator for debugging only.                                            │
+│                                                                                                    │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+2026-09-08T22:35:00Z [USER LOG] unica-guardian-secrets-loaded
+2026-09-08T22:35:00Z [USER LOG] unica-guardian-decision:RESTORE_MINIMUM_RESERVE
+
+✓ Workflow Simulation Result:
+"{\"workflowVersion\":\"unica-treasury-guardian/1.0.0\",\"policyVersion\":1,\"policyCommitment\":\"0x130c183e3896db39\",\"actionClass\":\"RESTORE_MINIMUM_RESERVE\",\"reason\":\"RESERVE_SHORTFALL\",\"amount\":\"10000000\",\"bounded\":true,\"permittedToken\":\"0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238\",\"permittedTarget\":\"0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238\",\"permittedSelector\":\"0xa9059cbb\",\"observedAtBlock\":\"0\",\"observedAtUnix\":\"1788921300\",\"sequence\":\"1788921300\",\"expiryUnix\":\"1788922200\",\"evidenceGrade\":\"CRE_CONFIDENTIAL_SIMULATION\",\"calldata\":\"0xa9059cbb000000000000000000000000a50802fbcafc5af3d0093026d301a82ec341652a0000000000000000000000000000000000000000000000000000000000989680\"}"
+
+2026-09-08T22:35:00Z [SIMULATION] Execution finished signal received
+2026-09-08T22:35:00Z [SIMULATION] Skipping WorkflowEngineV2</pre>
+<p class="note">The five private policy values load inside the handler. The published result carries a policy
+commitment, an action class and a reason category — <b>no threshold appears in any field</b>. The CLI states
+plainly that its simulator is not a real TEE; nothing here has executed in an enclave, which is why the
+workflow stamps <code>CRE_CONFIDENTIAL_SIMULATION</code> on its own output and never <code>TEE_ATTESTED</code>.</p>
+
+<h2>Sponsor status — what is live, what is not</h2>
+<table>
+<tr><th>Track</th><th>State</th><th>What is true</th></tr>
+<tr><td>Uniswap v4 settlement</td><td class="live">LIVE</td><td>Deployed and source-verified on Ethereum Sepolia, one settlement receipted. <code>make proof</code> 14/14 + 31/31.</td></tr>
+<tr><td>Chainlink CRE</td><td class="gate">SIMULATED</td><td>Runs in Chainlink's own simulator, which is not a real TEE. Deploy access requested, pending review.</td></tr>
+<tr><td>ENSv2</td><td class="gate">OWNER-GATED</td><td>Live Sepolia reads, Permissioned Resolver and access control exercised. <b>UNICA owns no ENS name</b> — live rows read a name somebody else registered.</td></tr>
+<tr><td>The Graph</td><td class="gate">OWNER-GATED</td><td>Subgraph not deployed. <b>No successful live read has ever been observed.</b></td></tr>
+<tr><td>Arc / Circle USDC</td><td class="gate">OWNER-GATED</td><td>Treasury flow and console read live Arc. <b>Nothing broadcast; no UNICA contract on Arc; no swap path there.</b></td></tr>
+<tr><td>UNICA V2</td><td class="block">FROZEN &amp; BLOCKED</td><td>v2.0.0-rc1, blocked by an open Critical we found, reproduced and published ourselves.</td></tr>
+</table>
+<p class="note">Gate at this commit: 182 Solidity tests, 82 Vyper, 1,543 JavaScript rows across 14 suites.</p>
+</main>
