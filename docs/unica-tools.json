@@ -575,7 +575,7 @@
     {
       "id": "web-checkout-surface",
       "name": "Web Checkout Surface",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "status": "PROTOTYPE",
       "paths": [
         "web/index.html",
@@ -602,7 +602,7 @@
         "ens",
         "uniswap"
       ],
-      "lastVerifiedCommit": "0845dec9ea015d6febed2cfbbcc641c1754ee28d"
+      "lastVerifiedCommit": "a525153898904611b01765ad4146b574f614c140"
     },
     {
       "id": "v2-settlement-indexer",
