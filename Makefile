@@ -133,10 +133,13 @@ endef
 gate     : _need-deps
 	@# The fork suites are excluded on purpose. They need somebody else's endpoint, and a gate that
 	@# depends on a third party's uptime is not a gate — it is a status page. `make fork` runs them.
-	@# test/compat/ is excluded for the same reason and was missed when it was added: it forks THREE
-	@# chains, so without this line every `make gate` opened sockets to Sepolia, Unichain and
-	@# Robinhood. Caught by the adversarial verifier, not by the gate going red.
-	forge build && forge test --no-match-path '{test/fork/*,test/compat/*}' && forge fmt --check
+	@# test/compat/ and test/v3/DeploymentsV3Fork.t.sol are excluded for the same reason and were both
+	@# missed when they were added: between them they fork five chains, so every `make gate` opened
+	@# sockets to Sepolia, Unichain, Arbitrum and Robinhood. The v3 file is the worse of the two,
+	@# because its try/catch guards fork CREATION while the rate limiter answers later, on the storage
+	@# reads, which nothing catches — so the gate went red on somebody else's 429 and green on retry.
+	@# Both were caught by an adversarial reader, never by the gate going red on its own.
+	forge build && forge test --no-match-path '{test/fork/*,test/compat/*,test/v3/DeploymentsV3Fork.t.sol}' && forge fmt --check
 	bash script/scan.sh
 	bash script/no-copied-source.sh
 	bash script/size-budget.sh
