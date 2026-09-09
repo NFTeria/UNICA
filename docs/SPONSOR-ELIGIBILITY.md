@@ -112,6 +112,11 @@ Remaining: a Subgraph Studio deploy key. The live proof command **fails closed**
 prints which variable is missing and exits non-zero. An offline run cannot be mistaken for a live
 one, which is the whole point.
 
+> **UPDATE, 2026-09-09.** The **V1** subgraph is deployed and synced — endpoint in `README.md`'s
+> dated block, `hasIndexingErrors: false`, one `Settlement` returned whose amounts match the raw
+> log. `integrations/graph-v2/` is the one still undeployed, and not on a credential: it subscribes
+> to V2's `QuoteSettled` and V2 is deployed nowhere.
+
 ### 4. ENS — Best Use of ENSv2 (From Scratch)
 
 **Status: `LIVE READ` — the integration is complete and runs against live ENSv2 Sepolia**
@@ -142,6 +147,14 @@ is refused rather than approximated.
 a *merchant* owns; owning one ourselves would be a demo prop. Every live row reads a name somebody
 else registered, discovered from the chain rather than hard-coded, which is a stronger demonstration
 than pointing at a name we control.
+
+> **CORRECTION, 2026-09-09.** The paragraph above is no longer true and is kept rather than deleted,
+> because the reasoning in it still holds and the change is worth seeing. `unica.eth` **is** now
+> registered on ENSv2 **Sepolia** to this project's deployer, and the delegation is broadcast —
+> 12 transactions, blocks 11670554–11670579, all `status 1`. The rows that read a third party's name
+> still run and still matter: resolution is not hard-coded to a name we hold. What we now
+> additionally have is the *merchant* side, which needed a name we control to demonstrate at all.
+> **Sepolia only.** ENSv2's registries hold zero bytes on mainnet; no mainnet name is claimed.
 
 ### 5. Arc — Best DeFi / Onchain Finance Application
 

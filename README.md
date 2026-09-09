@@ -8,6 +8,18 @@ receipt event. UNICA composes Uniswap v4 hooks and official execution infrastruc
 verifiable settlement flow with enforceable order invariants and indexable receipts. Built from
 scratch during ETHOnline 2026 by **NFTeria**.
 
+> ### Live right now
+>
+> | | |
+> |---|---|
+> | **App** | **https://nfteria.github.io/UNICA/** |
+> | **Settled swap** | [`0x1120af18…cb83`](https://sepolia.etherscan.io/tx/0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83) — 0.001 ETH in, 2.003660 USDC out, receipt emitted inside the swap |
+> | **Subgraph** | `https://api.studio.thegraph.com/query/1755384/unica-settlements/v1-632f2e3` — synced, returns that receipt |
+> | **ENSv2** | `unica.eth` on **Sepolia**, delegation broadcast in 12 transactions, all `status 1` |
+> | **The scope, provable** | `node integrations/ensv2/agent.mjs` — 6 rows, 5 of them refusals |
+>
+> Testnet only. Detail and what is **not** claimed: [What changed on 2026-09-09](#what-changed-on-2026-09-09--appended-not-rewritten).
+
 **The name.** *Unica* is Latin for *one of a kind*. It is the name, and it is meant as one — not
 as a claim about the software. Nothing in this repository asserts that UNICA is the first or the
 only anything; where prior art exists it is named in [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md) and
@@ -86,7 +98,7 @@ carried forward from an earlier one.
 | V2 receipt verifier | locally demonstrated + fork-tested | `tools/unica-verify`, 113 rows with no endpoint at all; 9 more with one | the settlement it verifies exists only inside a local fork |
 | V2 signing tool | locally demonstrated | `tools/unica-sign`, 81 rows | builds and reads; never broadcasts |
 | ENSv2 identity chain | **locally demonstrated end-to-end** | `integrations/ensv2`, 136 + 95 rows, `node integrations/ensv2/demo.mjs` | every stage is a local fixture or computation; the policy registry is deployed nowhere. The 95-row suite crashed at row 30 and had never run to completion until 2026-09-08 |
-| V2 Graph indexer | locally demonstrated | 13 matchstick + 17 manifest checks | **not deployed to Subgraph Studio** — owner gate |
+| V2 Graph indexer | locally demonstrated | 13 matchstick + 17 manifest checks | **not deployed** — it subscribes to V2's `QuoteSettled` and V2 is deployed nowhere. The **V1** indexer IS deployed and live; see the 2026-09-09 block below |
 | Chainlink CRE policy | locally demonstrated | `integrations/chainlink-cre-guardian`, 88 rows, 9 mutations | **LOCAL SIMULATION only**; no workflow deployed |
 | Chainlink CRE adapter | locally demonstrated | 86 rows, 10 mutations | **deployment BLOCKED** — see the Chainlink section |
 | Circle Arc nanopayments | locally demonstrated | `integrations/arc-nanopayments`, 141 rows | paid tool and agent loop not built; nothing settled |
@@ -288,6 +300,24 @@ be read as a V2 capability on any chain.
 | Limitations | one input, one payout, one chain, exact-input only, no merchant identity — the full list is in [`docs/versions/V1.md`](docs/versions/V1.md) |
 
 [`CHANGELOG.md`](CHANGELOG.md) records what has landed since the release.
+
+## What changed on 2026-09-09 — appended, not rewritten
+
+Three things below this line went from prepared to live. Everything earlier in this file stays as
+written; where it now disagrees with this block, this block is the later reading and the chain is
+the arbiter of both.
+
+| | Now |
+|---|---|
+| **Public surface** | **https://nfteria.github.io/UNICA/** — live, HTTP 200. One page: the flow told in six sections, then the settlement action. Three panels read live chain state — the hook's permission bits (computed from its address, no RPC call), the settled swap (from the subgraph), the agent's four role words (from the ENSv2 resolver) |
+| **ENSv2** | `unica.eth` is registered on **Sepolia** to the deployer, and the delegation is **broadcast**: 12 transactions, blocks 11670554–11670579, every one `status 1`. The agent holds `SET_TEXT` at exactly one per-key resource and **0** at the name, the payment name and ROOT_RESOURCE |
+| **The Graph** | The V1 subgraph is **deployed and synced** at `https://api.studio.thegraph.com/query/1755384/unica-settlements/v1-632f2e3`, `hasIndexingErrors: false`. It returns one `Settlement`: `amountIn 1000000000000000`, `amountOut 2003660`, `fee 0` — the values decoded from the raw log, and an entity id that is the transaction hash followed by log position `0x6b` = 107 |
+| **The agent** | `node integrations/ensv2/agent.mjs` — six rows against the live resolver, **five of them refusals**, control first. It broadcasts nothing: a refused transaction is one that does not exist, so `eth_call` is the only way those rows are observable |
+
+**Still not true, and not claimed:** no mainnet anything; V3 has settled nothing; V2 is deployed
+nowhere; the Chainlink workflow has never run in a TEE; the agent's key is not in this project's
+keystore, so no agent-signed transaction exists on chain.
+
 
 ## Proof: UNICA V3, one address on four chains (2026-09-09)
 

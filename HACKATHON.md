@@ -146,3 +146,36 @@ continuity and capital efficiency trade off.
   deployment, and the V2 deployment decision.
 - **Optional, post-hackathon:** EIP-1271 merchant signers, the payout-asset policy, additional
   chains. None is claimed.
+
+## 6. Ledger update — 2026-09-09
+
+Section 5 was recomputed on 2026-09-08 and two of its rows are now out of date. They are superseded
+here rather than edited above, so the record shows what was true when.
+
+### ENS — was PARTIAL, now LIVE ON CHAIN
+
+`unica.eth` is registered on **ENSv2 Sepolia** to the deployer, and the delegation plan was signed
+and broadcast: **12 transactions, blocks 11670554–11670579, every one `status 1`**. The agent holds
+`SET_TEXT` at one per-key resource and nothing at the name, the payment name or ROOT_RESOURCE — all
+four read back from the resolver. `node integrations/ensv2/agent.mjs` proves the scope from the
+chain in six rows, five of them refusals.
+
+**Sepolia only.** ENSv2's registry contracts hold **zero bytes of code on mainnet**, so this
+namespace exists on the testnet and nowhere else. No ownership of, affiliation with, or connection
+to any mainnet name is claimed — mainnet `unica.eth` is held by an unrelated third party.
+
+### The Graph — was PARTIAL/OWNER GATE, now INDEXED END TO END
+
+The **V1** subgraph is deployed to Subgraph Studio and synced with `hasIndexingErrors: false`. It
+indexes the live V1 hook from the block that hook first held code, and returns one `Settlement`
+whose three amounts match the values decoded from the raw log. The query was validated by making it
+fail — a filter for an amount that does not exist returns `[]`, so its non-empty answer means
+something.
+
+`integrations/graph-v2/` remains **not deployed** and is a different thing: it subscribes to V2's
+`QuoteSettled`, and V2 is deployed nowhere.
+
+### What did not change
+
+Uniswap, Chainlink and Circle read exactly as section 5 left them. The Chainlink workflow still runs
+only in the simulator and still stamps `CRE_CONFIDENTIAL_SIMULATION` on its own output.
