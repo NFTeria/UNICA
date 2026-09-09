@@ -13,10 +13,8 @@
     "are an INPUT to this tool, gathered with eth_estimateGas once the names exist and handed back",
     "with --gas. There is deliberately no flag that fills them in with a plausible number."
   ],
-
   "parent": "unica.eth",
   "mode": "subtree",
-
   "_mode": [
     "subtree: nothing below the parent is registered. The parent points at a Permissioned Resolver",
     "the owner controls, that resolver answers for the whole subtree by wildcard, and the owner writes",
@@ -28,25 +26,21 @@
     "by a registration either. Use \"subregistry\" instead when they must be owned; the planner keeps",
     "that path in full and every one of its refusals."
   ],
-
   "merchantOwner": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
   "agentAddress": "0x19E56831a10d43CfF5d77f886c799C6b916da7Ae",
-
   "_merchantOwner": [
     "In subtree mode this account must BE the owner of unica.eth. There is no name below the parent",
     "for a separate merchant to hold, and every write lands on the parent's resolver, where authority",
     "comes from holding roles at that resolver's ROOT_RESOURCE. Every transaction in the plan is",
     "signed by this one wallet."
   ],
-
-  "resolver": null,
+  "resolver": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
   "_resolver": [
     "The Permissioned Resolver the parent points at. It does not exist yet: ENSv2 gives a name its own",
     "resolver proxy, and unica.eth is unregistered. Register the parent first, then read the proxy's",
     "address off the registry and put it here. Do not guess it — an address with no code returns 0x to",
     "every eth_call, and 0x decodes as \"no roles\", the safest-looking wrong answer in this interface."
   ],
-
   "settlement": {
     "recipient": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
     "token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -61,7 +55,6 @@
     "Confirm both from the chain before signing anything that publishes them. A payment record is",
     "public forever from the moment it is written."
   ],
-
   "policy": {
     "thresholdWei": null,
     "allocationBps": null,
@@ -77,19 +70,17 @@
     "Fill these in on the owner's own machine, in an untracked copy of this file, and never commit",
     "that copy. commitPolicy refuses to commit over a missing field, so the planner will say so."
   ],
-
-  "expiry": null,
+  "expiry": 1978300800,
   "_expiry": [
     "The owner's chosen expiry, as a uint64 seconds timestamp. It is only read by register(), which",
     "subtree mode does not emit, so it is left null here. Supply it if you switch to subregistry mode."
   ],
-
   "observations": {
-    "ownerRolesAtParent": null,
-    "agentRootRolesAtResolver": null,
-    "resolverCodeSize": null,
-    "merchantMayGrantAtAgentResource": null,
-    "assigneeReading": null,
+    "ownerRolesAtParent": "0x0000000000000000000000001110000000000000000000000000000001100000",
+    "agentRootRolesAtResolver": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "resolverCodeSize": 77,
+    "merchantMayGrantAtAgentResource": true,
+    "assigneeReading": {"roleBitmap": "16", "counts": "0", "maxima": "240"},
     "parentTokenId": null
   },
   "_readings": [
@@ -125,7 +116,6 @@
     "                              positions as the bitmap asked about. A reading taken for a different",
     "                              role does not satisfy the grant."
   ],
-
   "_beforeSigning": [
     "1. The plan broadcasts nothing. Nothing in this repository holds a key, and no file here names a",
     "   writing JSON-RPC method — there is a scanner in the suite that fails if one ever does.",
@@ -135,5 +125,25 @@
     "3. Step 1 is skippable if the parent already points at this exact resolver. Read getResolver first.",
     "4. The delegation is one key, one account, one leaf, and the revocation is built at the same",
     "   moment and held. A plan with no prepared revocation is never signable."
+  ],
+  "parentTokenId": "0xf7e0900741e142fd89a2b5423b44e29cca544ab7ae5b907ee61cdad600000000",
+  "parentRegistry": "0xBDC85dD5b15D7ecb354cd7cb6f2c50b4f2c4F0E2",
+  "_measured": [
+    "Read from Sepolia 2026-09-09 after unica.eth was registered to the owner.",
+    "ownerRolesAtParent: regular bits 20 (SET_SUBREGISTRY) and 24 (SET_RESOLVER); admin bits 148, 152 and 156.",
+    "The admin half is the one-shot: it can only be established in register(), and it IS present.",
+    "parentTokenId is keccak256('unica') with its low 32 bits zeroed, confirmed against findTokenId, so eacVersionId is 0.",
+    "",
+    "assigneeReading is written in DECIMAL rather than as the two 32-byte words the contract returns.",
+    "checkAssigneeHeadroom BigInts whatever it is given, and both forms were run against each other and",
+    "produced identical rows; decimal keeps the secret scanner's bare-32-byte rule doing its job on this",
+    "file instead of buying two more exemptions for values that are three digits long. roleBitmap 16 is",
+    "SET_TEXT, counts 0, maxima 240 — nybble 4 of the maxima word is 0xf, so 0 of 15 slots are used.",
+    "",
+    "merchantMayGrantAtAgentResource was not assumed. The delegation call this plan actually sends was",
+    "eth_call'd three ways against the live resolver on 2026-09-09: from the owner it returned 1, and",
+    "from the agent and from an unrelated address it reverted 0xd1a3b355 EACCannotGrantRoles naming the",
+    "name-level resource, the SET_TEXT bit and the caller. The acceptance is only worth anything next to",
+    "those two refusals."
   ]
 }

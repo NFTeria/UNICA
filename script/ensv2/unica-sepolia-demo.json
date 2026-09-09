@@ -1,0 +1,91 @@
+{
+  "_what": [
+    "THE HACKATHON DEMONSTRATION CONFIGURATION. It is `unica-sepolia.json` with one difference: the",
+    "four policy values are filled in, so the planner produces a complete, signable plan that anybody",
+    "can reproduce without holding a merchant's real numbers.",
+    "",
+    "    node script/ensv2/plan.mjs --config script/ensv2/unica-sepolia-demo.json",
+    "",
+    "Add --gas to make it signable; the estimates are an input and the row below says which.",
+    "",
+    "THE POLICY VALUES BELOW ARE HACKATHON DEMONSTRATION VALUES. They exist so the commitment and",
+    "verification flow is reproducible by a reviewer. They are not a production financial policy, they",
+    "are not a recommendation, and no merchant's real threshold, allocation, reserve or salt appears in",
+    "this repository at any commit. A real deployment fills these in on the owner's own machine, in an",
+    "untracked copy, and publishes only the digest."
+  ],
+  "parent": "unica.eth",
+  "mode": "subtree",
+  "_testnetOnly": [
+    "`unica.eth` here is an ENSv2 name on SEPOLIA, registered by this project's deployer on 2026-09-09.",
+    "ENSv2's registry contracts hold zero bytes of code on Ethereum mainnet, so this namespace exists on",
+    "the testnet and nowhere else. UNICA claims no ownership of, affiliation with, or connection to any",
+    "mainnet name, `unica.eth` included; the mainnet name is held by an unrelated third party."
+  ],
+  "merchantOwner": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+  "agentAddress": "0x19E56831a10d43CfF5d77f886c799C6b916da7Ae",
+  "resolver": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+  "parentRegistry": "0xBDC85dD5b15D7ecb354cd7cb6f2c50b4f2c4F0E2",
+  "parentTokenId": "0xf7e0900741e142fd89a2b5423b44e29cca544ab7ae5b907ee61cdad600000000",
+  "expiry": 1978300800,
+  "settlement": {
+    "recipient": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+    "token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    "executor": "0x044bc8a8773EC7b9B8de2467766636dFFCaC6210"
+  },
+  "policy": {
+    "thresholdWei": "1000000",
+    "allocationBps": "2500",
+    "reserveWei": "5000000",
+    "salt": "0x756e696361000000000000000000000000000000000000000000000000000000"
+  },
+  "_policy": [
+    "HACKATHON DEMO POLICY VALUES — see the header. In plain English, and matching how roles.mjs",
+    "actually uses each field:",
+    "",
+    "  thresholdWei   1000000    the smallest settlement the treasury policy acts on at all. Below it,",
+    "                            nothing is swept and nothing is reallocated. Denominated in the payout",
+    "                            token's own base units, which for Sepolia USDC (6 decimals) is 1.00 USDC.",
+    "  allocationBps  2500       the share of a settlement the policy is willing to move, in basis",
+    "                            points. 2500 is 25%.",
+    "  reserveWei     5000000    the floor the treasury is never taken below, in the same base units:",
+    "                            5.00 USDC. A reserve ABOVE the threshold is deliberate here — it is the",
+    "                            case that exercises the floor, because a policy whose reserve is smaller",
+    "                            than its trigger never has to refuse anything.",
+    "  salt           bytes32(\"unica\")   the blinding value. Without it the commitment is a keccak over",
+    "                            a small space of round numbers and anyone could brute-force the inputs.",
+    "                            A real one is random and secret; this one is the ASCII of the project",
+    "                            name, right-padded, precisely so a reviewer can recompute the digest.",
+    "",
+    "Only the DIGEST is ever written on chain. commitPolicy returns the digest and the scheme string and",
+    "keeps nothing else, and the values above never appear in any transaction in the plan."
+  ],
+  "observations": {
+    "ownerRolesAtParent": "0x0000000000000000000000001110000000000000000000000000000001100000",
+    "agentRootRolesAtResolver": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "resolverCodeSize": 77,
+    "merchantMayGrantAtAgentResource": true,
+    "assigneeReading": {"roleBitmap": "16", "counts": "0", "maxima": "240"},
+    "parentTokenId": null
+  },
+  "_observations": [
+    "Every value here was read from Sepolia on 2026-09-09 at block 11670203 and none of it is a fixture.",
+    "The commands are in `_readings` of unica-sepolia.json; re-run them and the plan should not move.",
+    "",
+    "The one that is a simulation rather than a read is merchantMayGrantAtAgentResource: the delegation",
+    "call was eth_call'd from the owner (returned 1), from the agent and from an unrelated address (both",
+    "reverted 0xd1a3b355). One acceptance next to two refusals — the acceptance alone would only prove",
+    "the call is well formed."
+  ],
+  "_gas": [
+    "Estimated from Sepolia on 2026-09-09 with eth_estimateGas, from the merchant owner, against live",
+    "state. Pass them back in verbatim to make the plan signable:",
+    "",
+    "  --gas 1=37983,3=65547,4=66432,5=112968,6=113004,7=66420,8=136261,9=207416,10=112859,11=65547,12=66541,13=257888,14=93566",
+    "",
+    "Step 1 is the setResolver, and it is already satisfied on chain: getResolver(\"unica\") returns this",
+    "file's resolver today, so that row is a re-send rather than a change. It is kept in the plan and",
+    "estimated anyway, because a plan that silently drops a step is a plan whose preview stops matching",
+    "what a signer would send."
+  ]
+}
