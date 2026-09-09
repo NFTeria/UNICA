@@ -33,3 +33,41 @@ int_types       = "long"
 # the count is high and CI runs the same number. Lowering it is a change that needs a reason.
 [fuzz]
 runs = 10000
+
+# ---- RPC endpoints -----------------------------------------------------------------------------
+# `cast --rpc-url robinhood_testnet` and `forge script --rpc-url unichain_sepolia` resolve from
+# here, so a chain is named once and never pasted into a command again.
+#
+# EVERY ENTRY IS AN ENVIRONMENT REFERENCE, NEVER A URL. A provider endpoint carries its API key in
+# the path, which makes the whole URL a credential — and this repository is public. `${VAR}` keeps
+# the value in .env (gitignored, chmod 600) where `script/rpc-setup.sh` puts it, and keeps this
+# file safe for anyone to read.
+#
+# EVERY ALIAS IS A BARE ${VAR}, AND THAT IS DELIBERATE. Foundry has no `${VAR:-default}` syntax —
+# it reads the whole `VAR:-https://...` as ONE variable name and fails with "environment variable
+# not found". This file carried that mistake briefly and every alias was dead; `script/rpc-setup.sh`
+# now guarantees a value exists instead, writing the keyless public endpoint when you do not supply
+# one. Those public endpoints are rate-limited and demonstrably flaky under load — see
+# docs/proof/retry.sh for what that cost — so supply real ones for anything that matters.
+#
+# THE MAINNET ENTRIES HAVE NO FALLBACK, DELIBERATELY. UNICA is testnet-only: nothing in this
+# repository has ever been deployed to or broadcast on a mainnet, and `script/mainnet-guard.sh`
+# refuses one by chain id. The aliases exist so a READ against mainnet is possible — comparing a
+# deployed router's bytecode against the mainnet build is exactly the kind of check this project
+# does — and an unset variable simply fails rather than silently reaching a public mainnet node.
+[rpc_endpoints]
+# --- TESTNETS. Every one of these is a testnet and its name says so. ---
+sepolia_testnet    = "${SEPOLIA_TESTNET_RPC_URL}"
+arbitrum_testnet   = "${ARBITRUM_TESTNET_RPC_URL}"
+base_testnet       = "${BASE_TESTNET_RPC_URL}"
+unichain_testnet   = "${UNICHAIN_TESTNET_RPC_URL}"
+robinhood_testnet  = "${ROBINHOOD_TESTNET_RPC_URL}"
+arc_testnet        = "${ARC_TESTNET_RPC_URL}"
+
+# --- MAINNETS. Read-only comparison. No fallback, so an unset one fails instead of
+#     quietly reaching a public mainnet node. script/mainnet-guard.sh refuses these by chain id. ---
+ethereum_mainnet   = "${ETHEREUM_MAINNET_RPC_URL}"
+arbitrum_mainnet   = "${ARBITRUM_MAINNET_RPC_URL}"
+base_mainnet       = "${BASE_MAINNET_RPC_URL}"
+unichain_mainnet   = "${UNICHAIN_MAINNET_RPC_URL}"
+robinhood_mainnet  = "${ROBINHOOD_MAINNET_RPC_URL}"
