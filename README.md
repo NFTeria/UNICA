@@ -365,6 +365,13 @@ all three. Deployed and bound is the rung they reach.
 
 ## Proof: UNICA V3, one address on four chains (2026-09-09)
 
+> **SUPERSEDED IN ONE RESPECT, 2026-09-10.** Everything in this section about deployment, binding
+> and verification still holds and is still re-proved by the script it names. Its headline claim
+> that V3 has settled nothing is **no longer true of Ethereum Sepolia** — `receiptCount()` there is
+> 1, and the block above titled "V3 has settled" carries the four transaction hashes. It remains
+> true of Unichain, Base and Arbitrum Sepolia. The body is left exactly as it was written, because
+> the record of what was believed when is worth more than a tidy page.
+
 **V3 is DEPLOYED and BOUND on four testnets, and it has SETTLED NOTHING.** `receiptCount()` on the
 hook and `orderCount()` on the executor are **0 on all four chains** — re-read on every run of the
 script below, printed as values rather than asserted as a pass. Nothing has been swapped, settled or
