@@ -148,7 +148,7 @@
     {
       "id": "v1-graph-indexer",
       "name": "V1 Graph Indexer",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "status": "IMPLEMENTED — LOCAL TESTS",
       "paths": [
         "integrations/graph/subgraph.yaml",
@@ -575,7 +575,7 @@
     {
       "id": "web-checkout-surface",
       "name": "Web Checkout Surface",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "status": "PROTOTYPE",
       "paths": [
         "web/index.html",

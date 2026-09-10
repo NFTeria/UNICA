@@ -17,7 +17,7 @@ scratch during ETHOnline 2026 by **NFTeria**.
 > | **App** | **https://nfteria.github.io/UNICA/** |
 > | **V1 settled swap** | [`0x1120af18…cb83`](https://sepolia.etherscan.io/tx/0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83) — 0.001 ETH in, 2.003660 USDC out |
 > | **V3 settled swap** | [`0x4f4acbd1…8854`](https://sepolia.etherscan.io/tx/0x4f4acbd1b1ed07eccbcf0d7c6f6fcb23a397b619dd3a1dd7fcf7ed7456768854) — 0.001 ETH in, **2.216294 USDC** out, `receiptCount` 1 |
-> | **Subgraph** | `https://api.studio.thegraph.com/query/1755384/unica-settlements/v1-632f2e3` — synced, returns that receipt |
+> | **Subgraph** | `https://api.studio.thegraph.com/query/1755384/unica-settlements/v2-39b6f91` — synced, indexes **both** hooks, returns both receipts |
 > | **ENSv2** | `unica.eth` on **Sepolia**, delegation broadcast in 12 transactions, all `status 1` |
 > | **The scope, provable** | `node integrations/ensv2/agent.mjs` — 6 rows, 5 of them refusals |
 >
@@ -315,7 +315,7 @@ the arbiter of both.
 |---|---|
 | **Public surface** | **https://nfteria.github.io/UNICA/** — live, HTTP 200. One page: the flow told in six sections, then the settlement action. Three panels read live chain state — the hook's permission bits (computed from its address, no RPC call), the settled swap (from the subgraph), the agent's four role words (from the ENSv2 resolver) |
 | **ENSv2** | `unica.eth` is registered on **Sepolia** to the deployer, and the delegation is **broadcast**: 12 transactions, blocks 11670554–11670579, every one `status 1`. The agent holds `SET_TEXT` at exactly one per-key resource and **0** at the name, the payment name and ROOT_RESOURCE |
-| **The Graph** | The V1 subgraph is **deployed and synced** at `https://api.studio.thegraph.com/query/1755384/unica-settlements/v1-632f2e3`, `hasIndexingErrors: false`. It returns one `Settlement`: `amountIn 1000000000000000`, `amountOut 2003660`, `fee 0` — the values decoded from the raw log, and an entity id that is the transaction hash followed by log position `0x6b` = 107 |
+| **The Graph** | The V1 subgraph is **deployed and synced** at `https://api.studio.thegraph.com/query/1755384/unica-settlements/v2-39b6f91`, `hasIndexingErrors: false`. It returns one `Settlement`: `amountIn 1000000000000000`, `amountOut 2003660`, `fee 0` — the values decoded from the raw log, and an entity id that is the transaction hash followed by log position `0x6b` = 107 |
 | **The agent** | `node integrations/ensv2/agent.mjs` — six rows against the live resolver, **five of them refusals**, control first. It broadcasts nothing: a refused transaction is one that does not exist, so `eth_call` is the only way those rows are observable |
 
 **Still not true, and not claimed:** no mainnet anything; V3 has settled nothing; V2 is deployed
@@ -353,6 +353,11 @@ is what makes a V3 deployment visible to everything built for V1.
 sequence against live Sepolia state and the deployed contracts, and printed `2216294`. The chain
 then produced 2216294. Nothing was deployed to achieve it: the hook, the executor, the PoolManager
 and the liquidity router were all already there.
+
+**The Graph carries it too.** The subgraph was extended to a second data source at V3's hook and
+redeployed — no chain transaction, the same event signature and the same handler, all 6 matchstick
+tests still green. It now returns two settlements: V1's `2003660` and V3's `2216294`. The V3 entity
+id ends `6c000000` — `0x6c` = 108, the exact log position the receipt was emitted at.
 
 **Still not claimed:** V3 is exercised on **Ethereum Sepolia only**. Unichain, Base and Arbitrum
 Sepolia carry the same address, are verified, and have settled nothing — `receiptCount()` is 0 on

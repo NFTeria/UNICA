@@ -256,9 +256,9 @@ const CFG = {
   release: { tag: "live-green", commit: "5e1d843" },
   amountIn: 10n ** 15n, // the fixed 0.001 ETH input of every order this page registers
   receiptTx: "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83", // the canonical receipt
-  // The subgraph that indexes the hook above. Deployed to Subgraph Studio 2026-09-09; the version
+  // The subgraph that indexes BOTH settlement hooks, V1 and V3. Redeployed 2026-09-10; the version
   // is in the path, so a redeploy is a new URL and a stale one fails loudly rather than quietly.
-  subgraph: "https://api.studio.thegraph.com/query/1755384/unica-settlements/v1-632f2e3",
+  subgraph: "https://api.studio.thegraph.com/query/1755384/unica-settlements/v2-39b6f91",
   // ENSv2 on Sepolia. `unica.eth` is a TESTNET name registered by this project's deployer; ENSv2's
   // registries hold zero bytes on mainnet, and no ownership of or affiliation with any mainnet name
   // is claimed. The three resource ids are derived from the names and are recomputable by anyone.

@@ -3,6 +3,10 @@
     "V4SettlementHook": {
       "address": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0",
       "startBlock": 11639895
+    },
+    "UnicaHookV3": {
+      "address": "0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0",
+      "startBlock": 11667702
     }
   }
 }
