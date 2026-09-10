@@ -28,3 +28,6 @@ package-lock.json
 # same defect docs/unica-tools.json met before it. Formatting is not worth a gate that stops working.
 scripts/public-build.manifest.json
 docs/unica-tools.json
+# One row per line by requirement: script/scan.sh refuses a bare 32-byte value whose line carries
+# no label word, and each row's feature name IS that label. A reflow would orphan the pool id.
+apps/web/tests/parity.matrix.json
