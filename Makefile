@@ -11,7 +11,7 @@
 # chain id (one address on every chain), and a bare chain 31337 has no PoolManager to resolve.
 -include .env
 
-.PHONY: help all deps doctor build test fuzz snapshot format fmt gate gate-live clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
+.PHONY: help all deps doctor scan-key scan-key-check build test fuzz snapshot format fmt gate gate-live clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
         rehearse deploy init-pool seed settle topup live readback verify balances _need-deployer _need-signing \
         predict-v3 deploy-v3 deploy-v3-check _deploy-v3-broadcast _need-v3-chain _need-v3-signing \
         proof-v3 proof-v3-offline proof-v3-self-test proof-v3-etherscan
@@ -105,6 +105,23 @@ deps:
 	@test "$$(git -C lib/uniswap-hooks rev-parse HEAD)" = "$(PIN_COMMIT)" \
 	  || { echo "lib/uniswap-hooks is not at $(PIN_TAG) ($(PIN_COMMIT)); run: git submodule update --init --recursive --checkout"; exit 1; }
 	@echo "deps: uniswap-hooks at $(PIN_TAG) = $(PIN_COMMIT); v4-core, v4-periphery, hookmate, forge-std present"
+
+# ── explorer API keys ─────────────────────────────────────────────────────────────────────────
+#
+# An explorer key is a credential and this repository is public, so it follows the same rule the
+# RPC endpoints already do: the VALUE lives only in .env (gitignored, chmod 600) and everything
+# else names the VARIABLE. The prompt is interactive and silent on purpose — a key passed as an
+# argument is visible to `ps` and lands in the shell history, which is a leak with a long tail.
+#
+# Robinhood's testnet explorer answered read-only API calls WITHOUT a key on 2026-09-10; the key
+# is for rate limits, not access. Say so rather than implying the reads depend on it.
+.PHONY: scan-key scan-key-check
+scan-key:
+	@bash script/scan-key-setup.sh
+
+# Reports which keys are set and how long they are. Never a value.
+scan-key-check:
+	@bash script/scan-key-setup.sh --check
 
 doctor:
 	@echo "== toolchain"
