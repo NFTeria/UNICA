@@ -153,7 +153,7 @@ gate     : _need-deps
 	@# because its try/catch guards fork CREATION while the rate limiter answers later, on the storage
 	@# reads, which nothing catches — so the gate went red on somebody else's 429 and green on retry.
 	@# Both were caught by an adversarial reader, never by the gate going red on its own.
-	forge build && forge test --no-match-path '{test/fork/*,test/compat/*,test/v3/DeploymentsV3Fork.t.sol}' && forge fmt --check
+	forge build && forge test --no-match-path '{test/fork/*,test/compat/*,test/v3/DeploymentsV3Fork.t.sol,test/v3/LiveFireV3Fork.t.sol}' && forge fmt --check
 	bash script/scan.sh
 	bash script/no-copied-source.sh
 	bash script/size-budget.sh
