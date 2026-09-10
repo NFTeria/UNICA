@@ -259,6 +259,11 @@ gate     : _need-deps
 	@# and are deliberately NOT here: they need four endpoints. The self-test caught a real defect
 	@# in its own first draft — a row that went green because BOTH sides of its comparison had
 	@# failed to evaluate — which is the whole argument for gating it rather than trusting it.
+	@# Six statements about chain 46630 this repository has already had to correct once. Offline:
+	@# no network, no chain call. The self-test runs FIRST because a claim check that cannot fire is
+	@# worse than none — it reports green over whatever the tree actually says.
+	bash script/check-robinhood-claims.sh --self-test
+	bash script/check-robinhood-claims.sh
 	bash script/verify-v3.sh --self-test
 	bash script/verify-v3.sh --offline
 	@echo "gate: build, test, fmt-check, both scans, the ENS and Permit2 vectors, the signing tool,"
