@@ -710,20 +710,84 @@ function blockers() {
   return out;
 }
 
+// ── ONE WALLET REQUEST AT A TIME ──────────────────────────────────────────────────────────────
+// A browser wallet does not queue prompts. A second `eth_requestAccounts` sent while the first is
+// still open is refused with -32002, and the raw message it carries is worse than useless to a
+// payer: "Request of type 'wallet_requestPermissions' already pending for origin …" names an
+// internal method nobody clicked, for an origin they are already looking at, and offers no action.
+//
+// Two things went wrong to produce it. Nothing disabled the connect button while its own prompt was
+// open, so a second click sent a second request; and connecting then registering prompted TWICE by
+// construction, because createDemoOrder() asked for accounts again after connect() had just been
+// granted them. This gate closes the first and requireAccount() closes the second.
+//
+// eth_chainId and eth_accounts deliberately do NOT come through here. They prompt for nothing, they
+// run on every refresh, and gating them would stall the readback for as long as a prompt sat open.
+let walletBusy = false;
+async function walletRequest(req) {
+  if (walletBusy) {
+    const e = new Error("Your wallet already has a request open. Approve or dismiss it in the wallet window, then try again.");
+    e.handled = true;
+    throw e;
+  }
+  walletBusy = true;
+  try { return await window.ethereum.request(req); }
+  finally { walletBusy = false; }
+}
+
+// The account, without asking twice. If the page already read one out of eth_accounts, that IS the
+// connected account and prompting again buys nothing but a chance to collide.
+async function requireAccount() {
+  if (S.wallet.present && S.wallet.account) return S.wallet.account;
+  const accounts = await walletRequest({ method: "eth_requestAccounts" });
+  if (!accounts || !accounts.length) throw Object.assign(new Error("The wallet returned no account."), {handled: true});
+  return accounts[0];
+}
+
+// Wallet errors, said in words a payer can act on. Anything unrecognised falls through to the
+// wallet's own message rather than being swallowed — an unexplained failure must still be visible.
+function sayWallet(e) {
+  if (e && e.handled) return e.message;
+  const code = e && (e.code ?? (e.data && e.data.originalError && e.data.originalError.code));
+  if (code === 4001) return "You dismissed the wallet prompt, so nothing was sent.";
+  if (code === -32002) return "Your wallet already has a request open. Approve or dismiss it in the wallet window, then try again.";
+  if (code === 4902) return `Your wallet does not know ${CFG.chainName}; add the network in the wallet, then try again.`;
+  return e && e.message ? e.message : String(e);
+}
+
+// The message line the current view is using. renderNoLink puts its wallet errors in the drawer.
+const msgEl = () => $("#msg2") || $("#msg");
+function complain(e) {
+  const m = msgEl();
+  if (m) { m.textContent = sayWallet(e); m.className = "note bad"; }
+}
+
 const switchButton = () => S.wallet.present && S.wallet.chainId !== CFG.chainId
   ? `<button class="secondary" id="switch">Switch the wallet to ${CFG.chainName}</button>` : "";
 function wireSwitch() {
   const b = $("#switch"); if (!b) return;
   b.onclick = async () => {
     b.disabled = true;
-    try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CFG.chainIdHex }] }); }
-    catch (e) { const m = $("#msg"); if (m) { m.textContent = e && e.message ? e.message : String(e); m.className = "note bad"; } }
+    const was = b.textContent;
+    b.textContent = "Check your wallet…";
+    try { await walletRequest({ method: "wallet_switchEthereumChain", params: [{ chainId: CFG.chainIdHex }] }); }
+    catch (e) { complain(e); b.disabled = false; b.textContent = was; return; }
     await refresh();
   };
 }
-async function connect() {
-  try { await window.ethereum.request({ method: "eth_requestAccounts" }); }
-  catch (e) { const m = $("#msg"); if (m) { m.textContent = e && e.message ? e.message : String(e); m.className = "note bad"; } return; }
+
+// The button is disabled for as long as its own prompt is open. Without that, a second click sends a
+// second request and the wallet answers -32002 — which is the bug this whole block exists to remove,
+// so leaving the button live here would reintroduce it one function away from its own fix.
+async function connect(btn) {
+  const was = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Check your wallet…"; }
+  try { await walletRequest({ method: "eth_requestAccounts" }); }
+  catch (e) {
+    complain(e);
+    if (btn) { btn.disabled = false; btn.textContent = was; }
+    return;
+  }
   await refresh();
 }
 
@@ -894,7 +958,7 @@ function renderNoLink() {
       </div>
     </details>`;
   const btn = $("#make");
-  if (btn && !btn.disabled) btn.onclick = connected ? createDemoOrder : connect;
+  if (btn && !btn.disabled) btn.onclick = connected ? createDemoOrder : () => connect(btn);
   const dr = $("#merchant-drawer");
   if (dr) dr.addEventListener("toggle", () => { S.merchantOpen = dr.open; });
   wireMerchant();
@@ -962,7 +1026,7 @@ async function createDemoOrder() {
   btn.disabled = true;
   S.merchantOpen = true;
   try {
-    const [from] = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const from = await requireAccount();
     say("Re-reading the pool…");
     await reread();
     const quote = S.quote, shown = S.demo;
@@ -995,7 +1059,7 @@ async function createDemoOrder() {
     say(bound
       ? `Confirm in your wallet: one prompt, <code>createOrder</code>, payable to <span class="mono">${esc(bound.recipient)}</span>, carrying no ETH…`
       : "Confirm in your wallet: one prompt, <code>createOrder</code>, carrying no ETH…");
-    const hash = await window.ethereum.request({
+    const hash = await walletRequest({
       method: "eth_sendTransaction", params: [{ from, to: CFG.executor, data }]
     });
     say(`Registering… <a class="mono" href="${CFG.explorer}/tx/${hash}">${short(hash)}</a>`);
@@ -1007,7 +1071,7 @@ async function createDemoOrder() {
     location.search = "?order=" + log.topics[1];
   } catch (e) {
     btn.disabled = false;
-    say(esc(e && e.message ? e.message : String(e)), true);
+    say(esc(sayWallet(e)), true);
   }
 }
 
@@ -1058,7 +1122,7 @@ function renderOrder() {
       minimum below it is what the hook will actually enforce.</p>
     </div>`;
   const btn = $("#pay");
-  if (btn && !btn.disabled) btn.onclick = connected ? pay : connect;
+  if (btn && !btn.disabled) btn.onclick = connected ? pay : () => connect(btn);
   wireSwitch();
 }
 
@@ -1067,12 +1131,12 @@ async function pay() {
   const say = (html, bad) => { msg.innerHTML = html; msg.className = "note" + (bad ? " bad" : ""); };
   btn.disabled = true;
   try {
-    const [from] = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const from = await requireAccount();
     say("Re-reading the pool…");
     await reread();
     if (blockers().length || orderQuote(order) < order.minOut) { renderReadback(); return renderOrder(); }
     say(`Confirm in your wallet: one prompt, <code>pay(orderId)</code> carrying ${fmt(order.amountIn, 18, 6)} ETH…`);
-    const hash = await window.ethereum.request({
+    const hash = await walletRequest({
       method: "eth_sendTransaction",
       params: [{ from, to: CFG.executor, data: CFG.sel.pay + pad(orderId), value: "0x" + order.amountIn.toString(16) }]
     });
@@ -1085,7 +1149,7 @@ async function pay() {
     renderReceipt(decodeReceipt(log), hash);
   } catch (e) {
     btn.disabled = false;
-    say(esc(e && e.message ? e.message : String(e)), true);
+    say(esc(sayWallet(e)), true);
   }
 }
 
