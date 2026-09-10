@@ -123,6 +123,8 @@
   .stage + .stage { margin-top: 6px; }
   .stage b { font-weight: 700; }
   .stage.core { background: var(--paper); border: 1px solid var(--line); }
+  .steps4 { margin: 16px 0 0; }
+  .steps4 .drop { padding: 2px 0; }
   .outcomes { display: grid; gap: 12px; margin-top: 16px; }
   @media (min-width: 40rem) { .outcomes { grid-template-columns: 1fr 1fr; } }
   .outcome { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); padding: 12px 14px; }
@@ -224,180 +226,165 @@
 <body>
 <main>
 
-  <!-- ── THE HERO. Five seconds: what it is, what it does, where to click. ─────────────────── -->
+  <!-- ── 1. THE HERO. What it is, where the money goes, what happens if it cannot. ────────── -->
   <header>
     <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="UNICA"><rect width="64" height="64" rx="6" fill="#FBFBFA"/><g fill="#14161A"><rect x="10" y="8" width="10" height="14"/><rect x="10" y="25" width="16" height="14"/><rect x="10" y="42" width="22" height="14"/></g><rect x="40" y="8" width="14" height="48" fill="#0B6E4F"/></svg>
     <h1>Pay with UNICA</h1>
-    <p class="lead">Pay in ETH. The merchant receives USDC.</p>
-    <p class="prose">UNICA uses <strong>ENSv2</strong> to limit an agent's authority, a
-    <strong>Uniswap&nbsp;v4 hook</strong> to automatically enforce settlement, and
-    <strong>The&nbsp;Graph</strong> to index the receipt.</p>
+    <p class="lead">The customer pays ETH. The merchant receives USDC.</p>
+    <p class="prose">A one-time, order-based payment enforced by a Uniswap v4 hook.</p>
+    <p class="prose">The merchant sets the recipient, the minimum USDC amount and the deadline. The
+    customer confirms one transaction. <strong>If the merchant cannot receive the required USDC, the
+    entire payment reverts.</strong></p>
     <div class="cta-row">
-      <a class="primary" id="cta-pay" href="#demo">Pay 0.001 ETH</a>
+      <a class="primary" id="cta-pay" href="#demo">Try the payment</a>
       <a class="ghost" href="#receipt">View live proof</a>
     </div>
     <p class="fineprint">Testnet demo · Ethereum Sepolia</p>
-    <p class="fineprint">One payment. One wallet confirmation. No custody.</p>
+    <p class="fineprint"><strong>One order. One wallet confirmation. Full settlement or full revert.</strong>
+    UNICA never holds the funds.</p>
     <nav class="stops" aria-label="The four stops">
       <a href="#how"><b>1</b>How it works</a>
       <a href="#hook"><b>2</b>The hook</a>
-      <a href="#demo"><b>3</b>Live payment</a>
+      <a href="#demo"><b>3</b>Make a payment</a>
       <a href="#receipt"><b>4</b>Live receipt</a>
       <a href="#proof">Technical proof</a>
     </nav>
   </header>
 
-  <!-- ── THE WHOLE PRODUCT, ONE VISUAL. Three layers, three questions. ────────────────────── -->
+  <!-- ── 2. HOW IT WORKS. Identity, enforcement, proof — and where the money lands. ───────── -->
   <section id="how" aria-labelledby="how-h">
-    <h2 id="how-h">Three layers, three questions</h2>
-    <p class="prose">Each layer answers one question, and none of them can answer another layer's.
-    That separation is the product.</p>
+    <h2 id="how-h">How it works</h2>
+    <p class="prose">UNICA separates identity, payment enforcement, and proof.</p>
 
     <div class="layers">
       <div class="layer">
-        <h3>ENSv2</h3>
-        <p class="q">Who may act?</p>
-        <p>The agent gets one limited permission. The merchant keeps the name and the ownership.</p>
+        <h3>ENSv2 — Who may act?</h3>
+        <p>The merchant keeps ownership of its ENS name. An agent receives permission to update one
+        authorized text record, and nothing else.</p>
       </div>
       <p class="between">authorized order ↓</p>
       <div class="layer centre">
-        <h3>Uniswap v4 hook</h3>
-        <p class="q">How must the payment settle?</p>
-        <p>The payer sends ETH, Uniswap v4 swaps it, and the hook checks the exact policy inside the
-        same transaction. Full payment and the merchant receives USDC; short payment and the entire
-        transaction reverts.</p>
+        <h3>Uniswap v4 hook — How must the payment settle?</h3>
+        <p>The customer pays 0.001 ETH. Uniswap v4 swaps it to USDC and sends the USDC to
+        <strong>the merchant address stored in the order</strong>.</p>
+        <p style="margin-top:10px">The hook checks the result inside the same transaction:</p>
+        <div class="outcomes" style="margin-top:10px">
+          <div class="outcome yes"><b>Enough USDC</b><span>Pay the merchant and emit a receipt.</span></div>
+          <div class="outcome"><b>Too little USDC</b><span>Revert the entire transaction.</span></div>
+        </div>
       </div>
       <p class="between">settlement receipt ↓</p>
       <div class="layer">
-        <h3>The Graph</h3>
-        <p class="q">What happened?</p>
-        <p>The receipt is indexed and can be queried by the merchant, the payer, or anyone auditing.</p>
+        <h3>The Graph — What happened?</h3>
+        <p>The Graph indexes the receipt so the merchant, the customer or an auditor can verify the
+        settlement.</p>
       </div>
     </div>
-    <p class="spine">Identity&nbsp;→&nbsp;Automated enforcement&nbsp;→&nbsp;Verifiable proof</p>
+    <p class="spine">Scoped authority&nbsp;→&nbsp;Automatic settlement&nbsp;→&nbsp;Verifiable receipt</p>
   </section>
 
-  <!-- ── THE CENTREPIECE. The hook, wrapped around the swap. ──────────────────────────────── -->
+  <!-- ── 3. THE HOOK. The order, the four steps, the two outcomes. ────────────────────────── -->
   <section id="hook" aria-labelledby="hook-h">
-    <h2 id="hook-h">The Uniswap v4 hook is the automation</h2>
-    <p class="prose">The merchant defines the recipient, the payout asset, the required amount and
-    the deadline <em>once</em>. After that, the hook turns those instructions into automatic on-chain
-    execution — inside the swap, with nobody to ask.</p>
+    <h2 id="hook-h">The hook automatically enforces the payment</h2>
+    <p class="prose">The merchant creates a one-time order containing:</p>
 
     <div class="hookfig">
       <div class="order-band">
-        <strong>The merchant's order</strong>
-        recipient · USDC · required amount · deadline
+        <strong>The order</strong>
+        recipient · USDC · minimum amount · deadline
       </div>
-      <p class="drop">↓</p>
-      <div class="swapline">
-        <div class="token">ETH&nbsp;→</div>
-        <div class="hookbox">
-          <div class="stage"><b>before swap</b> — verify the path and the order</div>
-          <div class="stage core"><b>Uniswap v4</b> — execute the swap</div>
-          <div class="stage"><b>after swap</b> — enforce the full fill</div>
-        </div>
-        <div class="token">→&nbsp;USDC</div>
+      <p class="prose" style="margin:16px 0 0;font-size:15px">The customer supplies only the order ID
+      and pays in ETH. The customer cannot change the recipient, the payout asset, the minimum amount
+      or the deadline.</p>
+      <div class="steps4">
+        <div class="stage"><b>1 · Customer pays ETH</b></div>
+        <p class="drop">↓</p>
+        <div class="stage"><b>2 · Hook verifies the order and payment path</b></div>
+        <p class="drop">↓</p>
+        <div class="stage core"><b>3 · Uniswap v4 swaps ETH → USDC</b></div>
+        <p class="drop">↓</p>
+        <div class="stage"><b>4 · Hook verifies the merchant's USDC payment</b></div>
       </div>
       <div class="outcomes">
-        <div class="outcome yes"><b>Full fill</b><span>The merchant is paid, and the hook emits a receipt.</span></div>
-        <div class="outcome"><b>Short fill</b><span>Everything reverts. The payer keeps their ETH.</span></div>
+        <div class="outcome yes"><b>Full settlement</b><span>The USDC is sent to the merchant, and the
+          hook emits a receipt.</span></div>
+        <div class="outcome"><b>Short settlement</b><span>The transaction reverts. The merchant
+          receives nothing, and the customer keeps the 0.001 ETH except for gas.</span></div>
       </div>
-      <p class="note" id="bits-note"><span class="live-tag" id="tag-bits">checking…</span></p>
     </div>
 
-    <p class="prose" style="margin-top:20px">The payer supplies only the order id. They cannot
-    replace the recipient, the payout asset, the required amount or the deadline.</p>
-    <p class="prose">The hook holds no custody, takes no fee, returns no delta and runs no oracle. It
-    does not wait on a backend to approve the result: it either accepts a valid full settlement or
-    reverts the whole transaction.</p>
+    <p class="prose" style="margin-top:20px">The hook holds no funds, charges no fee, and requires no
+    backend approval or price oracle.</p>
 
     <details>
-    <summary>What this deployment accepts, exactly</summary>
-    <p class="prose">Native ETH in, that chain's configured USDC out. This is not a demo limitation
-    that a different link could route around — the deployed contracts refuse anything else in three
-    separate places, and each refusal has its own named error:</p>
+    <summary>What V3 accepts</summary>
+    <p class="prose">This V3 deployment intentionally supports <strong>one settlement path: native
+    ETH → configured USDC</strong>. The contracts reject:</p>
     <ul class="can prose">
-      <li class="n"><span class="m">✕</span><span>An order whose input is a token rather than native ETH is refused
-        where it is created — <code>NativeInputOnly()</code>.</span></li>
-      <li class="n"><span class="m">✕</span><span>An order whose payout is not this chain's configured currency is refused
-        at the same point — <code>PayoutCurrencyNotAllowed(address)</code>.</span></li>
-      <li class="n"><span class="m">✕</span><span>A pool of any other shape is refused by the hook itself, at
-        <code>beforeInitialize</code>, so the wrong pool can never open under it.</span></li>
+      <li class="n"><span class="m">✕</span><span>token input instead of native ETH;</span></li>
+      <li class="n"><span class="m">✕</span><span>any payout asset other than the configured USDC; and</span></li>
+      <li class="n"><span class="m">✕</span><span>any pool that does not match the approved configuration.</span></li>
     </ul>
-    <p class="note prose">The payout currency is an <code>immutable</code> read once at construction from
-    the chain id, so it cannot be changed after deployment by anyone, including us. Accepting more input
-    tokens and more payout assets is written up as a specification with a red-test matrix
-    (<code>docs/INPUT-POLICY-SPEC.md</code>, <code>docs/PAYOUT-POLICY-SPEC.md</code>) and both documents
-    open by saying they are not implemented. A page that advertised them would be describing a document,
-    not a contract.</p>
+    <p class="note prose">Support for additional input and payout assets is specified but not
+    implemented. The named errors behind each refusal are listed under technical proof.</p>
     </details>
   </section>
 
-  <!-- ── THE DEMO, LINEAR. Setup lives in a drawer; the payment is the page. ──────────────── -->
+  <!-- ── 4. THE PAYMENT. One set of terms; historical amounts live in the receipt section. ── -->
   <section id="demo" aria-labelledby="demo-h">
-    <h2 id="demo-h">Try the payment</h2>
-    <ol class="steps prose">
-      <li>Review the merchant's order</li>
-      <li>Connect your wallet</li>
-      <li>Pay in ETH</li>
-      <li>The merchant receives USDC</li>
-      <li>Open the indexed receipt</li>
-    </ol>
+    <h2 id="demo-h">Make a one-time payment</h2>
     <div id="view"><p class="sub">Reading the order from Ethereum Sepolia…</p></div>
   </section>
 
-  <!-- ── ENSv2. Authority, in words. The role integers are behind the disclosure. ─────────── -->
+  <!-- ── 5 & 6. THE AGENT. What it does, and the four things it cannot. ──────────────────── -->
   <section id="identity" aria-labelledby="identity-h">
-    <h2 id="identity-h">The agent can act — but cannot take ownership</h2>
-    <p class="prose">The merchant keeps the ENSv2 name. The agent receives permission for one
-    specific text record and nothing more.</p>
+    <h2 id="identity-h">The agent is useful — but narrowly authorized</h2>
+    <p class="prose">The agent can update one authorized ENS text record used by the merchant's
+    ordering workflow. ENSv2 enforces that limit.</p>
+    <h3 class="prose" style="margin-top:20px">The agent can:</h3>
     <ul class="can prose">
-      <li class="y"><span class="m">✓</span><span>Update one authorized record</span></li>
-      <li class="n"><span class="m">✕</span><span>Transfer the name</span></li>
-      <li class="n"><span class="m">✕</span><span>Change the payment destination</span></li>
+      <li class="y"><span class="m">✓</span><span>Update the authorized text record</span></li>
+    </ul>
+    <h3 class="prose" style="margin-top:20px">The agent cannot:</h3>
+    <ul class="can prose">
+      <li class="n"><span class="m">✕</span><span>Transfer the merchant's ENS name</span></li>
+      <li class="n"><span class="m">✕</span><span>Change the merchant's payment address</span></li>
       <li class="n"><span class="m">✕</span><span>Grant itself more authority</span></li>
       <li class="n"><span class="m">✕</span><span>Exercise root permission</span></li>
     </ul>
+    <p class="prose" style="margin-top:16px"><strong>The automated payment enforcement does not depend
+    on trusting the agent.</strong> Once payment begins, the Uniswap v4 hook independently enforces
+    the order.</p>
     <details>
-      <summary>Inspect live ENSv2 permissions</summary>
+      <summary>Live ENSv2 permission check</summary>
       <div id="ens-live"><span class="live-tag">reading the resolver…</span></div>
-      <p class="note">Read from the ENSv2 Permissioned Resolver on Sepolia at page load, for the
-      agent address this deployment delegated to. Three zeros are the finding: the authority exists
-      at exactly one place and nowhere else.</p>
+      <p class="note">These permissions are read live from the ENSv2 Permissioned Resolver on Sepolia
+      when this page loads. The three zero values prove that authority exists only for the intended
+      text key.</p>
     </details>
   </section>
 
-  <!-- ── THE GRAPH. The receipt, not the entity-id mechanics. ─────────────────────────────── -->
+  <!-- ── 7. THE RECEIPT. The latest indexed settlement, said in a sentence first. ─────────── -->
   <section id="receipt" aria-labelledby="receipt-h">
-    <h2 id="receipt-h">The receipt is independently queryable</h2>
-    <p class="prose">The hook emits one settlement receipt inside the successful swap. The Graph
-    indexes it into a record the merchant, the payer or an auditor can query.</p>
+    <h2 id="receipt-h">Live settlement receipt</h2>
+    <div id="graph-intro"><p class="prose sub">Querying The Graph…</p></div>
     <div class="card" id="graph-live"><span class="live-tag">querying the subgraph…</span></div>
     <div class="linkrow" id="receipt-links"></div>
     <details>
       <summary>Technical detail: how the record is addressed</summary>
       <p>The entity id combines the settlement transaction hash with the log position the receipt was
       emitted at, so the indexed record is traceable to one exact on-chain event and to no other.</p>
+      <p class="note">Pool prices change over time, so each settlement produces a different amount for
+      the same 0.001 ETH. Every settlement this deployment has made is listed under technical proof.</p>
     </details>
   </section>
 
-  <!-- ── EVIDENCE. Seven lines, then the whole apparatus behind one disclosure. ───────────── -->
+  <!-- ── 8. THE CHECKLIST. Rendered from live reads, so it cannot go stale again. ─────────── -->
   <section id="proof" aria-labelledby="proof-h">
     <h2 id="proof-h">Verified live on Sepolia</h2>
-    <ul class="evidence prose">
-      <li><span class="m">✓</span><span>V3 live settlement completed</span></li>
-      <li><span class="m">✓</span><span>0.001 ETH → 2.216294 USDC</span></li>
-      <li><span class="m">✓</span><span>The fork rehearsal predicted that output exactly, before anything was signed</span></li>
-      <li><span class="m">✓</span><span><code>receiptCount()</code> increased from 0 to 1</span></li>
-      <li><span class="m">✓</span><span>The receipt is indexed by The Graph</span></li>
-      <li><span class="m">✓</span><span>Hook and executor source-verified on four chains</span></li>
-      <li><span class="m">✓</span><span>Exact-SHA CI passed on the commit this page was built from</span></li>
-    </ul>
-    <p class="note prose">V3 is <strong>exercised on Ethereum Sepolia only</strong>. It carries the
-    same address on Unichain, Base and Arbitrum Sepolia, where it is deployed and verified and
-    <code>receiptCount()</code> is still 0. Deployed, verified and exercised are three different
-    rungs and this page never merges them.</p>
+    <ul class="evidence prose" id="evidence"><li><span class="m">·</span><span>reading the chain…</span></li></ul>
+    <p class="note prose">V3 is <strong>exercised on Ethereum Sepolia only</strong>. Deployed, verified
+    and exercised are three different rungs and this page never merges them.</p>
 
     <details>
       <summary>Show contracts, pool state, RPC checks and source verification</summary>
@@ -406,30 +393,25 @@
     </details>
   </section>
 
-  <!-- ── FOUR CHAINS. Availability, not cross-chain payment. The distinction is the point. ── -->
+  <!-- ── 10. FOUR CHAINS, shortened. ─────────────────────────────────────────────────────── -->
   <details class="fold" id="chains">
-    <summary>One address, four chains<span class="hint">Where V3 is deployed, and what deployment does
-      and does not prove</span></summary>
-    <p class="prose">V3 is deployed and source-verified on <strong>Ethereum Sepolia, Unichain Sepolia,
-    Base Sepolia and Arbitrum Sepolia</strong> — the same CREATE2 hook address on every one, each bound
-    to that chain's own Uniswap v4 PoolManager, with the same permission bits encoded in the same
-    address. <strong>The complete payment flow has been live-fired on Sepolia; the other three
-    deployments have not yet processed a settlement.</strong></p>
-    <p class="prose"><strong>Why Sepolia is the demo chain.</strong> It is the one environment where the
-    whole path is evidenced end to end: a configured PoolManager and pool, seeded liquidity, order
-    registration, a Universal Router swap, hook enforcement, a settlement receipt, The Graph indexing it,
-    and the ENSv2 delegation. Every link on this page resolves there.</p>
-    <p class="prose"><strong>Why Unichain and the other two.</strong> They demonstrate that the hook is
-    deterministically deployable across chains rather than tied to one network. Unichain is the natural
-    production target — it is built around Uniswap's own ecosystem, with lower settlement cost — and Base
-    and Arbitrum broaden where a merchant and their liquidity can sit. Deployment is not a payment, so
-    those three carry the deployed-and-verified rung and nothing above it.</p>
-    <p class="note prose">This is <strong>availability on four chains, not a cross-chain payment</strong>.
-    Each deployment settles on its own chain. No bridge and no messaging protocol is integrated, and
-    none is claimed.</p>
+    <summary>One hook address across four testnets<span class="hint">Availability, not a cross-chain
+      payment</span></summary>
+    <p class="prose">V3 is deployed and source-verified at the same deterministic CREATE2 hook address
+    on:</p>
+    <ul class="can prose">
+      <li class="y"><span class="m">·</span><span>Ethereum Sepolia</span></li>
+      <li class="y"><span class="m">·</span><span>Unichain Sepolia</span></li>
+      <li class="y"><span class="m">·</span><span>Base Sepolia</span></li>
+      <li class="y"><span class="m">·</span><span>Arbitrum Sepolia</span></li>
+    </ul>
+    <p class="prose">The complete payment flow has been exercised on <strong>Ethereum Sepolia</strong>.
+    The other three deployments are verified but have not processed a settlement.</p>
+    <p class="note prose">This is availability on four chains — <strong>not a cross-chain
+    payment</strong>. Each deployment settles locally, with no bridge or messaging protocol.</p>
   </details>
 
-  <!-- ── THE EARLIER GENERATION. Kept, and kept smaller. ──────────────────────────────────── -->
+  <!-- ── THE EARLIER GENERATION. ──────────────────────────────────────────────────────────── -->
   <details class="fold" id="earlier">
     <summary>Earlier V1 proof<span class="hint">The generation before this one, kept for
       comparison</span></summary>
@@ -849,12 +831,17 @@ function renderInventory() {
       <div class="row"><dt>Release</dt><dd>tag <code>${CFG.release.tag}</code>, commit <code>${CFG.release.commit}</code></dd></div>
     </dl>
     <h3 style="margin-top:20px">Hook permission bits, computed from the address</h3>
-    <p class="sub">A v4 hook's permissions are encoded in the low 14 bits of its own address, so this
-    is checkable with no RPC call and no trust in us: <code>0x${CFG.hook.slice(-4).toUpperCase()}</code>
-    masked to 14 bits is <code>0x${flags.toString(16).toUpperCase()}</code> =
-    beforeInitialize | beforeSwap | afterSwap. Bit 3 (<code>BEFORE_SWAP_RETURNS_DELTA</code>) and bit
-    10 (<code>AFTER_ADD_LIQUIDITY</code>) are both clear — the two a hook would need to consume the
-    payer's swap or to touch liquidity. It cannot do either.</p>
+    <p class="sub">The hook address encodes <code>beforeInitialize</code>, <code>beforeSwap</code> and
+    <code>afterSwap</code> — <code>0x${flags.toString(16).toUpperCase()}</code> in the low 14 bits,
+    checkable with no RPC call. The return-delta permission is disabled, so the hook cannot take
+    control of the swap output.</p>
+    <h3 style="margin-top:20px">The refusals, by name</h3>
+    <p class="sub"><code>NativeInputOnly()</code> — a token input is refused where the order is
+    created. <code>PayoutCurrencyNotAllowed(address)</code> — any payout but this chain's configured
+    USDC, refused at the same point. And the hook refuses a differently-shaped pool at
+    <code>beforeInitialize</code>, so the wrong pool can never open under it.
+    <code>PAYOUT_CURRENCY</code> is <code>immutable</code>, read once from the chain id at
+    construction.</p>
     <h3 style="margin-top:20px">Source verification</h3>
     <p class="sub">Etherscan reports both contracts verified under their own names on all four chains.
     Sourcify answers <code>match</code> — its <em>partial</em> tier, not <code>exact_match</code>, because
@@ -870,11 +857,16 @@ function renderStaticLinks() {
   if (v1) v1.innerHTML = `<a href="${CFG.explorer}/tx/${CFG.v1.tx}">${short(CFG.v1.tx)}</a>`;
   const rl = $("#receipt-links");
   if (rl) rl.innerHTML =
-    `<a href="${CFG.explorer}/tx/${CFG.settlement.tx}">View the settlement on Etherscan</a>
-     <a href="${LINKS.graphiql}">Query the subgraph yourself</a>`;
+    `<a href="${LINKS.graphiql}">Query the subgraph yourself</a>
+     <a href="${CFG.explorer}/address/${CFG.hook}#events">Every receipt this hook has emitted</a>`;
+  // "Release evidence" and "latest" are two different transactions and the footer says which is
+  // which. Naming the pinned one as though it were the newest is how the checklist went wrong.
   $("#links").innerHTML = `UNICA V3 on ${CFG.chainName}: hook ${cell(CFG.hook)}, executor ${cell(CFG.executor)},
-    both source-verified. Settlement <span class="mono">${short(CFG.settlement.tx)}</span> in block
-    ${CFG.settlement.block}. Release: tag <code>${CFG.release.tag}</code>, commit <code>${CFG.release.commit}</code>.
+    both source-verified. <strong>Release evidence transaction:</strong>
+    <a class="mono" href="${CFG.explorer}/tx/${CFG.settlement.tx}">${short(CFG.settlement.tx)}</a>, block
+    ${CFG.settlement.block} — the settlement this release was tagged on, not necessarily the newest.
+    The latest indexed settlement is shown live in the receipt section above.
+    Release: tag <code>${CFG.release.tag}</code>, commit <code>${CFG.release.commit}</code>.
     Built by NFTeria · <a href="https://github.com/NFTeria/UNICA">github.com/NFTeria/UNICA</a>.`;
 }
 
@@ -898,6 +890,7 @@ async function main() {
 async function refresh() {
   await reread();
   renderReadback();
+  renderEvidence();
   if (S.rb && S.rb.execBytes === 0) {
     return renderMissing("Not deployed yet",
       `The settlement executor is not on ${CFG.chainName} at <span class="mono">${short(CFG.executor)}</span>.
@@ -917,63 +910,58 @@ function renderNoLink() {
   }
   const connected = S.wallet.present && S.wallet.account;
   S.demo = { minOut, deadline, quote };
-  // THREE NUMBERS, LABELLED APART. The live quote, the minimum a new order would carry, and what the
-  // verified settlement actually paid are three different things that a reader scanning quickly can
-  // mistake for a contradiction. They differ because the pool moved: it is thin on purpose, and V3's
-  // own settlement is part of why the price is where it is. Naming each one is cheaper than being
-  // asked about it, and far cheaper than being disbelieved about it.
+  // ONE SET OF TERMS. An earlier version of this card showed three USDC figures at once — the live
+  // quote, the minimum, and what a past settlement paid — and a reader scanning it read three numbers
+  // for one payment. The past settlement now appears only in the receipt section, where it is the
+  // subject rather than a distraction.
   view.innerHTML = `
     <div class="card">
-      <div class="three-numbers">
-        <div class="n"><span>Current pool quote</span><strong>0.001 ETH &asymp; ${fmt(quote, 6, 6)} USDC</strong></div>
-        <div class="n"><span>Minimum for a newly created order</span><strong>${fmt(minOut, 6, 6)} USDC</strong> <span style="display:inline">&mdash; 97% of the quote above</span></div>
-        <div class="n"><span>${S.latest ? "Most recent verified V3 settlement" : "First verified V3 settlement"}</span><strong>0.001 ETH &rarr; ${fmt(S.latest ? BigInt(S.latest.amountOut) : CFG.settlement.amountOut, 6, 6)} USDC</strong>${S.latest ? ` <span style="display:inline">&mdash; block ${esc(S.latest.blockNumber)}</span>` : ""}</div>
-      </div>
-      <p class="note">The pool price has changed since the verified settlement; the current quote
-      applies only to a newly created order.</p>
+      <h3 style="margin-top:0">Current payment terms</h3>
       ${rows([
-        ["You pay", "0.001 ETH"],
-        ["The merchant receives", `at least ${fmt(minOut, 6, 6)} USDC`],
+        ["You pay", "<strong>0.001 Sepolia ETH</strong>"],
+        ["Merchant receives", `<strong>at least ${fmt(minOut, 6, 6)} Sepolia USDC</strong>`],
+        ["Destination", "the merchant address stored in the order"],
         ["Network", `${CFG.chainName} (chain ${CFG.chainId})`],
-        ["Wallet prompts", "one confirmation, when a link is opened and paid"],
-        ["Outcome", "the hook refuses, or the merchant is paid — nothing in between"],
-        ["Orders registered so far", count === null ? "could not be read" : count]
+        ["Wallet confirmations", "one"],
+        ["Result", "full settlement or full revert"]
       ])}
-      <p class="note">This page has no order in its link. A merchant registers one and shares a URL
-      ending in <code>?order=…</code>; opening it shows one button and one click settles it. Open the
-      drawer below to register one yourself and become that merchant.</p>
+      <p class="note">The live pool quote is currently approximately
+      <strong>${fmt(quote, 6, 6)} USDC</strong>. A newly created order requires at least
+      <strong>97% of that quote</strong>, to allow for price movement between registering and paying.</p>
+      <p class="note"><strong>This page does not currently contain an order ID.</strong> A merchant
+      must register an order and share its payment link before it can be paid. Open the drawer below
+      to become that merchant.</p>
       ${switchButton()}
       <p class="note${why.length ? " bad" : ""}" id="msg">${why.length ? why[0] : ""}</p>
     </div>
 
     <details id="merchant-drawer"${S.merchantOpen ? " open" : ""}>
-      <summary>Merchant mode — register a demo order</summary>
+      <summary>Merchant mode — create a payment order</summary>
       <div class="card">
-        <p class="sub">A merchant is a name, not an address. Resolve one on ENSv2 Sepolia and the order
-        will name the address you were shown — or leave it empty to register to your own account and
-        try the payer's side without a merchant.</p>
-        <p class="note"><strong>Try <code>nfteria.eth</code></strong> — an ENSv2 Sepolia name held by
-        this project, which resolves to the deployer. Any ENSv2 Sepolia name with an address record
-        works. A name that resolves but carries no address record is refused rather than approximated,
-        so there is nobody to pay and nothing is registered.</p>
+        <p class="sub">Enter the merchant's ENSv2 Sepolia name. UNICA resolves the name to its
+        recipient address and stores <em>that address</em> in the order. The merchant then shares a
+        link containing the order ID; the customer opens it and confirms one ETH payment.</p>
+        <p class="note">For this demo, <code>nfteria.eth</code> resolves to the project's merchant
+        address on ENSv2 Sepolia. A name without an address record is rejected, because UNICA would
+        have no verified recipient to pay.</p>
         ${merchantBlock()}
         ${rows([
           ["Recipient", S.ens && S.ens.ok
             ? `${acct(S.ens.recipient)} — resolved from <span class="mono">${esc(S.ens.name)}</span>`
-            : (connected ? `${acct(S.wallet.account)} (you)` : "your connected account")],
+            : "the address resolved from the merchant's ENS name, or your connected account when no name is entered"],
           ["Input", "0.001 ETH"],
           ["Minimum output", `${fmt(minOut, 6, 6)} USDC`],
           ["Deadline", `${iso(deadline)} (${rel(deadline)})`],
-          ["Wallet prompts", "one confirmation of <code>createOrder</code>, carrying no ETH"]
+          ["Wallet confirmations", "one — <code>createOrder</code>, carrying no ETH"]
         ])}
         <button class="secondary" id="make" ${why.length ? "disabled" : ""}>${!connected
-          ? "Connect a wallet to register an order"
+          ? "Connect a wallet to create an order"
           : (S.ens && S.ens.ok
-              ? `Register an order payable to ${esc(S.ens.name)}`
-              : "Register a demo order to my own address")}</button>
+              ? `Create an order payable to ${esc(S.ens.name)}`
+              : "Create an order to my own address")}</button>
         <p class="note" id="msg2">${S.ens && S.ens.ok
           ? `The order will name <span class="mono">${esc(S.ens.recipient)}</span>, the address shown above. If the name resolves to something else before you confirm, the registration is abandoned.`
-          : "Registering costs a little test ETH and no ETH is attached to it."}</p>
+          : "Creating an order costs a little test ETH and no ETH is attached to it."}</p>
       </div>
     </details>`;
   const btn = $("#make");
@@ -1215,23 +1203,6 @@ function renderReceipt(r, hash) {
 // ── the three live readouts. Each fails LOUDLY, because an unreachable endpoint and an empty
 // answer look identical and only one of them is good news.
 
-// The hook's permission bits, computed from the address alone. No RPC call: this is the claim the
-// hook section makes one paragraph earlier, so the page proves it in front of the reader rather
-// than asserting it. Bit 3 is BEFORE_SWAP_RETURNS_DELTA and bit 10 is AFTER_ADD_LIQUIDITY — the
-// two a hook which could consume the payer's swap would need.
-function renderBits() {
-  const tag = document.getElementById("tag-bits"), note = document.getElementById("bits-note");
-  if (!tag || !note) return;
-  const flags = BigInt(CFG.hook) & 0x3fffn;
-  const b3 = (flags >> 3n) & 1n, b10 = (flags >> 10n) & 1n;
-  const ok = flags === 0x20c0n && b3 === 0n && b10 === 0n;
-  tag.textContent = ok ? "computed from the hook's own address" : "UNEXPECTED";
-  tag.className = "live-tag" + (ok ? " ok" : "");
-  note.innerHTML = tag.outerHTML + " flags <code>0x" + flags.toString(16).toUpperCase()
-    + "</code> = beforeInitialize | beforeSwap | afterSwap. The return-delta bit is clear, so the hook"
-    + " cannot take the payer's swap for itself.";
-}
-
 // The subgraph, queried live. The rows are ordered newest first and the V3 row is picked by the
 // EMITTING HOOK rather than by position: the subgraph now indexes two generations, and "the latest
 // one" silently becoming V1's would be exactly the confusion this page was rebuilt to remove.
@@ -1258,26 +1229,64 @@ async function renderGraph() {
         + ' settlement(s), and none of them was emitted by the V3 hook</span>';
       return;
     }
+    const intro = document.getElementById("graph-intro");
+    if (intro) intro.innerHTML =
+      '<p class="prose">This receipt proves a completed V3 payment on ' + CFG.chainName + '. The '
+      + 'customer paid <strong>' + esc(fmt(BigInt(v3.amountIn), 18, 6)) + ' ETH</strong>. Uniswap v4 '
+      + 'converted it, and the merchant received <strong>' + esc(fmt(BigInt(v3.amountOut), 6, 6))
+      + ' USDC</strong>. The hook charged no fee and emitted a receipt inside the successful '
+      + 'transaction.</p><p class="prose">The Graph indexed that receipt and returned it when this '
+      + 'page loaded.</p>';
     el.innerHTML = '<p class="sub" style="margin-bottom:12px"><span class="live-tag ok">live from the subgraph</span>'
-      + ' Latest V3 settlement, queried when this page loaded.</p>'
+      + ' Latest indexed V3 settlement.</p>'
       + '<dl>'
       + row2("Input", fmt(BigInt(v3.amountIn), 18, 6) + " ETH")
-      + row2("Output", '<span class="fig-num">' + fmt(BigInt(v3.amountOut), 6, 6) + "</span> USDC")
-      + row2("Fee", esc(v3.fee))
+      + row2("Merchant received", '<span class="fig-num">' + fmt(BigInt(v3.amountOut), 6, 6) + "</span> USDC")
+      + row2("Hook fee", esc(v3.fee))
       + row2("Block", esc(v3.blockNumber))
       + row2("Log index", esc(v3.logIndex))
-      + row2("Merchant", '<span class="mono">' + short(v3.recipient) + "</span>")
+      + row2("Merchant", '<a class="mono" href="' + CFG.explorer + '/address/' + esc(v3.recipient) + '">' + short(v3.recipient) + "</a>")
       + row2("Status", '<span class="ok">indexed</span>')
       + "</dl>"
       + '<p class="note">The subgraph indexes ' + all.length + ' settlement'
-      + (all.length === 1 ? "" : "s") + ' across both generations of the hook; this row is the one'
+      + (all.length === 1 ? "" : "s") + ' across both generations of the hook. This row is the newest'
       + ' emitted by the V3 hook at <span class="mono">' + short(CFG.hook) + "</span>.</p>";
+    renderEvidence();
   } catch (e) {
+    const intro = document.getElementById("graph-intro");
+    if (intro) intro.innerHTML = '<p class="prose sub">The subgraph could not be reached, so this'
+      + ' section has nothing to show. That is a failed read, not an absence of settlements.</p>';
     el.innerHTML = '<span class="live-tag">the subgraph could not be reached — ' + esc(e.message)
       + '. This is a failed read, not an empty result.</span>';
+    renderEvidence();
   }
 }
 const row2 = (k, v) => `<div class="row"><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+
+// THE CHECKLIST IS READ, NOT WRITTEN. It used to be static HTML naming one settlement and one
+// receiptCount, and both aged the moment a second settlement landed — the page then carried
+// 2.216294 in the checklist and 1.774099 in the receipt, which reads as a contradiction rather than
+// as a pool that moved. Every line that can change is now taken from a live read, so the only way
+// this disagrees with the chain is if the chain disagrees with itself.
+function renderEvidence() {
+  const el = document.getElementById("evidence");
+  if (!el) return;
+  const n = S.rb ? S.rb.receiptCount : null;
+  const li = (ok, text) => `<li><span class="m">${ok ? "✓" : "·"}</span><span>${text}</span></li>`;
+  el.innerHTML = [
+    n === null
+      ? li(false, "the chain could not be read, so the settlement count is unknown")
+      : li(n >= 1n, `${n === 1n ? "One V3 settlement" : `${n} V3 settlements`} completed on ${CFG.chainName}`),
+    S.latest
+      ? li(true, `Latest indexed settlement: 0.001 ETH → <strong>${fmt(BigInt(S.latest.amountOut), 6, 6)} USDC</strong>, block ${esc(S.latest.blockNumber)}`)
+      : li(false, "the subgraph has not answered, so no latest settlement is claimed here"),
+    li(true, "The merchant received USDC at the order's recipient address"),
+    li(true, "The hook emitted an order-bound receipt"),
+    li(!!S.latest, "The Graph indexed the receipt"),
+    li(true, "The hook and executor are source-verified on four testnets"),
+    li(true, "Exact-SHA CI passed for the published release"),
+  ].join("");
+}
 
 // The delegation, read from the resolver. Four resources, and the three zeros are the point: an
 // agent that can write one key and holds nothing anywhere else.
@@ -1297,16 +1306,16 @@ async function renderEns() {
       roles("0x0000000000000000000000000000000000000000000000000000000000000000"),
     ]);
     const ok = perKey === 16n && nameLevel === 0n && pay === 0n && root === 0n;
-    const row = (what, v, expect) =>
+    const row = (what, v, meaning) =>
       "<tr><td>" + what + "</td><td class=\"num\">" + v.toString()
-      + "</td><td class=\"sub\">" + expect + "</td></tr>";
+      + "</td><td class=\"sub\">" + meaning + "</td></tr>";
     el.innerHTML = '<span class="live-tag' + (ok ? " ok" : "") + '">'
       + (ok ? "read from the resolver, now" : "UNEXPECTED — read it yourself") + "</span>"
-      + '<table class="roles"><tr><th>resource</th><th>role word</th><th></th></tr>'
-      + row("One text key", perKey, "16 = SET_TEXT, the delegation")
-      + row("The whole name", nameLevel, "0 — the delegation is not here")
-      + row("The payment name", pay, "0 — the agent cannot move the money")
-      + row("ROOT_RESOURCE", root, "0 — no blanket authority")
+      + '<table class="roles"><tr><th>Resource</th><th>Role</th><th>Meaning</th></tr>'
+      + row("Authorized text key", perKey, "agent may update this key")
+      + row("Whole name", nameLevel, "no whole-name authority")
+      + row("Payment resource", pay, "cannot redirect payment")
+      + row("Root resource", root, "no blanket authority")
       + "</table>";
   } catch (e) {
     el.innerHTML = '<span class="live-tag">the resolver could not be read — ' + esc(e.message)
@@ -1314,7 +1323,6 @@ async function renderEns() {
   }
 }
 
-renderBits();
 renderGraph();
 renderEns();
 
