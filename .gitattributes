@@ -1,0 +1,16 @@
+# Normalise line endings so a checkout on another platform cannot produce a diff nobody wrote.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# Generated and vendored trees: kept out of language statistics and collapsed in reviews, so a
+# lockfile bump never buries the change it accompanies.
+package-lock.json linguist-generated=true -diff
+lib/** linguist-vendored=true
+broadcast/** linguist-generated=true

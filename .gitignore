@@ -221,3 +221,19 @@ skills-lock.json
 # The submission packet is strategy, not product: which tracks to enter, which to decline,
 # and where we think we are strongest. It lives in the war room and is kept out of a public repo.
 docs/submission/
+
+# ── the workspace application tree (apps/, packages/) ──────────────────────
+# `node_modules/`, `out/`, `cache/` and `*.tsbuildinfo` above already match at any depth; these
+# are the ones that do not. Build output is regenerated from a commit — only the source is history.
+apps/*/.next/
+apps/*/.turbo/
+apps/*/.vercel/
+apps/*/dist/
+apps/*/build/
+packages/*/dist/
+packages/*/build/
+# Playwright and Vitest write these on every run.
+playwright-report/
+test-results/
+blob-report/
+.playwright/

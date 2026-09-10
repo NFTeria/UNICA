@@ -1,0 +1,23 @@
+# Formatting is for the code this repository writes. Everything below is either vendored,
+# generated, or gated by a check that reads the bytes literally — reflowing any of it would
+# either lose the vendor's history or break the gate that greps it.
+lib/
+out/
+cache/
+node_modules/
+broadcast/
+coverage/
+
+# The published surface is asserted verbatim by script/check-surface.sh, which greps the
+# committed file for exact pins and banned phrases. A reformat would move those lines.
+web/index.html
+
+# Generated or externally-owned artifacts.
+**/generated/
+**/build/
+**/*.min.js
+integrations/graph-v2/tests/.latest.json
+package-lock.json
+
+# Foundry owns Solidity formatting via `forge fmt`, which the gate already runs.
+*.sol
