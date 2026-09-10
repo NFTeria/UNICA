@@ -85,7 +85,11 @@ test("chain 46630 is not deployable and not settleable, whatever tokens exist on
   // about settlement: `payoutCurrency(46630)` still reverts, both constructors call it, and so
   // V3 cannot be constructed on that chain. Token existence is not a payout path.
   assert.equal(isSettlementChainId(46630), false, "46630 must never be offered as a settlement chain");
-  assert.equal(chainMetadata(46630).canSettle, false, "no verified payout token has been established on 46630");
+  assert.equal(
+    chainMetadata(46630).canSettle,
+    false,
+    "no verified payout token has been established on 46630",
+  );
   assert.equal(
     (SETTLEMENT_CHAIN_IDS as readonly number[]).includes(46630),
     false,
