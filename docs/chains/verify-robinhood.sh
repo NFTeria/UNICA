@@ -198,7 +198,14 @@ fi
 
 # ---- the equity verdict, read as an ABSENCE rather than transcribed ------------------------------
 # Robinhood's docs list these three as canonical MAINNET addresses (chain 4663). Reading them here
-# and finding no code is what makes "the stock tokens are not on this chain" a measurement.
+# and finding no code is what makes "the canonical mainnet contracts are not at these addresses on
+# this chain" a measurement rather than a transcription.
+#
+# SUPERSEDED SCOPE, 2026-09-10: these rows once carried a broader reading — that no stock-token
+# contract of any kind existed here. That is no longer what they show. A public faucet has since
+# issued five testnet stock-token contracts at DIFFERENT addresses (ROBINHOOD.md section 0), so
+# what these three rows establish is narrower and still true: the canonical mainnet addresses hold
+# no code on this chain.
 chk "the mainnet TSLA stock token has no code on chain $CHAIN_ID" "[ \"\$(codelen $MAINNET_TSLA)\" = 0 ]"
 chk "the mainnet WETH has no code on chain $CHAIN_ID"             "[ \"\$(codelen $MAINNET_WETH)\" = 0 ]"
 chk "the mainnet USDG has no code on chain $CHAIN_ID"             "[ \"\$(codelen $MAINNET_USDG)\" = 0 ]"

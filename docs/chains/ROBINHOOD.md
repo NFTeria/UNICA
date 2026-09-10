@@ -16,6 +16,123 @@ fixed: **Robinhood testnet is under compatibility investigation.**
 
 ---
 
+---
+
+## 0. BINDING CORRECTION — 2026-09-10
+
+**Section 1 below carried a sentence, now marked SUPERSEDED, asserting that the chain held none of
+these contracts. It was true as read on 2026-09-09 and is false now.** The original is left in place and dated rather than
+rewritten, because a document that quietly edits its own past is not evidence of anything.
+
+A public testnet faucet at `faucet.testnet.chain.robinhood.com` issued five **testnet stock-token
+contracts** to a documented address on chain 46630. What follows is only what was read back over
+JSON-RPC; nothing here is taken from a UI, a screenshot, or a claim.
+
+**Read on 2026-09-10 via `eth_call` and `eth_getTransactionReceipt` against
+`https://rpc.testnet.chain.robinhood.com/rpc`. `eth_chainId` → `46630`.**
+
+| Fact | Value |
+|---|---|
+| Transaction hash | `0xc1564a9b19307b6823c55b50adee224b3e16a2f2d1476c869b683ddd63892ec8` |
+| Transaction status | `1` |
+| Block number | `117005259` |
+| Faucet contract (`to`) | `0x8762F93772c663c6a88Ba50900bd5381df2717Be` — answers neither `symbol()` nor `decimals()` |
+| Address queried for balances | `0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73` (this repository's documented deployer) |
+
+At block `117005259`, `balanceOf(0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73)` returned
+`30000000000000000000` — 30 tokens at 18 decimals — for each of the five contracts below.
+
+| Contract address on 46630 | `symbol()` | `decimals()` | balance of the address above |
+|---|---|---:|---:|
+| `0xc9f9c86933092bbbfff3ccb4b105a4a94bf3bd4e` | `TSLA` | 18 | 30.0 |
+| `0x5884ad2f920c162cfbbacc88c9c51aa75ec09e02` | `AMZN` | 18 | 30.0 |
+| `0x1fbe1a0e43594b3455993b5de5fd0a7a266298d0` | `PLTR` | 18 | 30.0 |
+| `0x3b8262a63d25f0477c4dde23f83cfe22cb768c93` | `NFLX` | 18 | 30.0 |
+| `0x71178bac73cbeb415514eb542a8995b82669778d` | `AMD` | 18 | 30.0 |
+
+### 0.1 What this does NOT establish
+
+These are **faucet-issued test tokens on a testnet**. This document does not call them shares,
+securities, assets owned by anyone, production instruments, or mainnet stock tokens, and no
+official token documentation has been read that would support any of that wording. Section 7.3's
+existing rule stands unchanged: *testnet tokens bearing ticker-like symbols are not treated as
+equities.*
+
+**Their addresses are not the canonical mainnet addresses.** Re-read on 2026-09-10, on 46630, the
+three canonical mainnet addresses section 6(b) lists still hold **zero** runtime bytes:
+
+| Address (per Robinhood's docs, mainnet) | Runtime bytes on 46630, 2026-09-10 |
+|---|---:|
+| `0x322F0929c4625eD5bAd873c95208D54E1c003b2d` (TSLA) | **0** |
+| `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` (WETH) | **0** |
+| `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` (USDG) | **0** |
+
+Those zeros carry a positive control, for the reason section 6(b) already gives: a dead endpoint
+would otherwise "prove" all three absent. In the same run the `TSLA`-symbol testnet contract read
+back **283** runtime bytes and the PoolManager **24,009**, so the endpoint was answering and a zero
+is a real zero.
+
+### 0.2 What has NOT changed
+
+- **No verified USDC payout token has been established on 46630.** All four Circle testnet USDC
+  addresses `UnicaDeploymentsV3` names for the other chains read back **0 bytes** here on 2026-09-10.
+- **`payoutCurrency(46630)` still reverts** `PayoutCurrencyNotVerified` — `src/v3/UnicaDeploymentsV3.sol`.
+- **`UnicaHookV3` and `UnicaExecutorV3` still cannot be constructed on 46630 at all**, because both
+  constructors call that function. V3 is not deployable on this chain.
+- **Token existence does not prove a settlement path.** Five ERC-20s existing says nothing about
+  whether a v4 pool pairing any of them with a settleable counter-asset exists, is initialised, or
+  holds liquidity. Section 7.3's steps (2) and (3) are untouched by this correction.
+- **UNICA has no Robinhood integration.** The chain has been researched and probed. Nothing has been
+  deployed to it, nothing settles on it, and no partnership, sponsorship, or endorsement is claimed
+  or implied. The only public sentence on this subject remains the one in section 1.
+
+### 0.3 Reproducing these reads
+
+Read-only. Nothing below signs, sends, or spends.
+
+```sh
+R=https://rpc.testnet.chain.robinhood.com/rpc
+cast chain-id --rpc-url $R                                              # 46630
+cast receipt 0xc1564a9b19307b6823c55b50adee224b3e16a2f2d1476c869b683ddd63892ec8 --rpc-url $R
+
+for a in 0xc9f9c86933092bbbfff3ccb4b105a4a94bf3bd4e \
+         0x5884ad2f920c162cfbbacc88c9c51aa75ec09e02 \
+         0x1fbe1a0e43594b3455993b5de5fd0a7a266298d0 \
+         0x3b8262a63d25f0477c4dde23f83cfe22cb768c93 \
+         0x71178bac73cbeb415514eb542a8995b82669778d ; do
+  cast call $a 'symbol()(string)'   --rpc-url $R
+  cast call $a 'decimals()(uint8)'  --rpc-url $R
+  cast call $a 'balanceOf(address)(uint256)' 0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73 --rpc-url $R
+done
+
+# the surviving negatives, each with the positive control that makes a zero meaningful
+cast code 0x322F0929c4625eD5bAd873c95208D54E1c003b2d --rpc-url $R | wc -c   # canonical mainnet TSLA
+cast code 0x8366a39CC670B4001A1121B8F6A443A643e40951 --rpc-url $R | wc -c   # PoolManager: must NOT be empty
+```
+
+The explorer at `https://explorer.testnet.chain.robinhood.com` serves these records; see section 0.4.
+
+### 0.4 The explorer, and why it was verified at the API rather than in the page
+
+The HTML routes are a client-rendered application and return **HTTP 200 for anything**, including a
+transaction hash that does not exist — real and invented bodies came back the same byte length. The
+page therefore cannot distinguish a real record from a fabricated one, and was not used as evidence.
+
+The underlying API can, and was:
+
+```sh
+B=https://explorer.testnet.chain.robinhood.com
+curl -s -o /dev/null -w '%{http_code}\n' $B/api/v2/transactions/0xc1564a9b19307b6823c55b50adee224b3e16a2f2d1476c869b683ddd63892ec8   # 200
+curl -s -o /dev/null -w '%{http_code}\n' $B/api/v2/transactions/0xdeadbeef00000000000000000000000000000000000000000000000000000001   # 404, the control
+```
+
+A fabricated hash returns `404 {"message":"Not found"}`; the real one returns the transaction. A
+nonsense route returns 404 as well. On that evidence the base URL is recorded in
+`packages/protocol/src/chain.ts`; the canonical UI routes are `/tx/<hash>`, `/address/<address>` and
+`/block/<number>`.
+
+---
+
 ## 1. The headline, in five sentences
 
 Chain 46630 carries a **complete and self-consistent Uniswap v4 deployment**, and it is **not
@@ -27,7 +144,7 @@ Router is a **different, larger build** than the one on Ethereum Sepolia and exp
 **six-field** `ExactInputSingleParams` layout, which is the hazard this repository already recorded
 and which is re-proved here against the live bytecode.
 
-**No Robinhood Stock Token exists on this chain.** Robinhood's own public asset registry lists 194
+**No Robinhood Stock Token exists on this chain.** *(True as read on 2026-09-09; **superseded 2026-09-10** — five faucet-issued testnet stock-token contracts were read back on 46630. See section 0. The rest of this paragraph still holds: those contracts are not at the canonical mainnet addresses, which remain empty here.)* Robinhood's own public asset registry lists 194
 stock-token deployments and every single one is on chain **4663** — the mainnet — with zero on
 46630; the canonical mainnet TSLA, WETH and USDG addresses all read back as **empty** here. The
 equity path on chain 46630 is therefore classified **`NO_VERIFIED_LIQUIDITY_PATH`**.
@@ -372,11 +489,14 @@ evidence.
 
 **Equity path on chain 46630: `NO_VERIFIED_LIQUIDITY_PATH`.**
 
-There is no stock token on this chain, therefore no stock-token pool, therefore no equity leg for
-anything to settle against. What would have to become true instead, in order:
+~~There is no stock token on this chain, therefore no stock-token pool, therefore no equity leg
+for anything to settle against.~~ **Superseded 2026-09-10 (section 0):** faucet-issued testnet stock-token
+contracts now exist on 46630, so step (1) below is satisfied. Steps (2) and (3) are NOT, and the
+classification is unchanged — token existence is not a pool, and a pool is not liquidity. What would have to become true instead, in order:
 
-1. A stock token would have to **exist on 46630** — a testnet issuance, which Robinhood's
-   documentation does not currently describe.
+1. ~~A stock token would have to **exist on 46630**~~ — **satisfied 2026-09-10**: five
+   faucet-issued testnet stock-token contracts read back on this chain (section 0). This is a
+   testnet issuance and is not treated as an equity.
 2. A v4 pool pairing it with a settleable counter-asset would have to be **initialised and funded**.
 3. The restriction analysis would have to be redone against the **real instrument**, because the
    mainnet instrument is restricted from US persons and from several other jurisdictions, and a

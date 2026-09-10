@@ -210,7 +210,13 @@ rather than overwriting it, for the same reason.
 - No Uniswap deployment on Arc, and no UNICA contract running on Arc.
 - No Arc mainnet — it does not exist; Arc is testnet-only in every source retrieved.
 - No TEE attestation for the Chainlink workflow until it has actually run in one.
-- No tokenized-asset availability. The Robinhood chain was probed and nothing was integrated.
+- No tokenized-asset **settlement path**, and no integration. *(Scope narrowed 2026-09-10: this
+  line previously said "no tokenized-asset availability", which is no longer accurate. Faucet-issued
+  testnet stock-token contracts were read back on Robinhood testnet that day —
+  `docs/chains/ROBINHOOD.md` section 0. Their existence establishes nothing further: there is still
+  no verified payout token on that chain, `payoutCurrency(46630)` still reverts, V3 still cannot be
+  constructed there, and no pool pairing any of them with a settleable counter-asset has been shown.
+  The chain was probed and nothing was integrated.)*
 - **V2 is not shipped.** It is frozen as `v2.0.0-rc1` with an open Critical that we found,
   reproduced, published and blocked our own release over. See `docs/v2/SECURITY-ADVISORY-001.md`.
 
