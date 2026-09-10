@@ -25,20 +25,42 @@ fi
 # ── 1. the pins the page must carry, verbatim ─────────────────────────────────
 # One grep per pinned fact named in docs/DEPLOYMENT.md and the live-green tag. A miss here means
 # the page would go live naming a different deploy than the one this repository proves.
+# REPOINTED TO V3, 2026-09-10. These asserted V1's addresses until the page was V1's. The demo the
+# repository now proves is V3 — deployed and source-verified on four chains, live-settled on Ethereum
+# Sepolia — so the page names V3 and this block follows it. That is the check working rather than
+# being relaxed: it fired the moment the page changed deploy and refused to pass until the script
+# agreed. V1 is still named on the page in one small prior-evidence section, which is why nothing
+# here bans its strings; what the rows below assert is which deploy the page PAYS THROUGH.
 chk "pins chain id 11155111"                  "grep -qE '\\b11155111\\b' '$PAGE'"
-chk "pins the live hook address"              "grep -qF '0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0' '$PAGE'"
-chk "pins the live executor address"          "grep -qF '0x044bc8a8773EC7b9B8de2467766636dFFCaC6210' '$PAGE'"
-chk "pins the live pool id"                   "grep -qF '0xff4f4e2438f61817271cbd8399a925f5f99a1482f88c55419a2b69d0768e56db' '$PAGE'"
-chk "pins deployBlock 11639895"               "grep -qE '\\b11639895\\b' '$PAGE'"
-chk "pins release tag live-green"             "grep -qF 'live-green' '$PAGE'"
-chk "pins release commit 5e1d843"             "grep -qF '5e1d843' '$PAGE'"
+chk "pins the V3 hook address"                "grep -qF '0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0' '$PAGE'"
+chk "pins the V3 executor address"            "grep -qF '0x015692C9E43ca19a2504F79368D1156A56680517' '$PAGE'"
+chk "pins the V3 pool id"                     "grep -qF '0xf9b873f83814234224be42592795ec812fb948a300188e0c597796171ab9c57a' '$PAGE'"
+chk "pins deployBlock 11667702"               "grep -qE '\\b11667702\\b' '$PAGE'"
+chk "pins release tag v3-settled-indexed"     "grep -qF 'v3-settled-indexed' '$PAGE'"
+chk "pins release commit 8cdf141"             "grep -qF '8cdf141' '$PAGE'"
+chk "pins the V3 settlement transaction"      "grep -qF '0x4f4acbd1b1ed07eccbcf0d7c6f6fcb23a397b619dd3a1dd7fcf7ed7456768854' '$PAGE'"
+
+# The two addresses the page actually SENDS TO, read off their own CFG keys rather than from anywhere
+# in the file. A page that merely mentions V3 somewhere while still paying V1 would pass every row
+# above and fail these two, which is the whole difference between naming a deploy and using one.
+chk "CFG.executor is the V3 executor"         "grep -qE '^  executor: \"0x015692C9E43ca19a2504F79368D1156A56680517\",' '$PAGE'"
+chk "CFG.hook is the V3 hook"                 "grep -qE '^  hook: \"0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0\",' '$PAGE'"
 
 # control: prove the pin checks actually distinguish present from absent, on a throwaway fixture
 tmp_pin=$(mktemp)
 printf 'no pins here\n' > "$tmp_pin"
-chk "control: a pin check fails on a fixture missing every pin" "! grep -qF '5e1d843' '$tmp_pin'"
-printf '5e1d843\n' >> "$tmp_pin"
-chk "control: the same check passes once the pin is present"    "grep -qF '5e1d843' '$tmp_pin'"
+chk "control: a pin check fails on a fixture missing every pin" "! grep -qF '8cdf141' '$tmp_pin'"
+printf '8cdf141\n' >> "$tmp_pin"
+chk "control: the same check passes once the pin is present"    "grep -qF '8cdf141' '$tmp_pin'"
+# control: the CFG-key rows must reject the PREVIOUS generation's address, not merely accept the new
+# one. Without this row a check that matched any address at all would look identical to a working
+# one — and matching any address is exactly the failure this pair exists to rule out.
+printf '  executor: "0x044bc8a8773EC7b9B8de2467766636dFFCaC6210",\n' > "$tmp_pin"
+chk "control: the CFG.executor row rejects V1's executor" \
+    "! grep -qE '^  executor: \"0x015692C9E43ca19a2504F79368D1156A56680517\",' '$tmp_pin'"
+printf '  executor: "0x015692C9E43ca19a2504F79368D1156A56680517",\n' > "$tmp_pin"
+chk "control: ...and accepts V3's" \
+    "grep -qE '^  executor: \"0x015692C9E43ca19a2504F79368D1156A56680517\",' '$tmp_pin'"
 rm -f "$tmp_pin"
 
 # ── 2. no external script, stylesheet, or font tag ────────────────────────────

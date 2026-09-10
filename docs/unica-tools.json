@@ -575,7 +575,7 @@
     {
       "id": "web-checkout-surface",
       "name": "Web Checkout Surface",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "status": "PROTOTYPE",
       "paths": [
         "web/index.html",
@@ -594,9 +594,10 @@
         {"kind": "command", "value": "bash script/check-surface.sh"}
       ],
       "limitations": [
-        "not published; GitHub Pages is disarmed and publication is an owner action",
-        "V1 only; it does not know about the V2 invoice path",
-        "no stranger has completed a payment through it"
+        "published on GitHub Pages, and no stranger has completed a payment through it",
+        "pinned to V3 on Ethereum Sepolia only; it does not know about the V2 invoice path",
+        "native ETH in and USDC out, because that is what the deployed contracts accept",
+        "the demo pool is thin and the quote moves; under 0.5 USDC it refuses to register"
       ],
       "sponsorRoles": [
         "ens",
