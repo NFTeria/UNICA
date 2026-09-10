@@ -1161,7 +1161,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Purpose: let a person pay a merchant by name, seeing the resolved address before they commit.
 - Product role: the operable surface. Two of the five published judging criteria are unreachable
   without one.
-- Version: 0.6.0
+- Version: 0.7.0
 - Location: `web/index.html`, `web/README.md`
 - Inputs: a merchant name and an amount.
 - Outputs: a resolution, a review step, and a settlement call.

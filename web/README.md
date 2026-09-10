@@ -36,6 +36,49 @@ addresses is the specific confusion the repointing exists to remove.
   order's minimum is 97% of the live quote, never a constant.
 - Before the contracts exist on chain it says so plainly rather than failing.
 
+## The four stops — how the page is meant to be walked
+
+The page holds several minutes of material and the presentation is 90 seconds, so it is built so
+that **the four stops are the only thing open** and everything else is one click away. The anchor
+rail under the hero names them in order.
+
+| Stop | Section | Seconds | What is said |
+|---|---|---|---|
+| — | Hero | 0:00–0:15 | pay in ETH, the merchant receives USDC, one Uniswap v4 transaction |
+| 1 | Three layers, three questions | 0:15–0:35 | ENSv2 who may act · the hook how it settles · The Graph what happened |
+| 2 | The Uniswap v4 hook is the automation | 0:35–1:00 | the merchant fixes the terms once; the payer supplies only an order id; full fill or full revert |
+| 3 | Try the payment | — | the live card, for the interactive walk rather than the timed one |
+| 4 | The receipt is independently queryable | 1:00–1:20 | the latest V3 settlement, read live: 0.001 ETH into 2.216294 USDC, zero fee |
+| — | Verified live on Sepolia | 1:20–1:30 | the seven-line checklist, then close |
+
+**Open by default:** hero, the three layers, the hook automation, the payment card, the latest V3
+settlement, the verified-live checklist.
+
+**Folded by default — these are answers to judge questions, not stops on the walk:** what this
+deployment accepts exactly · merchant mode · live ENSv2 permissions · the entity-id construction ·
+contracts, pool state, RPC checks and source verification · one address, four chains · earlier V1
+proof. Seven folds, and a fold is not a hiding place: every one of them is one click from the walk,
+and the two that carry live reads still run their reads when opened.
+
+`View live proof` in the hero jumps to the **receipt**, not to the top of the evidence, so the
+fourth stop is one click from the first.
+
+## The three numbers, held apart
+
+A reader scanning the payment card sees three USDC figures that can look like a contradiction, so
+the card labels each one and says why they differ:
+
+| Label | What it is |
+|---|---|
+| Current pool quote | what 0.001 ETH buys from the pool right now |
+| Minimum for a newly created order | 97% of that quote — what a new order would carry |
+| Previous verified V3 settlement | 2.216294 USDC, what the live settlement actually paid |
+
+followed by: *"The pool price has changed since the verified settlement; the current quote applies
+only to a newly created order."* The pool is thin on purpose and V3's own settlement is part of why
+the price sits where it does. Naming the three is cheaper than being asked about them, and much
+cheaper than being disbelieved about them.
+
 ## What it reads before it enables anything
 
 On load the page performs one readback over the public RPC (`https://ethereum-sepolia-rpc.publicnode.com`)

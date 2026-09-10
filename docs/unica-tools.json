@@ -575,7 +575,7 @@
     {
       "id": "web-checkout-surface",
       "name": "Web Checkout Surface",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "status": "PROTOTYPE",
       "paths": [
         "web/index.html",

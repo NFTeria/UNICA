@@ -146,11 +146,33 @@
   ul.evidence li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 15px; display: flex; gap: 10px; }
   ul.evidence li .m { flex: 0 0 1.1em; font-weight: 700; color: var(--accent); }
 
+  /* ── the anchor rail: the four stops of the 90-second walk, in order ──── */
+  nav.stops { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; }
+  nav.stops a {
+    text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 12px;
+    background: var(--surface);
+  }
+  nav.stops a:hover { color: var(--ink); }
+  nav.stops a b { color: var(--ink); font-weight: 700; margin-right: 6px; font-variant-numeric: tabular-nums; }
+
   /* ── disclosures: everything a judge does not need in the first minute ── */
   details { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
   summary { cursor: pointer; font-weight: 500; font-size: 15px; padding: 4px 0; }
   summary::marker { color: var(--muted); }
   details > *:not(summary) { margin-top: 12px; }
+  /* A whole section folded away. The summary keeps the weight of the heading it replaces, so the
+     page still reads as a table of contents when every fold is shut. */
+  details.fold { margin: 56px 0; border-top: 1px solid var(--line); padding-top: 20px; }
+  details.fold > summary { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; padding: 0; }
+  details.fold > summary .hint { display: block; font-size: 14px; font-weight: 400; color: var(--muted);
+                                 margin-top: 4px; letter-spacing: 0; }
+
+  /* the three numbers a reader could mistake for a contradiction, held apart */
+  .three-numbers { margin: 16px 0 0; }
+  .three-numbers .n { padding: 10px 0; border-top: 1px solid var(--line); }
+  .three-numbers .n span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+  .three-numbers .n strong { font-size: 17px; font-variant-numeric: tabular-nums; }
 
   /* ── live readouts. Each one fails LOUDLY: an unreachable endpoint and an
         empty answer must never render the same. ───────────────────────────── */
@@ -205,10 +227,17 @@
     <strong>The&nbsp;Graph</strong> to index the receipt.</p>
     <div class="cta-row">
       <a class="primary" id="cta-pay" href="#demo">Pay 0.001 ETH</a>
-      <a class="ghost" href="#proof">View live proof</a>
+      <a class="ghost" href="#receipt">View live proof</a>
     </div>
     <p class="fineprint">Testnet demo · Ethereum Sepolia</p>
     <p class="fineprint">One payment. One wallet confirmation. No custody.</p>
+    <nav class="stops" aria-label="The four stops">
+      <a href="#how"><b>1</b>How it works</a>
+      <a href="#hook"><b>2</b>The hook</a>
+      <a href="#demo"><b>3</b>Live payment</a>
+      <a href="#receipt"><b>4</b>Live receipt</a>
+      <a href="#proof">Technical proof</a>
+    </nav>
   </header>
 
   <!-- ── THE WHOLE PRODUCT, ONE VISUAL. Three layers, three questions. ────────────────────── -->
@@ -276,7 +305,8 @@
     does not wait on a backend to approve the result: it either accepts a valid full settlement or
     reverts the whole transaction.</p>
 
-    <h3 class="prose" style="margin-top:28px">What this deployment accepts, exactly</h3>
+    <details>
+    <summary>What this deployment accepts, exactly</summary>
     <p class="prose">Native ETH in, that chain's configured USDC out. This is not a demo limitation
     that a different link could route around — the deployed contracts refuse anything else in three
     separate places, and each refusal has its own named error:</p>
@@ -294,6 +324,7 @@
     (<code>docs/INPUT-POLICY-SPEC.md</code>, <code>docs/PAYOUT-POLICY-SPEC.md</code>) and both documents
     open by saying they are not implemented. A page that advertised them would be describing a document,
     not a contract.</p>
+    </details>
   </section>
 
   <!-- ── THE DEMO, LINEAR. Setup lives in a drawer; the payment is the page. ──────────────── -->
@@ -369,8 +400,9 @@
   </section>
 
   <!-- ── FOUR CHAINS. Availability, not cross-chain payment. The distinction is the point. ── -->
-  <section id="chains" aria-labelledby="chains-h">
-    <h2 id="chains-h">One address, four chains</h2>
+  <details class="fold" id="chains">
+    <summary>One address, four chains<span class="hint">Where V3 is deployed, and what deployment does
+      and does not prove</span></summary>
     <p class="prose">V3 is deployed and source-verified on <strong>Ethereum Sepolia, Unichain Sepolia,
     Base Sepolia and Arbitrum Sepolia</strong> — the same CREATE2 hook address on every one, each bound
     to that chain's own Uniswap v4 PoolManager, with the same permission bits encoded in the same
@@ -388,18 +420,19 @@
     <p class="note prose">This is <strong>availability on four chains, not a cross-chain payment</strong>.
     Each deployment settles on its own chain. No bridge and no messaging protocol is integrated, and
     none is claimed.</p>
-  </section>
+  </details>
 
   <!-- ── THE EARLIER GENERATION. Kept, and kept smaller. ──────────────────────────────────── -->
-  <section id="earlier" aria-labelledby="earlier-h">
-    <h2 id="earlier-h">Earlier V1 proof</h2>
+  <details class="fold" id="earlier">
+    <summary>Earlier V1 proof<span class="hint">The generation before this one, kept for
+      comparison</span></summary>
     <p class="prose sub">V1 established the original working settlement on Ethereum Sepolia —
     0.001 ETH into 2.003660 USDC, receipt in transaction
     <span class="mono" id="v1-tx"></span>, block 11640026. <strong>V3 is the latest architecture and
     the primary demo</strong>; V1 is prior evidence, not the path this page pays through. The
     subgraph indexes both, which is how the two generations can be compared rather than merely
     both claimed.</p>
-  </section>
+  </details>
 
   <div class="builton">
     <h3>Built on Uniswap v4 · ENSv2 on Sepolia · The Graph</h3>
@@ -805,14 +838,23 @@ function renderNoLink() {
   }
   const connected = S.wallet.present && S.wallet.account;
   S.demo = { minOut, deadline, quote };
+  // THREE NUMBERS, LABELLED APART. The live quote, the minimum a new order would carry, and what the
+  // verified settlement actually paid are three different things that a reader scanning quickly can
+  // mistake for a contradiction. They differ because the pool moved: it is thin on purpose, and V3's
+  // own settlement is part of why the price is where it is. Naming each one is cheaper than being
+  // asked about it, and far cheaper than being disbelieved about it.
   view.innerHTML = `
     <div class="card">
-      <p class="big">${fmt(quote, 6, 6)} USDC</p>
-      <p class="sub">is what 0.001 ETH buys from the live pool right now, read from
-      ${CFG.chainName} a moment ago. A payment link fixes that as a minimum and pays it.</p>
+      <div class="three-numbers">
+        <div class="n"><span>Current pool quote</span><strong>0.001 ETH &asymp; ${fmt(quote, 6, 6)} USDC</strong></div>
+        <div class="n"><span>Minimum for a newly created order</span><strong>${fmt(minOut, 6, 6)} USDC</strong> <span style="display:inline">&mdash; 97% of the quote above</span></div>
+        <div class="n"><span>Previous verified V3 settlement</span><strong>0.001 ETH &rarr; ${fmt(CFG.settlement.amountOut, 6, 6)} USDC</strong></div>
+      </div>
+      <p class="note">The pool price has changed since the verified settlement; the current quote
+      applies only to a newly created order.</p>
       ${rows([
         ["You pay", "0.001 ETH"],
-        ["The merchant receives", `at least ${fmt(minOut, 6, 6)} USDC — 97% of the live quote`],
+        ["The merchant receives", `at least ${fmt(minOut, 6, 6)} USDC`],
         ["Network", `${CFG.chainName} (chain ${CFG.chainId})`],
         ["Wallet prompts", "one confirmation, when a link is opened and paid"],
         ["Outcome", "the hook refuses, or the merchant is paid — nothing in between"],
@@ -998,7 +1040,8 @@ function renderOrder() {
       ${rows([
         ["Merchant", acct(order.recipient)],
         ["You pay", `${eth} ETH`],
-        ["The merchant receives", `at least ${usdc} USDC — the live quote is ${fmt(quote, 6, 6)} USDC`],
+        ["The merchant receives", `at least ${usdc} USDC — fixed when this order was created`],
+        ["Current pool quote", `${fmt(quote, 6, 6)} USDC for ${eth} ETH`],
         ["Network", `${CFG.chainName} (chain ${CFG.chainId})`],
         ["Deadline", `${iso(order.deadline)} (${rel(order.deadline)})`],
         ["Wallet prompts", `one confirmation of <code>pay(orderId)</code> carrying ${eth} ETH`],
@@ -1010,6 +1053,9 @@ function renderOrder() {
       </button>
       ${settled || expired ? "" : switchButton()}
       <p class="note${why.length ? " bad" : ""}" id="msg">${why.length ? why[0] : ""}</p>
+      <p class="note">The verified V3 settlement paid ${fmt(CFG.settlement.amountOut, 6, 6)} USDC for the
+      same 0.001 ETH. The pool price has moved since; the quote above applies to this order now, and the
+      minimum below it is what the hook will actually enforce.</p>
     </div>`;
   const btn = $("#pay");
   if (btn && !btn.disabled) btn.onclick = connected ? pay : connect;
