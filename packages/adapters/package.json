@@ -1,8 +1,8 @@
 {
-  "name": "@unica/protocol",
+  "name": "@unica/adapters",
   "version": "0.1.0",
   "private": true,
-  "description": "UNICA's shared domain model: chains, amounts, orders, quotes, payments, receipts. No I/O, no dependencies.",
+  "description": "Framework-neutral adapter contracts and deterministic mocks. No framework, no wallet library, no network client.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/src/index.js",
@@ -11,14 +11,21 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
+    },
+    "./mock": {
+      "types": "./dist/src/mock/index.d.ts",
+      "default": "./dist/src/mock/index.js"
     }
   },
   "files": [
     "dist"
   ],
+  "dependencies": {
+    "@unica/protocol": "0.1.0"
+  },
   "scripts": {
     "build": "tsc --build tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc --build tsconfig.json --dry",
     "test": "npm run build && node --test \"dist/tests/*.test.js\""
   }
 }
