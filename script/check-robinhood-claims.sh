@@ -46,7 +46,10 @@ SUPERSESSION='SUPERSEDED|superseded|~~|would have to|earlier finding|no longer'
 # Anchored with a trailing ':' because git grep emits "path:line:text" — a '$' after the filename
 # never matches, which silently disabled every exemption the moment --untracked let this file see
 # its own source. Found by the self-test going red on all six families at once.
-EXEMPT='script/check-robinhood-claims\.sh|script/check-surface\.sh|scripts/public-build\.manifest\.json|docs/DEMO-SHOTLIST\.md'
+EXEMPT='script/check-robinhood-claims\.sh|script/check-surface\.sh|scripts/public-build\.manifest\.json|docs/DEMO-SHOTLIST\.md|scripts/verify-candidate\.mjs'
+#        ...and verify-candidate.mjs, which is itself a claims scanner: its patterns and its
+#        planted-probe strings have to contain the phrases it forbids. Same reason
+#        check-surface.sh is exempt. Its own --self-test proves those patterns still fire.
 #        this file itself                  the surface gate's banned list     the same list, as data   the recording session's do-not-claim list
 
 # The claims, as parallel arrays. They were a pipe-delimited blob until the self-test caught the

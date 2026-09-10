@@ -274,6 +274,9 @@ gate     : _need-deps
 	@# The confidential-workflow prototype's repository boundary. Offline: the simulator cannot
 	@# test confidentiality and says so itself, so what is checked is what reaches the repo.
 	bash script/check-cre-confidentiality.sh
+	@# The candidate scanner proves itself offline here; the full source+output scan runs in the
+	@# workspace lane, which is where a build exists to scan.
+	node scripts/verify-candidate.mjs --self-test
 	bash script/check-robinhood-claims.sh --self-test
 	bash script/check-robinhood-claims.sh
 	bash script/verify-v3.sh --self-test

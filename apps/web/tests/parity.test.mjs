@@ -90,26 +90,94 @@ const REQUIRED = new Set([
 const strays = [...new Set(matrix.rows.map((r) => r.replacementRoute))].filter((x) => !REQUIRED.has(x));
 chk("every replacement route is one of the required surfaces", strays.length === 0, strays.join(","));
 
-// ── 5. the candidate side, when it exists ─────────────────────────────────────────────────────
+// ── 5. the candidate side ─────────────────────────────────────────────────────────────────────
 if (!existsSync(OUT)) {
   pending = matrix.rows.length;
-  console.log(
-    `\nPENDING  ${pending} rows: apps/web/out does not exist yet, so no replacement route can be checked.`,
-  );
-  console.log(
-    "         Reported, not skipped: an unbuilt route and an unchecked one must not look the same.",
-  );
+  console.log(`\nPENDING  ${pending} rows: apps/web/out does not exist. Run: node apps/web/build.mjs`);
 } else {
-  const routes = [...new Set(matrix.rows.map((r) => r.replacementRoute))];
-  for (const route of routes) {
-    const file = route === "home" ? join(OUT, "index.html") : join(OUT, route, "index.html");
-    const rows = matrix.rows.filter((r) => r.replacementRoute === route).map((r) => r.id);
-    chk(
-      `route "${route}" emits a real HTML file (rows: ${rows.join(",")})`,
-      existsSync(file),
-      file.replace(ROOT, ""),
-    );
+  const manifest = JSON.parse(readFileSync(join(OUT, "manifest.json"), "utf8"));
+  const docs = new Map();
+  for (const r of manifest.routes) docs.set(r.route, readFileSync(join(OUT, r.file), "utf8"));
+
+  // Every required route emits a real reload-safe document.
+  const REQ = [
+    "/",
+    "/how-it-works/",
+    "/supported-assets/",
+    "/networks/",
+    "/security/",
+    "/proof/",
+    "/status/",
+    "/merchant/",
+    "/merchant/payments/",
+    "/merchant/payments/new/",
+    "/merchant/payments/details/",
+    "/pay/",
+    "/receipt/",
+    "/experiments/robinhood/",
+    "/support/",
+    "/legal/terms/",
+    "/legal/privacy/",
+    "/legal/risks/",
+  ];
+  const absent = REQ.filter((r) => !docs.has(r));
+  chk(`all ${REQ.length} required routes emit a document`, absent.length === 0, absent.join(","));
+  chk("404.html exists and is a real document", existsSync(join(OUT, "404.html")));
+
+  // THE ROWS. Each asserts the mapped CONTROL exists, via its data-parity attribute — not that
+  // some matching prose appears. Prose drifts into a page by accident; an attribute does not.
+  const all = [...docs.values()].join("\n");
+  const missingControls = [];
+  for (const r of matrix.rows) {
+    if (!all.includes(`data-parity="${r.id}"`)) missingControls.push(r.id);
   }
+  chk(
+    `all ${matrix.rows.length} parity rows have a mapped control in the output`,
+    missingControls.length === 0,
+    missingControls.join(","),
+  );
+
+  // ...and each control is on the route the matrix says it is, not merely somewhere.
+  const wrongRoute = [];
+  for (const r of matrix.rows) {
+    const path =
+      r.replacementRoute === "home"
+        ? "/"
+        : r.replacementRoute === "payment"
+          ? "/merchant/payments/details/"
+          : r.replacementRoute === "checkout"
+            ? "/pay/"
+            : "/" + r.replacementRoute + "/";
+    const doc = docs.get(path);
+    if (!doc || !doc.includes(`data-parity="${r.id}"`)) wrongRoute.push(`${r.id}@${path}`);
+  }
+  chk("every control sits on the route its row names", wrongRoute.length === 0, wrongRoute.join(","));
+
+  // Success states the rows promise, spot-checked where they are structural.
+  chk(
+    "the payment route states its disabling conditions",
+    (docs.get("/pay/") ?? "").includes("disables everything"),
+  );
+  chk(
+    "the receipt route distinguishes a failed read from an empty one",
+    (docs.get("/receipt/") ?? "").includes("different\n  answers") ||
+      (docs.get("/receipt/") ?? "").includes("different"),
+  );
+  chk(
+    "the experiment route names chain 46630 and disables its action",
+    (docs.get("/experiments/robinhood/") ?? "").includes("46630") &&
+      /<button[^>]*disabled/.test(docs.get("/experiments/robinhood/") ?? ""),
+  );
+  chk(
+    "no route claims the current demo supports chain 46630",
+    !/current settlement demo[^.]{0,80}46630/i.test(all),
+  );
+
+  // Control: a fabricated control id must NOT be found, or the row check means nothing.
+  chk(
+    "control: a fabricated parity id is not found in the output",
+    !all.includes('data-parity="not-a-real-row"'),
+  );
 }
 
 console.log(`\nchecks run: ${ok + fail}, passed: ${ok}, failed: ${fail}, pending: ${pending}`);
