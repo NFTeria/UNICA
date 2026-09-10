@@ -72,9 +72,9 @@ The simulator **cannot** test confidentiality, by its own statement, and deliber
 logs that production hides. So a canary in a simulator log is expected behaviour, not a leak, and
 asserting its absence there would assert something the tool says is false.
 
-What survives into production — and is therefore what `tests/confidentiality.test.mjs` checks —
-is the public result, serialized artifacts, error messages, stack traces, calldata, and tracked
-files. **18 checks, 18 passed**, including two controls: a deliberately planted canary IS detected,
+What `tests/confidentiality.test.mjs` checks is the public result, serialized artifacts, error
+messages, stack traces, calldata, and tracked files — repository-controlled public and persistent
+surfaces observable locally. Production TEE confidentiality remains untested pending hosted access. **18 checks, 18 passed**, including two controls: a deliberately planted canary IS detected,
 and a context that includes the private policy DOES leak, which is why policy is never put in one.
 
 | Surface                                 | Canary present?    |

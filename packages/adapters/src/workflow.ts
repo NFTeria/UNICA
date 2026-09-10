@@ -10,8 +10,11 @@
  * and a surface that collapses them into "unavailable" tells an operator nothing.
  */
 
-/** How a piece of evidence was produced. `confirmed` is the only one that means a real chain. */
-export type EvidenceClass = "mock" | "simulated" | "confirmed";
+// EvidenceClass is declared once, in evidence.ts, beside the guards that police it. Re-declaring
+// it here would let the two drift, and a second definition of "confirmed" is exactly the defect
+// the guards exist to prevent.
+import type { EvidenceClass } from "./evidence.js";
+export type { EvidenceClass };
 
 export type WorkflowState =
   /** Access to hosted Confidential Workflows is requested and under review. Not a failure. */
@@ -41,9 +44,4 @@ export type WorkflowState =
  */
 export function isSettlementProven(state: WorkflowState): boolean {
   return state.kind === "confirmed-settlement";
-}
-
-/** Evidence that must never be rendered or serialized as `confirmed`. */
-export function mayClaimConfirmed(evidence: EvidenceClass): boolean {
-  return evidence === "confirmed";
 }

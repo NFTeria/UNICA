@@ -35,8 +35,8 @@ evidence is offline rather than a simulator assertion:
 So a private value appearing in a **simulator log** is documented expected behaviour, not a leak.
 Asserting its absence there would assert something the tool says is false. What can be tested — and
 is, in `tests/confidentiality.test.mjs` — is whether a private value reaches the **public result**,
-a serialized artifact, an error message, a stack trace, calldata, or a tracked file. Those surfaces
-survive into production.
+a serialized artifact, an error message, a stack trace, calldata, or a tracked file. Those are repository-controlled public and persistent surfaces observable locally.
+**Production TEE confidentiality remains untested pending hosted access.**
 
 Chainlink's concept page states the rule this integration follows by construction:
 "Don't log in production Confidential Workflows." —

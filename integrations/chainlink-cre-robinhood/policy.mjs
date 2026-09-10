@@ -15,7 +15,7 @@
  * So a private value appearing in a SIMULATOR log is documented, expected behaviour and is not a
  * leak. The boundary that can be tested — and is, in tests/confidentiality.test.mjs — is whether a
  * private value reaches the PUBLIC RESULT, a serialized artifact, an error message, a stack trace,
- * or calldata. Those are the surfaces that survive into production.
+ * or calldata. Those are repository-controlled public and persistent surfaces observable locally.
  */
 
 /** What the workflow may return. Nothing else crosses the boundary. */

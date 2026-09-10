@@ -14,9 +14,13 @@
  *   1. A canary appearing in SIMULATOR LOGS is documented, expected behaviour. Asserting its
  *      absence there would be asserting something the tool says is false, and a green result would
  *      mean the test was wrong rather than the boundary safe.
- *   2. The surfaces that DO survive into production — the public result, serialized artifacts,
- *      error messages, stack traces, calldata, and tracked files — can be tested offline, exactly,
- *      right here. So they are.
+ *   2. Repository-controlled public and persistent surfaces — the public result, serialized
+ *      artifacts, error messages, stack traces, calldata, and tracked files — CAN be tested
+ *      offline, exactly, right here. So they are.
+ *
+ *      Canary tests cover repository-controlled public and persistent surfaces observable locally.
+ *      Production TEE confidentiality remains untested pending hosted access. Nothing in this file
+ *      is evidence about an enclave.
  *
  * Chainlink's concept page also states the rule this file enforces by construction:
  * "Don't log in production Confidential Workflows."
