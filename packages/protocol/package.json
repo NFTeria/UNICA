@@ -1,0 +1,24 @@
+{
+  "name": "@unica/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "UNICA's shared domain model: chains, amounts, orders, quotes, payments, receipts. No I/O, no dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test \"dist/tests/*.test.js\""
+  }
+}
