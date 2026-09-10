@@ -21,3 +21,10 @@ package-lock.json
 
 # Foundry owns Solidity formatting via `forge fmt`, which the gate already runs.
 *.sol
+
+# Line-oriented by requirement, not by style. script/scan.sh refuses a bare 32-byte value whose
+# line carries no label word, so each pin here keeps its label and its value on ONE line. Prettier
+# split them once already, orphaning two documented hashes and turning the secret scan red — the
+# same defect docs/unica-tools.json met before it. Formatting is not worth a gate that stops working.
+scripts/public-build.manifest.json
+docs/unica-tools.json

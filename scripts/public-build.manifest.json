@@ -10,44 +10,20 @@
   "requiredPins": [
     { "label": "chain id", "kind": "word", "value": "11155111" },
     { "label": "V3 hook address", "kind": "literal", "value": "0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0" },
-    {
-      "label": "V3 executor address",
-      "kind": "literal",
-      "value": "0x015692C9E43ca19a2504F79368D1156A56680517"
-    },
-    {
-      "label": "V3 pool id",
-      "kind": "literal",
-      "value": "0xf9b873f83814234224be42592795ec812fb948a300188e0c597796171ab9c57a"
-    },
+    {"label": "V3 executor address", "kind": "literal", "value": "0x015692C9E43ca19a2504F79368D1156A56680517"},
+    {"label": "V3 pool id", "kind": "literal", "value": "0xf9b873f83814234224be42592795ec812fb948a300188e0c597796171ab9c57a"},
     { "label": "deploy block", "kind": "word", "value": "11667702" },
     { "label": "release tag", "kind": "literal", "value": "v3-settled-indexed" },
     { "label": "release commit", "kind": "literal", "value": "8cdf141" },
-    {
-      "label": "V3 settlement transaction",
-      "kind": "literal",
-      "value": "0x4f4acbd1b1ed07eccbcf0d7c6f6fcb23a397b619dd3a1dd7fcf7ed7456768854"
-    }
+    {"label": "V3 settlement transaction", "kind": "literal", "value": "0x4f4acbd1b1ed07eccbcf0d7c6f6fcb23a397b619dd3a1dd7fcf7ed7456768854"}
   ],
   "requiredRoutes": [
-    {
-      "label": "CFG.executor is the V3 executor",
-      "pattern": "^  executor: \"0x015692C9E43ca19a2504F79368D1156A56680517\",$"
-    },
-    {
-      "label": "CFG.hook is the V3 hook",
-      "pattern": "^  hook: \"0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0\",$"
-    }
+    {"label": "CFG.executor is the V3 executor", "pattern": "^  executor: \"0x015692C9E43ca19a2504F79368D1156A56680517\",$"},
+    {"label": "CFG.hook is the V3 hook", "pattern": "^  hook: \"0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0\",$"}
   ],
   "rejectedRoutes": [
-    {
-      "label": "CFG.executor must reject V1's executor",
-      "pattern": "^  executor: \"0x044bc8a8773EC7b9B8de2467766636dFFCaC6210\",$"
-    },
-    {
-      "label": "CFG.hook must reject V1's hook",
-      "pattern": "^  hook: \"0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0\",$"
-    }
+    {"label": "CFG.executor must reject V1's executor", "pattern": "^  executor: \"0x044bc8a8773EC7b9B8de2467766636dFFCaC6210\",$"},
+    {"label": "CFG.hook must reject V1's hook", "pattern": "^  hook: \"0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0\",$"}
   ],
   "prohibitedClaims": [
     { "id": "erc20-input", "pattern": "ERC-?20[^.]{0,30}(input|support)" },
@@ -63,22 +39,10 @@
     { "id": "sponsor-qualification", "pattern": "sponsor qualif" }
   ],
   "prohibitedExternal": [
-    {
-      "id": "script-src",
-      "pattern": "<script[^>]+src=",
-      "why": "an external script is a third-party dependency this repository never disclosed"
-    },
-    {
-      "id": "link-tag",
-      "pattern": "<link\\s",
-      "why": "a stylesheet or font link is the same, and web/README.md claims neither exists"
-    },
+    {"id": "script-src", "pattern": "<script[^>]+src=", "why": "an external script is a third-party dependency this repository never disclosed"},
+    {"id": "link-tag", "pattern": "<link\\s", "why": "a stylesheet or font link is the same, and web/README.md claims neither exists"},
     { "id": "css-import", "pattern": "@import", "why": "a CSS import fetches from wherever it points" },
-    {
-      "id": "cdn-host",
-      "pattern": "fonts\\.(googleapis|gstatic)\\.com|cdn\\.jsdelivr\\.net|cdnjs\\.cloudflare\\.com|unpkg\\.com",
-      "why": "a named CDN host, however it is referenced"
-    }
+    {"id": "cdn-host", "pattern": "fonts\\.(googleapis|gstatic)\\.com|cdn\\.jsdelivr\\.net|cdnjs\\.cloudflare\\.com|unpkg\\.com", "why": "a named CDN host, however it is referenced"}
   ],
   "approvedClaim": {
     "marker": "UNICA demonstrates",
