@@ -102,7 +102,9 @@ Executable quotes from the Quoter:
 | TSLA/"USDC"(6d) 3000/60 | 1.0 TSLA | 335893108 (335.893108) | 335.9        |
 | TSLA/native 10000/200   | 1.0 TSLA | 8104677426580296 wei   | —            |
 
-**About 15% slippage between 0.1 and 1.0 TSLA.** Any experimental settlement must be small.
+**About 15% slippage between 0.1 and 1.0 TSLA** — this venue is thin, and its quote is
+size-dependent. Any experimental settlement must be small, and the quote must be re-read at the
+size actually being settled rather than extrapolated from a smaller one.
 
 ### 3.4 Symbol is not identity on this chain
 
@@ -130,10 +132,10 @@ pool whose `hooks` field is that hook. Every existing TSLA pool is hookless. Enf
 attached to them, so they cannot be the settlement venue for a hook-enforced payment.
 
 **Path 2 is selected**: initialize a dedicated hook-enabled pool with verified test tokens and seed
-minimal test liquidity. The existing hookless pools then serve a second, better purpose — they are
-an **independent executable reference price** for the same pair, which is exactly the input the
-deviation check needs. Quoting and settling in the same pool would have given one source pretending
-to be two.
+minimal test liquidity. The existing hookless pools then serve a second purpose — they are a
+**separate executable reference venue** for the same pair, which is exactly the input the
+deviation check needs. Quoting and settling in the same pool would have given one venue pretending to
+be two. Two venues is still not two independent price sources.
 
 Path 2's precondition — that the program permits pool initialization and liquidity seeding — is
 **not established** and is a blocker below.
