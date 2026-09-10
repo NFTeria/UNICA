@@ -359,7 +359,33 @@ redeployed — no chain transaction, the same event signature and the same handl
 tests still green. It now returns two settlements: V1's `2003660` and V3's `2216294`. The V3 entity
 id ends `6c000000` — `0x6c` = 108, the exact log position the receipt was emitted at.
 
-**Still not claimed:** V3 is exercised on **Ethereum Sepolia only**. Unichain, Base and Arbitrum
+### And a second one, through the published page — same day
+
+`receiptCount()` is **2**. The second settlement did not come from a script: it was made in a
+browser, on <https://nfteria.github.io/UNICA/>, through the whole product.
+
+| | |
+|---|---|
+| Merchant | `nfteria.eth`, resolved live on **ENSv2 Sepolia** to `0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73` |
+| Register the order | [`0xe33760b4…12b6`](https://sepolia.etherscan.io/tx/0xe33760b47f2af632b54ac76bc50cb1a3988184a1142d3f03a89d66d6642312b6) · block 11675551 |
+| **Settle it** | [**`0x4a4ab260…604c`**](https://sepolia.etherscan.io/tx/0x4a4ab260728b026494da2120f03a627099b6130260a06b8d9172aec394af604c) · block 11675553 |
+| Order id | `0xd27a2def27cc56b9ea9e822d6ba6710a5f6051e230543c164b6fed376ea30120` |
+| Paid | 0.001 ETH in, **1.774099 USDC** out, fee 0 |
+
+**The page predicted it before it was signed.** The checkout displayed a quote of **1.774099 USDC**,
+computed in the browser from the pool's live `sqrtPriceX96` and liquidity. The settlement paid
+**1774099** units. Not close — the same integer. The rehearsal did this once against the first
+settlement from a Foundry fork; this time the arithmetic ran in a browser tab against live state and
+was right again.
+
+**This is the first settlement in which the ENSv2 leg was load-bearing.** The first one named a
+recipient address directly. This one started from a name: the resolver was read, the address was
+shown to the payer before anything was signed, and that address — the one on screen, not a
+re-resolved one — is what the order carries. Identity, enforcement and proof all ran in one pass
+through the deployed product.
+
+**Still not claimed:** no *stranger* has completed a payment through the page; both settlements were
+made by this project. And V3 is exercised on **Ethereum Sepolia only**. Unichain, Base and Arbitrum
 Sepolia carry the same address, are verified, and have settled nothing — `receiptCount()` is 0 on
 all three. Deployed and bound is the rung they reach.
 

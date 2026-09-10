@@ -1161,7 +1161,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Purpose: let a person pay a merchant by name, seeing the resolved address before they commit.
 - Product role: the operable surface. Two of the five published judging criteria are unreachable
   without one.
-- Version: 0.7.1
+- Version: 0.8.1
 - Location: `web/index.html`, `web/README.md`
 - Inputs: a merchant name and an amount.
 - Outputs: a resolution, a review step, and a settlement call.
@@ -1169,7 +1169,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Security guarantees: none of its own; it shows what it resolved and asks before acting.
 - Explicit non-guarantees: it is pinned to **V3 on Ethereum Sepolia** and knows nothing about the V2
   invoice path; it accepts native ETH and pays USDC, because that is what the deployed contracts
-  accept; no stranger has yet completed a payment through it.
+  accept; one real settlement has run through it — 0.001 ETH into 1.774099 USDC, tx `0x4a4ab260…604c` — made by this project rather than by a stranger.
 - Dependencies: the ENSv2 resolver module.
 - Networks: Ethereum Sepolia.
 - Status: PROTOTYPE

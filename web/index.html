@@ -190,6 +190,13 @@
     display: inline-block; text-decoration: none; font-size: 14px; font-weight: 500;
     border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; background: var(--surface);
   }
+  /* The only action left on a settled or expired card, so it is shaped like the button it replaces. */
+  a.cta-again {
+    display: block; text-align: center; text-decoration: none; font: 500 16px/1 inherit;
+    font-family: inherit; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 20px; margin-top: 16px; background: var(--surface); color: var(--ink);
+  }
+  a.cta-again:hover { border-color: var(--accent); }
 
   /* the merchant field, in the drawer where setup belongs */
   .ens label { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
@@ -684,7 +691,7 @@ async function walletState() {
 // Page state. Nothing is enabled on a value older than the last reread().
 // `merchantOpen` survives a re-render so resolving a name does not slam the drawer it was typed in.
 const S = { orderId: null, order: null, count: null, rb: null, rbError: null,
-            wallet: { present: false }, quote: 0n, demo: null, merchantOpen: false };
+            wallet: { present: false }, quote: 0n, demo: null, merchantOpen: false, latest: null };
 
 async function reread() {
   try { S.rb = await readback(); S.rbError = null; }
@@ -761,6 +768,12 @@ function complain(e) {
   const m = msgEl();
   if (m) { m.textContent = sayWallet(e); m.className = "note bad"; }
 }
+
+// Back to the merchant view, with the drawer already open. `?merchant=1` is read in main(); the
+// pathname is used rather than a bare "?" so the settled order id is genuinely dropped.
+const againLink = (settled) =>
+  `<a class="cta-again" href="${esc(location.pathname)}?merchant=1#demo">${settled
+    ? "Register another order and run it again" : "Register a new order"}</a>`;
 
 const switchButton = () => S.wallet.present && S.wallet.chainId !== CFG.chainId
   ? `<button class="secondary" id="switch">Switch the wallet to ${CFG.chainName}</button>` : "";
@@ -868,8 +881,10 @@ function renderStaticLinks() {
 async function main() {
   renderStaticLinks();
   renderInventory();
-  const q = new URLSearchParams(location.search).get("order");
+  const params = new URLSearchParams(location.search);
+  const q = params.get("order");
   S.orderId = q && /^0x[0-9a-fA-F]{64}$/.test(q) ? q : null;
+  if (params.get("merchant") === "1") S.merchantOpen = true;
   const cta = $("#cta-pay");
   if (cta && !S.orderId) cta.textContent = "Try the payment";
   await refresh();
@@ -912,7 +927,7 @@ function renderNoLink() {
       <div class="three-numbers">
         <div class="n"><span>Current pool quote</span><strong>0.001 ETH &asymp; ${fmt(quote, 6, 6)} USDC</strong></div>
         <div class="n"><span>Minimum for a newly created order</span><strong>${fmt(minOut, 6, 6)} USDC</strong> <span style="display:inline">&mdash; 97% of the quote above</span></div>
-        <div class="n"><span>Previous verified V3 settlement</span><strong>0.001 ETH &rarr; ${fmt(CFG.settlement.amountOut, 6, 6)} USDC</strong></div>
+        <div class="n"><span>${S.latest ? "Most recent verified V3 settlement" : "First verified V3 settlement"}</span><strong>0.001 ETH &rarr; ${fmt(S.latest ? BigInt(S.latest.amountOut) : CFG.settlement.amountOut, 6, 6)} USDC</strong>${S.latest ? ` <span style="display:inline">&mdash; block ${esc(S.latest.blockNumber)}</span>` : ""}</div>
       </div>
       <p class="note">The pool price has changed since the verified settlement; the current quote
       applies only to a newly created order.</p>
@@ -937,6 +952,10 @@ function renderNoLink() {
         <p class="sub">A merchant is a name, not an address. Resolve one on ENSv2 Sepolia and the order
         will name the address you were shown — or leave it empty to register to your own account and
         try the payer's side without a merchant.</p>
+        <p class="note"><strong>Try <code>nfteria.eth</code></strong> — an ENSv2 Sepolia name held by
+        this project, which resolves to the deployer. Any ENSv2 Sepolia name with an address record
+        works. A name that resolves but carries no address record is refused rather than approximated,
+        so there is nobody to pay and nothing is registered.</p>
         ${merchantBlock()}
         ${rows([
           ["Recipient", S.ens && S.ens.ok
@@ -990,7 +1009,7 @@ function merchantBlock() {
     <div class="ens" style="margin:20px 0">
       <label for="merchant">Merchant's ENS name</label>
       <div class="field">
-        <input id="merchant" class="mono" placeholder="merchant.eth" value="${esc(S.ensInput || "")}"
+        <input id="merchant" class="mono" placeholder="nfteria.eth" value="${esc(S.ensInput || "")}"
                autocomplete="off" spellcheck="false" />
         <button class="secondary" id="resolve">${S.ensBusy ? "Resolving…" : "Resolve"}</button>
       </div>
@@ -1081,7 +1100,7 @@ const orderQuote = (order) => S.rb ? quoteExactIn(order.amountIn, S.rb.sqrtPrice
 const belowMinimum = (order, quote) =>
   `The quote for ${fmt(order.amountIn, 18, 6)} ETH is now ${fmt(quote, 6, 6)} USDC against a minimum of ${fmt(order.minOut, 6, 6)} USDC:
    the pool has moved below this order's minimum; the hook would refuse the payment and you would keep your ETH.
-   <a href="${esc(location.pathname)}">Register a new order.</a>`;
+   <a href="${esc(location.pathname)}?merchant=1#demo">Register a new order.</a>`;
 
 // ── STEP 1 of the demo, with a real order in the link. This is the card a judge should land on.
 function renderOrder() {
@@ -1115,9 +1134,12 @@ function renderOrder() {
       <button class="${connected || disabled ? "pay" : "secondary"}" id="pay" ${disabled ? "disabled" : ""}>
         ${settled ? "Already settled" : expired ? "Expired" : connected ? `Pay ${eth} ETH` : "Connect a wallet to pay"}
       </button>
-      ${settled || expired ? "" : switchButton()}
+      ${settled || expired ? againLink(settled) : switchButton()}
       <p class="note${why.length ? " bad" : ""}" id="msg">${why.length ? why[0] : ""}</p>
-      <p class="note">The verified V3 settlement paid ${fmt(CFG.settlement.amountOut, 6, 6)} USDC for the
+      ${settled ? `<p class="note">An order is consumed exactly once and there is no way back from
+      settled — that is the invariant, not a limitation of this page. Registering another order is
+      how you run it again, and it takes one wallet confirmation.</p>` : ""}
+      <p class="note">The most recent verified V3 settlement paid ${fmt(S.latest ? BigInt(S.latest.amountOut) : CFG.settlement.amountOut, 6, 6)} USDC for the
       same 0.001 ETH. The pool price has moved since; the quote above applies to this order now, and the
       minimum below it is what the hook will actually enforce.</p>
     </div>`;
@@ -1182,6 +1204,7 @@ function renderReceipt(r, hash) {
       <div class="linkrow">
         <a href="${CFG.explorer}/tx/${hash}#eventlog">View the transaction</a>
         <a href="${LINKS.graphiql}">Query the receipt</a>
+        <a href="${esc(location.pathname)}?merchant=1#demo">Run it again</a>
       </div>
       <p class="note">The receipt exists only because the merchant was paid — the hook emitted it
       inside the swap, in the same transaction. The Graph picks it up a few blocks later; this page
@@ -1227,6 +1250,9 @@ async function renderGraph() {
     if (!Array.isArray(all)) throw new Error("no settlements field in the answer");
     if (!all.length) { el.innerHTML = '<span class="live-tag">the subgraph answered, and holds no settlement yet</span>'; return; }
     const v3 = all.find((s) => s.hook && s.hook.toLowerCase() === CFG.hook.toLowerCase());
+    // Stash it. The payment card names the most recent settlement too, and two independent reads of
+    // "the latest" drifting apart on one page is worse than one read used twice.
+    if (v3) { S.latest = v3; if (!S.orderId) renderNoLink(); else renderOrder(); }
     if (!v3) {
       el.innerHTML = '<span class="live-tag">the subgraph answered with ' + all.length
         + ' settlement(s), and none of them was emitted by the V3 hook</span>';
