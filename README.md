@@ -15,7 +15,8 @@ scratch during ETHOnline 2026 by **NFTeria**.
 > | | |
 > |---|---|
 > | **App** | **https://nfteria.github.io/UNICA/** |
-> | **Settled swap** | [`0x1120af18…cb83`](https://sepolia.etherscan.io/tx/0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83) — 0.001 ETH in, 2.003660 USDC out, receipt emitted inside the swap |
+> | **V1 settled swap** | [`0x1120af18…cb83`](https://sepolia.etherscan.io/tx/0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83) — 0.001 ETH in, 2.003660 USDC out |
+> | **V3 settled swap** | [`0x4f4acbd1…8854`](https://sepolia.etherscan.io/tx/0x4f4acbd1b1ed07eccbcf0d7c6f6fcb23a397b619dd3a1dd7fcf7ed7456768854) — 0.001 ETH in, **2.216294 USDC** out, `receiptCount` 1 |
 > | **Subgraph** | `https://api.studio.thegraph.com/query/1755384/unica-settlements/v1-632f2e3` — synced, returns that receipt |
 > | **ENSv2** | `unica.eth` on **Sepolia**, delegation broadcast in 12 transactions, all `status 1` |
 > | **The scope, provable** | `node integrations/ensv2/agent.mjs` — 6 rows, 5 of them refusals |
@@ -321,6 +322,41 @@ the arbiter of both.
 nowhere; the Chainlink workflow has never run in a TEE; the agent's key is not in this project's
 keystore, so no agent-signed transaction exists on chain.
 
+
+
+## V3 has settled — 2026-09-10, appended
+
+**`receiptCount()` is 1.** V3's first settlement landed on Ethereum Sepolia today. Every claim above
+that says V3 has settled nothing was true when written and is now superseded by this block.
+
+| | |
+|---|---|
+| Pool id | `0xf9b873f83814234224be42592795ec812fb948a300188e0c597796171ab9c57a` — native ETH / USDC, fee 3000, spacing 60, guarded by the V3 hook |
+| Open pool | [`0x28f56384…1f65`](https://sepolia.etherscan.io/tx/0x28f56384137fc465a7472891993883d74daa9a9f71aa096f3e18246c33e81f65) · block 11675180 · 56,966 gas |
+| Seed liquidity | [`0x1c955980…64f9`](https://sepolia.etherscan.io/tx/0x1c955980f27ca8da9db488ccefbaeef4ec3bd56f49fb0fe9dfcf3af2212864f9) · block 11675182 · 55,437 gas · 0.008 ETH + 20 USDC |
+| Register the order | [`0x4514e274…2884`](https://sepolia.etherscan.io/tx/0x4514e274531731441551a7122617ee08a877c447819feeb4b64f8a5402692884) · block 11675185 · 195,334 gas |
+| **Settle it** | [**`0x4f4acbd1…8854`**](https://sepolia.etherscan.io/tx/0x4f4acbd1b1ed07eccbcf0d7c6f6fcb23a397b619dd3a1dd7fcf7ed7456768854) · block 11675187 · 264,647 gas |
+
+All four `status 1`. The `SettlementReceipt`, decoded from the log at index 108:
+
+```
+amountIn   1000000000000000   = 0.001 ETH
+amountOut  2216294            = 2.216294 USDC
+fee        0
+topic0     0xf9b834e9c2d7d0250251dfdb3c5fdc3f97d829dbe3402f45c89257ab4ec43563
+```
+
+**That topic is V1's, unchanged** — the same signature the existing subgraph already indexes, which
+is what makes a V3 deployment visible to everything built for V1.
+
+**The number was predicted before it was signed.** `test/v3/LiveFireV3Fork.t.sol` rehearsed the whole
+sequence against live Sepolia state and the deployed contracts, and printed `2216294`. The chain
+then produced 2216294. Nothing was deployed to achieve it: the hook, the executor, the PoolManager
+and the liquidity router were all already there.
+
+**Still not claimed:** V3 is exercised on **Ethereum Sepolia only**. Unichain, Base and Arbitrum
+Sepolia carry the same address, are verified, and have settled nothing — `receiptCount()` is 0 on
+all three. Deployed and bound is the rung they reach.
 
 ## Proof: UNICA V3, one address on four chains (2026-09-09)
 
