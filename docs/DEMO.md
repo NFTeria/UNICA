@@ -3,6 +3,35 @@
 UNICA is a public settlement infrastructure project for Uniswap v4. Its policy hook and narrow
 executor enforce order-bound, full-fill settlement and emit an indexable receipt.
 
+## The 90-second walk — four stops, 2026-09-10
+
+The live page holds several minutes of material and the presentation is ninety seconds, so the page
+is built with **only the four stops open** and everything else folded one click away. The anchor rail
+under the hero names them in order. Live at <https://nfteria.github.io/UNICA/>.
+
+| Time | Stop | On screen | Said |
+|---|---|---|---|
+| 0:00–0:15 | Hero | "Pay with UNICA · Pay in ETH. The merchant receives USDC." | UNICA lets a customer pay in ETH while the merchant receives USDC in one Uniswap v4 transaction. It adds limited agent authority, automatic settlement enforcement, and a verifiable receipt. |
+| 0:15–0:35 | Three layers | the complete three-layer diagram | The product separates three questions. ENSv2 controls **who may act** — the agent gets one narrow permission while the merchant keeps ownership. The Uniswap v4 hook controls **how the payment must settle**. The Graph records **what happened**, by indexing the receipt. Close on: *identity, automated enforcement, and verifiable proof*. |
+| 0:35–1:00 | The hook | the order band and `ETH → before swap → Uniswap v4 → after swap → USDC` | The merchant fixes the recipient, the USDC payout, the required amount and the deadline. The payer supplies only the order id, so they cannot replace those terms. The hook verifies the order before the swap and checks the realised output after it. A full fill pays the merchant and emits a receipt; a short fill reverts everything. The hook is the automation: full settlement or full revert, with no custody, fee, oracle or backend approval. |
+| 1:00–1:20 | The receipt | "The receipt is independently queryable", read live from The Graph | This is the latest V3 settlement, read live from The Graph. It settled 0.001 ETH into 2.216294 USDC on Sepolia with zero hook fee. The receipt points back to the exact transaction and log. Show the Etherscan and subgraph buttons. |
+| 1:20–1:30 | Close | the verified-live checklist | V3 uses the same deterministic hook address across four verified deployments, including Unichain. Sepolia is where we exercised the complete flow. ENSv2 controls who may act, Uniswap v4 enforces settlement, and The Graph proves it. |
+
+**Do not scroll through, during the main walk:** what this deployment accepts exactly · merchant
+mode · the raw ENSv2 permissions · the entity-id construction · the contracts and RPC checks · the
+four chains · the earlier V1 proof. All seven are folded on the page and all seven are good answers
+to judge questions. Opening one is a deliberate move, not an accident of scrolling.
+
+**Never say "supported token" of the deployed V3.** Native ETH in and the chain's configured USDC
+out is what the contracts enforce — `NativeInputOnly()`, `PayoutCurrencyNotAllowed(address)`, and
+the hook's own refusal of any other pool shape at `beforeInitialize`. More inputs and more payout
+assets exist only as unimplemented specifications. The hero sentence is accurate as written.
+
+**And the three numbers on the payment card are not a contradiction.** Current pool quote, minimum
+for a newly created order, and the previous verified settlement are three different things; the card
+labels each and says the pool price has moved since the settlement. If asked: the pool is thin on
+purpose, and V3's own settlement is part of why the price is where it is.
+
 ## The sequence the demo shows
 
 ```text
@@ -14,6 +43,12 @@ Order created
 → canonical receipt emitted
 → receipt indexed by The Graph
 ```
+
+> **This table is V1's record, written 2026-09-05.** The arrows and the invariants are unchanged in
+> V3 — it is the same sequence — but every address, block and amount below is V1's, and the last row
+> is out of date: the subgraph **is** deployed to Subgraph Studio and indexes both generations. V3's
+> equivalent numbers are in the walk above and in the README's "V3 has settled" block. Kept as
+> written, because the record of what was proven when is the point of having it.
 
 Each arrow is a fact with a proof, on the live chain (Ethereum Sepolia, chain id 11155111):
 
