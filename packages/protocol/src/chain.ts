@@ -49,12 +49,24 @@ const METADATA: { readonly [K in RoutedChainId]: ChainMetadata } = {
     shortName: "Robinhood",
     isTestnet: true,
     nativeCurrency: { symbol: "ETH", decimals: 18 },
-    explorer: null, // no explorer verified for 46630; docs/chains/ROBINHOOD.md records none
-    // Routes, but no USDC was found on it when the table was read, so the contracts refuse to
-    // deploy here at all rather than name an unverified token. Note also that the tokenized
-    // equities are NOT on this chain: docs/chains/ROBINHOOD.md records all 194 of Robinhood's
-    // stock-token deployments on chain 4663, with zero on 46630, and the canonical mainnet TSLA,
-    // WETH and USDG addresses reading back empty here.
+    // Verified 2026-09-10 at the API layer, not in the page: the HTML routes are a client-rendered
+    // application and answer 200 for a transaction hash that does not exist, so they prove nothing.
+    // `/api/v2/transactions/<real>` returns the transaction and `<fabricated>` returns 404, which is
+    // the control that makes this trustworthy. docs/chains/ROBINHOOD.md section 0.4.
+    explorer: "https://explorer.testnet.chain.robinhood.com",
+    // Routes, and does NOT settle. Two separate reasons, neither softened by the other:
+    //
+    //   1. No verified payout token. All four Circle testnet USDC addresses this table names for
+    //      the other chains read back 0 runtime bytes here on 2026-09-10, so
+    //      `UnicaDeploymentsV3.payoutCurrency(46630)` reverts and BOTH contracts' constructors
+    //      call it. V3 cannot be constructed on this chain at all.
+    //   2. Faucet-issued testnet stock-token contracts DO now exist here (TSLA, AMZN, PLTR, NFLX
+    //      and AMD symbols, 18 decimals, read back 2026-09-10 — ROBINHOOD.md section 0). They are
+    //      not at the canonical mainnet addresses, which still hold zero bytes here, they are not
+    //      equities, and their existence says nothing about whether a pool pairing any of them
+    //      with a settleable counter-asset exists or holds liquidity.
+    //
+    // UNICA has no Robinhood integration. The chain is researched and probed, nothing more.
     canSettle: false,
   },
   11155111: {
