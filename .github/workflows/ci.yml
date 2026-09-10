@@ -116,6 +116,38 @@ jobs:
           echo "Run it with: make fork   (and make fork-mutants)"
           grep -rhoE 'function test[A-Za-z0-9_]*\(' test/fork --include='*.t.sol' | wc -l
 
+  # The Node workspace, which is a separate toolchain from the Foundry one above and shares nothing
+  # with it. It is its own lane so a TypeScript failure never reads as a contract failure, and so
+  # the contract gate stays runnable by somebody who has not installed Node at all.
+  #
+  # No setup-node step: the runner ships Node and npm, and every action in this repository is
+  # SHA-pinned. Adding one more pinned action to install a runtime that is already present would be
+  # a supply-chain surface bought for nothing.
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node and npm versions actually in use
+        run: node --version && npm --version
+
+      # `npm ci` and not `npm install`: it installs the lockfile exactly, and fails rather than
+      # silently resolving something else when the two disagree.
+      - name: Install the workspace from the lockfile
+        run: npm ci
+
+      - name: Format, typecheck, and test every workspace
+        run: npm run check
+
+      # The published-surface gate, run here too. pages.yml runs it before a deploy; running it on
+      # every push means a change that would block a publish is red at the commit that caused it,
+      # not weeks later when somebody next presses publish.
+      - name: Verify the resolved upload directory
+        run: node scripts/verify-public-build.mjs
+
+      - name: Prove the verifier still fails on bad input
+        run: node scripts/verify-public-build.mjs --self-test
+
   # A stranger's path, exactly: clone the public repository without submodules, fetch them
   # with the Makefile, run the gate. If this lane is red, the README's setup is a lie.
   fresh-clone:

@@ -37,6 +37,21 @@ jobs:
       - name: Verify the published surface (script/check-surface.sh)
         run: bash script/check-surface.sh
 
+      # The second gate, running beside the first rather than replacing it. check-surface.sh reads
+      # web/index.html by name, which is correct only while the artifact IS the source; this one
+      # reads the `path:` out of the upload step below and checks whatever that resolves to. Both
+      # run over the same directory today, and a drift row inside the verifier asserts every pin it
+      # holds is also asserted by check-surface.sh, so the two cannot quietly disagree.
+      #
+      # No `npm install`: the verifier has no dependencies and runs on the runner's own Node.
+      - name: Verify the resolved upload directory (scripts/verify-public-build.mjs)
+        run: node scripts/verify-public-build.mjs
+
+      # The instrument before the reading. Each family is fed a known-bad copy of the directory and
+      # must go red; the resolution itself is sabotaged by repointing a throwaway copy of THIS file.
+      - name: Prove the verifier still fails on bad input
+        run: node scripts/verify-public-build.mjs --self-test
+
   deploy:
     # Skipped, not failed, until the owner has enabled Pages and set the repository variable
     # PAGES_ENABLED to true (docs/PUBLISHING.md). Before that, actions/configure-pages cannot find a
