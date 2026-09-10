@@ -271,6 +271,9 @@ gate     : _need-deps
 	@# Six statements about chain 46630 this repository has already had to correct once. Offline:
 	@# no network, no chain call. The self-test runs FIRST because a claim check that cannot fire is
 	@# worse than none — it reports green over whatever the tree actually says.
+	@# The confidential-workflow prototype's repository boundary. Offline: the simulator cannot
+	@# test confidentiality and says so itself, so what is checked is what reaches the repo.
+	bash script/check-cre-confidentiality.sh
 	bash script/check-robinhood-claims.sh --self-test
 	bash script/check-robinhood-claims.sh
 	bash script/verify-v3.sh --self-test

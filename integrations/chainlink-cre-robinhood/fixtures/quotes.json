@@ -1,0 +1,9 @@
+{
+  "$comment": "Deterministic fixtures. PUBLIC data only - no private policy field appears here, and script/check-cre-confidentiality.sh refuses one that does. Amounts are raw integer units, because a pool prices raw units and never reads decimals().",
+  "scenarios": [
+    {"id": "agree", "reference": {"amountOut": "39531580", "atSeconds": 1789059990}, "settlement": {"amountOut": "39500000", "atSeconds": 1789059990}, "expect": "PROCEED"},
+    {"id": "stale", "reference": {"amountOut": "39531580", "atSeconds": 1789059990}, "settlement": {"amountOut": "39500000", "atSeconds": 1789050000}, "expect": "REJECT_STALE_QUOTE"},
+    {"id": "deviation", "reference": {"amountOut": "39531580", "atSeconds": 1789059990}, "settlement": {"amountOut": "20000000", "atSeconds": 1789059990}, "expect": "REJECT_DEVIATION"},
+    {"id": "below-floor", "reference": {"amountOut": "1000", "atSeconds": 1789059990}, "settlement": {"amountOut": "1000", "atSeconds": 1789059990}, "expect": "REJECT_BELOW_FLOOR"}
+  ]
+}

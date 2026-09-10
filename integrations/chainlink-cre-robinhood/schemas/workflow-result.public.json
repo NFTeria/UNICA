@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UNICA workflow result (PUBLIC)",
+  "description": "The ONLY thing that crosses the enclave boundary. additionalProperties is false so a private value cannot be added by accident - a new field is a deliberate act with a schema change beside it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "evidence",
+    "policyCommitment",
+    "deviationBps"
+  ],
+  "properties": {
+    "verdict": {
+      "enum": [
+        "PROCEED",
+        "REJECT_STALE_QUOTE",
+        "REJECT_DEVIATION",
+        "REJECT_BELOW_FLOOR",
+        "REJECT_SIMULATION_FAILED",
+        "REJECT_UNSUPPORTED_CHAIN"
+      ]
+    },
+    "evidence": {
+      "enum": [
+        "mock",
+        "simulated"
+      ],
+      "description": "'confirmed' is deliberately NOT permitted here: it is reserved for a real confirmed target-chain transaction and no workflow result may claim it."
+    },
+    "policyCommitment": {
+      "type": "string",
+      "pattern": "^policy-[0-9a-f]{8}$"
+    },
+    "deviationBps": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  }
+}

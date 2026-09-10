@@ -9,3 +9,4 @@ export * from "./contracts.js";
 export * from "./errors.js";
 export * from "./clock.js";
 export * from "./wallet-gate.js";
+export * from "./workflow.js";
