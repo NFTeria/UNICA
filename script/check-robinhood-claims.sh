@@ -60,6 +60,12 @@ CLAIM_ID=(
   "robinhood-integration"
   "existence-proves-liquidity"
   "v3-deployable-46630"
+  "no-blockscout-key-exists"
+  "universal-300-rps"
+  "fallback-replaces-primary"
+  "unica-integrates-blockscout-or-x402"
+  "x402-payment-completed"
+  "key-required-for-workflows"
 )
 CLAIM_WHAT=(
   "that no stock-token contract exists on 46630"
@@ -68,6 +74,12 @@ CLAIM_WHAT=(
   "that UNICA is integrated with, partnered with, or endorsed by Robinhood"
   "that token existence proves a settlement path or liquidity"
   "that V3 is deployable, deployed, or constructible on 46630"
+  "that no Blockscout key exists or that one cannot be obtained"
+  "that a 300 RPS limit is verified for every API surface"
+  "that the second endpoint replaces or redirects the primary Robinhood RPC"
+  "that UNICA integrates with Blockscout or with x402"
+  "that an x402 payment was made, attempted, or completed"
+  "that an API key is required by this repository's workflows"
 )
 CLAIM_PAT=(
   # \b matters here: without it "no" matched inside "canonical" and the row fired on a true
@@ -78,10 +90,22 @@ CLAIM_PAT=(
   "robinhood.{0,25}(integration|integrated|partner|sponsor|endorse|official)|(integrated|partnered).{0,25}with robinhood|powered by robinhood"
   "(token|stock.?token).{0,30}(existence|exists).{0,30}(proves|means|implies|establishes).{0,30}(pool|liquidity|settl)|stock.?token.{0,20}pool.{0,20}(exists|is (funded|liquid|available))"
   "(v3|unicahookv3|unicaexecutorv3).{0,40}(is )?(deployable|deployed|constructible|constructed|live).{0,20}(on )?(chain )?46630|46630.{0,30}(deployable|deployed|constructed).{0,20}(v3|hook|executor)"
+  "(no|zero).{0,20}(blockscout )?(api )?key.{0,20}(exists|is available|is offered)|key.{0,20}cannot be (obtained|acquired|created|issued)|there is no key to get"
+  "300 ?rps|300 requests per second|(every|all|each).{0,30}(endpoint|surface|api).{0,40}300"
+  "(fallback|explorer|second endpoint|robinhood_testnet_explorer).{0,40}(replaces|supersedes|overrides|redirects|instead of).{0,30}(primary|robinhood_testnet)|primary.{0,30}(replaced|redirected|superseded).{0,30}(explorer|fallback)"
+  "unica.{0,40}(integrates|integration|supports|implements).{0,20}(with )?(blockscout|x402)|(blockscout|x402).{0,30}integration.{0,20}(in|for|by) unica"
+  "x402 payment.{0,20}(was |been )?(made|completed|sent|attempted|successful)|(made|completed|sent|paid).{0,20}(an? )?x402 payment|paid (via|with|through) x402"
+  "(api )?key is required|requires an api key|api key is needed|must (have|supply|provide) an? (api )?key"
 )
 
 # Which second-stage filter each family uses. Index-aligned with the arrays above.
 CLAIM_FILTER=(
+  "$SUPERSESSION"
+  "$NEGATION"
+  "$NEGATION"
+  "$NEGATION"
+  "$NEGATION"
+  "$NEGATION"
   "$SUPERSESSION"
   "$NEGATION"
   "$NEGATION"
@@ -112,7 +136,13 @@ if [ "${1:-}" = "--self-test" ]; then
     "UNICA ships an official Robinhood integration."
     "Token existence proves a settlement pool is available."
     "V3 is deployable on chain 46630 today."
-  )
+      "No Blockscout key exists and one cannot be obtained."
+    "Every endpoint has a verified 300 RPS limit."
+    "The fallback replaces the primary Robinhood RPC."
+    "UNICA integrates with Blockscout and supports x402."
+    "An x402 payment was completed to reach the PRO endpoint."
+    "An API key is required to run the checks in this repository."
+)
   GOOD=(
     "The earlier finding of no stock tokens on 46630 is SUPERSEDED by section 0."
     "These are not the canonical mainnet addresses; 0xc9f9c86933092bbbfff3ccb4b105a4a94bf3bd4e is a testnet contract."
@@ -120,7 +150,13 @@ if [ "${1:-}" = "--self-test" ]; then
     "UNICA has no Robinhood integration; the chain was probed and nothing was integrated."
     "Token existence does not prove a settlement pool; none has been shown."
     "V3 is not deployable on chain 46630 because the constructor reverts."
-  )
+      "Keys are obtained through Blockscout's account system; none was requested here."
+    "An x-ratelimit-limit of 300 was observed on two surfaces; the window was not established."
+    "The second endpoint does not replace the primary; nothing redirects to it."
+    "This is not a UNICA integration with Blockscout or x402."
+    "No payment was attempted and no x402 payment was made."
+    "No key is required by any current workflow in this repository."
+)
   for i in "${!CLAIM_ID[@]}"; do
     printf '%s\n' "${BAD[$i]}"  > "$probe/bad.md"
     caught=$(scan_claim "${CLAIM_PAT[$i]}" "${CLAIM_FILTER[$i]}" "$probe")

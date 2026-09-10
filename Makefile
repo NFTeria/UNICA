@@ -113,8 +113,17 @@ deps:
 # else names the VARIABLE. The prompt is interactive and silent on purpose — a key passed as an
 # argument is visible to `ps` and lands in the shell history, which is a leak with a long tail.
 #
-# Robinhood's testnet explorer answered read-only API calls WITHOUT a key on 2026-09-10; the key
-# is for rate limits, not access. Say so rather than implying the reads depend on it.
+# ROBINHOOD, as measured on 2026-09-10. Three per-instance surfaces of its Blockscout explorer
+# each answered read-only calls WITHOUT a key: the REST API (/api/v2/...), the Etherscan-compatible
+# API (/api?module=...&action=...), and the JSON-RPC endpoint (/api/eth-rpc).
+#
+# Blockscout's documentation states a valid key can increase RPS on a per-instance endpoint, and
+# keys are obtained through Blockscout's account system rather than from an instance. No keyed rate
+# limit was measured here, so none is stated. The centralized PRO endpoint is separate and does
+# require authorization: an unauthenticated request to it returned HTTP 402 on that date.
+#
+# No key is required by any current workflow in this repository. ROBINHOOD_SCAN_API_KEY stays
+# optional, and this target exists for the keys that are not.
 .PHONY: scan-key scan-key-check
 scan-key:
 	@bash script/scan-key-setup.sh

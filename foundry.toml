@@ -62,6 +62,15 @@ arbitrum_testnet   = "${ARBITRUM_TESTNET_RPC_URL}"
 base_testnet       = "${BASE_TESTNET_RPC_URL}"
 unichain_testnet   = "${UNICHAIN_TESTNET_RPC_URL}"
 robinhood_testnet  = "${ROBINHOOD_TESTNET_RPC_URL}"
+# A SECOND endpoint for chain 46630, added 2026-09-10. It does NOT replace the line above and
+# nothing redirects to it: `robinhood_testnet` resolves exactly as it did before, and this alias
+# is reached only by naming it. Written as a literal because it is keyless and therefore not a
+# credential — every other entry here is a variable precisely because it carries a key in its path.
+# It is served through the Blockscout explorer for this chain; whether its upstream is operated
+# independently of the primary endpoint has NOT been established, so it is a second access path
+# rather than proven redundancy. Verified: cast chain-id -> 46630, cast block-number, eth_call,
+# and JSON-RPC batch. See docs/chains/ROBINHOOD.md section 0.5.
+robinhood_testnet_explorer = "https://explorer.testnet.chain.robinhood.com/api/eth-rpc"
 arc_testnet        = "${ARC_TESTNET_RPC_URL}"
 
 # --- MAINNETS. Read-only comparison. No fallback, so an unset one fails instead of

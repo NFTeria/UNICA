@@ -31,41 +31,41 @@ JSON-RPC; nothing here is taken from a UI, a screenshot, or a claim.
 **Read on 2026-09-10 via `eth_call` and `eth_getTransactionReceipt` against
 `https://rpc.testnet.chain.robinhood.com/rpc`. `eth_chainId` → `46630`.**
 
-| Fact | Value |
-|---|---|
-| Transaction hash | `0xc1564a9b19307b6823c55b50adee224b3e16a2f2d1476c869b683ddd63892ec8` |
-| Transaction status | `1` |
-| Block number | `117005259` |
-| Faucet contract (`to`) | `0x8762F93772c663c6a88Ba50900bd5381df2717Be` — answers neither `symbol()` nor `decimals()` |
-| Address queried for balances | `0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73` (this repository's documented deployer) |
+| Fact                         | Value                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------ |
+| Transaction hash             | `0xc1564a9b19307b6823c55b50adee224b3e16a2f2d1476c869b683ddd63892ec8`                       |
+| Transaction status           | `1`                                                                                        |
+| Block number                 | `117005259`                                                                                |
+| Faucet contract (`to`)       | `0x8762F93772c663c6a88Ba50900bd5381df2717Be` — answers neither `symbol()` nor `decimals()` |
+| Address queried for balances | `0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73` (this repository's documented deployer)       |
 
 At block `117005259`, `balanceOf(0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73)` returned
 `30000000000000000000` — 30 tokens at 18 decimals — for each of the five contracts below.
 
-| Contract address on 46630 | `symbol()` | `decimals()` | balance of the address above |
-|---|---|---:|---:|
-| `0xc9f9c86933092bbbfff3ccb4b105a4a94bf3bd4e` | `TSLA` | 18 | 30.0 |
-| `0x5884ad2f920c162cfbbacc88c9c51aa75ec09e02` | `AMZN` | 18 | 30.0 |
-| `0x1fbe1a0e43594b3455993b5de5fd0a7a266298d0` | `PLTR` | 18 | 30.0 |
-| `0x3b8262a63d25f0477c4dde23f83cfe22cb768c93` | `NFLX` | 18 | 30.0 |
-| `0x71178bac73cbeb415514eb542a8995b82669778d` | `AMD` | 18 | 30.0 |
+| Contract address on 46630                    | `symbol()` | `decimals()` | balance of the address above |
+| -------------------------------------------- | ---------- | -----------: | ---------------------------: |
+| `0xc9f9c86933092bbbfff3ccb4b105a4a94bf3bd4e` | `TSLA`     |           18 |                         30.0 |
+| `0x5884ad2f920c162cfbbacc88c9c51aa75ec09e02` | `AMZN`     |           18 |                         30.0 |
+| `0x1fbe1a0e43594b3455993b5de5fd0a7a266298d0` | `PLTR`     |           18 |                         30.0 |
+| `0x3b8262a63d25f0477c4dde23f83cfe22cb768c93` | `NFLX`     |           18 |                         30.0 |
+| `0x71178bac73cbeb415514eb542a8995b82669778d` | `AMD`      |           18 |                         30.0 |
 
 ### 0.1 What this does NOT establish
 
 These are **faucet-issued test tokens on a testnet**. This document does not call them shares,
 securities, assets owned by anyone, production instruments, or mainnet stock tokens, and no
 official token documentation has been read that would support any of that wording. Section 7.3's
-existing rule stands unchanged: *testnet tokens bearing ticker-like symbols are not treated as
-equities.*
+existing rule stands unchanged: _testnet tokens bearing ticker-like symbols are not treated as
+equities._
 
 **Their addresses are not the canonical mainnet addresses.** Re-read on 2026-09-10, on 46630, the
 three canonical mainnet addresses section 6(b) lists still hold **zero** runtime bytes:
 
-| Address (per Robinhood's docs, mainnet) | Runtime bytes on 46630, 2026-09-10 |
-|---|---:|
-| `0x322F0929c4625eD5bAd873c95208D54E1c003b2d` (TSLA) | **0** |
-| `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` (WETH) | **0** |
-| `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` (USDG) | **0** |
+| Address (per Robinhood's docs, mainnet)             | Runtime bytes on 46630, 2026-09-10 |
+| --------------------------------------------------- | ---------------------------------: |
+| `0x322F0929c4625eD5bAd873c95208D54E1c003b2d` (TSLA) |                              **0** |
+| `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` (WETH) |                              **0** |
+| `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` (USDG) |                              **0** |
 
 Those zeros carry a positive control, for the reason section 6(b) already gives: a dead endpoint
 would otherwise "prove" all three absent. In the same run the `TSLA`-symbol testnet contract read
@@ -131,6 +131,62 @@ nonsense route returns 404 as well. On that evidence the base URL is recorded in
 `packages/protocol/src/chain.ts`; the canonical UI routes are `/tx/<hash>`, `/address/<address>` and
 `/block/<number>`.
 
+### 0.5 A second endpoint for chain 46630
+
+The Blockscout explorer for this chain also serves JSON-RPC, and it answered every read tried
+against it on 2026-09-10:
+
+```sh
+cast chain-id     --rpc-url https://explorer.testnet.chain.robinhood.com/api/eth-rpc   # 46630
+cast block-number --rpc-url https://explorer.testnet.chain.robinhood.com/api/eth-rpc
+```
+
+Also verified through it: a read-only `eth_call` (the `TSLA`-symbol contract answered `symbol()`
+and `balanceOf`, reproducing section 0's figures by a different route), and a JSON-RPC **batch**
+request of the shape Blockscout's documentation describes.
+
+**Call it a second endpoint, not redundancy.** It is reached through the explorer for this same
+chain, and whether its upstream is operated independently of the primary endpoint has **not** been
+established. Overlapping infrastructure is entirely possible. What it improves is the number of
+access paths, not a proven failure boundary.
+
+**The primary endpoint is unchanged.** `foundry.toml`'s `robinhood_testnet` still resolves from
+`ROBINHOOD_TESTNET_RPC_URL` exactly as before. The second path is an additional alias,
+`robinhood_testnet_explorer`, reached only by naming it — nothing redirects to it. It is written as
+a literal URL rather than a variable because it is keyless and therefore not a credential; every
+other alias in that file is a variable precisely because it carries a key in its path.
+
+### 0.6 API keys, as measured
+
+| Surface                                              | Key required? | Observed 2026-09-10                              |
+| ---------------------------------------------------- | ------------- | ------------------------------------------------ |
+| REST, `/api/v2/...`                                  | No            | answered read-only calls unauthenticated         |
+| Etherscan-compatible, `/api?module=...&action=...`   | No            | answered unauthenticated                         |
+| JSON-RPC, `/api/eth-rpc`                             | No            | answered unauthenticated; batch worked           |
+| Centralized PRO, `api.blockscout.com/46630/json-rpc` | **Yes**       | an unauthenticated request returned **HTTP 402** |
+
+Blockscout's documentation states that a valid key **can increase RPS** on a per-instance endpoint,
+and that keys are obtained through Blockscout's account system rather than from an instance itself.
+**No keyed rate limit was measured here, so none is stated.** An `x-ratelimit-limit` value of `300`
+was observed on the REST and JSON-RPC surfaces; the window that number applies to was not
+established, and it was not read on every surface, so it is recorded as an observation on those two
+rather than as a property of the API.
+
+**No key is required by any current workflow in this repository.** `ROBINHOOD_SCAN_API_KEY` exists
+in `.env.example` and is optional. The PRO endpoint's terms are a commercial arrangement observed on
+one date and may change.
+
+### 0.7 An x402-gated endpoint, seen during reconnaissance
+
+During read-only reconnaissance, Blockscout's centralized PRO JSON-RPC endpoint returned HTTP 402
+and referenced API-key or x402 access. This demonstrates an external x402-gated infrastructure
+endpoint; it is not a UNICA integration.
+
+For the avoidance of any doubt about what was done: **no account was registered, no key was
+requested or stored, no wallet was connected, no payment was attempted, and nothing was
+implemented.** The observation is one HTTP status code and the message that came with it. UNICA
+neither supports nor integrates x402, and this section is not evidence that it does.
+
 ---
 
 ## 1. The headline, in five sentences
@@ -144,7 +200,7 @@ Router is a **different, larger build** than the one on Ethereum Sepolia and exp
 **six-field** `ExactInputSingleParams` layout, which is the hazard this repository already recorded
 and which is re-proved here against the live bytecode.
 
-**No Robinhood Stock Token exists on this chain.** *(True as read on 2026-09-09; **superseded 2026-09-10** — five faucet-issued testnet stock-token contracts were read back on 46630. See section 0. The rest of this paragraph still holds: those contracts are not at the canonical mainnet addresses, which remain empty here.)* Robinhood's own public asset registry lists 194
+**No Robinhood Stock Token exists on this chain.** _(True as read on 2026-09-09; **superseded 2026-09-10** — five faucet-issued testnet stock-token contracts were read back on 46630. See section 0. The rest of this paragraph still holds: those contracts are not at the canonical mainnet addresses, which remain empty here.)_ Robinhood's own public asset registry lists 194
 stock-token deployments and every single one is on chain **4663** — the mainnet — with zero on
 46630; the canonical mainnet TSLA, WETH and USDG addresses all read back as **empty** here. The
 equity path on chain 46630 is therefore classified **`NO_VERIFIED_LIQUIDITY_PATH`**.
@@ -167,16 +223,16 @@ mainnets rather than among its testnets.** The addresses nevertheless read back 
 That is recorded as an observation, not resolved: this document does not claim to know whether the
 two chains were deployed from one script, and no mainnet call was made in this pass.
 
-| Contract | Address | Runtime bytes | Ethereum Sepolia, same read |
-|---|---|---:|---:|
-| PoolManager | `0x8366a39cc670b4001a1121b8f6a443a643e40951` | 24,009 | 24,009 |
-| Universal Router | `0x8876789976decbfcbbbe364623c63652db8c0904` | **24,546** | 19,540 |
-| PositionManager | `0x58daec3116aae6d93017baaea7749052e8a04fa7` | 23,877 | — |
-| PositionDescriptor | `0x9639443158e8c5efa35bd45287bf2effd3d8dc06` | 752 | — |
-| Quoter | `0x8dc178efb8111bb0973dd9d722ebeff267c98f94` | **6,118** | 5,820 |
-| StateView | `0xf3334192d15450cdd385c8b70e03f9a6bd9e673b` | 3,531 | 3,531 |
-| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | 9,152 | 9,152 |
-| CREATE2 factory | `0x4e59b44847b379578588920cA78FbF26c0B4956C` | 69 | 69 |
+| Contract           | Address                                      | Runtime bytes | Ethereum Sepolia, same read |
+| ------------------ | -------------------------------------------- | ------------: | --------------------------: |
+| PoolManager        | `0x8366a39cc670b4001a1121b8f6a443a643e40951` |        24,009 |                      24,009 |
+| Universal Router   | `0x8876789976decbfcbbbe364623c63652db8c0904` |    **24,546** |                      19,540 |
+| PositionManager    | `0x58daec3116aae6d93017baaea7749052e8a04fa7` |        23,877 |                           — |
+| PositionDescriptor | `0x9639443158e8c5efa35bd45287bf2effd3d8dc06` |           752 |                           — |
+| Quoter             | `0x8dc178efb8111bb0973dd9d722ebeff267c98f94` |     **6,118** |                       5,820 |
+| StateView          | `0xf3334192d15450cdd385c8b70e03f9a6bd9e673b` |         3,531 |                       3,531 |
+| Permit2            | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |         9,152 |                       9,152 |
+| CREATE2 factory    | `0x4e59b44847b379578588920cA78FbF26c0B4956C` |            69 |                          69 |
 
 **No address in that table is empty.** The runner distinguishes an empty address from an unanswered
 read by returning `-1` for the latter, so a dead endpoint cannot prove an address vacant — a
@@ -224,11 +280,11 @@ was ≈ 116,033,000 on 2026-09-09, which matters for section 5.
 
 ## 3. What UNICA would land on
 
-| Address | Meaning | On 46630 |
-|---|---|---|
-| `0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0` | the hook address this tree's creation code mines to | vacant |
-| `0x044bc8a8773EC7b9B8de2467766636dFFCaC6210` | the executor address derived from it | vacant |
-| `0xa121e1ef31bbf0826aa67dc01e7977e80af58d73` | the deployer used for the live Sepolia deploy | holds **0.049177057720000000 ETH**, nonce **79** |
+| Address                                      | Meaning                                             | On 46630                                         |
+| -------------------------------------------- | --------------------------------------------------- | ------------------------------------------------ |
+| `0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0` | the hook address this tree's creation code mines to | vacant                                           |
+| `0x044bc8a8773EC7b9B8de2467766636dFFCaC6210` | the executor address derived from it                | vacant                                           |
+| `0xa121e1ef31bbf0826aa67dc01e7977e80af58d73` | the deployer used for the live Sepolia deploy       | holds **0.049177057720000000 ETH**, nonce **79** |
 
 The deployer has a balance and a non-zero nonce here, so it has transacted on this chain before.
 That is a fact about the account, not a claim about what those 79 transactions were.
@@ -261,14 +317,14 @@ ROBINHOOD_RPC_URL=robinhood_testnet forge test --match-path test/compat/Upgraded
 # 6 passed; 0 failed; 0 skipped
 ```
 
-| Row | Result |
-|---|---|
-| a different router build is present (size 24,546 and hash pinned) | PASS |
-| five-field layout with hook data is refused with an **empty** revert | PASS |
-| six-field layout settles **and delivers the hook data** | PASS |
-| the detector returns **PerHop** (six-field) | PASS |
-| five-field layout with **empty** hook data is accepted | PASS |
-| the probe's pool key cannot be initialised | PASS |
+| Row                                                                  | Result |
+| -------------------------------------------------------------------- | ------ |
+| a different router build is present (size 24,546 and hash pinned)    | PASS   |
+| five-field layout with hook data is refused with an **empty** revert | PASS   |
+| six-field layout settles **and delivers the hook data**              | PASS   |
+| the detector returns **PerHop** (six-field)                          | PASS   |
+| five-field layout with **empty** hook data is accepted               | PASS   |
+| the probe's pool key cannot be initialised                           | PASS   |
 
 The fourth row is the verdict: `src/compat/RouterProbe.sol` asks **both** layouts and answers only
 when exactly one is accepted, so the instrument is shown to discriminate on this router rather than
@@ -330,24 +386,24 @@ cast call 0x58daec3116aae6d93017baaea7749052e8a04fa7 \
 
 **Every token id from 1 to 3,621 was read. All 3,621 answered; none was an unanswered read.**
 
-| Measured over all 3,621 position ids | Count |
-|---|---:|
-| positions ever minted | 3,621 |
-| burned or cleared (pool key reads all-zero) | 380 |
-| live positions | 3,241 |
-| **distinct pools behind them** | **1,790** |
-| distinct token addresses appearing in a pool | 1,826 |
-| distinct hook addresses | 542 |
+| Measured over all 3,621 position ids         |     Count |
+| -------------------------------------------- | --------: |
+| positions ever minted                        |     3,621 |
+| burned or cleared (pool key reads all-zero)  |       380 |
+| live positions                               |     3,241 |
+| **distinct pools behind them**               | **1,790** |
+| distinct token addresses appearing in a pool |     1,826 |
+| distinct hook addresses                      |       542 |
 
 Every one of those 1,790 pools was then read through `StateView` for its current price and
 liquidity — **1,790 answered, none unanswered**:
 
-| Pool shape | Pools | **Holding live liquidity now** |
-|---|---:|---:|
-| all pools found | 1,790 | **1,474** |
-| native-input (`currency0 == address(0)`) | 755 | **616** |
-| — native **and** hookless | 277 | **227** |
-| carrying a hook | 1,150 | **955** |
+| Pool shape                               | Pools | **Holding live liquidity now** |
+| ---------------------------------------- | ----: | -----------------------------: |
+| all pools found                          | 1,790 |                      **1,474** |
+| native-input (`currency0 == address(0)`) |   755 |                        **616** |
+| — native **and** hookless                |   277 |                        **227** |
+| carrying a hook                          | 1,150 |                        **955** |
 
 **All 1,790 are initialised** (`slot0.sqrtPriceX96 != 0`); 1,474 of them also hold non-zero
 liquidity at this block. The row that matters for UNICA is the third one: **616 native-input pools
@@ -356,11 +412,11 @@ carry no hook of their own.
 
 The deepest funded native-input pools at this block, by `getLiquidity`:
 
-| currency1 | fee | spacing | hook | liquidity |
-|---|---:|---:|---|---:|
-| `0xD9178562a675d04C2A9A816b039f4653061840Be` | 100 | 200 | `0xeF0c0Fbc…C4cC` | 9.07e25 |
-| `0x664b03Eaf15a982d790cc79F3D36337fE0ccc9f7` | 100 | 200 | `0x8FAf3193…04Cc` | 8.92e24 |
-| `0x0c1123467D851eD455532A44B04D92A231E8bf12` | 100 | 200 | `0xeF0c0Fbc…C4cC` | 8.83e24 |
+| currency1                                    | fee | spacing | hook              | liquidity |
+| -------------------------------------------- | --: | ------: | ----------------- | --------: |
+| `0xD9178562a675d04C2A9A816b039f4653061840Be` | 100 |     200 | `0xeF0c0Fbc…C4cC` |   9.07e25 |
+| `0x664b03Eaf15a982d790cc79F3D36337fE0ccc9f7` | 100 |     200 | `0x8FAf3193…04Cc` |   8.92e24 |
+| `0x0c1123467D851eD455532A44B04D92A231E8bf12` | 100 |     200 | `0xeF0c0Fbc…C4cC` |   8.83e24 |
 
 This enumeration has one honest limit, and it is a real one: **a pool that was initialised but
 never given a position through the official PositionManager would not appear.** A pool created and
@@ -384,11 +440,11 @@ Pool liquidity is read through `StateView.getLiquidity(poolId)`, with the pool i
 as `keccak256(abi.encode(poolKey))` rather than transcribed. The derivation was checked against a
 position whose own liquidity was already known:
 
-| Reading | Value |
-|---|---|
-| position #1 `getPositionLiquidity` | `100000000000000000000` |
-| its pool, derived id `0xb7dd2038…5cbd`, `StateView.getLiquidity` | `100000000000000000000` |
-| that pool's `slot0.sqrtPriceX96` | `792281625142643375935439503360000` (initialised) |
+| Reading                                                          | Value                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------- |
+| position #1 `getPositionLiquidity`                               | `100000000000000000000`                           |
+| its pool, derived id `0xb7dd2038…5cbd`, `StateView.getLiquidity` | `100000000000000000000`                           |
+| that pool's `slot0.sqrtPriceX96`                                 | `792281625142643375935439503360000` (initialised) |
 
 and the same reader, pointed at a pool key that **cannot exist** — two identical currencies and a
 zero tick spacing, both refused by `PoolManager.initialize`, the same impossible key
@@ -403,20 +459,20 @@ The 1,826 token addresses found in pools were read for `symbol()`, `decimals()` 
 `totalSupply()`. The chain's populated pools are dominated by **test tokens and memecoins**, not by
 anything an equity desk would recognise. A representative sample, read first-hand:
 
-| Address | `symbol()` | `decimals()` | `name()` |
-|---|---|---:|---|
-| `0xE7AEfb0d18F5a3597324d92aE470847E32F38FdB` | `USDG` | 6 | Global Dollar |
-| `0x80134dF477DeC046b8F4656Ce75e1eBb18718896` | `USDT` | 18 | USDT test |
-| `0x44f60cDffB7c626537C09dbFC2807De3B1c8cd55` | `DTA` | 18 | Delta Test A |
-| `0x57d69a820cD5a6726F7606582f6dFD2549f451Ae` | `DTB` | 18 | Delta Test B |
-| `0x17486A01bb8c3Ac90d94AeD9A16e8fE33b28F300` | `BCASHCAT` | 18 | Buff Cash Cat |
-| `0x19D780FfB033AE641C456D8B15d5D39Bb464B5AF` | `tzZEC` | 8 | TEST Wrapped Zcash - NO VALUE |
-| `0xc52516FAF2db746880583d120a1959B570AbfD38` | `QAR9` | 18 | QA Receipt Sep 9 |
-| `0x25c69EAEa5028a445E3a4ae2d356897124B38352` | `LIST` | 18 | The List |
+| Address                                      | `symbol()` | `decimals()` | `name()`                      |
+| -------------------------------------------- | ---------- | -----------: | ----------------------------- |
+| `0xE7AEfb0d18F5a3597324d92aE470847E32F38FdB` | `USDG`     |            6 | Global Dollar                 |
+| `0x80134dF477DeC046b8F4656Ce75e1eBb18718896` | `USDT`     |           18 | USDT test                     |
+| `0x44f60cDffB7c626537C09dbFC2807De3B1c8cd55` | `DTA`      |           18 | Delta Test A                  |
+| `0x57d69a820cD5a6726F7606582f6dFD2549f451Ae` | `DTB`      |           18 | Delta Test B                  |
+| `0x17486A01bb8c3Ac90d94AeD9A16e8fE33b28F300` | `BCASHCAT` |           18 | Buff Cash Cat                 |
+| `0x19D780FfB033AE641C456D8B15d5D39Bb464B5AF` | `tzZEC`    |            8 | TEST Wrapped Zcash - NO VALUE |
+| `0xc52516FAF2db746880583d120a1959B570AbfD38` | `QAR9`     |           18 | QA Receipt Sep 9              |
+| `0x25c69EAEa5028a445E3a4ae2d356897124B38352` | `LIST`     |           18 | The List                      |
 
 Two observations that a ticker-shaped symbol would otherwise hide. The token calling itself `USDT`
 has **18 decimals**, not the 6 that name implies anywhere else, and it is named "USDT test". And
-two *different* addresses both answer `symbol()` with `BCASHCAT` — a symbol on this chain does not
+two _different_ addresses both answer `symbol()` with `BCASHCAT` — a symbol on this chain does not
 identify a contract. **Nothing here is called a tokenized equity on the strength of its symbol.**
 
 **Testnet USDG is real**: `0xE7AEfb0d18F5a3597324d92aE470847E32F38FdB`, 6 decimals, "Global
@@ -448,18 +504,18 @@ curl -s https://api.robinhood.com/rhj/assets | grep -oE '"chainId":[0-9]+' | sor
 ```
 
 **194 stock-token deployments, every one of them on chain 4663. The string `46630` does not occur
-anywhere in the payload.** The runner asserts this in *both* directions — that the registry does
+anywhere in the payload.** The runner asserts this in _both_ directions — that the registry does
 list ~194 on 4663, and that it lists none on 46630 — because the absence proves nothing unless the
 registry demonstrably had content, and a truncated answer would otherwise satisfy the second row on
 its own.
 
 **(b) The canonical mainnet addresses are empty here.** Read on 46630:
 
-| Address (per Robinhood's docs, mainnet) | Bytes on 46630 |
-|---|---:|
-| `0x322F0929c4625eD5bAd873c95208D54E1c003b2d` (TSLA) | **0** |
-| `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` (WETH) | **0** |
-| `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` (USDG) | **0** |
+| Address (per Robinhood's docs, mainnet)             | Bytes on 46630 |
+| --------------------------------------------------- | -------------: |
+| `0x322F0929c4625eD5bAd873c95208D54E1c003b2d` (TSLA) |          **0** |
+| `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` (WETH) |          **0** |
+| `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` (USDG) |          **0** |
 
 These are rows in the runner, and they are the reason `codelen()` returns `-1` rather than `0` for
 an unanswered read: without that distinction a dead endpoint would "prove" all three absent. The
@@ -512,14 +568,14 @@ are not treated as equities.
 
 Facts, in the order they would have to be resolved. This is a cost account, not a plan.
 
-| # | What is missing | Status today |
-|---|---|---|
-| 1 | `src/libraries/UniswapDeployments.sol` must resolve chain 46630 | resolves 11155111 only; **the file is frozen** |
-| 2 | The executor must encode the **six-field** `ExactInputSingleParams` | `src/compat/RouterParamsCodec.sol` already encodes both layouts; `SettlementExecutor.sol` is frozen and encodes five |
-| 3 | A settlement venue: a native-input pool with a settleable counter-asset | **none ready-made** — no hookless native/USDG pool holds liquidity at any of the five standard tiers (`100/1`, `500/10`, `3000/60`, `10000/200`, `0/60`); one would have to be created and funded |
-| 4 | Gas for the deployer | `0xa121e1ef…8d73` holds **0.049177 ETH** on this chain |
-| 5 | The counter-asset itself | testnet USDG exists (`0xE7AEfb0d…8FdB`, 6 decimals); the deployer's balance of it was not read in this pass |
-| 6 | An equity leg | **impossible today** — see section 7 |
+| #   | What is missing                                                         | Status today                                                                                                                                                                                      |
+| --- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `src/libraries/UniswapDeployments.sol` must resolve chain 46630         | resolves 11155111 only; **the file is frozen**                                                                                                                                                    |
+| 2   | The executor must encode the **six-field** `ExactInputSingleParams`     | `src/compat/RouterParamsCodec.sol` already encodes both layouts; `SettlementExecutor.sol` is frozen and encodes five                                                                              |
+| 3   | A settlement venue: a native-input pool with a settleable counter-asset | **none ready-made** — no hookless native/USDG pool holds liquidity at any of the five standard tiers (`100/1`, `500/10`, `3000/60`, `10000/200`, `0/60`); one would have to be created and funded |
+| 4   | Gas for the deployer                                                    | `0xa121e1ef…8d73` holds **0.049177 ETH** on this chain                                                                                                                                            |
+| 5   | The counter-asset itself                                                | testnet USDG exists (`0xE7AEfb0d…8FdB`, 6 decimals); the deployer's balance of it was not read in this pass                                                                                       |
+| 6   | An equity leg                                                           | **impossible today** — see section 7                                                                                                                                                              |
 
 Items 1 and 2 are both changes to **frozen** source. Under this repository's rules that is not an
 edit to make; it is a new generation that supersedes the frozen one.
@@ -536,23 +592,23 @@ not answer prints nothing and an empty answer must never score as a chain that s
 **A check that has never failed is not a check.** Each row below was broken on purpose and watched
 go red, then restored:
 
-| Sabotage | Expected | Observed |
-|---|---|---|
-| the whole runner pointed at a **dead endpoint** | no false greens | 29 FAIL, 1 SKIP, and only the 3 rows that do not touch this chain still pass |
-| router codehash constant corrupted | 1 row red | `the Universal Router runtime is the recorded build` — FAIL, 32 others pass |
-| live pool given a fee tier that does not exist | 2 rows red | both `ETH/BCASHCAT` rows FAIL, 31 others pass |
-| the impossible pool key replaced by the **real** pool | 2 rows red | both negative-control rows FAIL, 31 others pass |
-| "mainnet TSLA absent" aimed at a contract that **does** exist here | 1 row red | FAIL, 32 others pass |
-| the deploy-blocker row asked about a chain the frozen file **does** resolve | 1 row red | FAIL, 32 others pass |
-| the registry "has content" guard aimed at a chain id that is not there | 1 row red | FAIL, 32 others pass |
-| the ERC-8056 negative aimed at a token that **does** answer (mainnet TSLA) | 1 row red | FAIL, 34 others pass |
-| the ERC-8056 **positive control** made unreachable | both rows SKIP, neither passes | 2 SKIP, 0 FAIL, 33 pass |
+| Sabotage                                                                    | Expected                       | Observed                                                                     |
+| --------------------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------- |
+| the whole runner pointed at a **dead endpoint**                             | no false greens                | 29 FAIL, 1 SKIP, and only the 3 rows that do not touch this chain still pass |
+| router codehash constant corrupted                                          | 1 row red                      | `the Universal Router runtime is the recorded build` — FAIL, 32 others pass  |
+| live pool given a fee tier that does not exist                              | 2 rows red                     | both `ETH/BCASHCAT` rows FAIL, 31 others pass                                |
+| the impossible pool key replaced by the **real** pool                       | 2 rows red                     | both negative-control rows FAIL, 31 others pass                              |
+| "mainnet TSLA absent" aimed at a contract that **does** exist here          | 1 row red                      | FAIL, 32 others pass                                                         |
+| the deploy-blocker row asked about a chain the frozen file **does** resolve | 1 row red                      | FAIL, 32 others pass                                                         |
+| the registry "has content" guard aimed at a chain id that is not there      | 1 row red                      | FAIL, 32 others pass                                                         |
+| the ERC-8056 negative aimed at a token that **does** answer (mainnet TSLA)  | 1 row red                      | FAIL, 34 others pass                                                         |
+| the ERC-8056 **positive control** made unreachable                          | both rows SKIP, neither passes | 2 SKIP, 0 FAIL, 33 pass                                                      |
 
 The dead-endpoint run is the one that earned its keep. It caught a **false pass in the runner
 itself**: an earlier draft of the native/USDG row counted only "pools found", so five unanswered
 reads scored as "no pool exists" and the row printed PASS having read nothing. It now counts
-answered tiers separately and prints SKIP when fewer than five answered — *an unread tier is not an
-empty tier*.
+answered tiers separately and prints SKIP when fewer than five answered — _an unread tier is not an
+empty tier_.
 
 ---
 
@@ -562,12 +618,12 @@ empty tier*.
   floor derived from PositionManager state, not a complete enumeration.
 - **The only mainnet calls made were reads, and they were controls.** `uiMultiplier()`, `name()`,
   `symbol()`, `decimals()` and `totalSupply()` on the mainnet TSLA token, to prove the ERC-8056
-  probe can answer YES. Whether the *router* bytecode here is identical to the build Uniswap lists
+  probe can answer YES. Whether the _router_ bytecode here is identical to the build Uniswap lists
   under chain 4663 remains **unchecked** — no router comparison against mainnet was made.
 - **The liquidity census is a snapshot, not a runner assertion.** The 1,474/1,790 figures were
   measured once, at one block; liquidity moves. The runner asserts only what is durable: that a
   named pool is live, that an impossible one is not, and that the position count has not gone
   backwards.
 - **Nothing here is a deployment, a request, or a claim of compatibility.** UNICA is not deployed on
-  this chain and is not being proposed for it. The public sentence remains: *Robinhood testnet is
-  under compatibility investigation.*
+  this chain and is not being proposed for it. The public sentence remains: _Robinhood testnet is
+  under compatibility investigation._
