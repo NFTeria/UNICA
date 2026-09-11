@@ -1,0 +1,411 @@
+# UNICA v5 — the settlement evidence graph: buildable queries
+#
+# Draft for owner review. Nothing here is deployed. Every entity referenced is defined in
+# SETTLEMENT-SCHEMA.md in this directory; every field not emitted on-chain today is commented
+# where it is used. Entities from BUILT sources (integrations/graph, integrations/graph-v2) are
+# queryable today against their existing deployments; entities modelling the SPECIFIED-NOT-BUILT
+# v4 event surface (docs/unica-v4/EVENT-SCHEMA.md) are query shapes for a subgraph that does not
+# exist yet, since UNICA v4 contracts do not exist yet.
+#
+# WHAT A RETURNED ROW PROVES: a matching event was indexed. WHAT AN EMPTY RESULT PROVES: nothing on
+# its own — see SETTLEMENT-SCHEMA.md section 1 and the per-query notes below. Settlement
+# correctness never depends on this index (task boundary).
+
+# Field-name key: every type below is defined in SETTLEMENT-SCHEMA.md §4. `Settlement`,
+# `HookReceipt`, `ExecutorReceipt`, `Order`, `Market`, `Hook`, `Executor`, `OraclePolicy`,
+# `MarketPause`/`MarketUnpause`/`MarketRetirement`, `MarketVersion`, `Merchant`, and `Payer` all
+# model the SPECIFIED-NOT-BUILT UNICA v4 event surface (docs/unica-v4/EVENT-SCHEMA.md) — no such
+# subgraph is deployed. Every query below is a design for that future subgraph's API, written
+# against the field names SETTLEMENT-SCHEMA.md fixes, not against any running endpoint.
+
+# =============================================================================================
+# 1. Receipt by order id
+# =============================================================================================
+# The canonical success record (SETTLEMENT-SCHEMA.md §4.15, §5, §8). `Settlement.id` IS `orderId`,
+# so this is a direct lookup, not a filter. A `Settlement` exists only when a registry-authenticated
+# HookReceipt and ExecutorReceipt were both indexed, paired inside one transaction (§5, §7, §8).
+#
+# PROVES: that pair was indexed. PROVES NOTHING ON ITS OWN if it returns null: the order may not
+# exist, may still be Open/expired-unpaid (query `order(id: $orderId)` instead, below), may be on a
+# different chain or deployment, or may simply not be indexed yet (SETTLEMENT-SCHEMA.md §1).
+query ReceiptByOrderId($orderId: Bytes!) {
+  settlement(id: $orderId) {
+    id                       # == orderId
+    market {
+      id                      # marketId
+      status                  # last-indexed only, never authoritative — SETTLEMENT-SCHEMA.md §4.4
+      demonstrationOnly
+    }
+    order {
+      recipient               # the merchant, OrderCreated field 2 — EVENT-SCHEMA §6.1
+      boundPayer               # the only address allowed to pay this order — EVENT-SCHEMA §6.1 field 4
+      amountIn
+      minOut
+      deadline
+    }
+    merchant { id }
+    payer { id }
+    currencyIn
+    currencyOut
+    amountIn
+    amountOut
+    amountDelivered           # required equal to amountOut on-chain (DeliveryNotExact) — SPEC-CONTRACTS.md §9.1 step 5
+    hookFeePips               # always 0 in this release — UNICA takes no fee, EVENT-SCHEMA §5
+    lpFeePips
+    protocolFeePips
+    swapFeePips
+    referencePrice            # 0 when demonstrationOnly is true — no oracle bound
+    referenceDecimals         # 0 when demonstrationOnly is true
+    referenceUpdatedAt        # 0 when demonstrationOnly is true
+    demonstrationOnly
+    hookReceipt { id transactionHash logIndex blockNumber }
+    executorReceipt { id transactionHash logIndex }
+    blockNumber
+    blockTimestamp
+    transactionHash
+  }
+  # An order with no Settlement yet — still Open, expired-unpaid, or on a market never reached ACTIVE:
+  order(id: $orderId) {
+    recipient
+    boundPayer
+    amountIn
+    minOut
+    deadline                  # "expired" is NEVER stored (EVENT-SCHEMA §10.2) — compare against your own clock
+    settled                   # true only once a Settled event named this orderId
+  }
+}
+
+# =============================================================================================
+# 2. A merchant's recent settlements
+# =============================================================================================
+# `Merchant` (SETTLEMENT-SCHEMA.md §4.12) is an INDEXER-SIDE ROLLUP keyed by the order's `recipient`
+# address — never an on-chain merchant record. SPEC-CONTRACTS.md §9.2: "there is no on-chain
+# merchant record or merchant id." A returned row proves this address received an indexed
+# settlement; it proves nothing about who controls the address or whether it is a registered UNICA
+# merchant in any other sense.
+query MerchantRecentSettlements($merchant: Bytes!, $first: Int = 50, $skip: Int = 0) {
+  merchant(id: $merchant) {
+    id
+    firstSeenAt               # PROPOSED display field only — not an on-chain fact, SETTLEMENT-SCHEMA.md §4.12
+    settlements(orderBy: blockNumber, orderDirection: desc, first: $first, skip: $skip) {
+      id                       # == orderId
+      market { id }
+      currencyOut
+      amountOut
+      amountDelivered
+      demonstrationOnly        # true on every 46630 receipt today — EVENT-SCHEMA §5, §8
+      blockNumber
+      blockTimestamp
+      transactionHash
+    }
+  }
+}
+
+# =============================================================================================
+# 3. A payer's receipts
+# =============================================================================================
+# Symmetric to query 2, over `Payer` (SETTLEMENT-SCHEMA.md §4.13). The payer named here is the
+# order's BOUND payer — `WrongPayer` refuses any other caller on-chain (SPEC-CONTRACTS.md §9.3).
+# This query is downstream evidence the binding held on every indexed row; it is never the binding
+# check itself, and it never substitutes for `docs/v2/SECURITY-ADVISORY-001.md`'s own remedy of
+# reading terms from the chain rather than trusting a client-supplied identifier.
+query PayerReceipts($payer: Bytes!, $first: Int = 50, $skip: Int = 0) {
+  payer(id: $payer) {
+    id
+    settlements(orderBy: blockNumber, orderDirection: desc, first: $first, skip: $skip) {
+      id
+      market { id }
+      currencyIn
+      currencyOut
+      amountIn
+      amountOut
+      amountDelivered
+      hookFeePips
+      lpFeePips
+      protocolFeePips
+      swapFeePips
+      blockNumber
+      transactionHash
+    }
+  }
+}
+
+# =============================================================================================
+# 4. Market status and version
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §4.4. `status` and `updatedAt` are LAST-INDEXED, NEVER AUTHORITATIVE
+# (EVENT-SCHEMA §2: "Current state is not history... An indexer never supplies current status, and
+# its lag is shown"). Any operational or payment decision must re-read `registry.statusOf(marketId)`
+# live over RPC before acting — this query is for display and history only, never for gating.
+query MarketStatusAndVersion($marketId: Bytes!) {
+  market(id: $marketId) {
+    id
+    version                   # uint32, EVENT-SCHEMA §4.1 field 4
+    status                    # 0 None .. 6 RETIRED, SPEC-CONTRACTS.md §5 — LAST-INDEXED ONLY
+    updatedAt
+    demonstrationOnly
+    seedDepth
+    asset { id }
+    payoutAsset { id }
+    hook { id }
+    executor { id }
+    poolId
+    fee
+    tickSpacing
+    rateE18                   # "a demonstration rate the admin sets," never a market price — EVENT-SCHEMA throughout
+  }
+  # This subgraph's own indexing progress, for the caller to weigh against the row above:
+  _meta {
+    block { number timestamp }
+  }
+}
+
+# =============================================================================================
+# 5. All paused markets
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §4.4 (Market.status), §4.19 (MarketPause). WARNING, restated from
+# EVENT-SCHEMA §2 and SETTLEMENT-SCHEMA.md §4.19–21: `status: 5` means "the last transition this
+# indexer processed for this market left it paused" — a LAGGED, LAST-INDEXED VIEW, never a live
+# guarantee. A payment surface must re-read status live before treating a market as paused or not.
+query AllPausedMarkets($first: Int = 100) {
+  markets(where: { status: 5 }, orderBy: updatedAt, orderDirection: desc, first: $first) {
+    id
+    asset { id }
+    payoutAsset { id }
+    updatedAt                 # block timestamp of the last-indexed status write
+    pauseHistory(orderBy: blockNumber, orderDirection: desc, first: 1) {
+      blockNumber
+      blockTimestamp
+      transactionHash
+    }
+  }
+}
+
+# =============================================================================================
+# 6. A market's historical versions
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §4.5 (MarketVersion) — a subgraph-side mirror of the registry's own
+# `latestVersion`/`liveMarketOf` views (SPEC-CONTRACTS.md §6), so every version of a pair can be
+# listed in one query instead of walking versions 1..N by hand over RPC. $pairId is computed
+# off-chain by the client as keccak256(abi.encode(registryAddress, assetAddress, payoutAddress)) —
+# SETTLEMENT-SCHEMA.md §4.5's own PROPOSED id strategy, distinct from any single Market's marketId.
+query MarketHistoricalVersions($pairId: Bytes!) {
+  marketVersion(id: $pairId) {
+    id
+    latestVersion
+    liveMarketId               # null if the latest version is RETIRED and not yet relisted
+    markets(orderBy: version, orderDirection: asc) {
+      id                        # marketId
+      version
+      status
+      demonstrationOnly
+      retirement {              # populated only if this version was ever retired — SETTLEMENT-SCHEMA.md §4.21
+        blockNumber
+        blockTimestamp
+        transactionHash
+      }
+    }
+  }
+}
+
+# =============================================================================================
+# 7. Settlements under a given hook or executor
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §4.7 (Hook), §4.8 (Executor), §4.16 (HookReceipt), §4.17 (ExecutorReceipt).
+# Two entry points, since a `Settlement` is keyed by `orderId`, not by hook/executor — this walks
+# each contract's own derived receipt list instead.
+query SettlementsUnderHook($hook: Bytes!, $first: Int = 100, $skip: Int = 0) {
+  hook(id: $hook) {
+    id
+    market { id }
+    receiptCount               # cached echo of the on-chain counter — may trail it under indexing lag, never exceed it (SETTLEMENT-SCHEMA.md §4.7)
+    hookReceipts(orderBy: blockNumber, orderDirection: desc, first: $first, skip: $skip) {
+      id
+      orderId
+      amountIn
+      amountOut
+      settlement { amountDelivered }   # null until the paired Settled is also indexed — see §1's "evidence, not success" note
+      blockNumber
+      transactionHash
+    }
+  }
+}
+
+query SettlementsUnderExecutor($executor: Bytes!, $first: Int = 100, $skip: Int = 0) {
+  executor(id: $executor) {
+    id
+    market { id }
+    orderCount                 # cached echo of the on-chain counter, same caveat as Hook.receiptCount
+    executorReceipts(orderBy: blockNumber, orderDirection: desc, first: $first, skip: $skip) {
+      id
+      orderId
+      amountDelivered
+      settlement { amountOut }
+      blockNumber
+      transactionHash
+    }
+  }
+}
+
+# =============================================================================================
+# 8. Oracle versus execution evidence
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §4.15, §4.9. Compares the reference price the hook checked against at
+# settlement time with the market's oracle policy history. `referencePrice`/`referenceDecimals`/
+# `referenceUpdatedAt` are 0 whenever `demonstrationOnly` is true — every 46630 receipt today
+# (EVENT-SCHEMA §5, §8) — and must never be presented as a market quotation even when non-zero
+# (SPEC-CONTRACTS.md §13's display rule: call it "a demonstration rate," never "market price").
+query OracleVersusExecutionEvidence($orderId: Bytes!) {
+  settlement(id: $orderId) {
+    id
+    amountIn
+    amountOut
+    referencePrice
+    referenceDecimals
+    referenceUpdatedAt
+    demonstrationOnly
+    market {
+      id
+      oraclePolicyHistory(orderBy: blockNumber, orderDirection: desc, first: 5) {
+        adapter
+        feedId
+        maxAge
+        maxDeviationBps
+        enabled
+        blockNumber
+      }
+    }
+  }
+}
+
+# =============================================================================================
+# 9. Fee and slippage breakdown
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §4.15. All four fee fields are RATES in pips (1e-6), never amounts
+# (EVENT-SCHEMA §5, §11: "the fee is about amountIn × swapFeePips / 10^6"). `hookFeePips` is always
+# 0 in this release (SPEC-CONTRACTS.md §1.2 lists "Any UNICA fee (Q55–61)" as out of scope).
+# "Slippage" here is the gap between `amountOut` (the pool's produced delta) and the order's own
+# `minOut` floor — not a market-price deviation, since there may be no market price at all
+# (`demonstrationOnly`).
+query FeeAndSlippageBreakdown($orderId: Bytes!) {
+  settlement(id: $orderId) {
+    id
+    hookFeePips
+    lpFeePips
+    protocolFeePips
+    swapFeePips
+    amountIn
+    amountOut
+    amountDelivered
+    order {
+      minOut                   # the guaranteed floor set at order creation — EVENT-SCHEMA §6.1
+    }
+  }
+}
+
+# =============================================================================================
+# 10. Testnet and no-value receipts
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §4.4, §4.15. `demonstrationOnly` is true exactly when the market's oracle
+# policy is disabled (EVENT-SCHEMA §4.1 field 13) — every 46630 receipt today
+# (SPEC-CONTRACTS.md §1.1, §2). A client consuming this query MUST label these rows "Testnet
+# demonstration — no-value tokens" (SPEC-CONTRACTS.md §13's display rule) and must never present
+# `market.rateE18` as a market price.
+query TestnetAndNoValueReceipts($first: Int = 100, $skip: Int = 0) {
+  settlements(
+    where: { demonstrationOnly: true }
+    orderBy: blockNumber
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    market {
+      id
+      rateE18                 # "a demonstration rate the admin sets," never a market price
+    }
+    currencyIn
+    currencyOut
+    amountIn
+    amountOut
+    blockNumber
+    transactionHash
+  }
+}
+
+# =============================================================================================
+# 11. Receipts awaiting finality
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §5 link 10, §6, §7 ("unfinalized events"). This subgraph carries no
+# `safe`/`finalized` marker of its own — `_meta` has no such field (thegraph.com/docs GraphQL API
+# reference; SETTLEMENT-SCHEMA.md §0 source S6). A client must independently fetch the chain's own
+# `safe`/`finalized` block (or apply Graph Node's `ETHEREUM_REORG_THRESHOLD` default of 250 blocks,
+# source S9) and compare it against `_meta.block.number` and each row's own `blockNumber`.
+# LABELLED, never rejected: an unfinalized settlement is a real, indexed fact that may or may not
+# still be canonical (SETTLEMENT-SCHEMA.md §7's "reorgs" and "unfinalized events" rows).
+query ReceiptsAwaitingFinality($sinceBlock: BigInt!, $first: Int = 200) {
+  _meta {
+    block { number hash timestamp }
+    deployment
+    hasIndexingErrors
+  }
+  settlements(
+    where: { blockNumber_gte: $sinceBlock }
+    orderBy: blockNumber
+    orderDirection: asc
+    first: $first
+  ) {
+    id
+    blockNumber                # compare against _meta.block.number minus your chosen confirmation depth
+    blockTimestamp
+    transactionHash
+    market { id }
+  }
+}
+
+# =============================================================================================
+# 12. Reconciliation totals by merchant, asset and day
+# =============================================================================================
+# SETTLEMENT-SCHEMA.md §4.8's own caveat applies in full here: no on-chain event ever carries a
+# per-day total (`payoutUsedOnDay` is executor storage, never emitted — SPEC-CONTRACTS.md §9.2), and
+# this design has not defined a `@aggregation`/timeseries entity (thegraph.com/docs, "Advanced
+# Subgraph Features") for settlements — left as an open design question, SETTLEMENT-SCHEMA.md §10.
+# This query instead returns the RAW, paginated rows a client sums client-side, grouped by UTC day
+# (`blockTimestamp / 86400`, SPEC-CONTRACTS.md §9.2's own day boundary) — the query-level equivalent
+# of `Executor.payoutUsedTodaySnapshot` (SETTLEMENT-SCHEMA.md §4.8), generalized across every day and
+# every market a merchant used, never a substitute for the executor's own live counter.
+query ReconciliationRawRows(
+  $merchant: Bytes!
+  $payoutAsset: Bytes!
+  $fromBlockTimestamp: BigInt!
+  $toBlockTimestamp: BigInt!
+  $first: Int = 1000
+  $skip: Int = 0
+) {
+  settlements(
+    where: {
+      merchant: $merchant
+      currencyOut: $payoutAsset
+      blockTimestamp_gte: $fromBlockTimestamp
+      blockTimestamp_lt: $toBlockTimestamp
+    }
+    orderBy: blockTimestamp
+    orderDirection: asc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    market { id }
+    amountOut
+    amountDelivered
+    blockTimestamp
+  }
+}
+
+# -----------------------------------------------------------------------------------------------
+# What none of the above ever proves, restated once at the end rather than after every query:
+# a returned row proves a matching event was indexed by THIS subgraph, from an address that passed
+# SETTLEMENT-SCHEMA.md §5's registry-based authentication chain. An empty result proves nothing on
+# its own. No query here creates, authorizes, or settles a payment, or substitutes for a live RPC
+# read of current market status, current caps usage, or current oracle condition — those remain
+# contract reads, never graph reads (task boundary; SETTLEMENT-SCHEMA.md §1).
