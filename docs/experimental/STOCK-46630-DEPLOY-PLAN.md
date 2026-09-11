@@ -1,10 +1,53 @@
 # Stock settlement on Robinhood testnet 46630 — the eleven-transaction plan
 
+> **2026-09-11 — this plan was broadcast, and the sentence below is superseded.** The owner
+> authorized deployment to chain 46630 and ran all four stages from their own terminal, each
+> through the wrapper's typed `SEND` and the keystore prompt. All eleven transactions landed, in
+> order, from the deployer at nonces 79 to 89, every receipt status 1, with nothing else sent from
+> the deployer between them. The owner chose smaller parameters than the rehearsal's: rate 395,
+> seed **100** uTUSD, payment **0.001** TSLA. The superseded text is left where it was, so the
+> record shows what was believed when.
+>
+> | Stage  | Nonces | Transactions (tx hash, block)                                                                                      |
+> | ------ | ------ | ------------------------------------------------------------------------------------------------------------------ |
+> | token  | 79     | tx `0x6e7947b46fec550a0b1c3250095b5efd756bdf0aad9f9a2e2b12c2a227d07375` 117528087                                 |
+> | pair   | 80–81  | tx `0xf3088d5294ef726e827faa7017df5d7dab86e715b65df22bde8c87896ad0b40c` 117529452, tx `0x4a9c50423e94d10fe11cbd069ba7a9c06a1eb150c63b23d472390a955ff3f4b5` 117529467 |
+> | pool   | 82–86  | init tx `0x56f4c5731774c214847d2c1cb27b6175290f5322476609e6b0955c99632fd565` 117530861 … seed tx `0xe47ab25e23215867e296537af2bcaf3cff35bbb0050dce7b20ff37689c29a123` 117530869 |
+> | settle | 87–89  | order tx `0x66c15925dbefe42147b1674747ee328d2a624ad418b3470825c7744928153603` 117535197 … pay tx `0x9cb16eeab49670283b8c2a36241e89e5239df45523660afdc36491a0453ec300` 117535202 |
+>
+> - **Deployed:** uTUSD `0xfb93352698150e720Bf0A321DEf3aC98D90B9874` (no value), hook
+>   `0xAe1975f223824b5851564277656ebAC21667E0c0` (flags `0x20C0`), executor
+>   `0x613dadd395E0bB1A7AC4A843Aca408C3af8e16cE`; seed position NFT 4209 owned by the deployer.
+> - **Pool id** `0x64553b2a4c30c7a7551f752184ef3442e40817cc17f118db3d95142839057a34`.
+> - **The one settlement:** 0.001 faucet TSLA in; **393052** raw uTUSD (0.393052) to the merchant
+>   `0x19E56831a10d43CfF5d77f886c799C6b916da7Ae`, against a floor of 383149. The merchant's uTUSD came
+>   from the pool, not from a mint: uTUSD supply is the single 100 uTUSD seed mint.
+> - **Cost:** 0.00008904036 ETH for all eleven, read from the deployer's balance before and after.
+> - **Checked after each stage** by `.rehearsal/live-46630/readback.sh` (8, 12, 14 and 14 rows, all
+>   PASS), then by an independent read-only pass: every transaction and receipt re-read by hash, the
+>   explorer's list agreeing on all eleven, a second `pay` refused with `OrderNotOpen`, a swap not
+>   sent by the executor refused by the hook with `NotSettlementExecutor`.
+> - **The records** are `broadcast/StockSettlement46630.s.sol/46630/`, committed in e5a0185 and
+>   frozen under the tag `experimental-46630-settled`, whose source rebuilds all three contracts'
+>   creation code exactly.
+>
+> **What this is not.** One order, paid by the deployer, against the deployer's own seed liquidity,
+> at a demonstration rate the deployer set: not a market price, and there is no oracle. The faucet
+> TSLA is a testnet token, not a share or a security, and uTUSD has no value. The contracts'
+> source is **not verified on the explorer**; nothing here claims it. Four more things are true of
+> it: the settlement receipt's fee field does not report the fee the swap paid; the seed range sat just below the opening
+> price, so the first swap crossed seven ticks of empty range; the executor is permissionless, so
+> anyone holding faucet TSLA can buy the remaining uTUSD; and small allowances from the seed step
+> remain (100000 raw uTUSD to Permit2, and Permit2 to the PositionManager until 2026-09-12).
+>
+> These contracts are not upgraded or reused as UNICA v4, which is a separate deployment with
+> its own addresses and its own records.
+
 **Nothing in this document has been broadcast.** It describes transactions that have been
 rehearsed on a local fork and not sent to the chain. Sending any of them requires the owner's
 explicit authorization, a keystore signature, and the typed confirmation described below.
 
-## Current state, stated exactly
+## Current state, stated exactly (as written 2026-09-10, before the broadcast)
 
 | Item                                                                  | State                                                                                                                                                                          |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

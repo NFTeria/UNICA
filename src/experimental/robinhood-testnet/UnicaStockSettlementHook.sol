@@ -16,7 +16,10 @@ import {UnicaStockSettlementEvents as Ev} from "./UnicaStockSettlementEvents.sol
 import {IUnicaStockOrders} from "./interfaces/IUnicaStockOrders.sol";
 
 /// @title UnicaStockSettlementHook — the policy boundary, enforcing only what it can prove
-/// @notice EXPERIMENTAL. Deployed nowhere. The live V3 generation is untouched.
+/// @notice EXPERIMENTAL. Deployed once, on Robinhood testnet 46630 on 2026-09-11, at
+///         0xAe1975f223824b5851564277656ebAC21667E0c0, and exercised by one settlement; frozen as
+///         deployed under the tag experimental-46630-settled, never upgraded in place. The record is
+///         docs/experimental/STOCK-46630-DEPLOY-PLAN.md. The live V3 generation is untouched.
 ///
 ///         WHY THERE IS NO ROUTER IN THIS GENERATION, which is the design's largest departure.
 ///         V3 reaches the pool through Uniswap's Universal Router and must therefore trust two

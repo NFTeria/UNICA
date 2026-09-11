@@ -25,7 +25,11 @@ interface IERC20Minimal {
 }
 
 /// @title UnicaStockSettlementExecutor — the experimental ERC-20-input settlement path
-/// @notice EXPERIMENTAL. Deployed nowhere. The live V3 generation is untouched and unaffected.
+/// @notice EXPERIMENTAL. Deployed once, on Robinhood testnet 46630 on 2026-09-11, at
+///         0x613dadd395E0bB1A7AC4A843Aca408C3af8e16cE, and exercised by one settlement; frozen as
+///         deployed under the tag experimental-46630-settled, never upgraded in place. The record is
+///         docs/experimental/STOCK-46630-DEPLOY-PLAN.md. The live V3 generation is untouched and
+///         unaffected.
 ///
 ///         NO ROUTER, NO PERMIT2, AND WHY. V3 reaches the pool through Uniswap's Universal Router,
 ///         which for an ERC-20 input would need a Permit2 leg. Two facts made that the wrong choice
