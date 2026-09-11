@@ -234,6 +234,23 @@ v4 specification is committed.
 "Not upgradeable" does not mean "nothing is configurable". The boundary is defined field by field in
 `UPGRADEABILITY-AND-HOOKS-REVIEW.md` §8.
 
+## Identity NFT data (owner, 2026-09-11)
+
+Confirmed rulings N1–N9. These bind the identity token designed in `ENS-ART-LAYER.md` and
+`../unica-v5/ens/IDENTITY-NFT.md`.
+
+| # | Ruling |
+| --- | --- |
+| N1 | **Identity badge only.** The token proves the normalized merchant name, the ENS deployment and the renderer version and provenance. It proves nothing about current name control, address ownership, operational status, payment, receipt count, settlement volume or merchant legitimacy. |
+| N2 | **Fixed at mint.** The normalized name, renderer version, ENS deployment identifier, creation epoch, namehash and approved registry pointer are baked into immutable token data. `tokenURI` reads no mutable external state, and the same token always returns byte-identical metadata and imagery. |
+| N3 | **The image never changes.** A new renderer version needs a new token. No status overlay and no EIP-4906 in v1. Active, paused and revoked state lives in a separately verified interface layer and never alters the token. |
+| N4 | **Metadata fields:** `name`, `description`, `image`, `external_url` only. No `attributes`, `animation_url` or `background_color` in v1. `external_url` points at a safe canonical verification page, never an arbitrary merchant-controlled URL. |
+| N5 | **The description** identifies the normalized name, renderer version and ENS deployment, then states verbatim: "Identity artwork only. Not proof of payment, current ENS control, address ownership, merchant status, or endorsement." No merchant-editable marketing copy in immutable metadata. |
+| N6 | **Embed verification pointers** — namehash, ENS deployment identifier, registry address, renderer version, and the identity contract and token id where appropriate. A reader independently verifies live ENS control and current resolution; the pointer is never evidence that current state is unchanged. |
+| N7 | **Non-transferable,** bound to namespace control. Ordinary transfers and approvals are disabled. Minting and any replacement verifies namespace authority. Losing or transferring namespace control never moves the old badge to the new controller: the old token stays historical and is never presented as current, and a newly verified controller receives a newly issued token under an explicit versioned policy. |
+| N8 | **Testnet mark inside the artwork.** The SVG carries a prominent, persistent "SEPOLIA TESTNET / ENSv2 BETA — NO VALUE" mark as part of the composition, repeated in metadata and on the verification page. Metadata alone is never relied on. |
+| N9 | **Names.** The complete normalized name is preserved in immutable JSON. The SVG shows a safely truncated name plus a deterministic fingerprint derived from the complete normalized name, the namehash, the ENS deployment identifier and the renderer version. Truncation is explicit with an ellipsis and never removes the final label needed to identify the namespace. Control characters and unsafe bidirectional rendering are rejected; normalization, confusable warnings, maximum lengths and golden vectors are specified and tested. |
+
 ## What the missing answers mean (owner, 2026-09-11)
 
 1. Fable does not start yet.
