@@ -118,6 +118,51 @@ abstract contract StockSettlementBase is Test {
         return address((high & ~uint160(Hooks.ALL_HOOK_MASK)) | DECLARED_FLAGS);
     }
 
+    /// @notice A second, independent topology bound to a different INPUT token. The executor binds
+    ///         one input currency at construction, so the only honest way to drive a different input
+    ///         through it is a separate hook, executor and pool — not a flag on the shared one.
+    /// @dev Liquidity is SINGLE-SIDED in the payout token: the position sits entirely on the side
+    ///      of the price a payer's sale moves toward, so adding it never pulls the input token. That
+    ///      is what lets a token which cannot be pulled conventionally sit in the pool at all, and it
+    ///      is the same shape a real deployment seeds when it holds only the payout asset.
+    function _buildSideTopology(address input, address payout, string memory label)
+        internal
+        returns (UnicaStockSettlementHook h, UnicaStockSettlementExecutor x, PoolKey memory k)
+    {
+        address predictedExecutor = vm.computeCreateAddress(address(this), vm.getNonce(address(this)));
+        address minedHook = _labelledHookAddress(label);
+        deployCodeTo(
+            "UnicaStockSettlementHook.sol:UnicaStockSettlementHook",
+            abi.encode(manager, predictedExecutor, input, payout),
+            minedHook
+        );
+        h = UnicaStockSettlementHook(minedHook);
+        x = new UnicaStockSettlementExecutor(manager, minedHook, input, payout);
+        assertEq(address(x), predictedExecutor, "side executor did not land where its hook expects it");
+
+        bool inputIsZero = input < payout;
+        (Currency c0, Currency c1) =
+            inputIsZero ? (Currency.wrap(input), Currency.wrap(payout)) : (Currency.wrap(payout), Currency.wrap(input));
+        k = PoolKey({currency0: c0, currency1: c1, fee: FEE, tickSpacing: TICK_SPACING, hooks: IHooks(minedHook)});
+        manager.initialize(k, SQRT_PRICE_1_1);
+
+        // Selling the input moves the price toward the payout side, so the position lives there:
+        // below the current tick when the input is currency0, above it when the input is currency1.
+        (int24 lower, int24 upper) = inputIsZero ? (TICK_LOWER, -TICK_SPACING) : (TICK_SPACING, TICK_UPPER);
+        UnicaTestDollar(payout).mint(address(this), 1e30);
+        UnicaTestDollar(payout).approve(address(liquidityRouter), type(uint256).max);
+        liquidityRouter.modifyLiquidity(
+            k, ModifyLiquidityParams({tickLower: lower, tickUpper: upper, liquidityDelta: 1e18, salt: bytes32(0)}), ""
+        );
+    }
+
+    /// @dev Same construction as `_localHookAddress`, under a different label, so two local hooks
+    ///      never collide. Equally unsuitable for any real deployment, for the same reason.
+    function _labelledHookAddress(string memory label) internal pure returns (address) {
+        uint160 high = uint160(uint256(keccak256(bytes(label))));
+        return address((high & ~uint160(Hooks.ALL_HOOK_MASK)) | DECLARED_FLAGS);
+    }
+
     function _createOrder(uint128 amountIn, uint128 minOut, uint64 deadline, address boundPayer, bytes32 salt)
         internal
         returns (bytes32)

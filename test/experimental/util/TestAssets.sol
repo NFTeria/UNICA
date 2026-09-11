@@ -24,13 +24,35 @@ contract MockStockToken is MockERC20 {
     ///      pool, and the hazard would then be tested on a topology no row otherwise uses.
     uint256 public feeBps;
 
+    /// @dev An input token that calls back from inside `transferFrom`, off by default. This is the
+    ///      re-entry the executor's latch is the ONLY defence against: it happens before `pay` has
+    ///      taken the PoolManager's lock, so the PoolManager cannot refuse it on the latch's behalf.
+    ///      The callback runs after the balances have moved, and its revert data is kept so a row
+    ///      can assert WHICH check refused it rather than merely that something did.
+    address public reenterTarget;
+    bytes public reenterCalldata;
+    bytes public lastReentryRevert;
+
     constructor() MockERC20("Mock Stock Token (test fixture)", "mTSLA", 18) {}
 
     function setFeeBps(uint256 bps) external {
         feeBps = bps;
     }
 
+    function armReentry(address target, bytes calldata data) external {
+        reenterTarget = target;
+        reenterCalldata = data;
+    }
+
     function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        address t = reenterTarget;
+        if (t != address(0)) {
+            reenterTarget = address(0); // one shot, so the callback cannot recurse forever
+            bool moved = super.transferFrom(from, to, amount);
+            (bool hit, bytes memory ret) = t.call(reenterCalldata);
+            if (!hit) lastReentryRevert = ret;
+            return moved;
+        }
         if (feeBps == 0) return super.transferFrom(from, to, amount);
         uint256 fee = (amount * feeBps) / 10_000;
         if (allowance[from][msg.sender] != type(uint256).max) allowance[from][msg.sender] -= amount;
@@ -56,6 +78,12 @@ contract UnicaTestDollar is MockERC20 {
     address public reenterTarget;
     bytes public reenterCalldata;
 
+    /// @dev A payout token that delivers less than it was told to move, off by default. The pool's
+    ///      delta says the merchant was paid in full; only a balance measured at the merchant can
+    ///      say otherwise. This is the one hazard the executor's `RecipientShort` exists for, and
+    ///      the hook's delta check cannot see it by construction.
+    uint256 public deliveryFeeBps;
+
     constructor() MockERC20("UNICA Test Dollar", "uTUSD", 6) {}
 
     function armReentry(address target, bytes calldata data) external {
@@ -63,8 +91,24 @@ contract UnicaTestDollar is MockERC20 {
         reenterCalldata = data;
     }
 
+    function setDeliveryFeeBps(uint256 bps) external {
+        deliveryFeeBps = bps;
+    }
+
     function transfer(address to, uint256 amount) public override returns (bool) {
-        bool ok = super.transfer(to, amount);
+        bool ok;
+        if (deliveryFeeBps == 0) {
+            ok = super.transfer(to, amount);
+        } else {
+            uint256 fee = (amount * deliveryFeeBps) / 10_000;
+            balanceOf[msg.sender] -= amount;
+            unchecked {
+                balanceOf[to] += amount - fee;
+                totalSupply -= fee;
+            }
+            emit Transfer(msg.sender, to, amount - fee);
+            ok = true;
+        }
         address t = reenterTarget;
         if (t != address(0)) {
             reenterTarget = address(0); // one shot, so the callback cannot recurse forever

@@ -119,6 +119,53 @@ that the _fixtures_ took a fee and returned false, which proved the fixtures wor
 about the executor. Deleting `InputNotExact` left the suite fully green. The rows now drive the
 executor and F is caught.
 
+### 5a. The five gaps, closed (2026-09-10)
+
+The table above is left as it was measured. What changed since is a second suite,
+`test/experimental/StockSettlementGaps.t.sol`, which isolates each check the first suite could not
+tell apart, and a sabotage run repeated by the same method: each check deleted from a scratch copy of
+the tree, its row required to go red, the check restored. Every row was first required to be GREEN on
+the unmodified copy, so a red verdict below means the deletion caused it.
+
+| #   | Check deleted                              | Row | Caught? |
+| --- | ------------------------------------------ | --- | ------- |
+| B   | Hook: `PartialFill`                        | G1  | **yes** |
+| C   | Hook: `OutputBelowMinimum`                 | G2  | **yes** |
+| D   | Executor: `RecipientShort`                 | G3  | **yes** |
+| E   | Executor: reentrancy latch                 | G4  | **yes** |
+| I   | Executor: residual-input check             | G5  | **yes** |
+| —   | Executor: residual-payout check            | G6  | **yes** |
+| —   | Executor: a `false` return read as success | G7  | **yes** |
+| —   | Executor: an empty return read as failure  | G8  | **yes** |
+
+**Eight of eight**, including three checks the table above never listed. With the four already
+caught (A, F, G, H), the twelve checks named in these two tables each have a row that fails without
+them. That is not every check in the two contracts: others — `ParamsDoNotMatchOrder`,
+`PoolDoesNotMatchOrder`, `OrderAlreadySwapped`, `SettlementDidNotClose`, `NoReceipt` among them —
+have not been through a sabotage run, and nothing here says they are evidenced.
+A negative control confirmed the harness discriminates: with `RecipientShort` deleted, the unrelated
+row G1 stayed green and only G3 went red.
+
+What made the difference, so it is not relearned:
+
+- **A bare `expectRevert()` accepts any revert.** Where two checks guard one property, deleting the
+  first lets the second fire and a bare row stays green. Every row in the new suite names the exact
+  error and its arguments.
+- **A hook's revert reaches the payer wrapped.** The PoolManager re-throws it as
+  `WrappedError(hook, callback, reason, HookCallFailed)`, so the rows unwrap that envelope and compare
+  the hook's own reason inside it.
+- **The latch is not only defence in depth.** The note on E above was right about a payout token
+  re-entering inside the PoolManager's lock, and incomplete: an INPUT token can re-enter from
+  `transferFrom`, before `pay` has taken the lock, where nothing but the latch refuses it. G4 drives
+  exactly that. Without the latch, the inner payment settles inside the outer one and the outer then
+  reverts on `NoReceipt` — a legitimate payment becomes impossible.
+- **C and D are separated by making only one of them true.** G2 has the pool itself produce one unit
+  below the floor, so the hook refuses. G3 has the pool pay in full while the payout token delivers
+  1% short, which only the merchant's measured balance can see.
+
+Still true after this: every row ran locally, against fixtures. None of it is evidence about a real
+faucet-issued token, a real payout token, or chain 46630.
+
 ## 6. CRE trust boundary
 
 **CRE is outside the trusted settlement boundary and nothing here trusts a CRE report.** No
@@ -162,6 +209,6 @@ questions that would settle them are drafted and awaiting the organizer.
 ## 9. What is NOT proved
 
 - Anything about chain 46630. Every row here ran locally.
-- The five unevidenced checks in §5.
+- ~~The five unevidenced checks in §5.~~ Closed locally on 2026-09-10; see §5a.
 - Any behaviour of a real faucet-issued token, a real payout token, or real liquidity.
 - That a hook-enabled pool can be created there, or that anyone may create one.
