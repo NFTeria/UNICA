@@ -35,7 +35,9 @@
 > at a demonstration rate the deployer set: not a market price, and there is no oracle. The faucet
 > TSLA is a testnet token, not a share or a security, and uTUSD has no value. The contracts'
 > source is **not verified on the explorer**; nothing here claims it. Four more things are true of
-> it: the settlement receipt's fee field does not report the fee the swap paid; the seed range sat just below the opening
+> it: the settlement receipt's `fee` is the hook's own fee, correctly 0, and the receipt does not
+> carry the pool's 0.3% LP fee the swap paid (see [`STOCK-46630-FEE-FIELD.md`](STOCK-46630-FEE-FIELD.md));
+> the seed range sat just below the opening
 > price, so the first swap crossed seven ticks of empty range; the executor is permissionless, so
 > anyone holding faucet TSLA can buy the remaining uTUSD; and small allowances from the seed step
 > remain (100000 raw uTUSD to Permit2, and Permit2 to the PositionManager until 2026-09-12).
