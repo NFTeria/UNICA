@@ -179,9 +179,9 @@ below; a tool may emit several codes, and the envelope's `decision` is the most 
 | `POOL_LOOKALIKE` | `registry.marketIdOfPool(candidate) != marketId` | `unica_verify_market` | REFUSE |
 | `HOOK_CODE_HASH_MISMATCH` | the candidate hook's code hash is not `factory.HOOK_CREATION_CODE_HASH()` decoded from its own CREATE2 preimage (SC §7, §12) | `unica_verify_market` | REFUSE |
 | `ORDER_UNKNOWN` | `executor.orders(id).status == None` (SC §9.1) | `unica_order_status`, `unica_verify_receipt` | REFUSE |
-| `ORDER_NOT_OPEN` | status is Paying or Settled already (SC §9.1) | `unica_order_status` | REFUSE (for a *pay* decision); informational for a status query |
-| `ORDER_EXPIRED` | `deadline < now`, computed at query time, never stored (EV §6.1) | `unica_order_status` | REFUSE |
-| `ORDER_ALREADY_SETTLED` | status Settled (replay) | `unica_order_status`, `unica_verify_receipt` | REFUSE for a new payment; ALLOW-compatible for "was this paid" |
+| `ORDER_NOT_OPEN` | status is Paying or Settled already (SC §9.1) | `unica_order_status` | REFUSE with `intent: "authorize"`; informational (does not force `REFUSE`) with `intent: "status"` — §7.4's `intent` parameter |
+| `ORDER_EXPIRED` | `deadline < now`, computed at query time, never stored (EV §6.1) | `unica_order_status` | REFUSE under either `intent` — §7.4 carves out no status-query exception for this code |
+| `ORDER_ALREADY_SETTLED` | status Settled (replay) | `unica_order_status`, `unica_verify_receipt` | REFUSE with `intent: "authorize"` (a new payment); informational, ALLOW-compatible, with `intent: "status"` ("was this paid") — §7.4's `intent` parameter |
 | `RECEIPT_MISSING` | no `SettlementReceipt` in the named transaction from the market's own hook | `unica_verify_receipt` | REFUSE |
 | `RECEIPT_UNPAIRED` | a `SettlementReceipt` exists with no `Settled` in the same transaction (EV §5, "cannot survive") | same | REFUSE |
 | `RECEIPT_EMITTER_MISMATCH` | `log.address != registry.getMarket(marketId).hook` (EV §2) | same | REFUSE |
@@ -290,11 +290,11 @@ evidence match (the pairing question, EV §6.2).
 
 | | |
 |---|---|
-| Input | `{ chainId, executor, orderId }` |
+| Input | `{ chainId, executor, orderId, intent }` — `intent` is `"authorize"` \| `"status"`, **required**, no default (a caller cannot silently land in the wrong mode) |
 | Live RPC reads | `executor.orders(orderId)` (a `view`, SC §9.1) → `{recipient, creator, payer, amountIn, minOut, deadline, status}`; `expired` is **computed** in the SDK from `deadline` against the read block's timestamp, never stored (EV §6.1) |
 | Optional index reads | historical `OrderCreated` for audit display (EV §9, column IX: "Order") |
-| Decision meaning | This tool answers a status question, not an authorization question, so its `decision` field is `ALLOW` whenever the read succeeded, regardless of the order's own status; the **status itself** (`Open`/`Paying`/`Settled`/expired) is the payload, and `reason_codes` carries `ORDER_UNKNOWN` / `ORDER_EXPIRED` / `ORDER_ALREADY_SETTLED` as **informational** flags a caller combines with its own intent (e.g. "I wanted to pay this" turns `ORDER_ALREADY_SETTLED` into a refusal upstream) |
-| Cites | SC §9.1, §9.3; EV §6.1 |
+| Decision meaning | `decision` follows §5's severity rule exactly, like every other tool in this catalogue — it is never overridden here. `ORDER_UNKNOWN` and `ORDER_EXPIRED` force `REFUSE` under **either** `intent`; §5's table lists no status-query carve-out for these two, so a nonexistent or expired order is never `ALLOW`. `ORDER_NOT_OPEN` and `ORDER_ALREADY_SETTLED` are the two codes §5 itself marks intent-dependent: with `intent: "authorize"` both force `REFUSE`; with `intent: "status"` both are carried in `reason_codes` only and do not force `REFUSE`. The **status itself** (`Open`/`Paying`/`Settled`/expired) is always returned as the payload regardless of `intent`. `X402-EVIDENCE.md` §5 calls this tool with `intent: "authorize"` before any x402 authorization is signed (X402-EVIDENCE.md §5, §6); a dashboard or audit display asking "what state is this order in," never gating a payment, calls it with `intent: "status"` instead. |
+| Cites | SC §9.1, §9.3; EV §6.1; §5 (this file, reason-code severity rule) |
 
 ### 7.5 `unica_merchant_history`
 
@@ -453,7 +453,7 @@ tool, and that residual trust boundary is recorded here rather than hidden (§15
 unica-evidence market-status   --chain <chainId> --market-id <id>
 unica-evidence verify-market   --chain <chainId> --market-id <id> [--hook <addr>] [--executor <addr>] [--pool-id <id>]
 unica-evidence verify-receipt  --chain <chainId> --tx <hash> [--order-id <id>]
-unica-evidence order-status    --chain <chainId> --executor <addr> --order-id <id>
+unica-evidence order-status    --chain <chainId> --executor <addr> --order-id <id> --intent <authorize|status>
 unica-evidence merchant-history --chain <chainId> --recipient <addr> [--market-id <id>]
 unica-evidence identity        --chain <chainId> --tx <hash> [--ens-name <name>]
 unica-evidence token-status    --chain <chainId> --token <addr>
@@ -474,7 +474,7 @@ import type { ChainClients, EvidenceResult } from "@unica/evidence-sdk";
 export function marketStatus(clients: ChainClients, input: { chainId: number; marketId: `0x${string}` }): Promise<EvidenceResult>;
 export function verifyMarket(clients: ChainClients, input: { chainId: number; marketId: `0x${string}`; candidateHook?: `0x${string}`; candidateExecutor?: `0x${string}`; candidatePoolId?: `0x${string}` }): Promise<EvidenceResult>;
 export function verifyReceipt(clients: ChainClients, input: { chainId: number; transactionHash: `0x${string}`; orderId?: `0x${string}` }): Promise<EvidenceResult>;
-export function orderStatus(clients: ChainClients, input: { chainId: number; executor: `0x${string}`; orderId: `0x${string}` }): Promise<EvidenceResult>;
+export function orderStatus(clients: ChainClients, input: { chainId: number; executor: `0x${string}`; orderId: `0x${string}`; intent: "authorize" | "status" }): Promise<EvidenceResult>;
 export function merchantHistory(clients: ChainClients, input: { chainId: number; recipient: `0x${string}`; marketId?: `0x${string}` }): Promise<EvidenceResult>;
 export function identityProvenance(clients: ChainClients, input: { chainId: number; transactionHash: `0x${string}`; ensName?: string }): Promise<EvidenceResult>;
 export function tokenImplementationStatus(clients: ChainClients, input: { chainId: number; tokenAddress: `0x${string}` }): Promise<EvidenceResult>;

@@ -57,8 +57,8 @@ across three tracks, each 1st/2nd/3rd at $2,500/$1,500/$1,000:
 > Substreams packages, or the Subgraph MCP layer."
 > "Either compose two or more of The Graph's products, or build meaningfully on a standardized
 > schema."
-> "Consume live data from a Graph provider... Mocked, local-only, or static datasets do not
-> qualify."
+> "Consume live data from a Graph provider, for example Subgraph Studio for Subgraphs or The
+> Graph Market for Substreams. Mocked, local-only, or static datasets do not qualify."
 > "Simply querying one Subgraph with no composition or standardization does not qualify."
 > "Authoring or extending a Standardized Subgraph, or contributing a reusable composable
 > Substreams module, is in scope." "Make the standards leverage clear: show what became easier."
@@ -74,8 +74,10 @@ across three tracks, each 1st/2nd/3rd at $2,500/$1,500/$1,000:
 > Pool definition, From Scratch: "Projects begun and built during the hackathon. Open-source
 > starter kits are fine; project-specific prior code is not."
 > "Use The Graph as a load-bearing part of the project." "Consume live data from a Graph
-> provider... Mocked, local-only, or static datasets do not qualify." "Do meaningful work with the
-> data: reasoning, decisions, automation, or a natural-language interface." "Tooling submissions
+> provider, for example querying Subgraphs with an API key from Subgraph Studio, or streaming
+> Substreams via The Graph Market. Mocked, local-only, or static datasets do not qualify." "Do
+> meaningful work with the data: reasoning, decisions, automation, or a natural-language
+> interface." "Tooling submissions
 > must be reusable infrastructure, not a single end-user app." "Open-source the code with a clear
 > README or SKILL.md." "Submit a public repository plus a short demo video (two to four minutes)."
 > "Select the pool that matches how you built: Start Fresh for net-new."
@@ -94,16 +96,27 @@ singular. The page's actual wording is **Composable or Standardized Graph Produc
 Scratch, Continuity), each carrying the full $5,000 structure independently — not one $5,000 pool
 with a sub-selector. Per the rule that the page wins, this file uses the page's wording throughout.
 
-**Dated wording drift, noted rather than hidden.** `docs/SPONSOR-ELIGIBILITY.md` (dated retrieved
-2026-09-05) quotes the AI track's live-data rule as *"Must consume live data via API keys or
-Graph Market streaming."* Today's retrieval (2026-09-11) reads *"Consume live data from a Graph
-provider... Mocked, local-only, or static datasets do not qualify,"* with no mention of API keys
-or Graph Market by name. **Conflict, recorded:** either the page's wording changed between
-2026-09-05 and 2026-09-11, or the two retrievals paraphrased the same clause differently; nothing
-here can distinguish those two explanations. Practically the newer wording is the more permissive
-of the two readings — a subgraph deployed and synced on Subgraph Studio, queried over its GraphQL
-endpoint, satisfies "live data from a Graph provider" under either wording, so the drift does not
-change this file's eligibility conclusions.
+**Dated wording drift, corrected.** `docs/SPONSOR-ELIGIBILITY.md` (dated retrieved 2026-09-05)
+quotes the AI track's live-data rule as *"Must consume live data via API keys or Graph Market
+streaming."* The §2 quote above, re-fetched directly from the live page on 2026-09-11 (fetched
+twice for this correction, verbatim both times), gives the AI track's live-data sentence in full:
+*"Consume live data from a Graph provider, for example querying Subgraphs with an API key from
+Subgraph Studio, or streaming Substreams via The Graph Market. Mocked, local-only, or static
+datasets do not qualify."* An earlier draft of this paragraph quoted that same 2026-09-11 sentence
+with the "for example" clause elided ("...") and, on the strength of that elision, concluded the
+newer wording made "no mention of API keys or Graph Market by name." **That conclusion was wrong:**
+the full sentence names both Subgraph Studio and The Graph Market by name and names "an API key"
+explicitly — the same two products and the same credential the 2026-09-05 paraphrase names.
+`NETWORK-OPTIONS.md` §6 already quoted this sentence with the naming intact ("Subgraph Studio or
+The Graph Market"); this file's elided quote was the one that disagreed with it, not the other way
+around, and the two files now agree. **Corrected finding:** on the evidence actually retrieved, the
+2026-09-05 and 2026-09-11 wordings are substantially consistent — both name Subgraph Studio, The
+Graph Market, and an API key as the qualifying mechanism — so there is less basis than the earlier
+draft stated for treating this as a wording change at all, rather than two paraphrases of one
+stable clause (§14 Unknown 3 is corrected to match). This does not change the file's eligibility
+conclusion: a subgraph deployed and synced on Subgraph Studio, queried over its GraphQL endpoint,
+satisfies "live data from a Graph provider" — now an explicit named example in the page's own
+text, not merely an inference drawn from a shortened quote.
 
 ## 3. The Graph's categories, classified against UNICA v5
 

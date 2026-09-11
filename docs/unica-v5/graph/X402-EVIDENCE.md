@@ -109,7 +109,8 @@ Agent                         UNICA Evidence Toolkit (AI-MCP-TOOLS.md)        Ch
   │<──────────────────────────────────────────────────────────────────────────│ ALLOW / REFUSE           │
   │  unica_market_status(marketId)                  ── MUST be live RPC (§6) ──>│                        │
   │<──────────────────────────────────────────────────────────────────────────│                          │
-  │  unica_order_status(executor, orderId)          ── MUST be live RPC (§6) ──>│                        │
+  │  unica_order_status(executor, orderId,                                                             │
+  │                     intent: "authorize")        ── MUST be live RPC (§6) ──>│                        │
   │<──────────────────────────────────────────────────────────────────────────│                          │
   │  [optional] unica_merchant_history(recipient)   ── MAY read index (§7) ────>│                        │
   │<──────────────────────────────────────────────────────────────────────────│                          │
@@ -162,7 +163,10 @@ x402 authorization is signed or a facilitator is asked to settle:
   order still Open" must be live: an indexed `Order` entity is fine for a history display, but the
   authorization decision needs the current status, because a stranger cannot settle a payer-bound
   order (`WrongPayer`) but the *bound payer's own agent* could otherwise attempt to double-collect an
-  x402 authorization against an order someone already paid through a different channel.
+  x402 authorization against an order someone already paid through a different channel. This call
+  is made with `intent: "authorize"` (`AI-MCP-TOOLS.md` §7.4), so `ORDER_UNKNOWN`, `ORDER_EXPIRED`,
+  `ORDER_NOT_OPEN`, and `ORDER_ALREADY_SETTLED` all force `REFUSE` per §5's severity rule — an
+  expired, unknown, or already-settled order never reads `ALLOW` on this leg of the flow.
 - **Token implementation** (proxy/beacon slot, EV §8 class U7) — should be live for any market
   moving real value; SC's own threat-model lines (A7, A8) name the beacon owner's power to upgrade or
   pause a stock token at any time, and only a live read answers "right now," never "as of the last
