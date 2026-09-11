@@ -60,6 +60,12 @@ query ReceiptByOrderId($orderId: Bytes!) {
     demonstrationOnly
     hookReceipt { id transactionHash logIndex blockNumber }
     executorReceipt { id transactionHash logIndex }
+    # Settlement is keyed by orderId, not by a log, so these three are not covered by SETTLEMENT-SCHEMA.md
+    # §4.0's default "every log-keyed entity" metadata rule — they are covered by that section's stated
+    # Settlement exception instead: both paired source events are guaranteed inside one transaction
+    # (EVENT-SCHEMA §8), so the transaction's own block/hash are well-defined and stored explicitly on
+    # Settlement (§4.0, §4.15). logIndex is deliberately not one of them — see hookReceipt/executorReceipt
+    # above for the two (necessarily different) log indices this Settlement pairs.
     blockNumber
     blockTimestamp
     transactionHash

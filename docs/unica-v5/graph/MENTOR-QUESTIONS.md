@@ -102,13 +102,45 @@ technical document, not a rules document. **Needs written confirmation.**
 
 ## Q4. Would a third-party Graph-compatible host qualify, or must queries use Studio or the decentralized network?
 
-**Not settled by any source retrieved.** No page fetched for this file — the ETHOnline prizes page,
-the supported-networks registry, or the AI Suite overview — states a rule either permitting or
-excluding a third-party Graph-compatible host (for example, a commercial `graph-node`-compatible
-indexing service run by a company other than Edge & Node / The Graph Foundation). The prize page's
-requirement is "Consume live data from a Graph provider," which is the only relevant phrase found,
-and it does not define "a Graph provider" narrowly enough to say whether a third-party host
-qualifies as one. **Needs written confirmation.**
+**Not settled by any source retrieved, but the page's own wording is more specific than an earlier
+draft of this answer recorded, and that wording bears directly on Q3 and on the Pinax
+recommendation in `NETWORK-OPTIONS.md` §7.**
+
+VERIFIED — the ETHOnline 2026 prizes page (retrieved 2026-09-11, re-fetched verbatim for this
+correction) does not leave "a Graph provider" wholly undefined; it bounds it by example, once per
+relevant track:
+- Composable or Standardized Graph Products: "Consume live data from a Graph provider, for
+  example Subgraph Studio for Subgraphs or The Graph Market for Substreams. Mocked, local-only, or
+  static datasets do not qualify."
+- AI Tooling or AI Use Case (From Scratch and Continuity, identical wording): "Consume live data
+  from a Graph provider, for example querying Subgraphs with an API key from Subgraph Studio, or
+  streaming Substreams via The Graph Market. Mocked, local-only, or static datasets do not
+  qualify."
+
+Both named examples — Subgraph Studio and The Graph Market — are Graph Foundation / Edge & Node
+operated surfaces. Neither sentence names a third-party Graph-compatible host (for example, a
+commercial `graph-node`-compatible indexing or Substreams/Firehose service run by a company other
+than Edge & Node / The Graph Foundation) as a qualifying example, and neither sentence excludes one
+either — "for example" introduces an illustrative list, not one stated as exhaustive. This narrows,
+but does not settle, the question: the wording is evidence of which two surfaces the page's authors
+reached for as examples, not proof that every other live indexing or streaming service is excluded.
+
+**Why this matters beyond Q4 itself.** `NETWORK-OPTIONS.md` §7 recommends, for Robinhood Chain
+(46630), evaluating a Substreams pipeline against Pinax's registered endpoint as "the chain's only
+real Graph-ecosystem path." Pinax is a third-party provider — VERIFIED named directly in The
+Graph's own official networks-registry entries for this chain (`NETWORK-OPTIONS.md` §3.4, §3.8),
+not a Graph Foundation / Edge & Node product, and not one of the two names given as examples above.
+A registry listing is stronger evidence of eligibility than an unlisted third party would carry,
+but it is still not the same as one of the page's own two named examples, so this open question
+bears directly on whether that specific recommended path satisfies "a Graph provider" for prize
+purposes. It bears on Q3's self-hosted-`graph-node` question the same way: a self-hosted node is
+further still from either named example than a registry-listed third-party provider like Pinax is.
+
+**What is not settled:** whether "for example" is read narrowly (only the two Graph-operated
+surfaces named qualify) or broadly (any live indexing/streaming service functioning as "a Graph
+provider," including a registry-listed third party or a self-hosted node, qualifies). No page
+fetched for this file — the prizes page, the supported-networks registry, or the AI Suite
+overview — resolves this reading either way. **Needs written confirmation.**
 
 ## Q5. If the demo uses one officially supported chain through Studio plus unsupported chains through self-hosted indexing, is the project eligible overall?
 
@@ -158,7 +190,8 @@ a new fact. **Needs written confirmation.**
 
 | Source | URL | Retrieved | Author/org | Kind | Used for |
 |---|---|---|---|---|---|
-| ETHOnline 2026 prizes page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 | ETHGlobal | OFFICIAL | Q1, Q2, Q6 — track wording, From Scratch pool definition |
+| ETHOnline 2026 prizes page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 (fetched twice this date, verbatim both times, the second fetch made to correct Q4's earlier evidence summary) | ETHGlobal | OFFICIAL | Q1, Q2, Q4, Q6 — track wording, From Scratch pool definition, the "for example Subgraph Studio... The Graph Market..." clauses |
+| `docs/unica-v5/graph/NETWORK-OPTIONS.md` §3.4, §3.7, §3.8 (this repository) | n/a — local file | 2026-09-11 | UNICA / NFTeria | TEAM GUIDANCE | Q4 — the Pinax third-party-provider recommendation this question bears on |
 | The Graph — Supported Networks (index) | https://thegraph.com/docs/en/supported-networks/ | 2026-09-11 | The Graph | OFFICIAL | Q3 — table structure, columns (Subgraphs/Substreams/Firehose) |
 | The Graph — Supported Networks, Robinhood Chain | https://thegraph.com/docs/en/supported-networks/robinhood/ | 2026-09-11 | The Graph | OFFICIAL | Q3 — Robinhood Chain **mainnet**, chain id `eip155:4663` |
 | The Graph — Supported Networks, Arc (mainnet slug) | https://thegraph.com/docs/en/supported-networks/arc/ | 2026-09-11 | The Graph | OFFICIAL | Q3 — a distinct "Arc" network, chain id `eip155:5042`, not Circle's Arc |
@@ -190,7 +223,10 @@ a new fact. **Needs written confirmation.**
    counts as "using a Graph provider" for prize eligibility — a policy question, not a technical
    one; the technical capability is confirmed (Q3), the eligibility reading is not.
 6. Whether a third-party Graph-compatible host (neither Subgraph Studio nor a self-hosted
-   `graph-node` the team runs itself) would qualify — Q4, no source addresses this at all.
+   `graph-node` the team runs itself) would qualify — Q4; the page names Subgraph Studio and The
+   Graph Market as examples of "a Graph provider" but does not state whether that list is
+   exhaustive, so no source settles the question either way, including for the registry-listed
+   third party (Pinax) `NETWORK-OPTIONS.md` §7 recommends for Robinhood Chain.
 7. Whether ETHGlobal or The Graph treats two feature-branch submissions from the same repository,
    built in the same event, aimed at the same prize pool, as one project extended or as competing
    submissions — Q6, restated from `PRIZE-FIT.md` §11.2.

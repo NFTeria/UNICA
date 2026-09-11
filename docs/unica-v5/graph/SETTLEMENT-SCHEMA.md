@@ -162,6 +162,12 @@ design, not an extension of an existing shape.
 
 ## 4. Entity catalogue
 
+Each entity below is stated first in prose (id strategy, source events, relationships, mutability, reorg and
+finality behavior, provenance, reconstructability) and then, in §4.27, as one buildable `graphql` block that
+declares every type named here with concrete fields, nullability and `@derivedFrom` targets. The two are the
+same design in two forms; §4.27 introduces no field or fact absent from §4.1–§4.26, and cites this section's
+numbering throughout rather than restating its reasoning.
+
 ### 4.0 Shared conventions, stated once rather than repeated twenty-six times
 
 - **Id strategy, default.** Every event-sourced immutable entity keyed to one log uses `id =
@@ -174,6 +180,14 @@ design, not an extension of an existing shape.
 - **Standard log metadata.** Every log-keyed entity carries `network` (`String`, from `dataSource.network()`,
   T4's own field), `blockNumber` (`BigInt`), `blockTimestamp` (`BigInt`), `transactionHash` (`Bytes`),
   `logIndex` (`BigInt`) — identical to both BUILT schemas (T4, T5).
+- **`Settlement`'s transaction-metadata exception.** `Settlement` (§4.15) is not log-keyed — its id is
+  `orderId`, not a transaction-hash/log-index pair — so the "every log-keyed entity" scope above does not,
+  by itself, cover it. It nonetheless stores `blockNumber`, `blockTimestamp` and `transactionHash` as
+  explicit fields (never `logIndex`, which would be ambiguous between its two paired source logs), because
+  EVENT-SCHEMA §8's fixed log order for `pay` guarantees `SettlementReceipt` and `Settled` land in the same
+  transaction (restated at §4.15, §6): "the settling transaction's own block and hash" is exactly as
+  well-defined for `Settlement` as for any single log, even though `Settlement` decodes two of them.
+  `QUERIES.graphql` §1, §2, §3, §10, §11, §12 read these three fields directly from `Settlement`.
 - **Type mapping.** `uint32`/`uint48`/`uint64`/`uint128`/`uint160`/`uint256` → GraphQL `BigInt`, never `Int`
   (T5's own documented reason, reused verbatim: GraphQL's `Int` is signed 32-bit and would truncate). `bytes32`
   → `Bytes`. `address` → `Bytes`, not `ID`/`String` (T4/T5's own convention), so values compare and filter as
@@ -483,7 +497,13 @@ both writes land in one transaction, hence one block. **Relationships:** belongs
 guard, SC §9.1 step 5 — a stored mismatch would itself be evidence of an `Anomaly`, never silently resolved),
 `hookFeePips` (always `0`), `lpFeePips`, `protocolFeePips`, `swapFeePips`, `referencePrice`,
 `referenceDecimals`, `referenceUpdatedAt`, `demonstrationOnly` (EVENT-SCHEMA §5's remaining receipt fields,
-minus the identifiers already lifted to relations). **Reorg/finality:** standard, same-block write pattern as
+minus the identifiers already lifted to relations). **Plus** the settling transaction's own `blockNumber`,
+`blockTimestamp`, `transactionHash` — §4.0's log-metadata convention is scoped to log-keyed entities and
+`Settlement` is keyed by `orderId`, not a log, but §4.0's stated exception for this entity applies: both
+paired events are guaranteed inside one transaction (EVENT-SCHEMA §8), so these three are well-defined and
+explicitly stored (never `logIndex`, ambiguous between the two source logs' own indices, which remain
+available only through `hookReceipt.logIndex`/`executorReceipt.logIndex`). `QUERIES.graphql` §1, §2, §3,
+§10, §11, §12 read them directly from `Settlement`. **Reorg/finality:** standard, same-block write pattern as
 noted. **Provenance:** fully on-chain, contingent on §5's authentication chain — EVENT-SCHEMA's own EV8 row: "a
 look-alike hook's receipt carrying the official marketId creates no subgraph entity." **Reconstructable from
 chain alone:** YES, entirely — this is the point of §5/§8: two on-chain logs plus registry-based authentication,
@@ -677,6 +697,442 @@ authentication chain); `_meta` is not "reconstructed" — it is reported as-is. 
 own operating rule, applied here rather than only stated. `EvidenceStatus` is the mechanism by which "0
 anomalies, block 12,345,678 last indexed, no indexing errors" is a value a client can query and display, not a
 claim made in prose with nothing behind it.
+
+### 4.27 Concrete schema — every entity above as buildable GraphQL
+
+The block below is portable into a future `schema.graphql`; it is not one, since no `subgraph.yaml` names
+data sources for it yet (§10 item 3: no UNICA v4 contract exists, so no topic0 can be pinned to an
+`eventHandlers` entry). It declares nothing this section's prose did not already state: every type name,
+field, and relationship traces back to its own numbered entry above, cited in a leading comment. Every
+`@entity(immutable: …)` tag applies §4.0's own immutability test; every scalar type applies §4.0's own
+type-mapping rule (`uint32`/`48`/`64`/`128`/`160`/`256` → `BigInt`, `bytes32`/`address` → `Bytes`), extended
+here, without introducing a new rule, to widths that rule did not enumerate: `uint8`/`uint16`/`uint24` are
+stored as `Int`, by the identical reasoning §4.0 already gives for the one width it does name this way (the
+lifecycle status code, "since it cannot approach the 32-bit signed ceiling") — a `uint24` tops out at
+16,777,215, well inside `Int`'s signed 32-bit range. `Factory` (§4.3) is deliberately not declared as its own
+type: this document's chosen default folds its three immutable reads into `ProtocolRelease`, exactly as
+§4.3's own prose decides; the alternative it also records is not modelled here, so as not to assert a
+commitment the owner has not made (§11 item 8). `Anomaly` is declared even though it is not one of the
+task's 26 names, because `EvidenceStatus.anomalies` (§4.26) needs a real target type to be buildable — it is
+EVENT-SCHEMA §10.2's own entity, imported rather than redesigned, exactly as §4.26 already says. Singular
+("has-one") relationships below are modelled as plain, independently-written fields on both sides where §4
+describes two entities each naming the other (for example `Market.hook` and `Hook.market`), rather than as
+`@derivedFrom`, so that this schema's buildability does not depend on graph-node's support for `@derivedFrom`
+on a non-list field — a detail this document did not independently verify and so does not rely on. Only
+genuine one-to-many relationships use `@derivedFrom`, matching the one pattern already proven BUILT (T5's
+`Deployment.settlements: [InvoiceSettlement!]! @derivedFrom(field: "deployment")`).
+
+```graphql
+# ---- §4.1 ProtocolRelease — PROPOSED ----
+type ProtocolRelease @entity(immutable: false) {
+  id: Bytes!                        # the factory's own address (§4.1) — one factory embodies one release generation
+  poolManager: Bytes!               # factory.POOL_MANAGER(), read once via try_ (S3)
+  hookCreationCodeHash: Bytes!      # factory.HOOK_CREATION_CODE_HASH(), read once via try_ (S3)
+  registryAddress: Bytes!           # factory.REGISTRY(), read once via try_ (S3)
+  releaseTag: String                # off-chain provenance, copied from the deployment manifest — never chain-stated (§4.1)
+  registries: [Registry!]! @derivedFrom(field: "protocolRelease")
+  deploymentManifest: DeploymentManifest   # plain, set once a DeploymentManifest row (§4.25) names this release
+}
+
+# ---- §4.2 Registry — SPECIFIED-NOT-BUILT (SC §6; EVENT-SCHEMA §4) ----
+type Registry @entity(immutable: false) {
+  id: Bytes!                        # the registry's own address — "one per deployment" (SC §6)
+  network: String!
+  protocolRelease: ProtocolRelease! # belongs-to, via the deploying factory (§4.1)
+  factory: Bytes!                   # immutable, SC §6 FACTORY
+  requireOracle: Boolean!           # immutable, SC §6 REQUIRE_ORACLE — true on every mainnet deployment, false only for the 46630 rehearsal
+  admin: Bytes!                     # mutable, written by RoleChange (AdminTransferred)
+  pendingAdmin: Bytes               # mutable, written by RoleChange (AdminTransferStarted / cleared by AdminTransferred)
+  pauser: Bytes                     # mutable, written by RoleChange (PauserSet); null means none
+  markets: [Market!]! @derivedFrom(field: "registry")
+  roleChanges: [RoleChange!]! @derivedFrom(field: "registry")
+}
+
+# ---- §4.3 Factory — deliberately NOT modelled as its own type ----
+# EVENT-SCHEMA §3: the factory "emits no events, so one emitter carries the whole lifecycle" (the registry).
+# This document's chosen default (§4.3) folds its three immutable reads into ProtocolRelease above instead.
+# The alternative (a standalone Factory entity, useful only for off-chain-initiated `previewMarket` capture)
+# is recorded in §4.3's prose only — never adopted, never silently declared here as if it had been (§11 item 8).
+
+# ---- §4.4 Market — SPECIFIED-NOT-BUILT (EVENT-SCHEMA §4.1, §10.2; SC §3, §6) ----
+type Market @entity(immutable: false) {
+  id: Bytes!                        # marketId (bytes32) — EVENT-SCHEMA §4.1 field 1; commits chain id, registry and oracle route (SC §3), not separately decoded here
+  network: String!                  # always its own field, never decoded from id (§4.0, §4.4)
+  registry: Registry!
+  version: BigInt!                  # uint32, field 4
+  asset: Asset!                     # field 2
+  payoutAsset: PayoutAsset!         # field 3
+  hook: Hook!                       # field 5, write-once; Hook.id == Market.hook
+  executor: Executor!               # field 6, write-once
+  poolId: Bytes!                    # field 7, write-once
+  fee: Int!                         # uint24, field 8
+  tickSpacing: Int!                 # int24, field 9
+  rateE18: BigInt!                  # uint256, field 10 — a demonstration rate the admin sets, never a market price
+  initSqrtPriceX96: BigInt!         # uint160, field 11
+  initTick: Int!                    # int24, field 12
+  demonstrationOnly: Boolean!       # field 13, write-once
+  status: Int!                      # 0 None .. 6 RETIRED (SC §5) — LAST-INDEXED ONLY, never authoritative (EVENT-SCHEMA §2)
+  updatedAt: BigInt!                # block timestamp of the last-indexed MarketStatusChanged
+  seedDepth: BigInt                 # uint128, MarketSeeded.depthAtOpeningTick; null until seeded
+  policyAdapter: Bytes              # cached current OraclePolicySet.adapter
+  policyFeedId: Bytes               # cached current OraclePolicySet.feedId
+  policyMaxAge: BigInt              # uint48, cached current OraclePolicySet.maxAge
+  policyMaxDeviationBps: Int        # uint16, cached current OraclePolicySet.maxDeviationBps
+  policyEnabled: Boolean            # cached current OraclePolicySet.enabled
+  capMaxPerTx: BigInt               # uint128, cached current CapsSet.maxPerTx
+  capMaxPerDay: BigInt              # uint128, cached current CapsSet.maxPerDay
+  capMaxSeed: BigInt                # uint128, cached current CapsSet.maxSeed
+  assetDecimals: Int                # PROPOSED (§4.4) — uint8, read live via getMarket(marketId), not carried by MarketProposed
+  payoutDecimals: Int               # PROPOSED, uint8, same source
+  assetIsCurrency0: Boolean         # PROPOSED, same source
+  proposedAt: BigInt                # PROPOSED, same source
+  marketVersion: MarketVersion!     # the (asset, payout) pair row this Market is one version of (§4.5)
+  oraclePolicyHistory: [OraclePolicy!]! @derivedFrom(field: "market")
+  capChangeHistory: [CapChange!]! @derivedFrom(field: "market")
+  pauseHistory: [MarketPause!]! @derivedFrom(field: "market")
+  unpauseHistory: [MarketUnpause!]! @derivedFrom(field: "market")
+  retirement: MarketRetirement      # plain, nullable, at most one (terminal) — set by the same handler that creates the row
+  liquiditySeed: LiquiditySeed      # plain, nullable, at most one on the honest path (SC §15 item 6)
+  pool: Pool                        # plain, nullable — only if the §4.6 divergence is adopted
+}
+
+# ---- §4.5 MarketVersion — PROPOSED ----
+type MarketVersion @entity(immutable: false) {
+  id: Bytes!                        # keccak256(registry address, asset address, payout address) — PROPOSED composite (§4.5)
+  latestVersion: BigInt!
+  liveMarketId: Bytes               # null if the latest version is RETIRED and not yet relisted
+  markets: [Market!]! @derivedFrom(field: "marketVersion")
+}
+
+# ---- §4.6 Pool — SPECIFIED-NOT-BUILT identity, PROPOSED enrichment that DIVERGES from EVENT-SCHEMA §10.2 ----
+# §10.2 decides against indexing PoolManager logs; §4.6's own recommendation is to leave this to RPC/StateView
+# and keep Pool limited to fields already visible through Market. What follows is the alternative, recorded
+# for the owner to choose (§11 item 2), not this document's adopted default.
+type Pool @entity(immutable: false) {
+  id: Bytes!                        # poolId (bytes32)
+  market: Market                    # plain, nullable — set only if marketIdOfPool(poolId) != 0 on the trusted registry (§4.6); never assumed from a PoolManager log alone
+  currency0: Bytes!
+  currency1: Bytes!
+  fee: Int!                         # uint24, set once by Initialize
+  tickSpacing: Int!                 # int24, set once
+  hooksAddress: Bytes!              # set once
+  initSqrtPriceX96: BigInt!         # uint160, set once
+  initTick: Int!                    # int24, set once
+  currentTick: Int                  # mutable, updated by every later Swap/ModifyLiquidity
+  currentSqrtPriceX96: BigInt       # mutable
+  liquidity: BigInt                 # mutable
+  protocolFee: Int                  # uint24, mutable, from ProtocolFeeUpdated
+}
+
+# ---- §4.7 Hook — SPECIFIED-NOT-BUILT (SC §8) ----
+type Hook @entity(immutable: false) {
+  id: Bytes!                        # hook address, CREATE2, low 14 bits 0x20C0 (SC §8)
+  market: Market!                   # plain, 1:1 — Market.hook == Hook.id
+  poolManager: Bytes!
+  factory: Bytes!
+  registry: Bytes!
+  marketId: Bytes!
+  assetToken: Bytes!
+  payoutToken: Bytes!
+  fee: Int!                         # uint24
+  tickSpacing: Int!                 # int24
+  assetDecimals: Int!               # uint8
+  payoutDecimals: Int!              # uint8
+  assetIsCurrency0: Boolean!
+  poolId: Bytes!
+  executor: Bytes!
+  requireOracle: Boolean!
+  receiptCount: BigInt!             # mutable, cached echo of the on-chain counter — may trail it under indexing lag, never exceed it (§4.7)
+  hookReceipts: [HookReceipt!]! @derivedFrom(field: "hook")
+}
+
+# ---- §4.8 Executor — SPECIFIED-NOT-BUILT (SC §9) ----
+type Executor @entity(immutable: false) {
+  id: Bytes!                        # executor address, CREATE(hook, 1)
+  market: Market!                   # plain, 1:1
+  poolManager: Bytes!
+  hook: Bytes!
+  registry: Bytes!
+  marketId: Bytes!
+  assetToken: Bytes!
+  payoutToken: Bytes!
+  fee: Int!
+  tickSpacing: Int!
+  assetIsCurrency0: Boolean!
+  orderCount: BigInt!               # mutable, cached echo, same caveat as Hook.receiptCount
+  payoutUsedTodaySnapshot: BigInt   # PROPOSED, NOT a mirror of on-chain payoutUsedOnDay — a derived approximation only (§4.8)
+  payoutUsedTodayDay: BigInt        # PROPOSED, block.timestamp / 86400 (SC §9.2's own day boundary)
+  orders: [Order!]! @derivedFrom(field: "executor")
+  executorReceipts: [ExecutorReceipt!]! @derivedFrom(field: "executor")
+}
+
+# ---- §4.9 OraclePolicy — SPECIFIED-NOT-BUILT (EVENT-SCHEMA §4.4; SC §6) ----
+# Named OraclePolicy per the task's entity list; EVENT-SCHEMA §10.2 calls the identically-shaped history row
+# PolicyChange — same event, same fields, renamed once here as §4.9 already notes.
+type OraclePolicy @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex) — one row per OraclePolicySet emission
+  market: Market!
+  adapter: Bytes!
+  feedId: Bytes!
+  maxAge: BigInt!                   # uint48
+  maxDeviationBps: Int!             # uint16
+  enabled: Boolean!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.10 Asset — PROPOSED ----
+type Asset @entity(immutable: true) {
+  id: Bytes!                        # token contract address, scoped to the one network this deployment indexes (§4.10 — a future multi-chain deployment needs a network++address composite, §9)
+  decimals: Int!                    # uint8, cached at first sight — TokenImplementationObservation (§4.24) catches later drift separately
+  markets: [Market!]! @derivedFrom(field: "asset")
+}
+
+# ---- §4.11 PayoutAsset — PROPOSED, structurally identical to Asset, kept separate on purpose (§4.11) ----
+type PayoutAsset @entity(immutable: true) {
+  id: Bytes!                        # token contract address
+  decimals: Int!                    # uint8, cached at first sight
+  markets: [Market!]! @derivedFrom(field: "payoutAsset")
+}
+
+# ---- §4.12 Merchant — PROPOSED rollup, never an authorization record ----
+type Merchant @entity(immutable: true) {
+  id: Bytes!                        # the recipient address — SPEC-CONTRACTS.md §9.2: "there is no on-chain merchant record or merchant id"
+  firstSeenBlock: BigInt            # PROPOSED display field: the earliest OrderCreated naming this address
+  firstSeenAt: BigInt               # that event's block timestamp
+  orders: [Order!]! @derivedFrom(field: "merchant")
+  settlements: [Settlement!]! @derivedFrom(field: "merchant")
+}
+
+# ---- §4.13 Payer — PROPOSED rollup, symmetric to Merchant (§4.13) ----
+type Payer @entity(immutable: true) {
+  id: Bytes!                        # the order's bound payer address — always non-zero in UNICA v4 (payer-bound only, EVENT-SCHEMA §6.1)
+  firstSeenBlock: BigInt
+  firstSeenAt: BigInt
+  orders: [Order!]! @derivedFrom(field: "payer")
+  settlements: [Settlement!]! @derivedFrom(field: "payer")
+}
+
+# ---- §4.14 Order — SPECIFIED-NOT-BUILT (EVENT-SCHEMA §6.1, §10.2) ----
+type Order @entity(immutable: false) {
+  id: Bytes!                        # orderId (bytes32) — EVENT-SCHEMA §6.1 field 1
+  executor: Executor!               # belongs-to (Market reachable via executor.market, never duplicated here)
+  merchant: Merchant!               # recipient
+  payer: Payer!                     # boundPayer
+  recipient: Bytes!                 # immutable-at-creation
+  creator: Bytes!
+  boundPayer: Bytes!
+  amountIn: BigInt!                 # uint128
+  minOut: BigInt!                   # uint128
+  deadline: BigInt!                 # uint64 — "expired" is never stored (EVENT-SCHEMA §10.2); a caller compares against its own clock
+  settled: Boolean!                 # mutable, false until Settled, never reverted back
+  settlement: Settlement            # nullable, present only once a Settled names this orderId
+  blockNumber: BigInt!              # of OrderCreated
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.15 Settlement — SPECIFIED-NOT-BUILT, the canonical success record (see §5, §8) ----
+type Settlement @entity(immutable: true) {
+  id: Bytes!                        # orderId — one Settlement per order, ever (EVENT-SCHEMA §5)
+  order: Order!                     # 1:1
+  market: Market!                   # denormalized copy of order.executor.market, for one-hop queries — never an independent fact (§4.15)
+  hookReceipt: HookReceipt!
+  executorReceipt: ExecutorReceipt!
+  merchant: Merchant!                # denormalized copy of order.merchant
+  payer: Payer!                      # denormalized copy of order.payer
+  currencyIn: Bytes!
+  currencyOut: Bytes!
+  amountIn: BigInt!                  # equal by on-chain construction across both paired events (SC §9.1 steps 3/5)
+  amountOut: BigInt!                 # from the receipt, uint128
+  amountDelivered: BigInt!           # from Settled, uint256; equal to amountOut by DeliveryNotExact (SC §9.1 step 5)
+  hookFeePips: Int!                  # uint24, always 0 in this release
+  lpFeePips: Int!                    # uint24
+  protocolFeePips: Int!              # uint24
+  swapFeePips: Int!                  # uint24
+  referencePrice: BigInt!            # uint256, 0 when demonstrationOnly
+  referenceDecimals: Int!            # uint8, 0 when demonstrationOnly
+  referenceUpdatedAt: BigInt!        # uint64, 0 when demonstrationOnly
+  demonstrationOnly: Boolean!
+  blockNumber: BigInt!               # the settling transaction's block — §4.0's stated Settlement exception
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# ---- §4.16 HookReceipt — SPECIFIED-NOT-BUILT (EVENT-SCHEMA §5) ----
+type HookReceipt @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex) — same id strategy as the BUILT Settlement (T4)
+  hook: Hook!                       # the emitter, accepted only when log.address == getMarket(marketId).hook (§2, §5)
+  orderId: Bytes!
+  recipient: Bytes!
+  payer: Bytes!
+  marketId: Bytes!
+  currencyIn: Bytes!
+  currencyOut: Bytes!
+  amountIn: BigInt!                 # uint128
+  amountOut: BigInt!                # uint128
+  hookFeePips: Int!                 # uint24, always 0
+  lpFeePips: Int!                   # uint24
+  protocolFeePips: Int!             # uint24
+  swapFeePips: Int!                 # uint24
+  referencePrice: BigInt!           # uint256
+  referenceDecimals: Int!           # uint8
+  referenceUpdatedAt: BigInt!       # uint64
+  demonstrationOnly: Boolean!
+  settlement: Settlement            # plain, nullable until the matching Settled is processed
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.17 ExecutorReceipt — SPECIFIED-NOT-BUILT (EVENT-SCHEMA §6.2) ----
+type ExecutorReceipt @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex)
+  executor: Executor!               # the emitter, accepted only when registry.marketIdOfExecutor(log.address) != 0 (§3)
+  orderId: Bytes!
+  payer: Bytes!
+  recipient: Bytes!
+  currencyIn: Bytes!
+  currencyOut: Bytes!
+  amountIn: BigInt!                 # uint256
+  amountDelivered: BigInt!          # uint256
+  settlement: Settlement            # plain, nullable until paired
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.18 LiquiditySeed — SPECIFIED-NOT-BUILT base, PROPOSED enrichment flagged as Pool is (§4.18) ----
+type LiquiditySeed @entity(immutable: false) {
+  id: Bytes!                        # marketId, reused from Market — at most one honest-path row per market (SC §15 item 6)
+  market: Market!                   # 1:1
+  depthAtOpeningTick: BigInt!       # uint128, immutable, from MarketSeeded
+  tickLower: Int                    # PROPOSED enrichment from the external ModifyLiquidity log — primary record is off-chain (SC §7)
+  tickUpper: Int                    # same
+  blockNumber: BigInt!              # of MarketSeeded
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.19-4.21 MarketPause / MarketUnpause / MarketRetirement — one event split three ways (§4.19-4.21) ----
+type MarketPause @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex) — created only on (from, to) == (4, 5)
+  market: Market!
+  marketId: Bytes!
+  previousStatus: Int!              # always 4 — §4.0's stated uint8 exception
+  newStatus: Int!                   # always 5
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+type MarketUnpause @entity(immutable: true) {
+  id: Bytes!                        # created only on (from, to) == (5, 4)
+  market: Market!
+  marketId: Bytes!
+  previousStatus: Int!              # always 5
+  newStatus: Int!                   # always 4
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+type MarketRetirement @entity(immutable: true) {
+  id: Bytes!                        # created only on to == 6 (RETIRED, terminal)
+  market: Market!
+  marketId: Bytes!
+  previousStatus: Int!              # 1, 2, 3, 4 or 5
+  newStatus: Int!                   # always 6
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.22 CapChange — SPECIFIED-NOT-BUILT (EVENT-SCHEMA §4.5; SC §6) ----
+# This document uses the task's singular CapChange; EVENT-SCHEMA §10.2 names the equivalent row CapsChange.
+type CapChange @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex)
+  market: Market!
+  marketId: Bytes!
+  maxPerTx: BigInt!                 # uint128
+  maxPerDay: BigInt!                # uint128
+  maxSeed: BigInt!                  # uint128, repeats verbatim on a tighten
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.23 RoleChange — SPECIFIED-NOT-BUILT (EVENT-SCHEMA §4.6; SC §6) ----
+# topic0 for all four source events is not yet fixed (EVENT-SCHEMA §12 item 2 / §14 item 1) — kind is named
+# by event name only, never by a topic0 value this document does not have.
+type RoleChange @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex)
+  registry: Registry!
+  kind: String!                     # "OrderCreatorSet" | "PauserSet" | "AdminTransferStarted" | "AdminTransferred"
+  addressA: Bytes!                  # generic slot: creator / previousPauser / currentAdmin / previousAdmin
+  addressB: Bytes                   # generic slot: unused for OrderCreatorSet / newPauser / pendingAdmin / newAdmin
+  allowed: Boolean                  # populated only for OrderCreatorSet; null otherwise
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.24 TokenImplementationObservation — PROPOSED ----
+type TokenImplementationObservation @entity(immutable: true) {
+  id: Bytes!                        # network ++ token address ++ observedAtBlock — PROPOSED composite (§4.24); each row is its own evidentiary observation, never an overwrite
+  asset: Asset                      # belongs-to Asset OR PayoutAsset, whichever role the token plays — §4.11's open question about a token playing both roles applies identically, not solved twice
+  payoutAsset: PayoutAsset
+  observedAtBlock: BigInt!
+  implementation: Bytes             # the implementation slot's contents, when read
+  mechanism: String!                # "EVENT" | "POLLING" — which of §4.24's two mechanisms produced this row
+}
+
+# ---- §4.25 DeploymentManifest — PROPOSED, the one entity whose honest provenance is "not the chain" (§4.25) ----
+type DeploymentManifest @entity(immutable: false) {
+  id: Bytes!                        # network ++ registry address
+  protocolRelease: ProtocolRelease!
+  registry: Registry!
+  factory: Bytes!
+  hookCreationCodeHash: Bytes!
+  startBlock: BigInt!
+  releaseTag: String!
+  evidenceStatus: EvidenceStatus    # plain, nullable — set once an EvidenceStatus row (§4.26) exists for this deployment
+}
+
+# ---- §4.26 EvidenceStatus — PROPOSED ----
+type EvidenceStatus @entity(immutable: false) {
+  id: Bytes!                        # network ++ registry address, matching DeploymentManifest — singleton per deployment
+  deploymentManifest: DeploymentManifest!
+  anomalyCount: BigInt!             # mutable rollup
+  lastAnomalyAt: BigInt
+  lastAnomalyKind: String
+  anomalies: [Anomaly!]! @derivedFrom(field: "evidenceStatus")
+}
+
+# ---- Anomaly — not one of the task's 26 names; EVENT-SCHEMA §10.2's own entity, imported per §4.26 ----
+# rather than redesigned, so that EvidenceStatus.anomalies above has a real, buildable target type.
+type Anomaly @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex)
+  evidenceStatus: EvidenceStatus!
+  kind: String!
+  detail: String!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+```
 
 ## 5. Canonical receipt authentication — the central piece
 

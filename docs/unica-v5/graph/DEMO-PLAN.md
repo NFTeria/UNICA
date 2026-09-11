@@ -100,6 +100,21 @@ corrected, with the correction stated, where it does not.
    applied here without a registry because none is deployed yet — the allow-list is a pinned
    constant of the two known-good addresses in §1 of `PRIZE-FIT.md`, documented as such rather than
    presented as a v4 registry lookup.
+
+   **Correction, evidence-driven: the allow-list check is vacuous against the subgraph alone.**
+   `integrations/graph/subgraph.yaml` pins its two data sources to exactly these same two
+   addresses, so every `Settlement` entity the subgraph can ever return already has `hook` on the
+   allow-list — comparing it against the allow-list proves nothing, and a `SettlementReceipt`-shaped
+   log from any other address is never indexed at all, so the subgraph alone can answer VERIFIED or
+   "not found," never REFUSED. Producing a live REFUSED verdict for an address the subgraph does not
+   index requires a second, independent live read alongside the subgraph query: an `eth_getLogs`
+   call against the same Sepolia JSON-RPC endpoint for the order id's transaction hash, checked
+   against the same allow-list, consulted only when the subgraph itself reports no match. This keeps
+   a REFUSED verdict grounded in live chain data rather than in a subgraph result, without changing
+   the subgraph's own scope or publishing anything new to it. It only fires, honestly, if a
+   non-allowlisted emitter is actually found live on Sepolia during the event — UNICA does not
+   broadcast one itself; step 4's "never broadcast" rule still holds. See §6 and step 8 below for
+   what this does and does not make demonstrable to a judge within the event window.
 4. **Add an adversarial look-alike fixture, in local tests only, never broadcast.** Kept as given.
    A locally deployed or locally simulated hook that emits a `SettlementReceipt`-shaped log from an
    address not on the allow-list, exercised only in test infrastructure, exactly as the research
@@ -112,8 +127,17 @@ corrected, with the correction stated, where it does not.
    receipt's `recipient` address through the already-built `integrations/ensv2/` module
    (`docs/SPONSOR-ELIGIBILITY.md` §4) to show a merchant name beside the verdict — reusing existing,
    already-live ENSv2 code rather than building anything new for this stream.
-8. **Build one judge-facing screen** showing a legitimate and a look-alike receipt side by side
-   with the queried block. Kept as given.
+8. **Build one judge-facing screen, corrected in scope.** The brief's order calls for a legitimate
+   and a look-alike receipt shown side by side. Per step 3's correction and §6: the legitimate
+   (VERIFIED) case and an endpoint-disabled or indexer-lag (UNKNOWN) case are shown live, each with
+   the queried block and the subgraph's own `_meta` block, exactly as the brief intends — this half
+   of the screen is fully load-bearing on the live subgraph. The look-alike case is shown as a
+   second, clearly labeled panel: the reason-code layer's own test-suite output against the step-4
+   local fixture, captioned as a local logic test, not a live query result — so the screen never
+   presents a mocked or local-only dataset as if it were the live, load-bearing query the prize
+   track requires. If the `eth_getLogs` fallback in step 3 ever catches a genuinely live
+   non-allowlisted emitter during the event, that live REFUSED case replaces the labeled fixture
+   panel; it is not assumed to arrive on schedule.
 9. **Measure failure behaviour**: the endpoint disabled, and under simulated lag and reorg. Kept
    as given; see §6 for what "simulated" can honestly mean without a second live chain.
 10. **Only then consider more chains** — kept as given, and, per §4, deferred past this event
@@ -130,7 +154,18 @@ project's own rule that clean output is the least trustworthy output.
 | Endpoint disabled | Point the query at an unreachable or invalid subgraph URL | UNKNOWN, reason "endpoint unreachable" |
 | Indexer lag | Query a block range ahead of the subgraph's last-indexed block (`_meta.block.number`) | UNKNOWN, reason "not yet indexed," with the lag shown, not hidden |
 | Reorg | **UNKNOWN whether this can be produced honestly on public Sepolia within the event window.** A real reorg cannot be scheduled; simulating one requires either a local fork whose canonical chain is deliberately rewritten after indexing, or relying on the subgraph's own reorg-handling being exercised by chance. Recorded here as an open build risk rather than assumed solvable — do not claim a reorg row exists until one has actually been produced and observed, per the project's rule to validate the instrument before trusting the reading. |
-| Look-alike receipt | The step-4 fixture, run locally, never broadcast | REFUSED, reason naming the unregistered address |
+| Look-alike receipt | The step-4 fixture, run locally, never broadcast — this proves the reason-code layer's own REFUSED logic in a test, not in a live query | REFUSED, in the test suite's own output; **not a live verdict** — see the note below |
+
+**Note on the look-alike row, corrected.** Per step 3's finding, the live subgraph as currently
+scoped cannot itself produce a REFUSED verdict — `integrations/graph/subgraph.yaml`'s two data
+sources only ever index the two allow-listed addresses, so the allow-list check against subgraph
+data is vacuous and a non-allowlisted emitter's log is never indexed. Only the `eth_getLogs`
+fallback in step 3 can produce a live REFUSED verdict, and only if a genuinely non-allowlisted
+emitter appears live on Sepolia during the event — not something this plan can schedule or
+manufacture without breaking the "never broadcast" rule. Until that happens, or until it doesn't,
+the REFUSED branch is proven the honest way available today: as test-suite output against the
+local fixture, shown to a judge captioned as a logic test, not presented as a live query result
+(step 8). `PRIZE-FIT.md` §7 item 1 is corrected to match.
 
 ## 7. Cut lines and overreach guards
 
@@ -164,3 +199,8 @@ no v4 contract is described as live; a demo that cannot fit inside the 2–4 min
 4. Whether an agent-loop harness (demo B) can be built and rehearsed reliably enough by the demo
    date to justify its Medium-High rather than High reliability score in §3 — this is a schedule
    risk, not a technical unknown, and it is the reason fallback 1 exists.
+5. Whether a genuinely non-allowlisted `SettlementReceipt`-shaped emitter will appear live on
+   Sepolia during the remaining event window, making a live REFUSED verdict reachable through the
+   step-3 `eth_getLogs` fallback — not something this plan can schedule or manufacture without
+   breaking the "never broadcast" rule (§5 step 3, §6); until or unless one appears, the
+   judge-facing REFUSED case stays a labeled local-fixture test, not a live query result.
