@@ -45,6 +45,58 @@ constant, and for the warning to say plainly that the scale is a property of the
 the chain. Ours is `integrations/arc-treasury/units.mjs`, where the two representations are types
 that refuse to meet; it is offered as the example if it is useful.
 
+### 2026-09-11 — USDC, EURC and cirBTC on Arc testnet confirmed against Circle's own contract-address pages
+
+**Confirmed, chain and contract state, same day.** Arc Testnet's chain id is `5042002`, re-confirmed
+via `eth_chainId` → `0x4cef52` against `https://rpc.testnet.arc.io`. Three token addresses were
+checked byte-for-byte against Circle's own published contract-address pages and against on-chain
+reads on that RPC:
+
+| Token | Address | Circle's page (row: "Arc Testnet") | On-chain `decimals()` / `symbol()` / `name()` |
+|---|---|---|---|
+| USDC | `0x3600000000000000000000000000000000000000` | `developers.circle.com/stablecoins/usdc-contract-addresses` | 6 / `USDC` / `USDC` |
+| EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | `developers.circle.com/stablecoins/eurc-contract-addresses` | 6 / `EURC` / `EURC` |
+| cirBTC | `0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` | `developers.circle.com/assets/cirbtc-contract-addresses` | 8 / `cirBTC` / `Circle Wrapped Bitcoin` |
+
+All three rows match. cirBTC's address also carries a Blockscout-verified source on Arc's own
+explorer (`testnet.arcscan.app`), named `contracts/v1/FiatTokenProxy.sol`, Apache-2.0, "Copyright
+(c) 2023, Circle Internet Financial, LLC" — and the verified deployed bytecode the explorer's own
+API returns for it matches this project's own `eth_getCode` read on the same address, byte for
+byte (1,496 bytes). Commands: `cast chain-id`, `cast call <address> "decimals()(uint8)"` (likewise
+`symbol()(string)` and `name()(string)`) and `cast code <address>`, each with
+`--rpc-url https://rpc.testnet.arc.io`; the explorer side is the `deployed_bytecode` field of
+`https://testnet.arcscan.app/api/v2/smart-contracts/<address>`.
+
+This resolves an item our own research had left open earlier the same day:
+`docs/unica-v4/arc/TOKENS.md` §5 found four mutually-inconsistent, self-labeled "cirBTC" tokens on
+that same explorer and could not confirm any of them as Circle's, because neither
+`docs.arc.io`'s network-level contract-addresses page nor Circle's `what-is-cirbtc` page named an
+address. `developers.circle.com/assets/cirbtc-contract-addresses` is the page that does, and it
+names exactly the one of those four candidates that also carries the verified Circle source above.
+
+Circle states plainly, on each of the three pages, that testnet tokens carry no financial value:
+the USDC and EURC pages both read "Testnet tokens have no financial value"; the cirBTC page adds
+"the cirBTC tokens in circulation on these networks... are not backed by real Bitcoin."
+
+### 2026-09-11 — Arc's contract-addresses page does not list cirBTC, whose Arc Testnet address Circle publishes elsewhere
+
+**Trying to:** find the Arc Testnet cirBTC address on Arc's own contract-addresses page, where
+USDC and EURC are listed.
+
+**Blocked by:** https://docs.arc.io/arc/references/contract-addresses.md describes itself as "Arc
+Testnet contract addresses for USDC, EURC, USYC, CCTP, Gateway, StableFX", then transaction
+extensions and common Ethereum contracts. The string `cirBTC` occurs zero times on it (fetched
+2026-09-11). It links to Circle pages for CCTP, Gateway, StableFX and USYC, but not to any Circle
+per-asset address page. The address is on Circle's separate page,
+https://developers.circle.com/assets/cirbtc-contract-addresses.
+
+**Cost:** not recorded as a duration. `docs/unica-v4/arc/TOKENS.md` §5 recorded cirBTC's Arc address
+as UNKNOWN earlier the same day, with four lookalike tokens on the explorer, until Circle's page
+was found.
+
+**Would have prevented it:** a cirBTC row on Arc's contract-addresses page, or one link from that
+page to Circle's per-asset address pages.
+
 Status: `LIVE READ`. The integration is complete: it reads a live Arc position, reads the ERC-20's
 own decimals(), decides one bounded action and emits a signable preview. No transaction has been
 broadcast and no UNICA contract runs on Arc — there is no signer in the directory, by design.

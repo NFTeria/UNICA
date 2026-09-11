@@ -15,14 +15,14 @@ Convention for this pass, matching the shape `docs/feedback/README.md` already s
 | File | One line |
 |---|---|
 | `uniswap/README.md` | Inventory in three tables: fixed in our tree, wanted with no code change, needs their code change |
-| `uniswap/robinhood.md` | An observed testnet's router refuses our shipped encoding; the facts, the cause, and a design question |
+| `uniswap/robinhood.md` | The testnet router refuses our shipped encoding; an experimental settlement now runs on 46630, and the same PoolManager address has a different owner than the one Uniswap's page lists under mainnet chain 4663 |
 | `the-graph.md` | Real usage exists (`integrations/graph/`); the open item is a hosted deployment, not a build |
 | `world.md` | No integration; the one seam considered is beta-gated and its endpoint is undocumented |
 | `ens.md` | No integration; no ENSv2 defect was established this pass |
 | `privy.md` | No integration; two wallet seams were designed, neither was built |
-| `chainlink.md` | No integration; a price-feed seam exists only as an idea |
+| `chainlink.md` | No integration; a CRE guardian workflow was simulated, not shipped; Robinhood testnet 46630 has Data Streams and CRE but no Data Feeds, and its Discovery API omits NFLX and v8 streams |
 | `ledger.md` | No integration; a related signing-registry gap is documented but credited to no track |
-| `arc.md` | No integration; Arc mainnet is not live; two documentation gaps noted |
+| `arc.md` | An Arc-native USDC treasury reads live testnet state with no swap and nothing broadcast; USDC, EURC and cirBTC are confirmed against Circle's own pages, and Arc's own address page omits cirBTC |
 | `hedera.md` | No integration; the only fit found is a pivot away from the settlement core |
 | `1inch.md` | No integration; the sponsor's own template licence blocks copying code into this repository |
 | `bazantic.md` | Not previously researched; requirement quoted fresh, nothing built |
