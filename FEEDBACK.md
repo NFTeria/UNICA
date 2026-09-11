@@ -50,6 +50,80 @@ specific as the friction — "the `X` helper saved an hour because it did `Y`" �
 
 <!-- newest first -->
 
+### 2026-09-11 — the `Swap` event's `amount0`/`amount1` are the swap caller's delta; `IPoolManager.sol`'s own NatSpec calls them the pool's balance delta instead
+
+**Trying to:** read the 46630 settlement's own `Swap` event as a plain statement of which way
+each currency moved, on the pay tx `0x9cb16eeab49670283b8c2a36241e89e5239df45523660afdc36491a0453ec300`
+(block 117535202).
+
+**Blocked by:** the doc comment on the event contradicts the value it emits. `IPoolManager.sol`,
+pinned at `Uniswap/v4-core` commit `d153b048868a60c2403a3ef5b2301bb247884d46`
+(<https://github.com/Uniswap/v4-core/blob/d153b048868a60c2403a3ef5b2301bb247884d46/src/interfaces/IPoolManager.sol#L85-L86>,
+local copy `lib/uniswap-hooks/lib/v4-core/src/interfaces/IPoolManager.sol:85-86`), reads:
+```
+/// @param amount0 The delta of the currency0 balance of the pool
+/// @param amount1 The delta of the currency1 balance of the pool
+```
+On the pay tx, the `Swap` log (topic `0x40e9cecb9f5f1f1c5b9c97dec2917b7ee92e57ba5563708daca94dd84ad7112f`,
+emitted by PoolManager `0x8366a39cc670b4001a1121b8f6a443a643e40951`) decodes via
+`cast abi-decode --input 'f(int128,int128,uint160,uint128,int24,uint24)' <data>` to
+`amount0 = -1000000000000000`, `amount1 = 393052`. In the same transaction the TSLA `Transfer`
+log (token `0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E`, log index 4) moves `1000000000000000`
+raw TSLA from the executor `0x613dadd395E0bB1A7AC4A843Aca408C3af8e16cE` (the swap caller, the
+`Swap` log's `sender`) into that same PoolManager address — the PoolManager's TSLA balance rose by
+the exact magnitude the event reports as negative, the opposite sign from what "the delta of the
+currency0 balance of the pool" would predict. The uTUSD `Transfer` at log index 6 moves `393052`
+out of the PoolManager while `amount1` reads `+393052`, so `currency1` runs opposite too. The code
+explains why: `PoolManager.sol:226`, `_accountPoolBalanceDelta(key, swapDelta, msg.sender)`,
+accounts the same `swapDelta` values emitted at `PoolManager.sol:244-245` (unchanged here, since
+this hook's flags `0x20C0` carry no return-delta permission) against `msg.sender` — the swap caller — through
+`_accountDelta` (`PoolManager.sol:368-371`) into `CurrencyDelta`, whose own title says what it
+stores: "a library to store **callers'** currency deltas in transient storage"
+(`lib/uniswap-hooks/lib/v4-core/src/libraries/CurrencyDelta.sol:6`). `take()`
+(`PoolManager.sol:294`) applies `-amount` to the caller on withdrawal and `settle()` applies a
+positive `paid` to the caller on deposit, confirming negative-delta-to-caller means "the caller
+owes this in" throughout the file — the value is the swap caller's own delta, not the pool's
+balance change, and on this tx the two run in opposite directions for both currencies.
+
+**Cost:** 25 minutes: pulling the receipt, decoding the `Swap` log, tracing the TSLA `Transfer`
+into the PoolManager, then reading `_swap` / `_accountPoolBalanceDelta` / `_accountDelta` /
+`CurrencyDelta` to confirm whose account the sign is relative to.
+
+**Would have prevented it:** rewrite the two `@param` lines to describe what the code does —
+"the delta accounted to the swap caller: negative means the caller paid this amount in, positive
+means the caller received it" — since the emitted value runs opposite in sign to the pool's own
+balance change, which is what a reader takes "delta of the pool" to mean.
+
+### 2026-09-11 — `Swap.fee` is a rate in pips; no event carries the fee as an amount, so a receipt cannot state what was paid without recomputing it
+
+**Trying to:** state, from its own events, how much of the 0.001 TSLA input was taken as a fee on pay tx `0x9cb16eeab49670283b8c2a36241e89e5239df45523660afdc36491a0453ec300`.
+
+**Blocked by:** the `Swap` event's `fee` field is documented as a rate — `/// @param fee The
+swap fee in hundredths of a bip` (`IPoolManager.sol:90`) — and decodes here to `3000` (0.3%).
+`Pool.sol` computes and splits it purely in pips: `lpFee, swapFee, and protocolFee are all in
+pips` (`lib/uniswap-hooks/lib/v4-core/src/libraries/Pool.sol:301`), `swapFee = protocolFee == 0
+? lpFee : uint16(protocolFee).calculateSwapFee(lpFee)` (`Pool.sol:307`), `swapFee is the pool's
+fee in pips (LP fee + protocol fee)` (`Pool.sol:318`). No field anywhere on `Swap` or `Donate`
+carries the fee as a token amount. The hook's own `SettlementReceipt` for this tx decodes
+`fee = 0` (`cast abi-decode` on the log at topic `0x2583a534a59ee6da3339351f87c9e89546b517294c1bcc57980f8a371716f177`) —
+correct in the receipt's own terms, since `docs/RECEIPT-SCHEMA.md` row 11 defines that field as the hook's own
+fee and this hook takes none — but silent on the pool's. The only way to state what the pool
+charged is to recompute it: `amountIn (1000000000000000) × fee (3000) / 1e6 = 3000000000000`
+raw TSLA, matching the independent price-movement derivation already recorded in
+`docs/experimental/STOCK-46630-FEE-FIELD.md` (997000000000000 raw TSLA moved the price; the
+remaining 3000000000000 is the LP fee).
+
+**Cost:** 15 minutes to decode both events and confirm neither carries a fee amount, on top of
+the derivation already recorded in `docs/experimental/STOCK-46630-FEE-FIELD.md`.
+
+**Would have prevented it:** emit the fee amount alongside the rate on `Swap` (or a second
+event), or add one NatSpec sentence on `IPoolManager.sol` stating the amount must be derived as
+`amountSpecified × fee / 1e6` (up to per-step rounding, and adjusted for exact-output) rather
+than read directly.
+
+
+---
+
 ### 2026-09-08 — `permitWitnessTransferFrom` lets a witness bind one side of a two-party agreement, and nothing says that is a total-loss bug
 
 **Context, because it decides whether this is actionable:** the integration is business payments.
@@ -312,9 +386,6 @@ this template") so the skill degrades to something useful instead of to nothing.
 `HookMiner` sentence, cite the pinned path that exists (`v4-periphery` at the
 `uniswap-hooks` pin) or point at `hookmate`, since `main` no longer has the file.
 
-
----
-
 ## Summary for the feedback form
 
 Filled in at submission, from the entries above, never from memory.
@@ -324,7 +395,7 @@ Filled in at submission, from the entries above, never from memory.
 | What did you build? | **A way for a business to be paid through Uniswap without becoming a trading venue.** A merchant issues an invoice; a customer pays in whatever token they hold; Uniswap v4 turns one into the other, and the merchant receives the exact amount invoiced in the currency they asked for. Neither party touches a swap UI, and neither party's funds touch our contracts — Permit2 moves the customer's token straight to the PoolManager and `take` moves the output straight to the merchant. Concretely that is a v4 hook enforcing order-bound, full-fill settlement, executed only through the official Universal Router and a thin admitted executor, with an indexable receipt. Architecture: the 2026-09-04 entry "the Universal Router as the execution path for a settlement hook". Why the venue is what makes it possible: the praise paragraph in the 2026-09-08 entry. |
 | Biggest blocker | Permit2's witness parameter has no documented contract about what it must contain, and a witness that binds only the signer's own half of a two-party agreement is a total-loss bug that nothing refuses. It reached our frozen release candidate and blocked it. See the 2026-09-08 entry — the reproduction, the two-redirect docs URL, and the one sentence that would have prevented it are all in there. Second, and earlier: the template `uniswap-ai`'s `v4-security-foundations` skill hands out does not compile against the current public `v4-periphery`/`v4-core` — a stale `BaseHook` import with no working replacement path, and a `SwapParams` reference to a type `IPoolManager` no longer declares. See the 2026-09-04 entry and its upstream draft. |
 | Time to first successful integration | Not reconstructable honestly from memory; the entries record specific costs (4 minutes to find the missing MCP tool and abandon it; about 25 minutes to run the security checklist and re-verify each of its claims; about 20 minutes today to isolate the two-compiler split) rather than one end-to-end figure. Leave blank rather than estimate, per this file's own rule against reconstructed timelines. |
-| Documentation helpfulness (1–5) | Draft: 2. The guides that were followed (the first-hook guide's import, the deployment guide's `HookMiner` import) point at paths that do not exist in the current repository, and the troubleshooting and concepts pages stop at a selector or a partial failure-mode list exactly where a reader most needs cause and fix — see the 2026-09-04 and 2026-09-05 upstream drafts under `docs/upstream/`. |
+| Documentation helpfulness (1–5) | Draft: 2. The guides that were followed (the first-hook guide's import, the deployment guide's `HookMiner` import) point at paths that do not exist in the current repository, and the troubleshooting and concepts pages stop at a selector or a partial failure-mode list exactly where a reader most needs cause and fix — see the 2026-09-04 and 2026-09-05 upstream drafts under `docs/upstream/`. The inline NatSpec is not exempt: `IPoolManager.sol`'s own `@param` lines on the `Swap` event describe the pool's balance delta while the emitted value is the swap caller's, opposite in sign for both currencies on our settlement, and the same event's `fee` is documented only as a rate with no field for the amount — see the two 2026-09-11 entries. |
 | Support (1–5) | Not answerable from this project's own experience — no support channel was used. Leave blank rather than guess. |
 | What support was missing | A stated fallback in `uniswap-ai`'s skills for when a named dependency (the MCP tool, a working import path) is absent, rather than the skill running to its final step and failing silently there. See the 2026-09-04 entry "the `v4-hook-generator` skill in `uniswap-ai` calls an MCP tool the plugin does not ship." |
 
