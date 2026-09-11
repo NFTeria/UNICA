@@ -19,6 +19,8 @@ AMM.
   and a chain helper identifies the chain by the chain id the RPC reports. Scripts refuse any chain
   without an enabled settings file; this release enables 46630 only.
 - **Track.** From Scratch, confirmed by the owner on 2026-09-11. Earlier drafts naming Continuity are wrong.
+- **Scope until the hand-off.** Everything up to the Fable run order is UNICA v4. The run order
+  itself is where UNICA v5 begins, and it is Fable's scope. Owner, 2026-09-11.
 - **Mainnet before submission** is a product goal, not permission to bypass a security gate.
 - **UX direction.** Stripe information architecture, Coinbase Commerce checkout, and Privy, Shopify,
   Uniswap, Safe, explorer and Linear patterns. Interaction patterns are borrowed; brand identity
