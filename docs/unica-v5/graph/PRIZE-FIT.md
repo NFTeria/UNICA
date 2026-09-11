@@ -201,10 +201,20 @@ of runway from this file's retrieval date.
 **Buildable today, on already-live infrastructure, no new contract and no owner G0 needed:**
 1. A reason-code verification layer over the **already deployed and synced** `integrations/graph/`
    V1/V3 subgraph: VERIFIED when a `Settlement`'s `hook` field matches a pinned allow-list of
-   registered hook addresses; REFUSED when a well-formed `SettlementReceipt`-shaped log exists
-   from an address not on that list (an adversarial fixture built and run locally only, never
-   broadcast, per the research brief's constraint); UNKNOWN when the query cannot be answered
-   (indexer lag, a malformed id, a network error) — UNKNOWN must never render as VERIFIED.
+   registered hook addresses; UNKNOWN when the query cannot be answered (indexer lag, a malformed
+   id, a network error) — UNKNOWN must never render as VERIFIED. **Corrected, evidence-driven:**
+   `integrations/graph/subgraph.yaml` pins its two data sources to exactly these same two
+   addresses, so every `Settlement` row the subgraph can ever return already has `hook` on the
+   allow-list — the allow-list comparison against subgraph data alone is vacuous (always true), and
+   a well-formed `SettlementReceipt`-shaped log from any other address is never indexed at all, so
+   the subgraph alone can answer VERIFIED or "not found," never REFUSED. A live REFUSED verdict for
+   an address the subgraph does not index needs a second, independent live read alongside the
+   subgraph query — an `eth_getLogs` call against the same Sepolia RPC endpoint, consulted only
+   when the subgraph itself reports no match — detailed in `DEMO-PLAN.md` §5 step 3. Absent a
+   genuinely non-allowlisted emitter appearing live on Sepolia during the event, the REFUSED path is
+   provable only as test-suite output against a local, never-broadcast fixture (the adversarial
+   fixture named in the research brief's constraint), and must be shown to judges labeled as a
+   logic test, not presented as a live verdict (`DEMO-PLAN.md` §6, §5 step 8).
 2. One GraphQL query exposing that verdict plus its reason code and the queried block, wrapped in
    one MCP tool, `unica_verify_receipt`.
 3. One judge-facing screen showing a legitimate and a look-alike receipt side by side, each with
@@ -324,12 +334,14 @@ team member, none of these is claimed as settled.
 
 | Source | URL | Retrieved | Author/org | Kind | Used for |
 |---|---|---|---|---|---|
-| ETHOnline 2026 prizes page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 | ETHGlobal | OFFICIAL | §2, §5, §9, §10, §11 — exact track wording, prize amounts |
+| ETHOnline 2026 prizes page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 (fetched twice this date, verbatim both times, the second fetch made to correct an earlier elided quote) | ETHGlobal | OFFICIAL | §2, §5, §9, §10, §11 — exact track wording, prize amounts, including the full "for example Subgraph Studio... The Graph Market..." clauses |
 | ETHOnline 2026 info/details | https://ethglobal.com/events/ethonline2026/info/details | 2026-09-11 | ETHGlobal | OFFICIAL | §11 — the Classic-track pre-event-code rule ("won't qualify for partner prizes or the Finalist category"); event date range 2026-09-04 to 2026-09-16 |
 | ETHGlobal partner-prize selection rule (via search summary of ETHGlobal event pages) | https://ethglobal.com/events/ethonline2026/prizes and prior ETHGlobal event info pages | 2026-09-11 | ETHGlobal | OFFICIAL | §9, §11.1 — "up to 3 Partner Prizes," multi-track-one-partner-one-slot rule |
 | The Graph — Supported Networks, Sepolia | https://thegraph.com/docs/en/supported-networks/sepolia/ | 2026-09-11 | The Graph | OFFICIAL | §10 — Sepolia is a supported network |
 | The Graph — AI Suite overview | http://thegraph.com/docs/en/ai-overview/ | 2026-09-11 | The Graph | OFFICIAL | §2, §6 — Subgraph MCP and Agent Skills as named AI Suite components |
-| `docs/SPONSOR-ELIGIBILITY.md` (this repository) | n/a — local file | 2026-09-05, updated 2026-09-09 | UNICA / NFTeria | TEAM GUIDANCE | §1, §2 (wording-drift conflict), §8, §11.2 — the already-disclosed Graph submission |
+| `docs/SPONSOR-ELIGIBILITY.md` (this repository) | n/a — local file | 2026-09-05, updated 2026-09-09 | UNICA / NFTeria | TEAM GUIDANCE | §1, §2 (wording-drift, corrected), §8, §11.2 — the already-disclosed Graph submission |
+| `NETWORK-OPTIONS.md` §6 (this stream) | n/a — local file | 2026-09-11 | UNICA / NFTeria | TEAM GUIDANCE | §2 — the correctly-quoted version of the same sentence, used to catch this file's earlier elided quote |
+| `DEMO-PLAN.md` §5, §6 (this stream) | n/a — local file | 2026-09-11 | UNICA / NFTeria | TEAM GUIDANCE | §7 item 1 — the `eth_getLogs` fallback mechanism and the corrected look-alike/REFUSED demo scope |
 | `docs/PROVENANCE-LEDGER.md` (this repository) | n/a — local file | 2026-09-08 (file date); re-derivable any time | UNICA / NFTeria | TEAM GUIDANCE | §4, §8 — from-scratch provenance facts |
 | `docs/unica-v4/EVENT-SCHEMA.md`, `SPEC-CONTRACTS.md` (this repository) | n/a — local files | 2026-09-11 | UNICA / NFTeria | TEAM GUIDANCE | §1, §6, §7, §11.4 — v4 event surface, SPECIFIED-NOT-BUILT status |
 | `docs/v2/SECURITY-ADVISORY-001.md` (this repository) | n/a — local file | 2026-09-08 | UNICA / NFTeria | TEAM GUIDANCE | §6 — the counterparty-binding failure mode a verification layer is meant to catch |
@@ -342,10 +354,13 @@ team member, none of these is claimed as settled.
 2. Whether two distinct feature-branch submissions from the same public repository, both aimed at
    the same From-Scratch AI-tooling pool in the same event, are treated as one project judged once
    or as competing submissions (§11.2) — not addressed in any source retrieved.
-3. Whether the AI-track wording drift between the 2026-09-05 retrieval ("API keys or Graph Market
-   streaming") and the 2026-09-11 retrieval ("a Graph provider") reflects an actual page edit or
-   two different paraphrases of stable underlying text — the retrieval method used here cannot
-   distinguish the two, and no page-revision history was consulted.
+3. Whether the 2026-09-05 retrieval ("API keys or Graph Market streaming") and the full
+   2026-09-11 sentence ("a Graph provider, for example querying Subgraphs with an API key from
+   Subgraph Studio, or streaming Substreams via The Graph Market") are two paraphrases of one
+   stable clause, or reflect an actual page edit between the two dates — both name the same two
+   products and the same credential, so this is a narrower question than an earlier draft of §2
+   stated; the retrieval method used here cannot distinguish paraphrase from edit, and no
+   page-revision history was consulted.
 4. Whether ETHGlobal or The Graph would view reusing the already-deployed `integrations/graph/`
    subgraph (built earlier in this same event window) as sufficiently "load-bearing new work" for
    a Track 2 submission whose new artifact is the verification layer on top of it, rather than the
