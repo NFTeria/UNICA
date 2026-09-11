@@ -14,7 +14,8 @@
 .PHONY: help all deps doctor scan-key scan-key-check build test fuzz snapshot format fmt gate gate-live clean anvil predict simulate go-live go-live-check settle-live settle-check topup-live topup-check tag-green proof \
         rehearse deploy init-pool seed settle topup live readback verify balances _need-deployer _need-signing \
         predict-v3 deploy-v3 deploy-v3-check _deploy-v3-broadcast _need-v3-chain _need-v3-signing \
-        proof-v3 proof-v3-offline proof-v3-self-test proof-v3-etherscan
+        proof-v3 proof-v3-offline proof-v3-self-test proof-v3-etherscan \
+        stock-check stock-live stock-rehearse
 
 # ── configuration ─────────────────────────────────────────────────────────────
 SEPOLIA_RPC_URL  ?= https://ethereum-sepolia-rpc.publicnode.com
@@ -88,6 +89,14 @@ help:
 	@echo "      CHAIN is a foundry.toml rpc alias, never a URL. Deployable today:"
 	@echo "        sepolia_testnet  unichain_testnet  base_testnet  arbitrum_testnet"
 	@echo "      robinhood_testnet is REFUSED by name: no payout currency verified on chain 46630."
+	@echo ""
+	@echo "  THE STOCK-SETTLEMENT EXPERIMENT, Robinhood testnet 46630 only (a separate generation, not V3)"
+	@echo "    make stock-rehearse   all four stages on a local FORK, as the deployer, impersonated. Signs nothing"
+	@echo "    make stock-check STAGE=<stage> ...   one stage, simulated against the live chain. Sends nothing"
+	@echo "    make stock-live  STAGE=<stage> ... LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS"
+	@echo "                          the same, prints the plan, asks you to type SEND, then signs (password prompted)"
+	@echo "      stages, in order: token | pair TOKEN= | pool TOKEN= HOOK= RATE= SEED= |"
+	@echo "                        settle TOKEN= HOOK= EXECUTOR= MERCHANT= AMOUNT_IN= SALT= | verify TOKEN= HOOK= EXECUTOR="
 	@echo ""
 	@echo "  SEPOLIA, one stage at a time (real transactions; keystore password prompted)"
 	@echo "    make deploy ARGS=\"--network sepolia\"      (and init-pool / seed / settle / live the same way)"
@@ -183,6 +192,8 @@ gate     : _need-deps
 	bash script/scan.sh
 	bash script/no-copied-source.sh
 	bash script/size-budget.sh
+	@# The 46630 stage wrapper's refusals, offline: four local anvils, no fork, no RPC, no key.
+	bash script/experimental/stock-46630.test.sh
 	@# The ENS resolution tests are offline and deterministic, so they belong in the gate. If node
 	@# is missing they report a SKIP and say it is a skip: an absent runner and a passing suite
 	@# must not look the same. `make gate-live` additionally resolves real names on Sepolia.
@@ -476,6 +487,28 @@ seed      : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:Se
 settle    : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:Settle       $(NETWORK_ARGS)
 topup     : _need-network ; $(RUN_ENV) forge script script/Interactions.s.sol:TopUp        $(NETWORK_ARGS)
 live      : _need-network ; $(RUN_ENV) forge script script/LiveFire.s.sol:LiveFire         $(NETWORK_ARGS)
+
+# ── the stock-settlement experiment on Robinhood testnet 46630 ──────────────────────────────────
+# Every stage goes through script/experimental/stock-46630.sh, which refuses any chain but 46630,
+# pins the block, simulates, and only then signs. Only public addresses travel on these lines.
+# ENDPOINT, not CHAIN: foundry reads a CHAIN variable as its own --chain option.
+STOCK_VARS = STAGE="$(STAGE)" DEPLOYER="$(DEPLOYER)" TOKEN="$(TOKEN)" HOOK="$(HOOK)" EXECUTOR="$(EXECUTOR)" \
+             MERCHANT="$(MERCHANT)" RATE="$(RATE)" SEED="$(SEED)" AMOUNT_IN="$(AMOUNT_IN)" SALT="$(SALT)" \
+             ENDPOINT="$(ENDPOINT)"
+
+stock-check: _need-deployer
+	DRY_RUN=1 $(STOCK_VARS) bash script/experimental/stock-46630.sh
+
+# Sends nothing unless LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS is given on this command
+# line, and even then only after the plan is printed and SEND is typed at the terminal.
+stock-live: _need-deployer
+	$(STOCK_VARS) DEPLOYER_ACCOUNT="$(DEPLOYER_ACCOUNT)" LIVE_BROADCAST="$(LIVE_BROADCAST)" bash script/experimental/stock-46630.sh
+
+# The keyed endpoint is deliberately NOT named on this line. make echoes a recipe line after
+# expanding it, and `make -n` prints it even behind an `@` — measured 2026-09-10, it printed the key.
+# The rehearsal script reads the variable from .env itself, so no make line ever carries it.
+stock-rehearse: _need-deployer
+	DEPLOYER="$(DEPLOYER)" bash script/experimental/rehearse-46630.sh
 
 readback:
 	bash script/readback.sh $(SEPOLIA_RPC_URL)
