@@ -4,14 +4,19 @@ These ten questions are answered here from official sources wherever the sources
 Nothing here is a question sent to a person; each is closed with a citation or left open, marked as
 needing written confirmation from an identifiable ENS team member, per project rule. Retrieval date
 2026-09-11 unless stated otherwise. Labels: VERIFIED (source cited), PROPOSED (UNICA design
-reasoning), DOCUMENTED_NOT_OBSERVED, UNKNOWN. Reads against `docs/unica-v5/ens/PRIZE-FIT.md` and
-`DEMO-PLAN.md`, which this file does not repeat.
+reasoning), DOCUMENTED_NOT_OBSERVED, UNKNOWN. Authority labels, one per described action, never
+blended into a single claim: **ENSV2_ONCHAIN**, **UNICA_ONCHAIN**, **BACKEND_POLICY**,
+**GRAPH_EVIDENCE**, **CLIENT_VERIFICATION**, **OFFCHAIN_OPERATION** — each answer below carries at
+least one, marking which layer the question and its documented mechanism actually belong to. Reads
+against `docs/unica-v5/ens/PRIZE-FIT.md` and `DEMO-PLAN.md`, which this file does not repeat.
 
 ## Q1. Does parent revocation prevent escape through SET_RESOLVER or SET_SUBREGISTRY?
 
 **Answered for `SET_SUBREGISTRY` from an official source: yes, by a documented "emancipation"
 pattern — but the mechanism is revocation on the child's own resource, not automatic propagation
 down from a parent. `SET_RESOLVER`'s equivalent is not documented anywhere fetched for this file.**
+**Authority: ENSV2_ONCHAIN** — the revocation described is a role-state transition on the deployed
+registry contracts, documented but not yet exercised live by this repository.
 
 VERIFIED — the ENSv2 Contracts documentation on hierarchical registries (retrieved 2026-09-11)
 describes "emancipated registries": a `PermissionedRegistry` is deployed with **no root-level admin
@@ -36,7 +41,8 @@ version was found. **Needs written confirmation.**
 
 **No function literally named `initialize(grants, calls)` was found in any source fetched. The
 practical effect the question asks about is documented, but as a two-step pattern, not a single
-named atomic call.**
+named atomic call.** **Authority: ENSV2_ONCHAIN** — both the deploy-with-scoped-grants step and the
+separate role-revocation step are transactions against the deployed registry/factory contracts.
 
 VERIFIED, `ROOT_RESOURCE` mechanics (<https://docs.ens.domains/ensv2/enhanced-access-control>,
 retrieved 2026-09-11): `ROOT_RESOURCE` is the constant `0`, representing contract-wide authority;
@@ -63,7 +69,9 @@ whether the two-step pattern above is the actual, intended mechanism.
 
 **Answered from an official source: yes, provided the terminal subnames are all owned by the same
 account as the merchant root — the Permissioned Resolver is per-account, not per-name, and this is
-also the exact design UNICA's own `roles.mjs` already implements.**
+also the exact design UNICA's own `roles.mjs` already implements.** **Authority: ENSV2_ONCHAIN** for
+the documented per-account resolver-sharing mechanism itself; **OFFCHAIN_OPERATION** for
+`roles.mjs`'s own calldata-construction choice to rely on it.
 
 VERIFIED (<https://docs.ens.domains/ensv2/permissioned-resolver>, retrieved 2026-09-11): "each
 account gets its own resolver instance, deployed as a UUPS-upgradeable proxy," and "all names owned
@@ -89,6 +97,10 @@ names would share the same subdomain namespace" — retrieved 2026-09-11) — a 
 *registries*, not shared *resolvers*, and this design does not propose a shared registry.
 
 ## Q4. How should service capabilities be exposed — ENSIP-25 / 26 / 27 / vendor records?
+
+**Authority: ENSV2_ONCHAIN** for the ENSIP-25/26/27 text records themselves (they live at the
+resolver); **OFFCHAIN_OPERATION** for the key-namespace choice this answer recommends for UNICA's
+own, non-agent "vendor record" use.
 
 VERIFIED, from official/ENS DAO governance-forum sources retrieved 2026-09-11 (search-summarized;
 the direct fetch of `docs.ens.domains/ensip/25` succeeded, `ensip25.ens.domains` returned no
@@ -124,7 +136,8 @@ confirmation.**
 
 **Partially answered: the two halves (avatar, EAC-governed subnames) are each independently
 meaningful per the track's own wording; no source addresses whether combining them clears a higher
-bar than either alone.**
+bar than either alone.** **Authority: ENSV2_ONCHAIN** for the EAC-governed-subname half;
+**UNICA_ONCHAIN** for the avatar NFT half (v4/identity-NFT: SPECIFIED-NOT-BUILT, `IDENTITY-NFT.md`).
 
 VERIFIED, the track's own bar (`PRIZE-FIT.md` §3): ENSv2 features must be "central to the product,
 not a cosmetic add-on," and the named focus areas explicitly include "permissioned resolvers" and
@@ -151,7 +164,9 @@ here for the record but does not change this event's build scope.
 ## Q6. What is the preferred high-volume receipt discovery model?
 
 **Not settled by any official recommendation — and the one community project built to fill this gap
-is archived.**
+is archived.** **Authority: GRAPH_EVIDENCE** for the discovery-model question itself (indexing at
+scale); **ENSV2_ONCHAIN** for the small-scale direct-`eth_call` alternative this event actually uses
+(§ conclusion below).
 
 VERIFIED, official guidance (<https://docs.ens.domains/ensv2/indexing>, retrieved 2026-09-11): the
 page states the ENSv2 contracts and interfaces "are not yet final and may change prior to mainnet
@@ -187,7 +202,9 @@ that supersedes the archived ENSNode project.
 
 ## Q7. What does the prize require of direct contract interaction?
 
-**Not stated as an explicit requirement on the official page fetched for this file.**
+**Not stated as an explicit requirement on the official page fetched for this file.** **Authority:
+OFFCHAIN_OPERATION** — interpreting a submission-requirements page, not a chain fact; **ENSV2_ONCHAIN**
+for what UNICA's own existing integration already does (`eth_call` in code, every run).
 
 VERIFIED (`PRIZE-FIT.md` §3): the page's bar is functional, not procedural — "central to the product,
 not a cosmetic add-on" and "functional and not just include hard-coded values." Nothing in the text
@@ -204,7 +221,9 @@ this file) exists.
 ## Q8. What are the compatibility concerns for non-transferable identity NFTs as avatars?
 
 **Answered from an official standard: technically compatible in principle; no ENS-specific statement
-addresses it directly.**
+addresses it directly.** **Authority: UNICA_ONCHAIN** for the identity NFT's own `locked()`/transfer
+behavior (once built); **CLIENT_VERIFICATION** for the resolving wallet/checkout's ownership check,
+which itself issues further **ENSV2_ONCHAIN** reads (the name's `addr` and the token's `ownerOf`).
 
 VERIFIED (<https://eips.ethereum.org/EIPS/eip-5192>, retrieved 2026-09-11, status Final): a minimal
 soulbound NFT implements `function locked(uint256 tokenId) external view returns (bool)` plus
@@ -231,7 +250,8 @@ than adding a new one specific to non-transferability. **Needs written confirmat
 
 **Answered, and cross-verified by exact address match against this repository's own on-chain reads
 (`PRIZE-FIT.md` §10) — the identifier is the resolver's own ERC-1967 implementation address, which
-this repository's tooling already checks.**
+this repository's tooling already checks.** **Authority: ENSV2_ONCHAIN** for the implementation-slot
+fact itself; **CLIENT_VERIFICATION** for the classification this repository's tooling applies to it.
 
 VERIFIED, raw page text (<https://docs.ens.domains/learn/deployments>, retrieved 2026-09-11): Sepolia
 carries **two** separate deployments at different addresses under one chain id (`11155111`), listed
@@ -263,7 +283,10 @@ actual scenario a "deployment identifier" would need to rule out. **Needs writte
 ## Q10. What are the canonical events or read methods for enumerating scoped grants and revocations?
 
 **Answered from an official source, and consistent with what this repository has already
-independently measured about the read methods' limits.**
+independently measured about the read methods' limits.** **Authority: ENSV2_ONCHAIN** for
+`EACRolesChanged` and the documented `roles`/`hasRoles`/`roleCount`/`getAssigneeCount` read methods
+themselves; **CLIENT_VERIFICATION** for this repository's own measurement of their operational
+limits (the two-word `getAssigneeCount` return, the non-deterministic `eth_getLogs` scan).
 
 VERIFIED (<https://docs.ens.domains/ensv2/enhanced-access-control>, retrieved 2026-09-11): the one
 documented event is `EACRolesChanged(resource, account, oldRoleBitmap, newRoleBitmap)`, emitted on

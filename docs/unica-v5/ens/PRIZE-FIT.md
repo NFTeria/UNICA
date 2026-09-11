@@ -2,9 +2,11 @@
 
 Engineering record. Retrieval date for every claim below is 2026-09-11 unless a claim states
 otherwise. Labels: VERIFIED (source cited), PROPOSED (UNICA design choice, not a claim about the
-sponsor), DOCUMENTED_NOT_OBSERVED, UNKNOWN. Reads against `docs/unica-v5/graph/PRIZE-FIT.md` (a
-sibling stream, cited here, never edited) and against the already-submitted ENSv2 integration
-recorded in `docs/SPONSOR-ELIGIBILITY.md` §4.
+sponsor), DOCUMENTED_NOT_OBSERVED, UNKNOWN. Authority labels, one per described action, never
+blended into a single claim: **ENSV2_ONCHAIN**, **UNICA_ONCHAIN**, **BACKEND_POLICY**,
+**GRAPH_EVIDENCE**, **CLIENT_VERIFICATION**, **OFFCHAIN_OPERATION**. Reads against
+`docs/unica-v5/graph/PRIZE-FIT.md` (a sibling stream, cited here, never edited) and against the
+already-submitted ENSv2 integration recorded in `docs/SPONSOR-ELIGIBILITY.md` §4.
 
 ## 1. Scope and relationship to existing UNICA work
 
@@ -47,6 +49,43 @@ project's testnet deployment," and UNICA's ENSv2 work has no pre-existing (pre-e
 integrate into (`docs/PROVENANCE-LEDGER.md`: repository genesis 2026-09-04, four hours after this
 event's build window opened). The brief's reference to "Continuity" is therefore read as naming the
 track that does **not** apply to this entry, and this file scopes entirely to Track 1 from here on.
+**[OFFCHAIN_OPERATION — a submission-track eligibility reading, not a chain fact.]**
+
+**Cross-document conflict, named and reconciled.** `docs/unica-v5/ens/DEPLOYMENT-CONFIG.md` §1–§2
+(a sibling stream's file, cited here, not edited by this file) states as VERIFIED that ENS's page
+"names two ENSv2 tracks, one **'From Scratch'** (net-new, $4,500) and one **'Continuity'**
+(integration into an existing project, $500)" — wording that reads Track 1 itself as named and
+bounded by entry type. That file's own §1 records its source as the general listing page,
+`ethglobal.com/events/ethonline2026/prizes`, not the ENS-specific page (`/prizes/ens`) this file
+cites. Re-retrieved live for this repair, a second pass, 2026-09-11, both URLs, quoted verbatim:
+
+- General page, `https://ethglobal.com/events/ethonline2026/prizes` — ENS section: "Track 1: Best
+  Use of ENSv2 ... Eligibility: 'Project must be built on ENSv2 (Sepolia). ENSv2 features should be
+  central to the product, not a cosmetic add-on.'" No occurrence of the words "From Scratch" inside
+  Track 1's own eligibility text on this re-fetch. "Track 2: Best Integration of ENSv2 into an
+  Existing Project ... Eligibility: 'This track is only available to Continuity Track
+  participants.'"
+- ENS-specific page, `https://ethglobal.com/events/ethonline2026/prizes/ens` — quoted verbatim:
+  "🧬 Best Use of ENSv2 ⸺ $4,500," with no pool-restriction sentence anywhere in that track's own
+  text, and "🔗 Best Integration of ENSv2 into an Existing Project ⸺ $500," restricted by: "This
+  prize is only available to Continuity Track participants."
+
+Both URLs, re-read on today's date on this second pass, agree with each other and with this file's
+own §2–§3 above: **neither page's own printed text ever labels "Best Use of ENSv2" a "From Scratch"
+track, and neither states a pre-existing-project restriction on it.** `DEPLOYMENT-CONFIG.md` §1's
+phrase — "'From Scratch' (net-new, $4,500)" — is that document's own paraphrase of Track 1, built by
+contrast with Track 2's explicit Continuity-only restriction, not a quoted heading or restriction
+from either page; that file's own §2 says as much in its final sentence ("Full track resolution and
+prize-fit analysis is `docs/unica-v5/ens/PRIZE-FIT.md`'s job... this document only needed to confirm
+the deployment target"). **Single resolution, carried forward from both readings: "Best Use of
+ENSv2" carries no entry-type restriction on either official page as printed; UNICA is eligible for
+it as a From Scratch entry regardless of whether that entry type is also, informally, the paraphrase
+`DEPLOYMENT-CONFIG.md` uses for the track's own name.** The two documents are not in factual
+conflict once each is read for what it actually claims — `DEPLOYMENT-CONFIG.md` never asserted a
+restriction exists, only used "From Scratch" as a label of convenience for the track it was
+confirming as a shared deployment target — but the label invites the misreading this section closes.
+**[OFFCHAIN_OPERATION — reconciling two documents' wording of the same publicly-printed prize page;
+no chain state is involved.]**
 
 ## 3. ETHGlobal ENS prize page, as worded today
 
@@ -133,7 +172,8 @@ call against live chain state, never a fixture).
 
 - **A merchant is a name, and the name is an authorization model, not a lookup.** This is the
   already-disclosed integration's own framing (`docs/SPONSOR-ELIGIBILITY.md` §4) and it is also,
-  independently, the exact shape Track 1 asks for.
+  independently, the exact shape Track 1 asks for. **[OFFCHAIN_OPERATION — a design framing, not a
+  chain read or write.]**
 - **Enhanced Access Control is already exercised, not merely read about.**
   `integrations/ensv2/roles.mjs` (dated 2026-09-09) records that `grantRoles` — the call the
   documentation leads a reader to — is REFUSED by the deployed resolver with `EACCannotGrantRoles`
@@ -143,6 +183,8 @@ call against live chain state, never a fixture).
   established by executing the calls against the deployed bytecode on a **pinned Sepolia fork** — a
   local simulation of the real deployed contract, not a broadcast transaction to public Sepolia — and
   is recorded here as VERIFIED (repository, fork execution) rather than as a live broadcast result.
+  **[CLIENT_VERIFICATION — a local fork simulation performed by this repository's own tooling against
+  the deployed bytecode; not a live write to ENSv2 state.]**
 - **Per-key scoping is measured, not assumed — and this corrects an earlier finding in the same
   repository.** The same file records that an agent authorized via `authorizeTextRoles` for one text
   key wrote that key successfully and was REFUSED (`EACUnauthorizedAccountRoles`, `0x4b27a133`) on a
@@ -161,17 +203,22 @@ call against live chain state, never a fixture).
   list for this research. **Neither finding is a broadcast to public Sepolia** — that remains
   DOCUMENTED_NOT_OBSERVED for `authorizeTextRoles` specifically (§10, `ENS-OWNER-ACTION.md` step 3
   still describes the delegation as an action to take through the ENS app's own interface, not
-  through calldata this repository has broadcast).
+  through calldata this repository has broadcast). **[CLIENT_VERIFICATION for the fork measurement
+  described in this bullet; the underlying `authorizeTextRoles` mechanism itself, once actually
+  broadcast, would be ENSV2_ONCHAIN — that broadcast has not happened, per the sentence above.]**
 - **Fail-closed by construction, and it is UNICA's own house rule as much as it is a prize
   criterion.** A resolver whose ERC-1967 implementation slot does not match the pinned
   `PermissionedResolverImpl` is classified `NOT_A_PERMISSIONED_RESOLVER` and refused; an unset
   address record fails closed as `ZERO_ADDRESS` rather than resolving to nothing silently
-  (`docs/ensv2/UNICA-ETH-ADDR-REPORT.md` §3).
+  (`docs/ensv2/UNICA-ETH-ADDR-REPORT.md` §3). **[ENSV2_ONCHAIN for the implementation-slot fact being
+  read; CLIENT_VERIFICATION for the classification/refusal logic applied to what was read.]**
 - **The non-negotiable settlement boundary is itself a security property Track 1 rewards.** ENS may
   aid discovery before an order exists; once an order is created, the resolved identity is bound
   immutably and no later record change redirects it (research brief's boundary, restated and already true of the
   contracts per `docs/ensv2/UNICA-ETH-ADDR-REPORT.md` §8: "the recipient is resolved once, client-side,
   before the order exists... settlement reads only that stored value and never re-resolves a name").
+  **[UNICA_ONCHAIN — a binding property of UNICA's own settlement contracts (v4:
+  SPECIFIED-NOT-BUILT); ENS's role is discovery only, and is not this bullet's own authority layer.]**
 
 ## 7. What must be built during the event
 
@@ -183,14 +230,20 @@ tighter ~2-day submission-deadline reading in §3 rather than the sibling stream
    resource via `authorizeTextRoles`, mirroring the exact call shape already measured in
    `integrations/ensv2/roles.mjs` (§6) — built and previewed as calldata, per the repository's
    standing rule that nothing here signs or broadcasts (`ENS-OWNER-ACTION.md`; any real grant is the
-   owner's wallet action).
+   owner's wallet action). **[OFFCHAIN_OPERATION for the calldata construction itself; the grant it
+   describes would be ENSV2_ONCHAIN only once the owner signs and broadcasts it, which this item does
+   not do.]**
 2. One live revocation of that delegation (`authorizeTextRoles(..., granted=false)`, already named as
    a code path in `roles.mjs`), read back via `eth_call`/fork execution exactly as `authz-sim.mjs`
-   already contrasts an authorized and unauthorized account for `setAddr`.
+   already contrasts an authorized and unauthorized account for `setAddr`. **[CLIENT_VERIFICATION —
+   fork execution and readback, not a broadcast transaction.]**
 3. A judge-facing screen showing the merchant root, the terminal's authorization state before and
    after revocation, and one adversarial case (§6 of `DEMO-PLAN.md`) rendered side by side.
+   **[OFFCHAIN_OPERATION — building the interface itself; the state it displays is sourced from the
+   CLIENT_VERIFICATION reads in items 1–2.]**
 4. Reuse of the already-registered `unica.eth` delegation (`docs/SPONSOR-ELIGIBILITY.md` §4
-   correction) as the merchant root — no new registration needed.
+   correction) as the merchant root — no new registration needed. **[ENSV2_ONCHAIN — an
+   already-existing state fact on the deployed registry, read rather than re-created.]**
 
 **Out of realistic scope at a ~2-day runway, named rather than silently dropped:**
 - A full multi-terminal "fleet" (more than one or two terminals) and any bulk-provisioning tooling.
@@ -213,7 +266,8 @@ recommendation and the reasoning for cutting further than the brief's starting p
 VERIFIED (repository) / PROPOSED (how to disclose it here). Per `docs/PROVENANCE-LEDGER.md`, the
 entire UNICA repository began inside this event's build window (2026-09-04), so nothing here is
 "project-specific prior code" in the sense the Classic-track rule (§3) means. What must still be
-named, honestly, in any Track 1 submission built from this design:
+named, honestly, in any Track 1 submission built from this design — **all four items below are
+[OFFCHAIN_OPERATION]: submission-text disclosure obligations, not chain facts:**
 
 1. **The ENSv2 resolution and authorization modules already exist and are already disclosed.**
    `integrations/ensv2/`, `web/ensv2/resolve.mjs`, and the `unica.eth` registration/delegation
@@ -240,7 +294,8 @@ VERIFIED — both tracks (§3) require "open source and accessible on Github or 
 and "a video recording or link to a live demo." UNICA's repository is already public and MIT-licensed
 (`CLAUDE.md`, `LICENSE`); the public-repository requirement is met by the repository as a whole. The
 specific files this stream would add (delegation calldata, a preview script, a judge-facing screen)
-need their own README section, not a repository-wide change.
+need their own README section, not a repository-wide change. **[OFFCHAIN_OPERATION — a
+repository/documentation structuring decision, not a chain fact.]**
 
 ## 10. Required ENSv2 dependency and the isolated-deployment question
 
@@ -260,17 +315,55 @@ three addresses** for `ETHRegistry`, `PermissionedResolverImpl`, and `Upgradable
 (case differences only, which do not change an EVM address). **This proves UNICA's already-live
 integration reads the same canonical, shared ENSv2 Sepolia Beta deployment ENS itself publishes — not
 a separate, isolated instance** — and that this satisfies "built on ENSv2 (Sepolia)" under the plain
-text of the page.
+text of the page. **[ENSV2_ONCHAIN for the three addresses as read from the deployed contracts;
+CLIENT_VERIFICATION for the cross-check against the official page's own listing.]**
 
-**A side finding from the same page, resolving one of the research brief's UNVERIFIED LEADS.** The same
-canonical deployment table lists a contract named `MockUSDC` at
+**A side finding from the same page, on one of the research brief's UNVERIFIED LEADS — corrected in
+this repair, because the address it named had never actually been read.** The canonical deployment
+table on `docs.ens.domains/learn/deployments` lists a contract named `MockUSDC` at
 `0x768f42455a2d082e23ceef7d51e5787c82d67a39` as part of **ENS's own** Sepolia ENSv2 Beta
 infrastructure (most likely used for the registrar's stablecoin-denominated fee path,
 `docs.ens.domains/web/ensv2-readiness/`: "Registration fees now paid in stablecoins rather than
-ETH," retrieved 2026-09-11). This is independent, official confirmation that "MockUSDC" in the
-ENSv2 ecosystem is ENS's own testnet mock token, unrelated to Circle's USDC — the claim the
-research brief flagged as an UNVERIFIED LEAD from an unseen channel discussion is correct, though for a
-different reason (an ENS-side mock fee token) than a reader might assume.
+ETH," retrieved 2026-09-11).
+
+**This disagrees with a different document's citation, and until this repair neither address had
+been read on chain.** `docs/unica-v5/ens/DEPLOYMENT-CONFIG.md` §6 (a sibling stream's file, cited
+here, not edited by this file) names a *different* address for `MockUSDC`,
+`0xd3322b29a7bdee707d1684676f149bf41aa3422f`, sourced from `contracts/docs/addresses/sepolia.md` (a
+GitHub-generated table dated 2026-06-29) — and that file's own §4 already documents, independently,
+that every contract "downstream" of the fixed entry-point proxy is volatile across the two source
+generations it checked. That file marks its own address `DOCUMENTED_NOT_OBSERVED` for exactly this
+reason. This file's earlier draft named its own address as "independent, official confirmation"
+without having read it either — an overclaim: an address appearing on an official page is a citation,
+not a read.
+
+**Corrected by a live read performed for this repair, 2026-09-11, chain id `11155111`, block
+`11685213`** (public endpoint `ethereum-sepolia-rpc.publicnode.com`, `eth_getCode` plus `eth_call`
+against `symbol()`, `name()`, `decimals()`, `totalSupply()` — a read-only RPC call, no signature, no
+broadcast): **both** addresses carry deployed bytecode and **both** answer `symbol()`/`name()` with
+`"USDC"` and `decimals()` with `6`; their `totalSupply()` values differ
+(`0x180ca4ce7c5fb29` raw for `0x768f...a39` vs. `0x295be96e646165a5fac469` raw for
+`0xd332...22f`), and their runtime bytecode differs in its dispatcher prologue (`5f5ffd5b` vs.
+`5f80fd5b`) — **two distinct, independently-deployed contracts, not one contract under two labels.**
+**[CLIENT_VERIFICATION — a read-only `eth_getCode`/`eth_call` performed against live Sepolia for this
+repair; no state was changed.]**
+
+**What this does and does not settle.** VERIFIED, now by live read rather than by citation alone: the
+address this file names (`0x768f...a39`, from the current official ENS docs page) is a real,
+currently-deployed ERC-20-shaped token symbol/name `"USDC"`, 6 decimals — consistent with a mock
+stablecoin used for a registration-fee path, and not Circle's real USDC contract (Circle's USDC is
+not listed on any ENS deployment page fetched for this file, at any address). The address
+`DEPLOYMENT-CONFIG.md` §6 names (`0xd332...22f`, from the older generated table) is **also** a real,
+currently-deployed contract with the identical symbol and decimals — so that address is not simply
+wrong or abandoned; it is a second contract this repository has now observed but not sourced to any
+current official page. **What remains UNKNOWN, and is not settled by this live read:** which of the
+two addresses, if either, the live ENSv2 registrar contract's own fee-path configuration currently
+points to — that requires reading the registrar's own configured fee-token address, a call this file
+has not made. The safe, narrower claim this file now makes, replacing the earlier "independent,
+official confirmation" language: **"MockUSDC" in the ENSv2 ecosystem is ENS's own test-shaped mock
+token and not Circle's USDC, for both addresses observed** — the specific, narrower question of which
+one address is wired into the live registrar's fee path today is carried forward to
+`MENTOR-QUESTIONS.md` Q9's own unknowns rather than answered here.
 
 **What remains unconfirmed.** The research brief's other referenced leads — "Universal Resolver
 override," "invalid old initialize/authorize interfaces," "direct contract registration," "manager
@@ -319,11 +412,13 @@ ENS team member, none of these is claimed as settled.
 
 | Source | URL | Retrieved | Author/org | Kind | Used for |
 |---|---|---|---|---|---|
-| ETHOnline 2026 ENS prize page | https://ethglobal.com/events/ethonline2026/prizes/ens | 2026-09-11 | ETHGlobal / ENS | OFFICIAL | §2, §3, §4, §5, §9 — track names, prize amounts, exact requirements, named focus features |
-| ETHOnline 2026 general prize page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 | ETHGlobal | OFFICIAL | cross-check that the ENS-specific page's shape (§2) is not contradicted by the general listing |
+| ETHOnline 2026 ENS prize page | https://ethglobal.com/events/ethonline2026/prizes/ens | 2026-09-11 (fetched twice: initial draft and this repair's §2 reconciliation pass) | ETHGlobal / ENS | OFFICIAL | §2, §3, §4, §5, §9 — track names, prize amounts, exact requirements, named focus features |
+| ETHOnline 2026 general prize page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 (fetched twice: initial draft and this repair's §2 reconciliation pass) | ETHGlobal | OFFICIAL | §2 — cross-check that the ENS-specific page's shape is not contradicted by the general listing, and the exact-wording comparison against `DEPLOYMENT-CONFIG.md` §1's citation of this same URL |
 | ETHOnline 2026 info/details | https://ethglobal.com/events/ethonline2026/info/details | 2026-09-11 (fetched twice) | ETHGlobal | OFFICIAL | §3, §11 — quoted submission deadline, Classic-track rule, demo-video spec, partner-prize rule |
-| ENS Docs — Deployments (Sepolia ENSv2 Beta) | https://docs.ens.domains/learn/deployments | 2026-09-11 (raw page text) | ENS Labs | OFFICIAL | §10 — exact address cross-check against this repository's own on-chain reads; MockUSDC finding |
+| ENS Docs — Deployments (Sepolia ENSv2 Beta) | https://docs.ens.domains/learn/deployments | 2026-09-11 (raw page text, fetched twice: initial draft and this repair's §10 MockUSDC re-check) | ENS Labs | OFFICIAL | §10 — exact address cross-check against this repository's own on-chain reads; MockUSDC finding |
 | ENS Docs — ENSv2 Readiness | https://docs.ens.domains/web/ensv2-readiness/ | 2026-09-11 | ENS Labs | OFFICIAL | §10 — stablecoin registration-fee context for the MockUSDC finding |
+| Sepolia public RPC, live read (`ethereum-sepolia-rpc.publicnode.com`) | n/a — JSON-RPC endpoint, not a web page | 2026-09-11, chain `11155111`, block `11685213`, this repair | Public RPC operator, not ENS or ETHGlobal | OFFICIAL-adjacent (public Sepolia chain data, not a curated document) | §10 — `eth_getCode`/`eth_call` (`symbol`, `name`, `decimals`, `totalSupply`) against both candidate MockUSDC addresses, read-only, no signature or broadcast |
+| `docs/unica-v5/ens/DEPLOYMENT-CONFIG.md` (sibling stream, cited not edited) | n/a — local file | 2026-09-11 | UNICA / NFTeria | TEAM GUIDANCE | §2, §10 — the conflicting track-wording paraphrase and the conflicting MockUSDC address, both reconciled in this repair |
 | `docs/SPONSOR-ELIGIBILITY.md` (this repository) | n/a — local file | 2026-09-05, updated 2026-09-09 | UNICA / NFTeria | TEAM GUIDANCE | §1, §5, §6, §8, §11 — the already-disclosed ENSv2 submission and its status |
 | `docs/PROVENANCE-LEDGER.md` (this repository) | n/a — local file | 2026-09-08 (file date); re-derivable any time | UNICA / NFTeria | TEAM GUIDANCE | §2, §8 — from-scratch provenance facts |
 | `integrations/ensv2/roles.mjs` (this repository) | n/a — local file | 2026-09-09 (file date) | UNICA / NFTeria | TEAM GUIDANCE | §6 — the per-key EAC measurement that supersedes the 2026-09-08 per-name-only finding |
@@ -359,3 +454,9 @@ ENS team member, none of these is claimed as settled.
    interfaces," "direct contract registration," "manager UI failures" — remain unconfirmed by any
    source fetched for this file; no transcript of the referenced ENS channel discussion was supplied
    to verify or refute them.
+7. **Which of the two live, code-bearing `MockUSDC`-shaped addresses (§10) the ENSv2 registrar's own
+   fee-path configuration currently reads** — this file's live read (§10) confirms both
+   `0x768f...a39` and `0xd332...22f` are real, currently-deployed contracts with matching
+   symbol/decimals, but neither the registrar's own configured fee-token address nor which
+   generation of the deployment is presently authoritative was read for this repair. Carried to
+   `MENTOR-QUESTIONS.md` Q9.

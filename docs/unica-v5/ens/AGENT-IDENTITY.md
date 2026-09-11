@@ -27,15 +27,25 @@ Labels: **VERIFIED**, **PROPOSED**, **DOCUMENTED_NOT_OBSERVED**, **UNKNOWN**. Au
 ## 2. What is already BUILT and live, and what this file adds
 
 **Already BUILT and independently reproducible, not redesigned here.** This repository's own
-`integrations/ensv2/roles.mjs` and `permissioned.mjs` (S1, S2) constitute a working, fork-tested,
-and — per `HACKATHON.md` §6 (S3) — **live-broadcast** agent-delegation mechanism on ENSv2 Sepolia:
-a delegated agent holds `SET_TEXT` at exactly one per-key resource of one leaf name, proven from
-the chain in six rows, "five of them refusals" (S3). This document does not redesign that
-mechanism. It states the lifecycle it already implements, end to end, with each step's authority
-label made explicit — because the assignment asks for "the two lifecycles end to end, each step
-carrying its authority label, including what a revoked terminal or agent can and cannot still do,"
-and the agent half of that already has a working implementation to describe accurately rather than
-invent.
+`integrations/ensv2/roles.mjs` and `permissioned.mjs` (S1, S2) constitute a working, fork-tested
+agent-delegation mechanism, and — per `HACKATHON.md` §6 (S3) — the grant itself is
+**live-broadcast** on ENSv2 Sepolia: twelve transactions, blocks 11670554–11670579, every one
+`status 1`. `HACKATHON.md` §6 (S3) further describes six simulated rows run against live
+post-broadcast state (`integrations/ensv2/agent.mjs`, `eth_call`, not a further broadcast),
+"five of them refusals," and characterizes the result as the agent holding `SET_TEXT` at exactly
+one per-key resource of one leaf name. **This document does not carry that per-key characterization
+as VERIFIED.** Whether the broadcast grant landed at the finer per-key resource or the coarser
+name-level resource is **DOCUMENTED_NOT_OBSERVED** against the live chain: this repository's own
+most current adjudication (`ACCESS-CONTROL.md` §16) finds that every live Sepolia call it has
+observed, including after this broadcast, has named only the name-level resource, and that the
+per-key resource formula is confirmed by `FORK_EXECUTED` evidence only — a local-fork replay, never
+a live readback that prints the resource hash beside the block number. `docs/unica-v5/ens/README.md`
+Success criterion 8 states the same conservative reading; this document carries it too rather than a
+stronger one. This document does not redesign the delegation mechanism itself. It states the
+lifecycle it already implements, end to end, with each step's authority label made explicit — because
+the assignment asks for "the two lifecycles end to end, each step carrying its authority label,
+including what a revoked terminal or agent can and cannot still do," and the agent half of that
+already has a working implementation to describe accurately rather than invent.
 
 **What this file adds.** Three things not present in `roles.mjs`/`permissioned.mjs` today: (a) an
 explicit fit-check against ENSIP-25/26/27, the ENS DAO's own draft standards for exactly this
@@ -94,11 +104,11 @@ adopted (§4.5), entirely orthogonal to the actual authority question, which EAC
 | | |
 |---|---|
 | Authority label | ENSV2_ONCHAIN |
-| What happens | The merchant/operator, holding `adminRole(SET_TEXT)` at the agent leaf's chosen per-key resource, calls `authorizeTextRoles(agentDnsName, recordKey, agentAddress, granted=true)` — S1's `planAgentGrant`/`buildTextDelegation`. The **effective** resource written is `keccak256(abi.encode(node, keccak256(bytes(recordKey))))` (S1's `resourceNote`), not the name-level resource — the property `roles.mjs`'s own header calls "the resource IS the separation." `recordKey` must be one of the closed vocabulary in `RECORD_KEYS` (S1) — never an arbitrary string |
+| What happens | The merchant/operator, holding `adminRole(SET_TEXT)` at the agent leaf's chosen per-key resource, calls `authorizeTextRoles(agentDnsName, recordKey, agentAddress, granted=true)` — S1's `planAgentGrant`/`buildTextDelegation`. The planner **computes and targets** the effective resource `keccak256(abi.encode(node, keccak256(bytes(recordKey))))` (S1's `resourceNote`), not the name-level resource — the property `roles.mjs`'s own header calls "the resource IS the separation." `recordKey` must be one of the closed vocabulary in `RECORD_KEYS` (S1) — never an arbitrary string. **This is a property of the planner's own code, PROPOSED for what the call targets — not yet a live-confirmed property of the resource the chain actually recorded**; see the "Live proof" row below and §2 above for why the two are kept separate |
 | Who acts | The merchant/operator signs; the agent's own address is the grantee |
 | Precondition, checked by `screenAgentGrant` (S1) before this call is ever built | Resource is not `ROOT_RESOURCE` (`ROOT_RESOURCE_FORBIDDEN`); method is not `authorizeNameRoles` (`NAME_LEVEL_METHOD_FORBIDDEN` — the wide call); bitmap carries no admin bit (`ADMIN_ROLE_FORBIDDEN`); bitmap is only allowlisted roles (`ROLE_NOT_ALLOWLISTED`/`ROLE_NOT_OBSERVED`); resource is not on the merchant's protected list (`PROTECTED_RESOURCE`); grantee is not the merchant itself (`AGENT_IS_MERCHANT`); grantee does not already hold `ROOT_RESOURCE` roles (`AGENT_HOLDS_ROOT_ROLES`); assignee headroom is available (`ASSIGNEE_CAP_REACHED`/`ASSIGNEE_COUNT_UNOBSERVED`) |
 | Measured (VERIFIED, S1's own header) | `grantRoles` — the call the documentation leads a reader to — is **refused by the deployed contract itself** with `EACCannotGrantRoles` (`0xd1a3b355`) even from the name owner holding every root role; `authorizeTextRoles` is the call that is actually accepted. `screenAgentGrant` refuses `grantRoles`/`revokeRoles` by name (`GRANT_ROLES_NOT_THE_DELEGATION_PATH`) as the last, least-urgent check, precisely so a call that is *also* wrong in a more dangerous way reports the more dangerous reason first |
-| Live proof | `HACKATHON.md` §6 (S3): 12 transactions, blocks 11670554–11670579, all `status 1` |
+| Live proof | `HACKATHON.md` §6 (S3): 12 transactions, blocks 11670554–11670579, all `status 1` — proof the grant call was broadcast and mined, **not**, on this record, proof of which resource it landed at. Per §2 above and `ACCESS-CONTROL.md` §16, that specific question is DOCUMENTED_NOT_OBSERVED against the live chain; no source in this directory prints the resource hash the post-broadcast readback actually named |
 
 ### 4.4 Normal operation
 

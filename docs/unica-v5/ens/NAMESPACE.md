@@ -6,9 +6,16 @@ deployment, no subname creation, no record write. Retrieval date for every claim
 design choice, not a claim about ENS), DOCUMENTED_NOT_OBSERVED (written in ENS documentation or
 this repository's own prior work, never exercised on a live or forked chain), UNKNOWN. Reads
 against `docs/unica-v5/ens/PRIZE-FIT.md`, `MENTOR-QUESTIONS.md`, `DEMO-PLAN.md` and
-`PEER-COMPARISON.md` (sibling stream, cited not edited; at this retrieval those files carry
-section headings only, so nothing here relies on their content) and against
-`docs/unica-v5/graph/` (sibling stream, cited not edited).
+`PEER-COMPARISON.md` (sibling stream, cited not edited) and against `docs/unica-v5/graph/`
+(sibling stream, cited not edited). **Header correction, recorded rather than silently fixed**: an
+earlier draft of this sentence stated those four sibling files "carry section headings only, so
+nothing here relies on their content." That is no longer accurate and should not be read as a
+current description — all four are now complete documents (`PEER-COMPARISON.md` alone runs 807
+lines, headed "Status: complete draft"). This document does not repeat or re-derive their content,
+and depends on exactly one thing from that sibling stream, named at its point of use (§11's ENSIP
+index cross-check against `PEER-COMPARISON.md`'s own stated method) — nothing else in this
+document rests on them, and nothing here should be taken as validated, or contradicted, by their
+content beyond that one citation.
 
 Authority labels used throughout, never blended within one claim: ENSV2_ONCHAIN,
 UNICA_ONCHAIN, BACKEND_POLICY, GRAPH_EVIDENCE, CLIENT_VERIFICATION, OFFCHAIN_OPERATION.
@@ -259,11 +266,19 @@ the reasoning recorded rather than assumed.
 **Mode recommendation, PROPOSED:** `subtree` (served, shared resolver, wildcard) by default for
 every merchant; `subregistry` (registered, own resolver+registry proxy) only for a merchant that
 specifically needs a **transferable, independently-owned** name — most merchants need neither
-property, and `subtree` mode both costs fewer transactions (13 vs 20, `DELEGATION-PLAN.md`) and
-bounds the number of independently-initialized, authority-holding resolver instances to one per
-parent rather than one per merchant (this is load-bearing at scale — see
-`docs/unica-v5/ens/SCALABILITY.md` §6, this stream, for the point at which that bound starts to
-matter).
+property. **This default rests on two grounds, both self-contained and independent of any other
+document this stream wrote**, not on a citation chain that loops back through them: (1) `subtree`
+mode costs fewer transactions — 13 vs. 20, a fork-measured count already recorded in
+`docs/ensv2/DELEGATION-PLAN.md` (repo file, written before this stream existed, not part of it) —
+and (2) it bounds the number of independently-initialized, authority-holding resolver instances to
+one per parent rather than one per merchant, a structural property of the `subtree`/`subregistry`
+split this section (§1) already states, true regardless of merchant count. Neither ground depends
+on `SCALABILITY.md` or `RECEIPT-NAMING.md` reaching any particular conclusion. `docs/unica-v5/ens/
+SCALABILITY.md` §6 (this stream) is cited only as **forward-pointing elaboration** of the scale at
+which ground (2) stops being a minor property and starts being load-bearing — it restates this
+section's own recommendation at each modeled volume (`SCALABILITY.md` §7 says so explicitly: "this
+section does not introduce a new design, it states which of the already-recommended defaults
+applies") rather than supplying a conclusion this section then imports back.
 
 ## 10. Rejected classes, and why
 

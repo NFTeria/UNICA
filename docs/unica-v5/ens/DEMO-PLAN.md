@@ -1,7 +1,10 @@
 # UNICA v5 / ENS — demo plan
 
 Engineering record. Retrieval date 2026-09-11 unless stated otherwise. Labels: VERIFIED (source
-cited), PROPOSED (UNICA design), DOCUMENTED_NOT_OBSERVED, UNKNOWN. Reads against
+cited), PROPOSED (UNICA design), DOCUMENTED_NOT_OBSERVED, UNKNOWN. Authority labels, one per
+described action, never blended into a single claim: **ENSV2_ONCHAIN**, **UNICA_ONCHAIN**,
+**BACKEND_POLICY**, **GRAPH_EVIDENCE**, **CLIENT_VERIFICATION**, **OFFCHAIN_OPERATION**. §5 and §6
+carry one on every phase and every adversarial-case row. Reads against
 `docs/unica-v5/ens/PRIZE-FIT.md`, which this file does not repeat.
 
 ## 1. Purpose
@@ -113,34 +116,48 @@ narrowed to what §4's recommendation and the corrected runway (§1) actually su
    `integrations/ensv2/`), on chain id `11155111`, and that its address matches the canonical
    Sepolia ENSv2 Beta listing (`PRIZE-FIT.md` §10) rather than a stale or legacy resolver. This gate
    already exists; this phase is re-running it against the specific names used in the demo, not
-   building it new.
+   building it new. **Authority: ENSV2_ONCHAIN** — a live read of the deployed proxy's own
+   implementation slot; no write, no signature.
 2. **Merchant root.** Use the already-registered `unica.eth` (`docs/SPONSOR-ELIGIBILITY.md` §4) as
    the root. No new registration. Read its current root-level role holders so the demo can state,
-   correctly, who holds what before any delegation is shown.
+   correctly, who holds what before any delegation is shown. **Authority: ENSV2_ONCHAIN** — reading
+   existing registry/resolver state; no new registration or grant is made in this phase.
 3. **Deterministic identity.** Resolve the root's address record live (the already-`LIVE READ` path);
    if an avatar exists, show it, but do not build a new one — the art layer is out of scope this event
-   (`PRIZE-FIT.md` §7).
+   (`PRIZE-FIT.md` §7). **Authority: ENSV2_ONCHAIN** for the live `addr`/`text` resolution;
+   **CLIENT_VERIFICATION** for any avatar ownership cross-check performed before display (ENSIP-12,
+   per `docs/unica-v4/ENS-ART-LAYER.md` §4.3 — not itself built this event, per §9 below).
 4. **Terminal delegation.** Derive one or two terminal subnames under the root. Build the
    `authorizeTextRoles` calldata for a per-key `SET_TEXT` grant on each, following the exact call
    shape `roles.mjs` already measured (§6 of `PRIZE-FIT.md`) — as calldata for preview, matching the
    repository's standing rule that nothing here signs or broadcasts. Verify via `eth_call`/fork
    execution that the grant, once made, is accepted for the authorized key and refused
    (`EACUnauthorizedAccountRoles`) for any other key or resource, exactly as already measured.
+   **Authority: OFFCHAIN_OPERATION** for building the calldata (unsigned, unbroadcast);
+   **CLIENT_VERIFICATION** for the `eth_call`/fork-execution check of its effect. Neither step is
+   ENSV2_ONCHAIN — that label applies only once the owner actually signs and broadcasts the grant,
+   which this phase does not do.
 5. **Payment association.** Show the terminal's role scoped to a leaf name that carries nothing the
    merchant relies on — no authority over the merchant's own `pay.`/`treasury.` resources or over the
    root's `SET_SUBREGISTRY`/`SET_RESOLVER` roles — mirroring the residual-risk statement already
    written into `roles.mjs`'s own `DENIAL_MATRIX` ("the agent's authority does not extend to a second
    key even on its own leaf, and merchant., pay. and treasury. resources are additionally in
    protectedResources"). No new UNICA settlement contract is touched; this phase demonstrates the
-   *boundary*, not a live payment.
+   *boundary*, not a live payment. **Authority: CLIENT_VERIFICATION** — checking a scope boundary
+   against the fork-measured `DENIAL_MATRIX`; explicitly not UNICA_ONCHAIN, since no settlement
+   contract is invoked.
 6. **Evidence.** Capture the `eth_call`/fork rows for: the terminal's authorized write (accepted), the
    terminal's out-of-scope write (refused), and the revocation (§7 below) — in the same measured,
-   printed-not-asserted style as `permissioned-live.mjs` and `authz-sim.mjs` already use.
+   printed-not-asserted style as `permissioned-live.mjs` and `authz-sim.mjs` already use. **Authority:
+   CLIENT_VERIFICATION** — capturing the results of local fork execution, not live chain events.
 7. **Judge-facing interface.** One screen: the root, its terminal(s), each terminal's live
    authorization state, and a revoke action wired to the real `authorizeTextRoles(..., granted=false)`
    calldata shape (previewed, not auto-broadcast — any actual signature remains the owner's, per
    `ENS-OWNER-ACTION.md`'s standing rule). Show at least one adversarial case (§6 below) beside the
-   legitimate rows.
+   legitimate rows. **Authority: OFFCHAIN_OPERATION** for the interface and the unsigned revoke
+   calldata it displays; the live root/terminal state it renders is sourced from the
+   **ENSV2_ONCHAIN**/**CLIENT_VERIFICATION** reads in phases 1–3 and 4–6 respectively, not read anew
+   by the interface itself.
 
 ## 6. Adversarial cases the demo must show
 
@@ -148,16 +165,16 @@ PROPOSED, with the expected fail-closed behavior for each, reasoned from mechani
 or already documented in this repository. Cases not yet demonstrable in the runway available are
 named as such rather than assumed solved.
 
-| Case | Expected fail-closed behavior | Basis |
-|---|---|---|
-| Legitimate root | Resolves live to the merchant's address; root-level roles read back exactly as expected | Baseline — establishes the fixture is real, per the project's rule that a stated negative beats an absence |
-| Legitimate terminal | The terminal's authorized key write succeeds; any other key on the same name is refused | `roles.mjs` per-key measurement (`PRIZE-FIT.md` §6) |
-| Revoked terminal | After `authorizeTextRoles(..., granted=false)`, the same key that previously succeeded is now refused (`EACUnauthorizedAccountRoles`); nothing else on the tree changes | Same mechanism as above, applied to the revoke path already named in `roles.mjs`'s method list |
-| Lookalike name | The checkout's independent resolution reads a different node/address than the legitimate merchant; normalization follows ENSIP-15 rather than a display-string fuzzy match, so a confusable label is never silently treated as the same name | `docs/unica-v4/ENS-ART-LAYER.md` §3.4 — ENSIP-15 verification is itself still an open item there; this demo does not resolve that gap, only avoids relying on unnormalized string comparison |
-| Counterfeit avatar | If an avatar is shown at all (§5 phase 3, optional), the ENSIP-12 ownership cross-check fails for an avatar the resolved address does not own, and the checkout warns rather than displaying it as proof — "the image alone is never treated as proof of payout identity" | `docs/unica-v4/ENS-ART-LAYER.md` §4.3, H11 |
-| Resolver from the wrong deployment | Classified `NOT_A_PERMISSIONED_RESOLVER` and refused, exactly as the existing tooling already does for a name still served by the ENSv1 mirror | `integrations/ensv2/ENS-OWNER-ACTION.md` §Step 1 ("`vitalik.eth` on Sepolia returns exactly that today") |
-| Stale indexer view | Any cached or indexed view of authorization state is never trusted for the revocation demo; the judge-facing screen reads role state via `eth_call`/fork execution at demo time, not from a cache, and if it must show a cached value it states the block the cache was last updated at rather than presenting it as current | Consistent with this repository's own finding that a bounded `eth_getLogs` scan for `EACRolesChanged` over a load-balanced endpoint is non-deterministic (`integrations/ensv2/README.md`, "Two things measured") |
-| A receipt created before revocation | Not built this event (§4 — Candidate D is deferred). If shown at all, the stated rule is the research brief's own non-negotiable boundary: an existing order/receipt does not change when a later ENS record is revoked; the interface must show the identity as observed at settlement, separately from current resolution, and never re-validate a past receipt against today's revoked state as if that revokes the original payment | Non-negotiable boundary, restated; consistent with `docs/ensv2/UNICA-ETH-ADDR-REPORT.md` §8's "no live call in this repository re-resolves a name after settlement" |
+| Case | Expected fail-closed behavior | Basis | Authority |
+|---|---|---|---|
+| Legitimate root | Resolves live to the merchant's address; root-level roles read back exactly as expected | Baseline — establishes the fixture is real, per the project's rule that a stated negative beats an absence | **ENSV2_ONCHAIN** — a live read of the real, already-registered `unica.eth` |
+| Legitimate terminal | The terminal's authorized key write succeeds; any other key on the same name is refused | `roles.mjs` per-key measurement (`PRIZE-FIT.md` §6) | **CLIENT_VERIFICATION** — the grant exists only on a local fork (§5 phase 4); no terminal subname is registered or granted live |
+| Revoked terminal | After `authorizeTextRoles(..., granted=false)`, the same key that previously succeeded is now refused (`EACUnauthorizedAccountRoles`); nothing else on the tree changes | Same mechanism as above, applied to the revoke path already named in `roles.mjs`'s method list | **CLIENT_VERIFICATION** — same fork-execution basis as the row above |
+| Lookalike name | The checkout's independent resolution reads a different node/address than the legitimate merchant; normalization follows ENSIP-15 rather than a display-string fuzzy match, so a confusable label is never silently treated as the same name | `docs/unica-v4/ENS-ART-LAYER.md` §3.4 — ENSIP-15 verification is itself still an open item there; this demo does not resolve that gap, only avoids relying on unnormalized string comparison | **ENSV2_ONCHAIN** for resolving the lookalike name's own real, independent record; **CLIENT_VERIFICATION** for the normalization comparison itself |
+| Counterfeit avatar | If an avatar is shown at all (§5 phase 3, optional), the ENSIP-12 ownership cross-check fails for an avatar the resolved address does not own, and the checkout warns rather than displaying it as proof — "the image alone is never treated as proof of payout identity" | `docs/unica-v4/ENS-ART-LAYER.md` §4.3, H11 | **CLIENT_VERIFICATION** — the ownership cross-check itself; the avatar record and the token's `ownerOf` it compares are each **ENSV2_ONCHAIN**/**UNICA_ONCHAIN** reads respectively |
+| Resolver from the wrong deployment | Classified `NOT_A_PERMISSIONED_RESOLVER` and refused, exactly as the existing tooling already does for a name still served by the ENSv1 mirror | `integrations/ensv2/ENS-OWNER-ACTION.md` §Step 1 ("`vitalik.eth` on Sepolia returns exactly that today") | **ENSV2_ONCHAIN** — matches `DEPLOYMENT-CONFIG.md` §2's own label for this identical live check |
+| Stale indexer view | Any cached or indexed view of authorization state is never trusted for the revocation demo; the judge-facing screen reads role state via `eth_call`/fork execution at demo time, not from a cache, and if it must show a cached value it states the block the cache was last updated at rather than presenting it as current | Consistent with this repository's own finding that a bounded `eth_getLogs` scan for `EACRolesChanged` over a load-balanced endpoint is non-deterministic (`integrations/ensv2/README.md`, "Two things measured") | **CLIENT_VERIFICATION** — the rule the judge-facing screen itself follows; the distrusted cache would be **GRAPH_EVIDENCE** or another indexed view, never treated as current on its own |
+| A receipt created before revocation | Not built this event (§4 — Candidate D is deferred). If shown at all, the stated rule is the research brief's own non-negotiable boundary: an existing order/receipt does not change when a later ENS record is revoked; the interface must show the identity as observed at settlement, separately from current resolution, and never re-validate a past receipt against today's revoked state as if that revokes the original payment | Non-negotiable boundary, restated; consistent with `docs/ensv2/UNICA-ETH-ADDR-REPORT.md` §8's "no live call in this repository re-resolves a name after settlement" | **UNICA_ONCHAIN** — a binding property of UNICA's own settlement contract (v4: SPECIFIED-NOT-BUILT); **CLIENT_VERIFICATION** for how the interface must separate it from current resolution |
 
 ## 7. Cut order and overreach guards
 
@@ -166,7 +183,9 @@ cut, in order, before any of the four items below are ever touched:** agent iden
 x402, receipt naming (Candidate D's ENS-to-Graph tie-in), CCIP-Read, bulk provisioning. **Never cut
 first — these are the core the recommendation in §4 is built around:** deployment correctness, role
 narrowing (per-key, not per-name, scoping — §6 of `PRIZE-FIT.md`), revocation, payment-binding safety
-(the boundary in §5 phase 5 and §6's last row).
+(the boundary in §5 phase 5 and §6's last row). **[OFFCHAIN_OPERATION — a build-priority ordering
+decision, not itself a chain action; each item ordered here carries its own authority label in §5/§6
+above.]**
 
 Stated once, plainly: never deploy or publish anything; never register a new name (the root reuses
 `unica.eth`); never grant a role from live calldata without separate owner approval — every
@@ -174,6 +193,9 @@ delegation and revocation shown is calldata built and verified by `eth_call`/for
 `ENS-OWNER-ACTION.md`'s standing rule, not a broadcast this research performs; no v4 contract or
 event is described as live; the ENS art layer is not built for this stream; a demo that cannot fit
 inside the 2–4 minute cap (`PRIZE-FIT.md` §3) is cut to the fallback (§4) rather than rushed.
+**[OFFCHAIN_OPERATION for the calldata construction this paragraph restates; CLIENT_VERIFICATION for
+the `eth_call`/fork-execution checks it names — matching §5 phase 4's own split; nothing in this
+paragraph is ENSV2_ONCHAIN or UNICA_ONCHAIN, which is the point it is making.]**
 
 ## 8. Sources
 

@@ -27,22 +27,49 @@ it costs to look up, what it proves, and what it leaks.
 **PROPOSED-then-rejected.** Every settled receipt gets its own registered or served subname,
 e.g. `<receiptId>.merchant.<parent>`, written at settlement time.
 
-- **Cost.** Even using the **cheapest** write this repository has actually measured as a floor —
-  `setAddr`, **44,339 gas**, live-measured on the deployed Permissioned Resolver
-  (ENSV2_ONCHAIN, `integrations/ensv2/ENS-OWNER-ACTION.md`) — a real **registration** (minting a
-  registry token, not just setting one record on an existing name) is UNKNOWN in this
-  repository's own measurements and would be expected to cost more, not less, than a single
-  storage write (a registry mint plus at least one resolver write, by the shape of the
-  transactions `docs/ensv2/DELEGATION-PLAN.md` already lists for its `subregistry` mode). Taking
-  44,339 gas as an explicit, labelled **floor**, not an estimate of the real cost: at
-  `docs/unica-v5/ens/SCALABILITY.md` §4's volume of 1,000,000 receipts/day, that floor alone is
-  **44,339,000,000 gas/day**. Ethereum's own network gas limit is **60,000,000 per block**
-  following the 2025 gas-limit increase (COMMUNITY, trade-press reporting a named ENS
-  co-founder's public statement — see §8), giving roughly 432,000,000,000 gas/day of total
-  network capacity at ~7,200 blocks/day. **This floor alone is ~10% of the entire Ethereum
-  network's daily gas capacity, for one application's naming side-channel to a payment that is
-  already recorded on-chain by the settlement event itself.** The real registration cost, being
-  higher than the floor, only makes this worse.
+- **Cost.** **The volume alone is the primary problem, independent of any cross-chain percentage
+  comparison below**: 1,000,000 on-chain writes a day, for a payment already recorded on-chain by
+  its own settlement event, is an operationally absurd write rate for a naming side-channel — a
+  conclusion that holds before any gas-capacity percentage is computed at all.
+
+  A percentage figure has previously been carried alongside that volume argument in this
+  document. Repairing it here (this stream's own review, CONFIRMED finding) means labelling its
+  three components separately rather than compounding them into one number, because each measures
+  something different:
+  - **The numerator is a Sepolia testnet measurement of `setAddr` — a single record write on an
+    already-registered name, not a registration.** 44,339 gas is the **cheapest** write this
+    repository has actually measured (ENSV2_ONCHAIN, `integrations/ensv2/ENS-OWNER-ACTION.md`,
+    Sepolia gas price 1.07 gwei on 2026-09-08), used here as an explicit, labelled **floor**, not
+    an estimate of the real cost. A real **registration** (minting a registry token, not just
+    setting one record on an existing name) is **UNKNOWN in this repository's own measurements**
+    and would be expected to cost more, not less, than a single storage write (a registry mint
+    plus at least one resolver write, by the shape of the transactions
+    `docs/ensv2/DELEGATION-PLAN.md` already lists for its `subregistry` mode). At
+    `docs/unica-v5/ens/SCALABILITY.md` §4's volume of 1,000,000 receipts/day, that floor alone is
+    **44,339,000,000 gas/day** — on Sepolia's own gas accounting, the only chain this figure was
+    ever measured on.
+  - **The denominator is an Ethereum mainnet capacity figure, sourced COMMUNITY, not this
+    repository's own measurement, and not independently corroborated on ENS's own official site**
+    (the same caveat `docs/unica-v5/ens/SCALABILITY.md` §0 already records for the identical
+    figure): **60,000,000 gas/block** following a reported 2025 increase from 30,000,000
+    (COMMUNITY, trade-press reporting a named ENS co-founder's public statement — see §8), giving
+    roughly **432,000,000,000 gas/day** of total network capacity at ~7,200 blocks/day.
+  - **The target chain the two figures are being compared against does not exist for this
+    protocol.** ENSv2 as a whole has **no mainnet deployment of any kind** as of this retrieval
+    (VERIFIED, OFFICIAL, `docs.ens.domains/learn/deployments` lists no ENSv2 mainnet contracts —
+    `docs/unica-v5/ens/DEPLOYMENT-CONFIG.md` §3 "Isolated deployment identity", sibling stream,
+    cited not edited). Dividing a Sepolia-measured write by Ethereum **mainnet's** block-gas
+    capacity compares a real testnet measurement against the capacity of a chain this protocol has
+    never been deployed to, on either side of the division.
+
+  Dividing the first bullet by the second, across a numerator and a denominator that were never
+  measured on the same chain and a denominator whose chain this deployment does not run on, gives
+  **~10% of Ethereum mainnet's daily gas capacity** for this floor alone. That figure is kept
+  below (§6) because it is already recorded here and not invented, but **the rejection does not
+  depend on it**: the volume argument at the top of this bullet — 1,000,000 on-chain writes a day
+  for information a settlement event already carries — is sufficient on its own and needs no
+  cross-chain percentage to hold. The real registration cost, being higher than the floor and
+  still UNKNOWN, only makes the volume argument worse, not better.
 - **Lookup.** Trivial once written — that is the entire appeal of this model, and the only thing
   it buys.
 - **Proof.** No stronger than the underlying settlement event already is; the name adds no new
@@ -55,7 +82,10 @@ e.g. `<receiptId>.merchant.<parent>`, written at settlement time.
   source) can infer a merchant's settlement volume and timing from name-creation frequency alone,
   without ever reading a value.
 
-**Verdict: rejected outright on gas grounds alone**, before privacy is even considered.
+**Verdict: rejected on volume grounds alone** — a million on-chain writes a day for information
+the settlement event already carries, independent of the labelled ~10%-of-mainnet-capacity figure
+above, which is supporting color, not the load-bearing reason — before privacy is even
+considered.
 
 ## 2. Model B — wildcard-derived names resolved from settlement state
 
@@ -84,10 +114,45 @@ fly rather than stored anywhere as a distinct name.
   leave one. A resolution is a read; ENS's own official guidance states plainly that on-chain
   enumeration works only for registered names with real registry events to scan (§5) — a
   read-only wildcard resolve leaves nothing of that kind behind at all.
+- **Buildability, addressed directly (this stream's own review, CONFIRMED finding).** The custom
+  `resolve()` logic described above — parsing the leftmost label as a receipt id and calling into
+  the executor/hook or an indexer — is not configuration of the deployed `PermissionedResolverImpl`;
+  it is bespoke contract code the pinned implementation does not contain (VERIFIED, OFFICIAL,
+  `docs.ens.domains/ensv2/permissioned-resolver`, `NAMESPACE.md` §0: the resource-derivation and
+  role-check surface described there governs **who may write which record**, not name-aware
+  business logic reading UNICA settlement state). Carrying it requires a **different**
+  implementation contract than the one every merchant's resolver proxy currently points to, and
+  two already-recorded facts settle who could attempt that and why the attempt fails here:
+  - **Who deploys and controls it.** `VerifiableFactory.deployProxy(implementation, salt, data)`
+    accepts an arbitrary `implementation` address (VERIFIED, full source read,
+    `ensdomains/verifiable-factory/src/VerifiableFactory.sol`, `NAMESPACE.md` §0 /
+    `ACCESS-CONTROL.md` §12) — so whoever signs a merchant's own proxy deployment could in
+    principle point that one proxy at custom code instead of the pinned `PermissionedResolverImpl`
+    (`0x9eae5c2730a7dd16bdd1dee6421a1b91e3b0365e`, `NAMESPACE.md` §0). That signer is the same
+    split `NAMESPACE.md` §2's "who creates" row already names: the UNICA operator in `subtree`
+    mode, the merchant in `subregistry` mode. No first-party evidence in this repository shows
+    this has been done, or that an already-deployed proxy can be **retargeted** to a new
+    implementation after the fact — only that the factory's initial deploy call accepts any
+    implementation address at deploy time.
+  - **Why that resolver then fails this repository's own mandatory preflight.** `THREAT-MODEL.md`
+    §3.4 "Malicious resolver" and `DEPLOYMENT-CONFIG.md` §12 "Preflight checks" (sibling streams,
+    cited not edited) both name the same mitigation as mandatory, not optional:
+    `readAuthorization` (`permissioned.mjs`) reads the resolver's ERC-1967 implementation slot and
+    reports `NOT_A_PERMISSIONED_RESOLVER` for anything that is not the one pinned, known-good
+    implementation address. A merchant resolver carrying Model B's custom `resolve()` logic is, by
+    that check's own design, indistinguishable from the malicious-resolver case the check exists
+    to catch — it fails the identical test, and `THREAT-MODEL.md` §3.4 records this preflight as
+    already `VERIFIED, built`, not a future addition that could be scoped around it.
 
-**Verdict: a real option, and the natural complement to Model D (§4) whenever a client wants an
-ENS-shaped pointer rather than a raw API call** — it needs no separate service and no
-registration, only a resolver smart enough to parse the label it was already handed.
+**Verdict: not buildable as described, without a decision this document does not make.** Model B
+requires a resolver implementation the mandatory ERC-1967 preflight above is built specifically to
+refuse; it is **NOT_BUILDABLE** under this repository's own boundary as written, not merely
+unbuilt. It becomes buildable only if that preflight is deliberately relaxed to allowlist one
+specific, disclosed alternate implementation per merchant that chooses it — a security/deployment
+policy change outside this stream's scope, and one this document neither proposes nor assumes has
+happened. Until such a decision is made and recorded in `THREAT-MODEL.md`/`DEPLOYMENT-CONFIG.md`
+themselves, Model B is not a viable complement to Model D; §7's recommendation is revised
+accordingly.
 
 ## 3. Model C — CCIP-Read backed by authenticated evidence
 
@@ -134,8 +199,13 @@ verify the relevance and validity of the gateway's response" (VERIFIED, same sou
 **Verdict: the right upgrade from Model D (§4) specifically when receipt data is not cheaply,
 synchronously readable from an L1 resolver call** — cross-chain receipts, or receipts whose
 authoritative record lives somewhere an L1 contract cannot call into directly. For UNICA's
-current, single-chain settlement shape, Model B already gives the on-chain-authenticated
-answer Model C would otherwise be built to fetch, without the extra trust surface.
+current, single-chain settlement shape, Model B was described above as the on-chain-authenticated
+answer Model C would otherwise be built to fetch, without the extra trust surface — **that
+comparison assumes Model B can be built, which §2 finds it currently cannot be** (NOT_BUILDABLE
+under this repository's own mandatory implementation-slot preflight). With Model B blocked, the
+practical alternative for a single-chain, on-chain-authenticated answer without a gateway is
+Model D (§4), which needs no resolver code change at all; Model C remains the correct upgrade path
+once the underlying data genuinely is not L1-readable, independent of Model B's status.
 
 ## 4. Model D — no receipt subnames; lookup through a merchant service record
 
@@ -214,12 +284,15 @@ already answers the question more cheaply.
 All gas figures are this repository's own measurements or explicitly labelled floors/estimates —
 none are invented. Volumes are `docs/unica-v5/ens/SCALABILITY.md` §4's own scenario (1,000,000
 receipts/day); the two Ethereum network figures (60,000,000 gas/block, ~432,000,000,000 gas/day
-at ~7,200 blocks/day) are COMMUNITY, trade-press-reported (§8).
+at ~7,200 blocks/day) are COMMUNITY, trade-press-reported (§8), and describe Ethereum **mainnet**
+capacity — not the ENSv2 Sepolia beta this document, and this repository's own measurements,
+actually target (§1 states this labelling explicitly for Model A's row below; no mainnet
+deployment of ENSv2 exists at all, `DEPLOYMENT-CONFIG.md` §3, sibling stream, cited not edited).
 
 | Model | On-chain writes/day at 1M receipts/day | Gas/day (this scenario) | % of daily network gas capacity | Proof strength | New leak surface beyond an opaque label |
 |---|---|---|---|---|---|
-| A — per-receipt name | 1,000,000 | ≥44,339,000,000 (measured floor; real registration cost UNKNOWN and higher) | ≥~10% (floor only) | No stronger than the underlying event | Write-cadence-as-volume-signal, per-receipt |
-| B — wildcard-derived resolve | 0 | 0 | 0% | As strong as the on-chain call it makes | None beyond the read itself (unobservable on-chain) |
+| A — per-receipt name | 1,000,000 | ≥44,339,000,000 (measured floor, Sepolia; real registration cost UNKNOWN and higher) | ≥~10% (floor only; Sepolia numerator over a mainnet denominator — labelling in §1 — not the reason this model is rejected) | No stronger than the underlying event | Write-cadence-as-volume-signal, per-receipt |
+| B — wildcard-derived resolve | 0 (also: NOT_BUILDABLE as described under this repository's own mandatory implementation-slot preflight, §2) | 0 | 0% | As strong as the on-chain call it makes, if it could be built | None beyond the read itself (unobservable on-chain) |
 | C — CCIP-Read, authenticated | 0 (gateway is off-chain) | 0 | 0% | Signed: gateway-operator-bound. Proof-backed: state-root-bound | Gateway sees every query in the clear (IP/wallet fingerprinting, per EIP-3668's own security section) |
 | D — merchant service record | 0 (record already exists on the merchant name for another reason) | 0 | 0% | Deliberately weak at the ENS layer; funds-critical facts come from the chain directly, never the record | Narrowest — identifier only travels over a query the client chooses to make |
 | E — epoch commitment root | 1 (daily) to 24 (hourly) | 64,847 to 1,556,328 (measured unit cost × epoch count) | ~0.00002% | Strongest durable, ENS-anchored evidence of the five — survives resolver/parent change via chain history | Coarse per-epoch cadence signal only; root itself reveals nothing |
@@ -229,21 +302,34 @@ at ~7,200 blocks/day) are COMMUNITY, trade-press-reported (§8).
 **PROPOSED.** Model D (merchant service record, reusing the graph stream's own subgraph as the
 answer engine) as the default for ordinary receipt discovery — it needs no new ENS hierarchy
 level, no new resolver logic, and no new infrastructure beyond what `docs/unica-v5/graph/`
-already recommends building for an unrelated reason. Model B (wildcard-derived live resolve) as
-an optional complement wherever a payer specifically wants an ENS-shaped name to type or embed
-in a QR code rather than call an API directly — it costs nothing extra and needs no separate
-service. Model E (epoch commitment root) layered on top of either, **only** where a durable,
+already recommends building for an unrelated reason. Model B (wildcard-derived live resolve) is
+**not currently a usable complement**: as described, it requires a merchant resolver carrying
+custom `resolve()` logic, and that resolver fails this repository's own mandatory ERC-1967
+implementation-slot preflight outright (§2's buildability finding) — it is listed here only
+because comparing it honestly, including the reason it is blocked, is more useful than omitting
+it. Model E (epoch commitment root) layered on top of Model D, **only** where a durable,
 on-chain-anchored evidence trail independent of the merchant's own service uptime is a real
 requirement (disputes, third-party audit), because it is the one model whose evidence survives a
-later resolver or parent change by virtue of being a mined event, not a live answer. Model A
-(one name per receipt) is rejected outright on gas grounds (§1, §6). Model C (full CCIP-Read
-with a signed or proof-backed gateway) is the correct **next** step only once UNICA settlement
-data is not already cheaply, synchronously readable by an L1 resolver call — cross-chain receipts
-being the concrete future case, not a demonstrated present one.
+later resolver or parent change by virtue of being a mined event, not a live answer. Model A (one
+name per receipt) is rejected on volume grounds (§1, §6) — the labelled ~10%-of-mainnet-capacity
+figure there is supporting color, not the reason. Model C (full CCIP-Read with a signed or
+proof-backed gateway) is the correct **next** step only once UNICA settlement data is not already
+cheaply, synchronously readable by an L1 resolver call — cross-chain receipts being the concrete
+future case, not a demonstrated present one, and it shares Model B's implementation-slot question
+to whatever extent its own gateway trigger requires resolver-side code the pinned implementation
+does not already carry, which this document has not separately verified.
 
-This recommendation composes directly with `NAMESPACE.md` §9's tree: it adds **zero** new nodes
-to that hierarchy. The merchant root already carries a service/text record slot (§2's "records
-exposed" row); Model D spends one of those slots. No `receipt.` level is added anywhere.
+This recommendation's **discovery default is Model D alone**, and Model D composes directly with
+`NAMESPACE.md` §9's tree at **zero** new nodes: the merchant root already carries a service/text
+record slot (§2's "records exposed" row), and Model D spends one of those slots. No `receipt.`
+level is added anywhere for Model D. **That zero-nodes claim is scoped to Model D (and to Model B,
+if the buildability question above is ever resolved) — it is not true of Model E.** Model E writes
+one **new** subname per epoch, not per receipt, but still one per epoch: a daily cadence adds
+roughly 365 nodes per year per merchant that adopts it (up to 8,760/year at hourly), a real,
+nonzero addition to `NAMESPACE.md` §9's hierarchy that document does not yet list as a level.
+Because Model E is recommended only as an optional evidence layer, not the discovery default, this
+does not change §9's tree for a merchant that never adopts Model E — but for one that does, an
+`epoch.` (or similarly named) level belongs in that hierarchy and is not costed there today.
 
 ## 8. Sources
 
@@ -257,6 +343,10 @@ exposed" row); Model D spends one of those slots. No `receipt.` level is added a
 | `integrations/ensv2/ENS-OWNER-ACTION.md` | 2026-09-11 | this repository | TEAM GUIDANCE | Live-measured `setAddr` (44,339 gas) used as the explicit floor in §1/§6 |
 | `docs/unica-v5/graph/SCALABILITY.md` | 2026-09-11 | this repository (sibling stream) | TEAM GUIDANCE | The 1,000,000-receipts/day scenario reused here (§0, §6); the subgraph this document's Model D proposes reusing rather than duplicating |
 | www.theblock.co, "ENS Labs scraps Namechain L2, shifts ENSv2 fully to Ethereum mainnet" | 2026-09-11 (event dated 2026-02-06) | The Block (trade press), reporting Nick Johnson (ENS co-founder) | COMMUNITY | 60,000,000 gas/block figure and the 30M→60M 2025 gas-limit increase, used in §1/§6's Model A network-capacity comparison |
+| `docs/unica-v5/ens/NAMESPACE.md` | 2026-09-11 | this repository (same stream) | TEAM GUIDANCE | Pinned `PermissionedResolverImpl` address, resource-derivation formula, "who creates" mode split — reused in §2's buildability finding |
+| `docs/unica-v5/ens/THREAT-MODEL.md` §3.4 | 2026-09-11 | this repository (sibling stream) | TEAM GUIDANCE | "Malicious resolver" mitigation — the ERC-1967 implementation-slot preflight Model B's custom `resolve()` logic fails (§2) |
+| `docs/unica-v5/ens/DEPLOYMENT-CONFIG.md` §3, §12 | 2026-09-11 | this repository (sibling stream) | TEAM GUIDANCE | No-mainnet-deployment finding (§1) and the same mandatory preflight check description (§2), cited not edited |
+| `docs/unica-v5/ens/ACCESS-CONTROL.md` §12 | 2026-09-11 | this repository (sibling stream) | TEAM GUIDANCE | `VerifiableFactory.deployProxy` accepting an arbitrary implementation address — §2's buildability finding |
 
 ## 9. Unknowns
 
@@ -282,3 +372,12 @@ exposed" row); Model D spends one of those slots. No `receipt.` level is added a
    given directly in this stream's own assignment; nothing here attributes their origin to an
    unavailable discussion, and no additional peer idea beyond the assignment's own five named
    models is claimed to come from one.
+6. **Whether this repository's mandatory implementation-slot preflight (`THREAT-MODEL.md` §3.4,
+   `DEPLOYMENT-CONFIG.md` §12) will ever be relaxed to allowlist a specific, disclosed alternate
+   resolver implementation is an owner/security decision this document does not make.** §2 records
+   that Model B is NOT_BUILDABLE without such a decision; whether that decision is ever taken, and
+   under what disclosure conditions, is left open here rather than assumed either way.
+7. **Whether `NAMESPACE.md` §9's tree is amended to add an `epoch.`-level node for Model E adopters
+   is not decided by this document.** §7 states the node cost (≈365/year per merchant at daily
+   cadence) that such an amendment would need to carry; whether and how to add it to the namespace
+   document itself is left to that document's own maintenance, not settled here.

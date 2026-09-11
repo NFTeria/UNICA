@@ -6,7 +6,22 @@ MockUSDC is minted or approved; no key is signed or broadcast; no ENS record is 
 never presents ENSv2 Sepolia beta behaviour as production ENS mainnet behaviour, and it never
 implies that revoking an ENS record rewrites chain history.
 
-Labels: **VERIFIED**, **PROPOSED**, **DOCUMENTED_NOT_OBSERVED**, **UNKNOWN**. Authority labels:
+**UNICA v4 contracts do not exist yet, restated once here rather than at every occurrence below.**
+Every reference in this document to `createOrder`, `pay()`/`pay(orderId)`, `WrongPayer`,
+`NotOrderCreator`, `MarketNotActive`, `ZeroRecipient`/`ReservedRecipient`, `_orders[orderId]`, and
+`payoutUsedOnDay` names a function, check, or storage slot from UNICA v4's own **specification**
+(`docs/unica-v4/SPEC-CONTRACTS.md`, S1) — **SPECIFIED-NOT-BUILT**: no v4 contract has been written,
+compiled, or deployed, so none of these checks currently execute anywhere. Where this document says
+a v4 check "refuses," "enforces," or is "a second, independent gate," that is a claim about what the
+written specification requires a future contract to do, never an observation of a live gate that
+exists today. The one exception, called out explicitly every time it appears, is `UnicaExecutorV3`
+and its `Order.recipient` field — **V1 and V3 are deployed and real** on Ethereum Sepolia, and the
+address-record non-redirection property in §2 below is measured against that deployed V3 contract,
+not against any v4 code.
+
+Labels: **VERIFIED**, **PROPOSED**, **DOCUMENTED_NOT_OBSERVED**, **UNKNOWN**,
+**SPECIFIED-NOT-BUILT** (a v4 contract mechanism that is written in the specification and has no
+deployed code). Authority labels:
 **ENSV2_ONCHAIN** (ENSv2 Permissioned Resolver / Enhanced Access Control state), **UNICA_ONCHAIN**
 (a UNICA settlement contract's own state), **BACKEND_POLICY** (UNICA's own off-chain backend/role
 table), **GRAPH_EVIDENCE** (an indexer's derived, lagging view), **CLIENT_VERIFICATION** (a live
@@ -32,14 +47,24 @@ For an existing market or order the payout address, token addresses, chain id, h
 amount, minimum output, and bound payer are fixed by UNICA's own contracts (UNICA_ONCHAIN) at the
 moment the order is created and, more narrowly, at the moment a payer's authorization is checked.
 ENS (ENSV2_ONCHAIN) may aid discovery **before** order creation; once an order exists, the resolved
-identity is bound immutably. Concretely, restated from `docs/unica-v4/SPEC-CONTRACTS.md` §9.1
-(S1): `createOrder` snapshots `recipient`, `payer`, `amountIn`, `minOut`, and `deadline` into
-storage, written once; `pay(orderId)` later checks `msg.sender == order.payer` (`WrongPayer`
-otherwise) and settles against exactly those stored values. No function anywhere in the executor
-re-resolves an ENS name. This is not a promise this document makes; it is a property of code
-already specified (and, for the address-record half, already measured empirically — S3's own
-§8: "changing this record cannot redirect an existing order's funds. It can only affect orders
-created *after* the change").
+identity is bound immutably.
+
+**Two different things are true here, and this document keeps them separate rather than letting one
+stand in for the other.** The address-record half is **already measured, empirically, against
+deployed code**: `UnicaExecutorV3` is real and deployed on Ethereum Sepolia (V1 and V3 are deployed;
+v4 is not), and S3's own §8 states plainly — "changing this record cannot redirect an existing
+order's funds. It can only affect orders created *after* the change" — measured against five settled
+V3 orders (§4.5 below quotes the same line in full). The mechanism half is different in kind:
+restated from `docs/unica-v4/SPEC-CONTRACTS.md` §9.1 (S1), UNICA v4's own **specification** —
+**SPECIFIED-NOT-BUILT**, no v4 contract exists — says `createOrder` snapshots `recipient`, `payer`,
+`amountIn`, `minOut`, and `deadline` into storage, written once; `pay(orderId)` later checks
+`msg.sender == order.payer` (`WrongPayer` otherwise) and settles against exactly those stored
+values, and no function anywhere in the executor re-resolves an ENS name. This document carries that
+mechanism forward on the strength of V3's already-measured behaviour under the identical design
+pattern — the same non-redirection property, the same "resolve once, store, never re-read" shape —
+not as a second, independent measurement of v4 code that has not been written. Until v4 is built and
+its own address-record behaviour is separately measured, the non-redirection property below is
+VERIFIED for V3 and PROPOSED (carried forward by design, not yet observed) for v4.
 
 **Four consequences that hold in every row of §4 below, stated once here rather than repeated ten
 times:**
@@ -66,10 +91,15 @@ authorization time and an ENS record can change after. UNKNOWN or stale identity
 
 ## 3. What binds an order, and what ENS never touches
 
+**SPECIFIED-NOT-BUILT.** Every field named in the left column and every check named beside it
+(`WrongPayer` included) is UNICA v4's own specified interface (`docs/unica-v4/SPEC-CONTRACTS.md`
+§9.1, S1); v4 has no deployed code. The pattern is carried forward from V3's already-deployed,
+already-measured `UnicaExecutorV3.Order.recipient` (§2 above), not observed directly in v4.
+
 | Bound at order creation (UNICA_ONCHAIN, immutable after) | Never re-derived from ENS after creation |
 |---|---|
 | `recipient` (the merchant's payout address) | Even if the merchant's ENS `addr` record changes |
-| `payer` (`WrongPayer` enforced at `pay()`) | Even if a terminal or agent subname is later revoked |
+| `payer` (`WrongPayer` enforced at `pay()`, SPECIFIED-NOT-BUILT) | Even if a terminal or agent subname is later revoked |
 | `amountIn`, `minOut` | Even if a discovery/market-listing record changes its quoted price |
 | `deadline` | Even if a terminal's `com.unica.terminal-status` record is set to `revoked` after creation |
 | `hook`, `executor`, `poolId`, chain id (via the market's own identity) | Even if `com.unica.registry` is repointed to a different deployment |
@@ -92,7 +122,7 @@ BACKEND_POLICY, GRAPH_EVIDENCE, CLIENT_VERIFICATION, and OFFCHAIN_OPERATION into
 | Backend order creation (BACKEND_POLICY) | The staff/device role table entry is disabled first (S5's own ordering: "this is what actually revokes access, independent of the Privy token's own remaining... validity"). A disabled terminal cannot reach the order-creation flow at all — this is the layer that actually stops anything, not the ENS record |
 | Existing on-chain order | None exists yet — there is nothing to affect |
 | Customer interface | Never reaches a payment screen; the terminal's own UI is locked out at the backend layer |
-| Settlement contract (UNICA_ONCHAIN) | Untouched. `createOrder`'s own `NotOrderCreator` check (S1 §9.1) additionally refuses the call if the terminal's operating key was ever removed from the on-chain order-creator allowlist — a second, independent gate, never relied on alone since revocation should not require an on-chain transaction to take effect promptly |
+| Settlement contract (UNICA_ONCHAIN) | Untouched. `docs/unica-v4/SPEC-CONTRACTS.md` §9.1 (S1) **specifies** that `createOrder`'s own `NotOrderCreator` check would additionally refuse the call if the terminal's operating key was ever removed from the on-chain order-creator allowlist — **SPECIFIED-NOT-BUILT**: no v4 contract exists to run this check today, so it is not a live backstop, only a written requirement for the contract v4 will eventually be. The backend disable in the row above is the only gate that actually exists and actually stops anything right now |
 | Indexer (GRAPH_EVIDENCE) | Nothing to index; no order-creation attempt reached the chain |
 | Historical receipt | None exists |
 
@@ -105,9 +135,9 @@ yet called `pay()`.)*
 |---|---|
 | ENS resolution | Any of the terminal's, agent's, or merchant's records may change or be revoked from this point forward; none of it touches the order |
 | Backend order creation | Irrelevant now — creation already happened; a later revocation only prevents *future* `createOrder` calls |
-| Existing on-chain order | `_orders[orderId]` already holds `recipient`, `payer`, `amountIn`, `minOut`, `deadline` (S1 §9.1) — fixed, unaffected by any ENS change |
+| Existing on-chain order | `_orders[orderId]` (SPECIFIED-NOT-BUILT for v4; the deployed analogue is V3's `Order` struct on `UnicaExecutorV3`) is specified to hold `recipient`, `payer`, `amountIn`, `minOut`, `deadline` (S1 §9.1) — fixed, unaffected by any ENS change |
 | Customer interface | The payer's own review screen, if it re-resolves the merchant name for display, may now show a *different* current resolution than what the order was created against — this is exactly the "current resolution vs. identity observed at settlement" distinction (§2 item 4); the interface MUST show the order's own bound `recipient`, never re-substitute a fresh resolution into the payment screen |
-| Settlement contract | `pay(orderId)` still checks only `msg.sender == order.payer`, unrelated to any ENS record; the payer can still pay the address the order actually names, exactly as created |
+| Settlement contract | `pay(orderId)` (SPECIFIED-NOT-BUILT for v4) is specified to still check only `msg.sender == order.payer`, unrelated to any ENS record; the payer can still pay the address the order actually names, exactly as created |
 | Indexer | `OrderCreated` was indexed at creation; nothing changes about that entity |
 | Historical receipt | None yet — no `Settled` has fired |
 
@@ -122,22 +152,24 @@ has not yet been mined.)*
 | Backend order creation | N/A — creation already happened |
 | Existing on-chain order | Status is `Open`, about to transition to `Paying`; unaffected by any ENS change during this window |
 | Customer interface | Should show a "processing" state; per Advisory 001's own lesson (S2), the pending transaction's binding was fixed when the payer signed / submitted it — nothing an ENS record does in this window can widen or narrow what that transaction settles |
-| Settlement contract | `pay()` executes exactly the checks in `docs/unica-v4/SPEC-CONTRACTS.md` §9.1 against on-chain state only; no ENS call exists anywhere in the executor or hook |
+| Settlement contract | `pay()` (SPECIFIED-NOT-BUILT for v4) is specified in `docs/unica-v4/SPEC-CONTRACTS.md` §9.1 to execute its checks against on-chain state only; no ENS call exists anywhere in the specified executor or hook |
 | Indexer | Nothing indexed yet for this attempt |
 | Historical receipt | None yet |
 
 ### 4.4 During settlement
 
 *(The `pay()` transaction is executing: input pull, swap, receipt, delivery, `Settled` — one
-transaction, per `docs/unica-v4/EVENT-SCHEMA.md` §8's fixed log order.)*
+transaction, per `docs/unica-v4/EVENT-SCHEMA.md` §8's fixed log order. Every row below is
+**SPECIFIED-NOT-BUILT**: it describes what the v4 specification requires, not an observation of a
+mined v4 transaction, since v4 has no deployed code.)*
 
 | Layer | Effect |
 |---|---|
-| ENS resolution | No ENS call occurs inside a UNICA v4 contract at any point — restated because it is the load-bearing fact behind every other row: `web/ensv2/resolve.mjs`'s resolution path is a client-side, pre-order concern only, never an on-chain dependency of `pay()` |
+| ENS resolution | No ENS call is specified to occur inside a UNICA v4 contract at any point — restated because it is the load-bearing fact behind every other row: `web/ensv2/resolve.mjs`'s resolution path is a client-side, pre-order concern only, never an on-chain dependency of the specified `pay()` |
 | Backend order creation | N/A |
-| Existing on-chain order | Transitions `Open` → `Paying` → `Settled` within one transaction (S1 §9.1); no revocation anywhere can interrupt a transaction already included in a block |
+| Existing on-chain order | Specified (S1 §9.1) to transition `Open` → `Paying` → `Settled` within one transaction; no revocation anywhere could interrupt a transaction already included in a block, once v4 exists to mine one |
 | Customer interface | Waiting on the transaction receipt; nothing to do with ENS |
-| Settlement contract | Executes atomically; a revocation broadcast in a later block cannot reach back into this transaction |
+| Settlement contract | Specified to execute atomically; a revocation broadcast in a later block would not reach back into this transaction, once v4 exists to enforce it |
 | Indexer | Will index `SettlementReceipt` and `Settled` once mined; not yet, mid-transaction |
 | Historical receipt | Created at the end of this transaction, immutable from that point |
 
@@ -149,9 +181,9 @@ transaction, per `docs/unica-v4/EVENT-SCHEMA.md` §8's fixed log order.)*
 | Backend order creation | N/A |
 | Existing on-chain order | `status = Settled`, terminal state, never reopened |
 | Customer interface | Shows the receipt from the mined `SettlementReceipt`/`Settled` pair (S1, `docs/unica-v4/EVENT-SCHEMA.md` §5–§6); a later ENS change never edits this display's underlying facts |
-| Settlement contract | Nothing further to do for this order; `payoutUsedOnDay` already accounted (S1 §9.2) |
+| Settlement contract | Nothing further to do for this order; `payoutUsedOnDay` (SPECIFIED-NOT-BUILT for v4) is specified to already be accounted (S1 §9.2) |
 | Indexer | `Settlement`/`HookReceipt`/`ExecutorReceipt` entities (per `docs/unica-v5/graph/SETTLEMENT-SCHEMA.md` §4.15–§4.17, cited, not edited) are immutable once both paired events are observed |
-| Historical receipt | Permanent. Restated from `docs/ensv2/UNICA-ETH-ADDR-REPORT.md` §8 (S3): "the five settled V3 orders on Sepolia keep the recipient they were created with, whatever `unica.eth` resolves to afterwards" — the same property, generalized to every UNICA order |
+| Historical receipt | Permanent. Restated from `docs/ensv2/UNICA-ETH-ADDR-REPORT.md` §8 (S3): "the five settled V3 orders on Sepolia keep the recipient they were created with, whatever `unica.eth` resolves to afterwards" — **VERIFIED for V3**, deployed and real; **PROPOSED, not yet measured,** as the same property for v4, which has no deployed code to observe it on |
 
 ### 4.6 Merchant root revoked
 
@@ -162,9 +194,9 @@ removed or transferred away — the most severe identity-layer event this table 
 |---|---|
 | ENS resolution | Future resolutions of the merchant's name may return a different address, or none, depending on what the new controller (if any) sets. `readAuthorization` (S4) would show a different or empty `authorized` list at the next read |
 | Backend order creation | If the merchant's own backend/creator-allowlist entry is independently revoked (an OFFCHAIN_OPERATION, not an ENS effect), new order creation stops; the two are separate systems and one does not imply the other — a root-revoked ENS name does not, by itself, disable the on-chain order-creator allowlist, which is a UNICA_ONCHAIN fact this document does not conflate with ENS state |
-| Existing on-chain order | Any order already created keeps its stored `recipient`, exactly as §4.5 — a root revocation, however severe at the ENS layer, cannot reach `_orders[orderId]` storage |
+| Existing on-chain order | Any order already created keeps its stored `recipient`, exactly as §4.5 — a root revocation, however severe at the ENS layer, cannot reach `_orders[orderId]` storage (SPECIFIED-NOT-BUILT for v4; the deployed analogue is V3's own order storage) |
 | Customer interface | A checkout attempting a **new** order against this name would see the changed resolution at its next live read and refuse or warn, per `web/ensv2/resolve.mjs`'s classified failure shapes (e.g. `ZERO_ADDRESS` if the new state resolves nothing) |
-| Settlement contract | Untouched for existing orders; a **new** order naming this merchant's now-unresolved address would simply fail `createOrder`'s own `ZeroRecipient`/`ReservedRecipient` checks if the interface tried to build one from a broken resolution — but the interface should refuse before ever reaching that call, per its own fail-closed resolution classification |
+| Settlement contract | Untouched for existing orders; a **new** order naming this merchant's now-unresolved address is specified to fail `createOrder`'s own `ZeroRecipient`/`ReservedRecipient` checks (SPECIFIED-NOT-BUILT for v4 — no such contract exists to run this check) if the interface tried to build one from a broken resolution — but the interface should refuse before ever reaching that call, per its own fail-closed resolution classification, since the v4 check itself is not yet a live backstop |
 | Indexer | Would index whatever EAC role-change events fired (`IdentityBindingObservation` in `docs/unica-v5/graph/ENS-NFT-SCHEMA.md` §5, cited), as evidence a root event occurred — never as the authority that it occurred, per §5 of that document's own rule |
 | Historical receipt | Permanent, unaffected |
 
@@ -209,9 +241,9 @@ directly with ENS-layer discovery.)*
 |---|---|
 | ENS resolution | The `com.unica.registry` record itself does not change merely because the registry it points at is paused — the pointer is still technically valid; what changes is what the pointed-to contract *reports* |
 | Backend order creation | A backend that checks live registry status before letting a terminal create an order sees `MarketPause`'s effect (`MarketStatusChanged` to `PAUSED`, S1 §5 row 5) and refuses; a backend that trusts a cached "market is active" fact without a fresh on-chain read does not, which is exactly the staleness risk this table exists to name |
-| Existing on-chain order | Explicitly addressed by `docs/unica-v4/SPEC-CONTRACTS.md` §5: "Open orders survive a pause and are payable after unpause if unexpired, never on a RETIRED market" — a pause does not void an already-open order, it only blocks *new* order creation and swaps while paused |
+| Existing on-chain order | Specified by `docs/unica-v4/SPEC-CONTRACTS.md` §5 (SPECIFIED-NOT-BUILT for v4): "Open orders survive a pause and are payable after unpause if unexpired, never on a RETIRED market" — a pause is specified not to void an already-open order, only to block *new* order creation and swaps while paused |
 | Customer interface | Should show the live `oracleCondition()`/status view (S1 §8.2) rather than a cached "active" state before allowing a new payment attempt |
-| Settlement contract | `MarketNotActive` refuses both `createOrder` and `pay` while paused (S1 §5, §9.1) — this is enforced on-chain regardless of what any ENS record says |
+| Settlement contract | `MarketNotActive` is **specified** to refuse both `createOrder` and `pay` while paused (S1 §5, §9.1) — **SPECIFIED-NOT-BUILT**: no v4 contract exists to enforce this on-chain today, so this row is a requirement on the contract v4 will eventually be, not a live enforcement a design can rely on as a backstop right now |
 | Indexer | `MarketPause` (`docs/unica-v5/graph/SETTLEMENT-SCHEMA.md` §4.19, cited) records the transition as evidence; per that document's own repeated warning, "a `MarketPause` row proves a pause transition was indexed at some past block; it never proves the market is paused right now" |
 | Historical receipt | Unaffected — settled history stands regardless of the registry's current status |
 
