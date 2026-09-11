@@ -150,7 +150,7 @@ gaps, not confirmed absences.
 
 ---
 
-## 3. Data Streams (pull model — DON-signed reports verified on-chain by a `VerifierProxy`)
+## 3. Data Streams (pull model — a `VerifierProxy` checks report signatures on chain; UNICA has verified no report)
 
 ### 3a. On Robinhood Chain Testnet (46630): the verifier exists, nothing else does
 
