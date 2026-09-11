@@ -167,3 +167,59 @@ during credential validation, self-described as retryable. It cleared on the nex
 Status: `SIMULATED_IN_CRE` — the workflow runs in Chainlink's own simulator, which the CLI states
 plainly is **not a real TEE**. Nothing here has executed in an enclave, and the evidence grade the
 workflow stamps on its own output still says `CRE_CONFIDENTIAL_SIMULATION`, never `TEE_ATTESTED`.
+
+---
+
+### 2026-09-11 — Robinhood Chain testnet (46630) has Data Streams and CRE infrastructure but no Data Feeds, so its own Robinhood test tokens cannot be priced
+
+**Trying to:** price the Robinhood testnet Robinhood test TSLA/NFLX tokens on chain 46630 with a Chainlink
+Data Feed, as a sanity check before settlement.
+
+**Blocked by:** no Data Feed exists for chain 46630. `reference-data-directory.vercel.app/feeds-robinhood-testnet.json`
+returns HTTP 404 (verified live, 79 bytes), and `chains.ts` lists exactly one Robinhood network,
+`"Robinhood Chain Mainnet"` — no testnet entry exists: `smartcontractkit/documentation`,
+`src/features/data/chains.ts`, lines 624-637,
+https://raw.githubusercontent.com/smartcontractkit/documentation/main/src/features/data/chains.ts.
+The same chain id nonetheless hosts a live Data Streams `VerifierProxy` (proxy address
+`0x72790f9eB82db492a7DDb6d2af22A270Dcc3Db64`; codesize 7009; `typeAndVersion()` =
+`"VerifierProxy 2.0.0"`) and a live CRE `KeystoneForwarder` (forwarder address
+`0x8E6E6A1f2B2D4dF503bfd67951CF28F27BF3AF19`; codesize 8591; `typeAndVersion()` =
+`"KeystoneForwarder 1.0.0"`), both read live against chain 46630 on 2026-09-11. The Robinhood test
+TSLA token (token address `0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E`; `symbol()` =
+`"TSLA"`) reverts on `latestRoundData()` — it is a plain ERC-20, not a price source.
+
+**Cost:** not recorded as a duration — a survey finding, not a debugging session.
+
+**Would have prevented it:** one line on the Data Feeds addresses page, or in `chains.ts` itself,
+stating that Robinhood Chain Testnet carries no Data Feed today, next to the Data Streams and CRE
+entries the same page family already documents for the same chain id — so confirming the gap does
+not require three separate live contract reads plus two documentation fetches.
+
+### 2026-09-11 — the reference-data-directory lists TSLA and NFLX v8 and v11 Data Streams, but the public Discovery API returns neither NFLX nor any v8-schema stream
+
+**Trying to:** confirm through Chainlink's own Discovery API that the TSLA/NFLX Data Streams feed
+ids published in the reference-data-directory are actually queryable, before designing an adapter
+around them.
+
+**Blocked by:** `feeds-ethereum-testnet-sepolia-arbitrum-1.json` lists v8- and v11-schema rows for
+both tickers, e.g. NFLX/USD v8
+(feed id `0x0008a024a686a2558a0214497367764f6dddf41076c08ea98234e76a8be18f6e`), and three v11 NFLX
+rows — https://reference-data-directory.vercel.app/feeds-ethereum-testnet-sepolia-arbitrum-1.json.
+That v8 row and the three v11 rows carry no `docs.hidden` flag. The unauthenticated public
+endpoint `https://api.testnet-dataengine.chain.link/api/v1/discovery` (HTTP 200, no credentials
+sent, fetched 2026-09-11 20:10 UTC) returns 470 feed entries. `TSLA` is the base asset of 7 of them:
+6 with `schemaVersion: "V11"` and one with `"V0"`, an entry with an empty name created that day.
+`NFLX` appears 0 times. Across all 470 entries, `schemaVersion` takes only the values V0, V2, V3,
+V4, V7, V9 and V11 — `"V8"` occurs zero times, for any asset (five entries whose feed ids begin
+`0x0008`, EUR, ABT and EWJ, are labelled `"V4"`). The endpoint's own page says an
+unauthenticated call returns "the streams Chainlink lists publicly" —
+https://docs.chain.link/data-streams/reference/data-streams-api/discovery-endpoint.
+
+**Cost:** not recorded as a duration — an API-reachability check, not a debugging session.
+
+**Would have prevented it:** a note on the Data Streams supported-assets or Discovery API page
+stating that v8-schema streams and NFLX specifically are not exposed through the public Discovery
+endpoint, so a builder does not conclude from the reference-data-directory alone that a listed
+stream is reachable there.
+
+Status: no claim of qualification.
