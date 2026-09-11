@@ -527,7 +527,8 @@ chains and needs no sequencer guard (L1).**
    Source: https://docs.etherscan.io/contract-verification/verify-with-foundry. Quote:
    "Most chains with an Etherscan explorer are supported using the --chain flag." Its
    own worked verification examples pass `--etherscan-api-key`, so, unlike the
-   Blockscout-based chains above, Ethereum verification requires an API key. The
+   Blockscout-based chains above, Ethereum verification is not keyless: Etherscan
+   documents that flag on its own examples. The
    Etherscan PoolManager page shows "Exact Match."
 
 ### Supplementary (not counted in the six)
@@ -562,7 +563,7 @@ chains and needs no sequencer guard (L1).**
 ### Open unknowns
 
 - Whether a fully keyless Etherscan verification path exists for any chain was not
-  confirmed — Ethereum specifically requires an API key per its own docs.
+  confirmed — Etherscan documents that flag for Ethereum in its own examples.
 - Privy's and The Graph's feature depth beyond "network is supported" (session-key /
   gas-sponsorship specifics on Ethereum, or Graph Network query costs at the beta's
   expected volume) was not checked.
