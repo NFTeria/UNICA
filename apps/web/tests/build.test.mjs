@@ -8,6 +8,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { h, esc, raw } from "../src/html.mjs";
+import { NO_VALUE_BANNER } from "../assets/product.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, "..");
@@ -143,7 +144,7 @@ chk("no route uses an absolute-root href or src", absolute.length === 0, absolut
 // bank. So the check is run in both directions. A default build must carry it on every document,
 // and a build explicitly told the environment is PUBLIC_MAINNET must carry it on none — same
 // source, one input, opposite requirement, and the generator refuses to emit a mismatch either way.
-const NO_VALUE = "TESTNET / NO VALUE";
+const NO_VALUE = NO_VALUE_BANNER;
 const withoutLabel = docs.filter(([, d]) => !d.includes(NO_VALUE)).map(([r]) => r);
 chk(`all ${docs.length} documents of a default build carry the ${NO_VALUE} label`, withoutLabel.length === 0, withoutLabel.join(","));
 

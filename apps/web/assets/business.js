@@ -45,7 +45,7 @@ export function readOnlySession(config, fetchImpl = globalThis.fetch) {
 }
 
 /**
- * The clock a dashboard should count "today" by. A practice chain's own time can sit years away
+ * The clock a dashboard should count "today" by. A local testnet's own time can sit years away
  * from the browser's, so counting the day against the browser would report zero takings on a
  * network that has just processed a payment. The deployment's own recorded time wins when it has
  * one; the browser is the fallback, and the screen says which was used.

@@ -53,7 +53,7 @@ ${C.banner("warn", "This is a testnet experiment.", raw(`Nothing here is deploye
 <section>
   <h2>What may be shown here</h2>
   ${C.evidenceKey()}
-  ${C.statusRegion("exp-demo", "Mock and simulated demonstrations run only when script is available. Neither is a settlement.")}
+  ${C.statusRegion("exp-demo", "Mock and simulated runs happen only when script is available. Neither is a settlement.")}
 </section>`,
   },
   {

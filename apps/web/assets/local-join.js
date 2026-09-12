@@ -13,7 +13,7 @@
  * onboarding contract, the screen says so and stays a static page.
  *
  * THE OWNER SIGNS IN THEIR WALLET, OR NOT AT ALL. Sending goes through apps/web/assets/wallet.js,
- * which never sees a key. On the local practice network with no wallet installed, the chain's own
+ * which never sees a key. On the local testnet with no wallet installed, the chain's own
  * unlocked account is used, exactly as the pay screen already does.
  *
  * ABI ENCODING, BY HAND, FROM THE SPECIFICATION. `join`, `register`, `authorizeTextRoles` and
@@ -133,7 +133,7 @@ export function shortId(hex) {
  * that is the next thing the person has to do.
  */
 export function joinReadiness(state = {}) {
-  if (!state.onboardingPresent) return { ready: false, sentence: "This practice setup has no onboarding contract yet, so a business cannot be added here." };
+  if (!state.onboardingPresent) return { ready: false, sentence: "This testnet setup has no business sign-up yet, so a business cannot be added here." };
   if (!state.connected) return { ready: false, sentence: "Connect a wallet first. It becomes the owner of the business." };
   if (state.alreadyJoined) return { ready: false, sentence: "This wallet already owns a business. One business per wallet in this release." };
   if (!state.labelValid) return { ready: false, sentence: LABEL_RULE_SENTENCE };
@@ -354,7 +354,7 @@ async function main() {
   set("join-network", networkName(config.chainId));
   if (!isPracticeNetwork(config.chainId)) {
     // This site has no mainnet and this page has no mainnet path; say so rather than proceed.
-    say("join-status", "This page only runs on a practice network. Nothing was sent.");
+    say("join-status", "This page only runs on a testnet. Nothing was sent.");
     return;
   }
 
@@ -373,7 +373,7 @@ async function main() {
   };
   if (!state.onboardingPresent) {
     say("join-status", joinReadiness(state).sentence);
-    say("wallet", "The local practice setup has no onboarding contract yet, so there is nothing to connect to. Run the local deployment again once it includes one.");
+    say("wallet", "This testnet setup has no business sign-up yet, so there is nothing to connect to. Run the local deployment again once it includes one.");
     return;
   }
 

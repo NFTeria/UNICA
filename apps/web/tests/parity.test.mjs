@@ -13,6 +13,7 @@
  * Offline. No network, no chain, no wallet.
  */
 import { readFileSync, existsSync } from "node:fs";
+import { NO_VALUE_BANNER } from "../assets/product.js";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
@@ -143,7 +144,7 @@ if (!existsSync(OUT)) {
     !STEPS.test("Connect your wallet Payout wallet Business name Preferred payout asset Customer assets to accept Name your first register Transaction limit Confirm"),
   );
   chk("the join route's one button is disabled until script says why", /<button[^>]*id="join-submit"[^>]*disabled[^>]*aria-describedby="join-why"/.test(joinDoc));
-  chk("the join route carries the practice-mode banner in the served HTML", joinDoc.includes("Practice mode, test money only"));
+  chk("the join route carries the practice-mode banner in the served HTML", joinDoc.includes("Testnet. No real money."));
   chk("the join route offers the dashboard, the register and Registers after success", joinDoc.includes(">Open my business<") && joinDoc.includes(">Create payment<") && joinDoc.includes(">Registers<"));
   chk(
     "the join route shows no contract word to a business owner",
@@ -167,7 +168,7 @@ if (!existsSync(OUT)) {
     ].every((s) => payDoc.includes(s)),
   );
   chk("the checkout never shows Merchant or [TEST MODE] to a customer", !/<dt>Merchant/.test(payDoc) && !payDoc.includes("[TEST MODE]"));
-  chk("the checkout carries the no-value label in the served HTML", payDoc.includes("TESTNET / NO VALUE"));
+  chk("the checkout carries the no-value label in the served HTML", payDoc.includes(NO_VALUE_BANNER));
 
   // The machine words are allowed inside the Advanced verification disclosure and nowhere else.
   // This is the check that keeps the product surface readable by the person paying for a haircut.

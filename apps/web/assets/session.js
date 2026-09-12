@@ -8,7 +8,7 @@
  * about the business is stored in the browser; the only thing remembered is WHICH address to look
  * for first, and that is a convenience, not a record. Clear it and the chain still knows.
  *
- * On the local practice network there is no browser wallet, so the chain's own unlocked accounts
+ * On the local testnet there is no browser wallet, so the chain's own unlocked accounts
  * stand in: the person picks one, and from then on it behaves like any other login.
  */
 import { connectWallet, discoverProviders, fromHexChainId, makeSession, rpcRequest } from "./wallet.js";
@@ -60,7 +60,7 @@ export function forgetWallet(storage = defaultStorage()) {
   }
 }
 
-/** The accounts the local practice chain itself unlocks; an empty list on any other network. */
+/** The accounts the local local testnet itself unlocks; an empty list on any other network. */
 export async function practiceAccounts(config, fetchImpl = globalThis.fetch) {
   if (Number(config?.chainId) !== LOCAL_CHAIN_ID || !config?.rpc) return [];
   try {
@@ -75,7 +75,7 @@ export async function practiceAccounts(config, fetchImpl = globalThis.fetch) {
  * Recognise a returning owner without a prompt. Every wallet in the browser is asked `eth_accounts`,
  * which a wallet answers only for a site it has already approved; the remembered address wins when
  * it is among the answers, otherwise the first account does. A wallet on another network is
- * skipped, never switched from here. On the practice chain a remembered practice account is
+ * skipped, never switched from here. On the local testnet a remembered testnet account is
  * reconnected the same way. Returns { session, wallet } or null; it never throws.
  */
 export async function silentReconnect(config, { win = globalThis.window, storage = defaultStorage(), fetchImpl = globalThis.fetch, providers = null } = {}) {
@@ -106,14 +106,14 @@ export async function silentReconnect(config, { win = globalThis.window, storage
     const accounts = await practiceAccounts(config, fetchImpl);
     const hit = accounts.find((a) => sameAddress(a, wanted));
     if (hit) {
-      return { session: makeSession({ kind: "local", address: hit, chainId: LOCAL_CHAIN_ID, rpc: config.rpc, fetchImpl }), wallet: { name: "Practice account", rdns: "" } };
+      return { session: makeSession({ kind: "local", address: hit, chainId: LOCAL_CHAIN_ID, rpc: config.rpc, fetchImpl }), wallet: { name: "Testnet account", rdns: "" } };
     }
   }
   return null;
 }
 
 /**
- * Log in with a prompt: the wallet's own approval flow, or on the practice chain the account the
+ * Log in with a prompt: the wallet's own approval flow, or on the local testnet the account the
  * person chose. The address is remembered so the next visit needs no button. Returns the same
  * shape as connectWallet: { session, wallet, note } or { blocked }.
  */

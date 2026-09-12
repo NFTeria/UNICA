@@ -82,7 +82,7 @@ test("chooser: injected wallet on the wrong chain -> switch requested, with a bl
   assert.match(v.sentence, /Sepolia test network/);
   assert.match(v.sentence, /nothing is sent from the wrong network/i);
 });
-test("chooser: no wallet, local practice network -> the local unlocked account", () => {
+test("chooser: no wallet, local testnet -> the local unlocked account", () => {
   const v = chooseProvider({ injected: false, injectedChainId: null, configuredChainId: LOCAL_CHAIN_ID });
   assert.equal(v.kind, "local");
   assert.match(v.sentence, /Nothing here has value/);
@@ -116,15 +116,15 @@ test("chooser: the sentences never contain hex, a chain id, or a contract word",
 // ---- network names ----------------------------------------------------------------------------------
 
 test("networkName reads as a business owner would", () => {
-  assert.equal(networkName(LOCAL_CHAIN_ID), "Local practice network");
+  assert.equal(networkName(LOCAL_CHAIN_ID), "Local testnet");
   assert.equal(networkName(SEPOLIA_CHAIN_ID), "Sepolia test network");
-  assert.equal(networkName("0x7a69"), "Local practice network"); // a hex chain id reads the same
-  assert.equal(networkName(fromHexChainId("0x7a69")), "Local practice network");
+  assert.equal(networkName("0x7a69"), "Local testnet"); // a hex chain id reads the same
+  assert.equal(networkName(fromHexChainId("0x7a69")), "Local testnet");
   assert.equal(networkName(undefined), "Unknown network");
   assert.equal(networkName("not a chain"), "Unknown network");
   assert.equal(networkName(424242), "Network 424242"); // a chain this product does not run on reads by number
 });
-test("every network this site runs on is a practice network; mainnet is not", () => {
+test("every network this site runs on is a testnet; mainnet is not", () => {
   assert.equal(isPracticeNetwork(LOCAL_CHAIN_ID), true);
   assert.equal(isPracticeNetwork(SEPOLIA_CHAIN_ID), true);
   assert.equal(isPracticeNetwork(1), false);
@@ -199,7 +199,7 @@ test("switchChain says so in plain words when the wallet declines (4001)", async
 });
 test("switchChain says the chain must be added when the wallet does not know it (4902)", async () => {
   const p = fakeProvider({ chainId: 1, switchError: Object.assign(new Error("Unrecognized"), { code: 4902 }) });
-  assert.match((await switchChain(p, LOCAL_CHAIN_ID)).sentence, /does not know Local practice network yet/);
+  assert.match((await switchChain(p, LOCAL_CHAIN_ID)).sentence, /does not know Local testnet yet/);
 });
 test("switchChain control: a wallet that claims success but stays put is not trusted", async () => {
   const p = fakeProvider({ chainId: 1, switchTo: 1 });
@@ -299,7 +299,7 @@ test("control: the key-material rule would catch a violation", () => {
 });
 
 test("every network this product runs on is named for a person, and an unknown one says its number", () => {
-  assert.equal(networkName(31337), "Local practice network");
+  assert.equal(networkName(31337), "Local testnet");
   assert.equal(networkName(11155111), "Sepolia test network");
   assert.equal(networkName(84532), "Base Sepolia test network");
   assert.equal(networkName(421614), "Arbitrum Sepolia test network");

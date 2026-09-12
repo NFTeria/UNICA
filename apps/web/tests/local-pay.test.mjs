@@ -255,7 +255,7 @@ test("formatFeesLine renders pips as percentages once a receipt exists", () => {
 
 test("renderTermsText carries the practice-mode label", () => {
   const text = renderTermsText(baseRecord());
-  assert.match(text, /Practice mode, test money only/);
+  assert.match(text, /Testnet. No real money./);
 });
 test("renderTermsText uses the dictionary rows: Business, Pay name, Register, Amount you pay, They receive, Network, Expires", () => {
   const text = renderTermsText(baseRecord());
@@ -264,7 +264,7 @@ test("renderTermsText uses the dictionary rows: Business, Pay name, Register, Am
   assert.match(text, /^Register: chair-1$/m);
   assert.match(text, /^Amount you pay: /m);
   assert.match(text, /^They receive: at least /m);
-  assert.match(text, /^Network: Local practice network$/m);
+  assert.match(text, /^Network: Local testnet$/m);
   assert.match(text, /^Expires: /m);
   assert.doesNotMatch(text, /Merchant|chainId|\[TEST MODE\]/);
 });

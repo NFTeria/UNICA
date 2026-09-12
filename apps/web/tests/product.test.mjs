@@ -74,11 +74,11 @@ test("control: the machine-word detector actually catches one", () => {
 
 // ---- the environment label ---------------------------------------------------------------------
 
-test("a local practice chain is labelled a test network, whatever the manifest says", () => {
+test("a local local testnet is labelled a test network, whatever the manifest says", () => {
   const v = validateEnvironment({ chainId: 31337, environment: MAINNET_ENVIRONMENT });
   assert.equal(v.mainnet, false);
   assert.equal(v.banner, NO_VALUE_BANNER);
-  assert.equal(v.networkName, "Local practice network");
+  assert.equal(v.networkName, "Local testnet");
 });
 test("Sepolia is labelled a test network", () => {
   assert.equal(validateEnvironment({ chainId: 11155111, environment: "SEPOLIA" }).banner, NO_VALUE_BANNER);

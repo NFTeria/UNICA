@@ -69,7 +69,7 @@ test("silent reconnect returns null for an unapproved wallet, a wallet on anothe
   assert.equal(await silentReconnect(config, { storage: fakeStorage(), providers: [broken] }), null);
 });
 
-test("on the practice chain a remembered practice account reconnects through the chain's own accounts", async () => {
+test("on the local testnet a remembered testnet account reconnects through the chain's own accounts", async () => {
   const config = { chainId: 31337, rpc: "http://127.0.0.1:8545" };
   const fetchImpl = rpcFetch({ eth_accounts: [A, B] });
   const s = fakeStorage();
@@ -79,7 +79,7 @@ test("on the practice chain a remembered practice account reconnects through the
   assert.equal(hit.session.address, B);
   assert.equal(await silentReconnect(config, { storage: fakeStorage(), providers: [], fetchImpl }), null, "nothing remembered: nothing assumed");
   assert.deepEqual(await practiceAccounts(config, fetchImpl), [A, B]);
-  assert.deepEqual(await practiceAccounts({ chainId: 11155111, rpc: "/local/rpc" }, fetchImpl), [], "only the practice chain has unlocked accounts");
+  assert.deepEqual(await practiceAccounts({ chainId: 11155111, rpc: "/local/rpc" }, fetchImpl), [], "only the local testnet has unlocked accounts");
 });
 
 test("a prompted login remembers the address it connected", async () => {

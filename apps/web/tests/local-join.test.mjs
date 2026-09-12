@@ -255,7 +255,7 @@ test("joinReadiness is ready only when every step is met", () => {
   assert.deepEqual(joinReadiness(READY), { ready: true, sentence: "Ready. Your wallet will ask you to confirm one transaction." });
 });
 test("joinReadiness names the missing onboarding contract before anything else", () => {
-  assert.match(joinReadiness({ ...READY, onboardingPresent: false, connected: false }).sentence, /no onboarding contract yet/);
+  assert.match(joinReadiness({ ...READY, onboardingPresent: false, connected: false }).sentence, /business sign-up/);
 });
 test("joinReadiness asks for a wallet, then refuses a second business, then the name rules", () => {
   assert.match(joinReadiness({ ...READY, connected: false }).sentence, /Connect a wallet first/);

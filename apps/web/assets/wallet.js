@@ -30,7 +30,7 @@ export const SEPOLIA_CHAIN_ID = 11155111;
 /** The network as a person sees it. No chain id is shown outside a "details" disclosure. */
 export function networkName(chainId) {
   const id = Number(chainId);
-  if (id === LOCAL_CHAIN_ID) return "Local practice network";
+  if (id === LOCAL_CHAIN_ID) return "Local testnet";
   if (id === SEPOLIA_CHAIN_ID) return "Sepolia test network";
   if (id === 84532) return "Base Sepolia test network";
   if (id === 421614) return "Arbitrum Sepolia test network";
@@ -45,7 +45,7 @@ export function isPracticeNetwork(chainId) {
   return Number(chainId) !== 1;
 }
 
-export const PRACTICE_MODE_LABEL = "Practice mode, test money only";
+export const PRACTICE_MODE_LABEL = "Testnet. No real money.";
 
 export function toHexChainId(chainId) {
   return "0x" + Number(chainId).toString(16);
@@ -70,7 +70,7 @@ export function fromHexChainId(hex) {
  *   { kind: "injected" }                          use the wallet as is
  *   { kind: "switch", from, to, sentence }        ask the wallet to switch; `sentence` is what the
  *                                                 screen says if the wallet declines
- *   { kind: "local", sentence }                   no wallet, local practice network: use the
+ *   { kind: "local", sentence }                   no wallet, local testnet: use the
  *                                                 chain's own unlocked account
  *   { kind: "blocked", sentence }                 nothing can send; `sentence` says why in plain words
  */
@@ -92,7 +92,7 @@ export function chooseProvider(state = {}) {
   if (configured === LOCAL_CHAIN_ID) {
     return {
       kind: "local",
-      sentence: "No wallet was found in this browser, so the local practice network's own test account will be used. Nothing here has value.",
+      sentence: "No wallet was found in this browser, so the local testnet's own test account will be used. Nothing here has value.",
     };
   }
   return {
@@ -245,7 +245,7 @@ export async function waitForReceipt(session, hash, { intervalMs = 500, timeoutM
  *
  *   config    { rpc, chainId }  from /local/config.json
  *   providers the list `discoverProviders` returned
- *   localFrom the address to use on the local practice network (the demo record's payer, or ?as=)
+ *   localFrom the address to use on the local testnet (the demo record's payer, or ?as=)
  *
  * Resolves { session } or { blocked: sentence }. Every branch that stops says why.
  */
@@ -277,9 +277,9 @@ export async function connectWallet({ config, providers, localFrom = null, prefe
     return { session: makeSession({ kind: "injected", address, chainId, provider: picked.provider, rpc: config.rpc ?? null, fetchImpl }), wallet: picked.info };
   }
 
-  // Local practice network, no wallet: the chain's own unlocked accounts.
+  // Local testnet, no wallet: the chain's own unlocked accounts.
   const accounts = await rpcRequest(config.rpc, "eth_accounts", [], fetchImpl);
   const address = localFrom ?? accounts?.[0] ?? null;
-  if (!address) return { blocked: "The local practice network reported no account to use." };
-  return { session: makeSession({ kind: "local", address, chainId: config.chainId, rpc: config.rpc, fetchImpl }), wallet: { name: "Local practice account", rdns: "" }, note: verdict.sentence };
+  if (!address) return { blocked: "The local testnet reported no account to use." };
+  return { session: makeSession({ kind: "local", address, chainId: config.chainId, rpc: config.rpc, fetchImpl }), wallet: { name: "Local testnet account", rdns: "" }, note: verdict.sentence };
 }

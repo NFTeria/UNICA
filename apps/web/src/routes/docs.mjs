@@ -44,13 +44,13 @@ export const DOCS = [
     h1: "Supported assets",
     title: "Supported assets — UNICA",
     description:
-      "The current demo accepts native ETH and pays one configured currency. Both are enforced in the contracts, not in the interface.",
+      "The current release accepts native ETH and pays one configured currency. Both are enforced in the contracts, not in the interface.",
     ogTitle: "What UNICA accepts",
     ogDescription: "Native ETH in, one configured payout out.",
     ogImage: "og-docs.svg",
     body: h`
 <section${P("accepts")}>
-  <h2>Current settlement demo</h2>
+  <h2>Current settlement</h2>
   <p>Pay with native ETH. The merchant receives the configured payout currency.</p>
   ${C.v3Disclosure()}
 </section>
@@ -83,7 +83,7 @@ export const DOCS = [
 </section>
 <section>
   <h2>Chain ${EXPERIMENT.chainId} <span class="tag">testnet experiment</span></h2>
-  <p>${EXPERIMENT.chainName} is researched and probed. <strong>The current demo does not support it</strong>
+  <p>${EXPERIMENT.chainName} is researched and probed. <strong>The current release does not support it</strong>
   and no UNICA contract is deployed there.</p>
 </section>`,
   },
@@ -123,7 +123,7 @@ export const DOCS = [
     ogImage: "og-docs.svg",
     body: h`
 <section${P("inventory")}>
-  <h2>What this demo pays through</h2>
+  <h2>What this release pays through</h2>
   ${C.v3PinsTable()}
   <p class="sub"><span${P("pin-chainid")}>Chain ${V3.chainId}</span> ·
   <span${P("pin-hook")}>hook ${hex(V3.hook, "hook address")}</span> ·
@@ -158,7 +158,7 @@ export const DOCS = [
     ogImage: "og-docs.svg",
     body: h`
 <table class="pins"><caption>Current state</caption><tbody>
-  <tr><th scope="row">Current settlement demo</th><td>Live on ${V3.chainName}</td></tr>
+  <tr><th scope="row">Current settlement</th><td>Live on ${V3.chainName}</td></tr>
   <tr><th scope="row">Robinhood experiment</th><td>Local only. Nothing deployed to chain ${EXPERIMENT.chainId}</td></tr>
   <tr><th scope="row">Hosted Confidential Workflows</th><td>Applied for, under review. Not granted</td></tr>
   <tr><th scope="row">CRE local simulator</th><td>Available and exercised locally</td></tr>

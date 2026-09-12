@@ -79,13 +79,13 @@ export const MAINNET_ENVIRONMENT = "PUBLIC_MAINNET";
 export const LOCAL_CHAIN_ID = 31337;
 export const SEPOLIA_CHAIN_ID = 11155111;
 
-export const NO_VALUE_BANNER = "TESTNET / NO VALUE";
+export const NO_VALUE_BANNER = "Testnet · no real money";
 
 /**
  * Decide what this build may call the chain it is pointed at.
  *
  * The rule is deliberately asymmetric. A testnet label costs nothing if it is wrong; a mainnet
- * label on a practice chain invites somebody to send real money to a fixture. So "mainnet" is
+ * label on a local testnet invites somebody to send real money to a fixture. So "mainnet" is
  * granted only when the manifest itself declares the environment PUBLIC_MAINNET, and a build on
  * 31337 or 11155111 shows the no-value banner no matter what any other field claims.
  *
@@ -100,7 +100,7 @@ export function validateEnvironment(manifest = {}) {
     return {
       mainnet: false,
       banner: NO_VALUE_BANNER,
-      networkName: chainId === LOCAL_CHAIN_ID ? "Local practice network" : "Sepolia test network",
+      networkName: chainId === LOCAL_CHAIN_ID ? "Local testnet" : "Sepolia test network",
       reason: "This network is a test network. Nothing on it has value.",
     };
   }

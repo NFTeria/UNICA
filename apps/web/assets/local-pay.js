@@ -15,7 +15,7 @@
  * build emits, assets included.
  *
  * SENDING GOES THROUGH apps/web/assets/wallet.js. A browser wallet, when one is installed, signs in
- * its own extension; on the local practice network with no wallet, the chain's own already-unlocked
+ * its own extension; on the local testnet with no wallet, the chain's own already-unlocked
  * account executes `eth_sendTransaction({from})` with no key anywhere. This file never sees either.
  *
  * THE PAID RULE IS NOT REIMPLEMENTED HERE. `paymentStatus`, `canAuthorizePayment` and
@@ -29,7 +29,7 @@
  * specifier resolves the same way under `node --test` and in a browser.
  *
  * WORDS ON SCREEN. A customer reads "business", "pay name", "register", "sale", "amount you pay",
- * "they receive", "Local practice network". Contract names, calldata and hex stay out of the page
+ * "they receive", "Local testnet". Contract names, calldata and hex stay out of the page
  * except inside a "Details" disclosure.
  */
 import { canAuthorizePayment, canInitiateSale, paymentStatus } from "../../../tools/unica-pos-cli/render.mjs";
@@ -41,7 +41,7 @@ import { ASSET_STATUS, assetLabel, assetMenu, chooseSettlementRoute, formatAmoun
 // ---- labels ---------------------------------------------------------------------------------------
 
 /** The practice-mode words, from the business-language dictionary. */
-export const TEST_MODE_LABEL = "Practice mode";
+export const TEST_MODE_LABEL = "Testnet";
 export const NO_VALUE_LABEL = PRACTICE_MODE_LABEL;
 export { PRACTICE_MODE_LABEL };
 
@@ -250,7 +250,7 @@ export function renderTermsText(record) {
 if (typeof document !== "undefined" && document.getElementById("checkout")) {
   main().catch((e) => {
     const wallet = document.getElementById("wallet");
-    if (wallet) wallet.textContent = `The local practice server could not be reached: ${e.message}`;
+    if (wallet) wallet.textContent = `The companion could not be reached: ${e.message}`;
   });
 }
 
@@ -276,7 +276,7 @@ async function main() {
   });
 
   say("terms", record
-    ? "Sale read from the local practice server."
+    ? "Sale read from the network."
     : "The local practice server is running, but no sale has been recorded yet. Run: make anvil-demo");
   if (record) {
     show("order-terms");
