@@ -95,8 +95,8 @@ async function main() {
   const banner = document.getElementById("env-banner");
   if (banner) {
     banner.textContent = environment.banner
-      ? `${environment.banner} — ${environment.networkName}. ${environment.reason}`
-      : `${environment.networkName}. ${environment.reason}`;
+      ? `${environment.banner} · ${environment.networkName}`
+      : `${environment.networkName}`;
   }
   fillAdvanced(config);
 

@@ -39,8 +39,7 @@ export const BUILT_FOR_MAINNET = BUILD_ENVIRONMENT === MAINNET_ENVIRONMENT;
 
 const envBar = BUILT_FOR_MAINNET
   ? ""
-  : `<p class="envbar" id="env-banner" role="note"><strong>${esc(NO_VALUE_BANNER)}</strong> —
-this is a test network. Nothing here is real money.</p>`;
+  : `<p class="envbar" id="env-banner" role="note"><strong>${esc(NO_VALUE_BANNER)}</strong></p>`;
 
 /** Relative prefix from a route's own depth, so nothing depends on the deployment's base path. */
 export function prefixFor(routePath) {

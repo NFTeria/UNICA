@@ -101,7 +101,7 @@ export function validateEnvironment(manifest = {}) {
       mainnet: false,
       banner: NO_VALUE_BANNER,
       networkName: chainId === LOCAL_CHAIN_ID ? "Local testnet" : "Sepolia test network",
-      reason: "This network is a test network. Nothing on it has value.",
+      reason: "",
     };
   }
   if (environment === MAINNET_ENVIRONMENT) {
