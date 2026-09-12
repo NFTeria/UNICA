@@ -167,15 +167,14 @@ contract UnicaMarketHook is BaseHook, IUnicaMarketHook {
         bool assetIsCurrency0 = asset_ < payout_;
         ASSET_IS_CURRENCY0 = assetIsCurrency0;
         (address currency0, address currency1) = assetIsCurrency0 ? (asset_, payout_) : (payout_, asset_);
-        POOL_ID = PoolId.unwrap(
-            PoolKey({
-                currency0: Currency.wrap(currency0),
-                currency1: Currency.wrap(currency1),
-                fee: fee_,
-                tickSpacing: tickSpacing_,
-                hooks: IHooks(address(this))
-            }).toId()
-        );
+        PoolKey memory poolKey = PoolKey({
+            currency0: Currency.wrap(currency0),
+            currency1: Currency.wrap(currency1),
+            fee: fee_,
+            tickSpacing: tickSpacing_,
+            hooks: IHooks(address(this))
+        });
+        POOL_ID = PoolId.unwrap(poolKey.toId());
 
         REQUIRE_ORACLE = IUnicaMarketRegistry(registry_).REQUIRE_ORACLE();
         EXECUTOR =
@@ -357,7 +356,7 @@ contract UnicaMarketHook is BaseHook, IUnicaMarketHook {
 
     /// @dev The mark, the count and the sixteen fields, last, after every check has passed.
     function _emitReceipt(ReceiptData memory receipt) private {
-        _markSwapped(receipt.orderId);
+        
         unchecked {
             ++receiptCount;
         }

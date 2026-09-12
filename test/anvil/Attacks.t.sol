@@ -483,20 +483,15 @@ contract AttacksTest is Test {
         asset.approve(address(swapRouter), type(uint256).max);
         PoolKey memory k = factory.poolKeyOf(marketId);
         bool zeroForOne = address(asset) < address(payout);
+        SwapParams memory params = SwapParams({
+            zeroForOne: zeroForOne,
+            amountSpecified: -int256(1e16),
+            sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+        PoolSwapTest.TestSettings memory settings =
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
         (bool ok, bytes memory data) = address(swapRouter)
-            .call(
-                abi.encodeWithSelector(
-                    swapRouter.swap.selector,
-                    k,
-                    SwapParams({
-                    zeroForOne: zeroForOne,
-                    amountSpecified: -int256(1e16),
-                    sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
-                }),
-                    PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
-                    abi.encode(bytes32(0))
-                )
-            );
+            .call(abi.encodeWithSelector(swapRouter.swap.selector, k, params, settings, abi.encode(bytes32(0))));
         vm.stopPrank();
         assertFalse(ok, "a swap that did not come from the executor must be refused");
         assertEq(bytes4(data), WRAPPED_ERROR);
