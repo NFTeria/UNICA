@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 import { encodeCall, selectorOf, topicOf } from "../assets/abi.js";
+import { fromBaseUnits } from "../assets/product.js";
 import { INTEGRATIONS, contrastRatio, hexToRgb, rgbToHex } from "../assets/brand.js";
 import {
   ENTRY_MAX_DIGITS,
@@ -141,6 +142,10 @@ test("a quick-pick fills the amount with the item's own price", () => {
   assert.equal(entry.text, "1.80");
   assert.equal(entry.exactUnits, 1800000n);
   assert.equal(entryToBaseUnits(entry.digits, 6, 2), 1800000n, "what the keypad now holds is the same amount");
+  // The width is the till's, not the number's: a price that loses its trailing zero across a
+  // counter looks like a different price. Seen on the running screen as 1.8 before it was fixed.
+  assert.equal(entry.text, formatEntry(entry.digits, 2));
+  assert.notEqual(entry.text, fromBaseUnits(1800000n, 6));
 });
 
 test("a price the keypad cannot express is shown exactly and not rounded to fit", () => {
@@ -299,6 +304,18 @@ test("the text this screen adds clears 4.5:1 in both schemes, computed rather th
     const muted = mix(ink, paper, 0.66);
     assert.ok(contrastRatio(ink, surface) >= 4.5, `${name}: the link text is ${contrastRatio(ink, surface).toFixed(2)}:1`);
     assert.ok(contrastRatio(muted, paper) >= 4.5, `${name}: the integration name is ${contrastRatio(muted, paper).toFixed(2)}:1`);
+  }
+});
+
+test("a key's own edge clears the 3:1 a control's boundary needs, in both schemes", () => {
+  const css = readFileSync(join(APP, "assets", "screens", "pos.css"), "utf8");
+  assert.match(css, /\.pos \.keypad \.key\s*\{[^}]*border-color:\s*var\(--muted\)/);
+  for (const { name, ink, paper } of SCHEMES) {
+    const muted = mix(ink, paper, 0.66);
+    const line = mix(ink, paper, 0.14);
+    assert.ok(contrastRatio(muted, paper) >= 3, `${name}: a key's edge is ${contrastRatio(muted, paper).toFixed(2)}:1`);
+    // ...and the quieter neutral it replaced would NOT have cleared it, which is why it was replaced.
+    assert.ok(contrastRatio(line, paper) < 3, `${name}: the quiet rule would have passed, so this says nothing`);
   }
 });
 
