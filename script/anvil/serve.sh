@@ -140,6 +140,33 @@ function assetsFrom(manifest, tokenLabels = {}) {
   return out;
 }
 
+// What a wallet on this network may hold, as far as this deployment knows: the two payment assets
+// plus every address the manifest lists under `knownTokens`. The same rule 1 applies — a symbol
+// or a decimal count is never invented — and an address that appears twice is listed once. The
+// list is what the app KNOWS, never what the wallet has: a token the manifest does not name is
+// invisible here, and the dashboard says so instead of pretending to be an indexer.
+function holdingsFrom(manifest, tokenLabels = {}) {
+  const seen = new Set();
+  const out = [];
+  const add = (address, role) => {
+    if (!address) return;
+    const key = String(address).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    const label = tokenLabels[key] ?? {};
+    out.push({
+      role,
+      address,
+      symbol: label.symbol ?? null,
+      decimals: label.decimals === undefined || label.decimals === null ? null : Number(label.decimals),
+      labelled: Boolean(label.symbol) && label.decimals !== undefined && label.decimals !== null,
+    });
+  };
+  for (const a of assetsFrom(manifest, tokenLabels)) add(a.address, a.role);
+  for (const t of Array.isArray(manifest?.knownTokens) ? manifest.knownTokens : []) add(t?.address ?? null, "known");
+  return out;
+}
+
 const MARKET_STATUS_ACTIVE = 4;
 
 function marketPairFrom(manifest) {
@@ -166,6 +193,7 @@ function runtimeConfig(manifest, record, rpc, tokenLabels = {}) {
     manifest,
     record,
     assets: assetsFrom(manifest, tokenLabels),
+    holdings: holdingsFrom(manifest, tokenLabels),
     marketPair: marketPairFrom(manifest),
     contracts: {
       directSettlement: contracts.directSettlement?.address ?? null,
@@ -242,6 +270,10 @@ async function readTokenLabels(manifest) {
     const address = contracts[key]?.address;
     if (!address) continue;
     labels[String(address).toLowerCase()] = await readTokenLabel(address);
+  }
+  for (const t of Array.isArray(manifest?.knownTokens) ? manifest.knownTokens : []) {
+    if (!t?.address) continue;
+    labels[String(t.address).toLowerCase()] = await readTokenLabel(t.address);
   }
   return labels;
 }

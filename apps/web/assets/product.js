@@ -459,3 +459,33 @@ export function assetLabel(asset) {
   const a = String(asset?.address ?? "");
   return a.length > 14 ? `${a.slice(0, 8)}…${a.slice(-4)}` : a || "Unnamed asset";
 }
+
+// ---- what a wallet holds ---------------------------------------------------------------------------
+
+/**
+ * One row per asset this deployment knows, with the amount the wallet holds when it was read.
+ * `balances` is keyed by lowercase address and holds base units as a decimal string or bigint; an
+ * asset with no entry is "not read yet", never zero, because an unread balance and an empty one
+ * look the same on a screen and mean different things to a business owner.
+ */
+export function holdingsRows(config = {}, balances = {}) {
+  const list = Array.isArray(config.holdings) ? config.holdings : [];
+  return list.map((h) => {
+    const key = String(h.address ?? "").toLowerCase();
+    const units = balances[key];
+    const labelled = Boolean(h.symbol) && h.decimals !== null && h.decimals !== undefined;
+    if (!labelled) {
+      return { ...h, amount: null, text: "Could not be read", why: "This asset did not answer with its own name and precision, so no amount is shown for it." };
+    }
+    if (units === undefined || units === null) {
+      return { ...h, amount: null, text: "Not read yet", why: "The amount for this asset has not been read from the network." };
+    }
+    const amount = BigInt(units);
+    let why;
+    if (amount === 0n) why = "Nothing held right now.";
+    else if (h.role === "payout") why = "The asset your business receives.";
+    else if (h.role === "customer") why = "An asset your customers can pay with.";
+    else why = "Held in this wallet.";
+    return { ...h, amount: amount.toString(), text: formatAsset(amount, h), why };
+  });
+}

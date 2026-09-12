@@ -27,6 +27,8 @@ import {
 import { fillAdvanced, loadConfig, say, shortId } from "./local.js";
 import { listRegisters, registerStatusText, revokeRegisterOnChain } from "./local-join.js";
 import { connectWallet, discoverProviders, rpcRequest } from "./wallet.js";
+import { holdingsRows } from "./product.js";
+import { encodeCall } from "./abi.js";
 
 // ---- a read-only view of the chain, with no wallet and no ability to send -----------------------
 // A dashboard should render for somebody who has not connected anything. This object exposes the
@@ -102,6 +104,8 @@ async function main() {
     : "No pay name has been resolved on this setup yet.");
 
   renderAssets(config);
+  await renderHoldings(config, readOnlySession(config), record?.merchant?.address ?? null);
+  wireHoldingsConnect(config);
   renderToday(config, record);
   fillAdvanced(config, {
     order: record?.order?.id ?? null,
@@ -113,6 +117,71 @@ async function main() {
 
   const registers = await renderRegisters(config, record);
   wireRevoke(config, record, registers);
+}
+
+// What the wallet holds: one network read per asset this deployment knows, for the payout wallet
+// by default and for a connected wallet on request. A read that fails leaves that asset "not read
+// yet" rather than showing zero, and the sentence under the list says how many assets were asked
+// and that unknown assets are not shown. Nothing here sends anything.
+async function renderHoldings(config, session, owner) {
+  const list = document.getElementById("holdings-list");
+  if (!list) return;
+  const holdings = Array.isArray(config.holdings) ? config.holdings : [];
+  if (!owner) {
+    say("holdings-said", "No wallet to read yet: this business has no payout wallet on record. Connect a wallet to read that one.");
+    return;
+  }
+  say("holdings-said", `Reading ${holdings.length} asset${holdings.length === 1 ? "" : "s"} for ${shortId(owner)}...`);
+  const balances = {};
+  for (const h of holdings) {
+    try {
+      const hex = await session.call({ to: h.address, data: encodeCall("balanceOf(address)", [owner]) });
+      balances[String(h.address).toLowerCase()] = BigInt(hex).toString();
+    } catch {
+      // left unread: the row says "Not read yet" instead of a guessed zero
+    }
+  }
+  const rows = holdingsRows(config, balances);
+  list.innerHTML = "";
+  for (const r of rows) {
+    const li = document.createElement("li");
+    const sym = document.createElement("span");
+    sym.className = "sym";
+    sym.textContent = r.symbol ?? "Unnamed asset";
+    const amount = document.createElement("span");
+    amount.className = "availability";
+    amount.dataset.status = r.amount === null ? "unavailable" : "available";
+    amount.textContent = r.text;
+    const why = document.createElement("span");
+    why.className = "why";
+    why.textContent = r.why;
+    li.append(sym, amount, why);
+    list.appendChild(li);
+  }
+  const read = rows.filter((r) => r.amount !== null).length;
+  say("holdings-said", `${rows.length} asset${rows.length === 1 ? "" : "s"} this app knows on this network, ${read} read for ${shortId(owner)}. An asset this app does not know is not shown.`);
+}
+
+function wireHoldingsConnect(config) {
+  const button = document.getElementById("holdings-connect");
+  if (!button) return;
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      say("holdings-said", "Looking for a wallet in this browser...");
+      const providers = await discoverProviders(window);
+      const result = await connectWallet({ config, providers });
+      if (result.blocked) {
+        say("holdings-said", result.blocked);
+        return;
+      }
+      await renderHoldings(config, result.session, result.session.address);
+    } catch (e) {
+      say("holdings-said", `Could not read that wallet: ${e.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  });
 }
 
 // The payout asset's address, remembered between the two renderers so an amount can be shown at

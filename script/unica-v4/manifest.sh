@@ -71,6 +71,7 @@ const manifest = {
     assetDecimals: m.assetDecimals, payoutDecimals: m.payoutDecimals, assetIsCurrency0: m.assetIsCurrency0,
   },
   accounts: {admin: env.UNICA_ADMIN, pauser: env.UNICA_PAUSER || null, deployer: env.DEPLOYER},
+  knownTokens: (env.UNICA_KNOWN_TOKENS || "").split(",").map((a) => a.trim()).filter(Boolean).map((address) => ({address, note: "named in the config as an asset a wallet on this chain may hold; symbol and decimals are read live by whoever displays it"})),
   identity: env.UNICA_IDENTITY_AUTHORITY ? {authority: env.UNICA_IDENTITY_AUTHORITY, authorityKind: env.UNICA_ENSV2_RESOLVER ? "EnsV2ResolverAuthority over the chain's ENSv2 permissioned resolver" : "pinned", ensV2Resolver: env.UNICA_ENSV2_RESOLVER || null, ensDeploymentId: env.UNICA_ENS_DEPLOYMENT_ID || null, terminalAdmission: env.UNICA_ADMISSION || null, identityToken: env.UNICA_IDENTITY_TOKEN || null, rendererVersion: env.UNICA_RENDERER_VERSION || null, terminalStatusKey: env.UNICA_TERMINAL_STATUS_KEY || null} : {note: "no identity authority configured; terminal admission is not deployed on this chain"},
   policy: env.UNICA_FORWARDER ? {forwarder: env.UNICA_FORWARDER, receiver: env.UNICA_POLICY_RECEIVER || null, workflowId: env.UNICA_WORKFLOW_ID || null} : {note: "no confidential-policy receiver configured on this chain"},
 };

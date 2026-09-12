@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  holdingsRows,
   ASSET_STATUS,
   ASSET_STATUS_TEXT,
   LANGUAGE,
@@ -296,4 +297,29 @@ test("a hyphenated label becomes the name on the shop sign", () => {
 test("a register is named as its owner named it", () => {
   assert.equal(registerDisplayName("chair-1.terminals.freshcuts.unica.eth"), "chair-1");
   assert.equal(registerDisplayName(null), "Unnamed register");
+});
+
+test("holdings rows: unread is never zero, unlabelled never shows an amount, and a read amount is formatted at the asset's own precision", () => {
+  const config = {
+    holdings: [
+      { role: "payout", address: "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", symbol: "uUSD", decimals: 6, labelled: true },
+      { role: "customer", address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", symbol: "tAST", decimals: 18, labelled: true },
+      { role: "known", address: "0xcccccccccccccccccccccccccccccccccccccccc", symbol: null, decimals: null, labelled: false },
+      { role: "known", address: "0xdddddddddddddddddddddddddddddddddddddddd", symbol: "PLTR", decimals: 18, labelled: true },
+    ],
+  };
+  const rows = holdingsRows(config, {
+    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "2500000",
+    "0xcccccccccccccccccccccccccccccccccccccccc": "1",
+    "0xdddddddddddddddddddddddddddddddddddddddd": 0n,
+  });
+  assert.equal(rows[0].text, "2.5 uUSD");
+  assert.equal(rows[0].why, "The asset your business receives.");
+  assert.equal(rows[1].text, "Not read yet");
+  assert.equal(rows[1].amount, null);
+  assert.equal(rows[2].text, "Could not be read");
+  assert.equal(rows[2].amount, null);
+  assert.equal(rows[3].text, "0 PLTR");
+  assert.equal(rows[3].why, "Nothing held right now.");
+  assert.deepEqual(holdingsRows({}, {}), []);
 });

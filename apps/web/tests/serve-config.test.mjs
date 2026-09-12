@@ -170,3 +170,27 @@ test("the runtime manifest on this machine, if there is one, is served verbatim"
   assert.equal(c.contracts.executor, runtimeManifest.contracts?.executor?.address ?? null);
   assert.equal(c.marketPair?.marketId ?? null, runtimeManifest.market?.marketId ?? null);
 });
+
+test("holdings are the two payment assets plus every known token, each listed once, labelled only when read", () => {
+  const A = "0x000000000000000000000000000000000000000a";
+  const B = "0x000000000000000000000000000000000000000b";
+  const K = "0x000000000000000000000000000000000000000c";
+  const c = runtimeConfig(
+    { contracts: { payoutToken: { address: A }, assetToken: { address: B } }, knownTokens: [{ address: K }, { address: A.toUpperCase().replace("0X", "0x") }] },
+    null,
+    "http://127.0.0.1:8545",
+    { [A]: { symbol: "uUSD", decimals: 6 }, [B]: { symbol: "tAST", decimals: 18 } },
+  );
+  assert.deepEqual(c.holdings.map((h) => [h.role, h.address.toLowerCase(), h.symbol, h.labelled]), [
+    ["payout", A, "uUSD", true],
+    ["customer", B, "tAST", true],
+    ["known", K, null, false],
+  ]);
+});
+
+test("a manifest without known tokens serves the two payment assets as holdings and nothing invented", () => {
+  const A = "0x000000000000000000000000000000000000000a";
+  const c = runtimeConfig({ contracts: { payoutToken: { address: A } } }, null, "http://127.0.0.1:8545", {});
+  assert.deepEqual(c.holdings.map((h) => [h.role, h.symbol]), [["payout", null]]);
+  assert.deepEqual(runtimeConfig({}, null, "http://127.0.0.1:8545").holdings, []);
+});
