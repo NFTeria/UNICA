@@ -54,7 +54,12 @@ CONFIG=${CONFIG:-config/unica-v4/$chain.env}
 test -f "$CONFIG" || fail "no configuration at $CONFIG (copy config/unica-v4/example.env and fill every value)"
 # The one URL a configuration may carry is the badge's verification page; everything else that looks
 # like an endpoint or a key is refused, because an RPC URL carries its credential in the path.
-grep -vE '^UNICA_EXTERNAL_URL_BASE=' "$CONFIG" | grep -qiE 'https?://|(API|PRIVATE|SECRET)_?KEY|MNEMONIC|SEED_PHRASE' && fail "the configuration carries a URL or a key-shaped value; it must carry neither"
+# Three public, credential-free URLs are allowed by name: the badge page and the chain's explorer (API and UI).
+# Everything else that looks like an endpoint or a key is refused, because an RPC URL carries its credential in
+# the path. The scan reads a variable, not a pipe: under pipefail a `grep -q` that exits early can hand the
+# producer SIGPIPE and turn a MATCH into a non-zero pipeline that never reaches `fail`.
+scanned=$(grep -vE '^UNICA_(EXTERNAL_URL_BASE|EXPLORER_API|EXPLORER_URL)=' "$CONFIG" || true)
+if grep -qiE 'https?://|(API|PRIVATE|SECRET)_?KEY|MNEMONIC|SEED_PHRASE' <<<"$scanned"; then fail "the configuration carries a URL or a key-shaped value; it must carry neither"; fi
 set -a; . "$CONFIG"; set +a
 test "${UNICA_CHAIN_ID:-}" = "$chain" || fail "the configuration says chain ${UNICA_CHAIN_ID:-?}, the endpoint says $chain"
 test -n "${DEPLOYER:-}" || fail "DEPLOYER (the public address that will sign) is not set in $CONFIG"
