@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm ci",
+  "buildCommand": "node apps/web/build.mjs",
+  "outputDirectory": "apps/web/out",
+  "functions": {
+    "api/local.mjs": {
+      "includeFiles": "{deployments/**/*.json,tools/**,web/ensv2/keccak.mjs,script/anvil/companion.mjs}"
+    }
+  },
+  "rewrites": [
+    { "source": "/local", "destination": "/api/local?__companionPath=/local" },
+    { "source": "/local/:path*", "destination": "/api/local?__companionPath=/local/:path*" },
+    {
+      "source": "/tools/unica-pos-cli/render.mjs",
+      "destination": "/api/local?__companionPath=/tools/unica-pos-cli/render.mjs"
+    },
+    { "source": "/web/ensv2/keccak.mjs", "destination": "/api/local?__companionPath=/web/ensv2/keccak.mjs" }
+  ]
+}

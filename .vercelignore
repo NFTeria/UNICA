@@ -1,0 +1,30 @@
+# .vercelignore — what never leaves this machine for the host.
+#
+# The upload is the repository minus everything the build and the one function do not need. Each
+# line below is either large, machine-local, or a record of something that already happened and has
+# no business being republished.
+
+# The Solidity toolchain, vendored as git submodules. Hundreds of megabytes, and the deployment
+# needs none of it: the screens are built from apps/web, and the companion reads recorded JSON.
+lib/
+
+# Subgraph and integration installs. The build runs npm ci at the root; these are somebody else's
+# node_modules and are never imported by the function.
+integrations/**/node_modules/
+node_modules/
+
+# Rehearsal output: what a practice run on this laptop produced. Local by definition.
+.rehearsal/
+
+# Broadcast records and the Foundry cache. Both are artifacts of running a chain from here.
+broadcast/
+/cache/
+/out/
+
+# Local build output of the screens; the host produces its own with the build command.
+apps/web/out/
+
+# Never uploaded, whatever else changes: the local harness and anything secret-shaped.
+.claude/
+.env
+.env.*
