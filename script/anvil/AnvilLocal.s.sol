@@ -47,7 +47,7 @@ interface IIdentityToken {
 /// @notice LOCAL_ANVIL_NO_VALUE. Every entry point refuses any chain but 31337, so this file cannot
 ///         reach a public network by accident. Accounts are Anvil's default unlocked accounts,
 ///         handed in by address through the environment (`script/anvil/env.sh`) and impersonated
-///         with `--unlocked`; no key material exists anywhere in this repository.
+///         with `--unlocked`; nothing in this repository signs.
 ///
 ///         Three entry points, one per `make anvil-*` stage, so a stage can be re-run and inspected:
 ///           deploy() — Uniswap's OFFICIAL PoolManager bytecode, two test tokens, the fixture price

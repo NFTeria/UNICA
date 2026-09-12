@@ -12,7 +12,7 @@ import {UnicaMarketTypes} from "../UnicaMarketTypes.sol";
 ///         this file never opens — only the two verified signatures, `onReport(bytes,bytes)` and
 ///         `supportsInterface(bytes4)`, are reproduced, per D4's independently-derived interface id).
 ///         Nothing in this repository has deployed a `KeystoneForwarder`, run a CRE workflow, or
-///         received a DON-signed report; `docs/unica-v5/chainlink/SIMULATION-VS-DON.md` §2-§3 states
+///         received a DON-signed report (it has NOT); `docs/unica-v5/chainlink/SIMULATION-VS-DON.md` §2-§3 states
 ///         exactly which of the six rungs between "compiles locally" and "a live DON delivers this"
 ///         this tree has climbed (none, for this subject). This contract is exercised in this
 ///         repository only against `LocalKeystoneForwarderFixture` and `LocalCreReportFixture` —
