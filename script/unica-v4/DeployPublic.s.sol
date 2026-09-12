@@ -266,7 +266,25 @@ contract DeployPublic is Script {
         );
         console.log(string.concat("hook code hash   ", vm.toString(keccak256(type(UnicaMarketHook).creationCode))));
         console.log(string.concat("forwarder        ", vm.toString(c.forwarder)));
-        console.log(string.concat("identity auth.   ", vm.toString(c.identityAuthority)));
+        console.log(
+            string.concat(
+                "identity auth.   ", vm.toString(c.identityAuthority), " (zero = stage A deploys the adapter)"
+            )
+        );
+        if (c.ensV2Resolver != address(0) && c.ensV2Resolver.code.length == 0) {
+            revert NoCode("ENSv2 resolver", c.ensV2Resolver);
+        }
+        if (c.ensV2Resolver != address(0) && c.ensDeploymentId == bytes32(0)) {
+            revert MissingConfig("UNICA_ENS_DEPLOYMENT_ID");
+        }
+        console.log(
+            string.concat(
+                "ensv2 resolver   ",
+                vm.toString(c.ensV2Resolver),
+                c.ensV2Resolver == address(0) ? " (none: no terminal admission on this chain)" : " has code"
+            )
+        );
+        console.log(string.concat("ens deployment   ", vm.toString(c.ensDeploymentId)));
         console.log("preflight: go");
     }
 

@@ -29,6 +29,27 @@ test -n "$chain" || fail "the alias '$ALIAS' did not answer a chain id (is its v
 head=$(cast block-number --rpc-url "$ALIAS")
 echo "chain id $chain   head $head"
 
+# Stage outputs (STAGE_A:"factory":"0x…", …) are recorded INTO the configuration after a LIVE stage, so
+# the next stage, the readback and the manifest read the same file and nobody retypes an address. A key
+# already present with a different value stops the run: a second deployment must be a decision, never a
+# silent overwrite of the record of the first.
+record_outputs() { # $1 prefix, $2 log, then key=VAR pairs
+  local prefix=$1 log=$2; shift 2
+  local pair key var val
+  for pair in "$@"; do
+    key=${pair%%=*}; var=${pair##*=}
+    val=$(grep -o "$prefix:\"$key\":\"[^\"]*\"" "$log" | head -1 | sed 's/.*:"\([^"]*\)"$/\1/' || true)   # a missing key records nothing; pipefail must not abort AFTER a broadcast
+    [ -z "$val" ] || [ "$val" = "0x0000000000000000000000000000000000000000" ] && continue
+    if grep -qE "^$var=" "$CONFIG"; then
+      have=$(grep -E "^$var=" "$CONFIG" | head -1 | cut -d= -f2 | awk '{print $1}')
+      [ "$have" = "$val" ] || fail "$var is already $have in $CONFIG, the stage says $val; resolve that by hand before continuing"
+    else
+      printf '%s=%s   # recorded from stage %s at block %s\n' "$var" "$val" "$STAGE" "$head" >>"$CONFIG"
+      echo "recorded $var=$val into $CONFIG"
+    fi
+  done
+}
+
 CONFIG=${CONFIG:-config/unica-v4/$chain.env}
 test -f "$CONFIG" || fail "no configuration at $CONFIG (copy config/unica-v4/example.env and fill every value)"
 # The one URL a configuration may carry is the badge's verification page; everything else that looks
@@ -37,6 +58,8 @@ grep -vE '^UNICA_EXTERNAL_URL_BASE=' "$CONFIG" | grep -qiE 'https?://|(API|PRIVA
 set -a; . "$CONFIG"; set +a
 test "${UNICA_CHAIN_ID:-}" = "$chain" || fail "the configuration says chain ${UNICA_CHAIN_ID:-?}, the endpoint says $chain"
 test -n "${DEPLOYER:-}" || fail "DEPLOYER (the public address that will sign) is not set in $CONFIG"
+if [ "${UNICA_IS_MAINNET:-false}" = "true" ]; then echo "== MAINNET — REAL VALUE"; else echo "== TESTNET / NO VALUE (chain $chain)"; fi
+echo "deployer $DEPLOYER  balance $(cast balance "$DEPLOYER" --rpc-url "$ALIAS" --ether) ETH  nonce $(cast nonce "$DEPLOYER" --rpc-url "$ALIAS")"
 
 if [ "${UNICA_IS_MAINNET:-false}" = "true" ]; then
   test "${UNICA_MAINNET_ACK:-}" = "I_UNDERSTAND_THIS_IS_MAINNET" || fail "this is a MAINNET configuration; type UNICA_MAINNET_ACK=I_UNDERSTAND_THIS_IS_MAINNET on the command line to continue"
@@ -60,8 +83,20 @@ if [ "${LIVE_BROADCAST:-}" = "I_UNDERSTAND_THIS_SENDS_TRANSACTIONS" ] && [ "$STA
   test -n "${DEPLOYER_ACCOUNT:-}" || fail "LIVE needs DEPLOYER_ACCOUNT (a forge keystore account name)"
   sender=$DEPLOYER; [ "$STAGE" = "activate" ] && sender=$UNICA_ADMIN
   echo "== LIVE stage $STAGE on chain $chain as $sender (keystore '$DEPLOYER_ACCOUNT'; password prompt follows)"
+  mkdir -p .rehearsal/deploy-public
+  LIVE_LOG=.rehearsal/deploy-public/live-$chain-$STAGE-$head.log
   forge script script/unica-v4/DeployPublic.s.sol:DeployPublic --sig "$SIG" \
-    --rpc-url "$ALIAS" --fork-block-number "$head" --account "$DEPLOYER_ACCOUNT" --sender "$sender" --broadcast -vv
+    --rpc-url "$ALIAS" --fork-block-number "$head" --account "$DEPLOYER_ACCOUNT" --sender "$sender" --broadcast -vv 2>&1 | tee "$LIVE_LOG"
+  case "$STAGE" in
+    A) record_outputs STAGE_A "$LIVE_LOG" factory=UNICA_FACTORY registry=UNICA_REGISTRY oracleAdapter=UNICA_ORACLE_ADAPTER policyReceiver=UNICA_POLICY_RECEIVER \
+         identityAuthority=UNICA_IDENTITY_AUTHORITY terminalAdmission=UNICA_ADMISSION identityToken=UNICA_IDENTITY_TOKEN
+       echo "next: LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=$DEPLOYER_ACCOUNT $0 $ALIAS B" ;;
+    B) record_outputs STAGE_B "$LIVE_LOG" marketId=UNICA_MARKET_ID hook=UNICA_HOOK executor=UNICA_EXECUTOR
+       echo "next: LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=$DEPLOYER_ACCOUNT $0 $ALIAS C" ;;
+    C) echo "next: $0 $ALIAS readback   (compare status 3, slot0Tick == initTick, the three reverse maps), then"
+       echo "      LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=$DEPLOYER_ACCOUNT $0 $ALIAS activate" ;;
+    activate) echo "next: $0 $ALIAS readback, then bash script/unica-v4/manifest.sh $ALIAS $CONFIG" ;;
+  esac
 else
   echo "== DRY RUN stage $STAGE on chain $chain (simulation at block $head; nothing is signed or sent)"
   FOUNDRY_BROADCAST=.rehearsal/deploy-public forge script script/unica-v4/DeployPublic.s.sol:DeployPublic --sig "$SIG" \
