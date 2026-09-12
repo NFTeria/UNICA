@@ -234,7 +234,7 @@ test("the brand hex is kept wherever it can be seen, and moved only where it can
   for (const key of ["uniswap", "graph", "chainlink"]) {
     assert.equal(integrationMark(key, "light").colour, INTEGRATIONS[key].colour, `${key} should not have been moved`);
   }
-  for (const key of ["ens", "robinhood"]) {
+  for (const key of ["ens", "stock"]) {
     const mark = integrationMark(key, "light");
     assert.notEqual(mark.colour, INTEGRATIONS[key].colour, `${key} cannot be seen unmoved and must have been settled`);
     assert.ok(contrastRatio(INTEGRATIONS[key].colour, MARK_GROUND.light) < MARK_FLOOR, `${key} was moved for no reason`);

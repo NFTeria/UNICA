@@ -218,7 +218,8 @@ export function saleVerdict({ evidence = null, expired = false, txHash = null, t
  */
 export function integrationFor({ customerAsset = null, converts = false, chainId = null } = {}) {
   const declared = customerAsset?.kind === "stock" || customerAsset?.stock === true;
-  if (declared && Number(chainId) === ROBINHOOD_CHAIN_ID) return INTEGRATIONS.robinhood;
+  const onStockChain = Number(chainId) === ROBINHOOD_CHAIN_ID;
+  if (declared && onStockChain) return INTEGRATIONS.stock;
   if (converts) return INTEGRATIONS.uniswap;
   return null;
 }
@@ -273,7 +274,9 @@ export const ORDER_CREATED_DIRECT_SIGNATURE = "OrderCreated(bytes32,address,addr
  */
 export function gateFor(route, manifest = {}) {
   if (route?.kind === "direct") return manifest?.directSettlement?.gate ?? null;
-  if (route?.kind === "conversion") return manifest?.contracts?.terminalAdmission?.address ?? null;
+  // The everyday market gate is the ENS admission WITHOUT a policy receiver (as the public deployments run);
+  // the policy-gated instance exists for the rows that prove that layer and a cashier cannot feed it.
+  if (route?.kind === "conversion") return manifest?.contracts?.marketAdmission?.address ?? manifest?.contracts?.terminalAdmission?.address ?? null;
   return null;
 }
 
@@ -667,7 +670,16 @@ async function chargeNow() {
   }
 
   const quote = await priceThisSale(minOut);
-  const deadline = Math.floor(Date.now() / 1000) + PAYMENT_WINDOW_SECONDS;
+  // The deadline is the CHAIN's clock plus the window, never this browser's: the sale lives on the
+  // chain, and a local testnet's clock can sit hours from the wall clock.
+  let chainNow = Math.floor(Date.now() / 1000);
+  try {
+    const head = await till.session.request("eth_getBlockByNumber", ["latest", false]);
+    if (head?.timestamp) chainNow = Number(BigInt(head.timestamp));
+  } catch {
+    // the wall clock stands in when the chain does not answer
+  }
+  const deadline = chainNow + PAYMENT_WINDOW_SECONDS;
   const salt = "0x" + [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join("");
   const gate = gateFor(till.route, till.config.manifest ?? {});
   const ensDeploymentId = till.config.manifest?.identity?.ensDeploymentId ?? till.business.ensDeploymentId ?? null;

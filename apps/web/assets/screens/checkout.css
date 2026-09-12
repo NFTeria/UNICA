@@ -60,7 +60,7 @@
 .int[data-int="graph"] { --int: #6F4CFF; }
 .int[data-int="ens"] { --int: #5298FF; }
 .int[data-int="chainlink"] { --int: #375BD2; }
-.int[data-int="robinhood"] { --int: #00C805; }
+.int[data-int="stock"] { --int: #00C805; }
 
 /* The shop: one card per product, each with its own way in. */
 .shop { list-style: none; padding: 0; margin: var(--s4) 0 0; display: grid; gap: var(--s3);

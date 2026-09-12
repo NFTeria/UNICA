@@ -22,7 +22,7 @@ export const INTEGRATIONS = Object.freeze({
   graph: Object.freeze({ name: "The Graph", colour: "#6F4CFF", where: "a receipt is indexed" }),
   ens: Object.freeze({ name: "ENS", colour: "#5298FF", where: "a name is registered or resolved" }),
   chainlink: Object.freeze({ name: "Chainlink", colour: "#375BD2", where: "a price feed set the price on screen" }),
-  robinhood: Object.freeze({ name: "Robinhood Chain", colour: "#00C805", where: "a tokenized stock on Robinhood Chain testnet is what is held or paid with" }),
+  stock: Object.freeze({ name: "Robinhood Chain", colour: "#00C805", where: "a tokenized stock on Robinhood Chain testnet is what is held or paid with" }),
 });
 
 const INK = "#111111";

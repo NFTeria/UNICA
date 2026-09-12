@@ -277,7 +277,7 @@ test("one view names at most one integration, and only where the fact is on scre
   assert.equal(integrationFor({ customerAsset: TAST, converts: true, chainId: 31337 }), INTEGRATIONS.uniswap);
   const stock = { ...TAST, kind: "stock" };
   const stockSale = { customerAsset: stock, converts: true, chainId: ROBINHOOD_CHAIN_ID };
-  const stockColour = INTEGRATIONS.robinhood;
+  const stockColour = INTEGRATIONS.stock;
   assert.equal(integrationFor(stockSale), stockColour);
   assert.equal(
     integrationFor({ customerAsset: stock, converts: false, chainId: 31337 }),
@@ -340,7 +340,7 @@ test("an integration's colour is a 3px rule and never the text, because measured
   const paper = "#fbfbfa";
   const asText = Object.values(INTEGRATIONS).map((i) => contrastRatio(i.colour, paper));
   assert.ok(Math.min(...asText) < 4.5, `all five would have passed as text (worst ${Math.min(...asText).toFixed(2)}:1)`);
-  assert.ok(contrastRatio(INTEGRATIONS.robinhood.colour, paper) < 3, "Robinhood Chain green is the one that proves it");
+  assert.ok(contrastRatio(INTEGRATIONS.stock.colour, paper) < 3, "Robinhood Chain green is the one that proves it");
 });
 
 test("the one button takes the business's own accent, with the text colour computed against it", () => {
