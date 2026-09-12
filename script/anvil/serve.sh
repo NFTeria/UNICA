@@ -347,6 +347,117 @@ function runtimeConfig(manifest, record, rpc, tokenLabels = {}) {
 }
 // @runtimeConfig-end
 
+// @catalog-begin
+// The pure half of GET /local/catalog: what a page is allowed to ask for, and how the catalogue's
+// own answers are read. No import, no socket, no chain — apps/web/tests/serve-config.test.mjs
+// slices this region out of the heredoc and runs these exact functions against bytes a node
+// actually returned, so a decoder that drifts fails here rather than on a shop owner's screen.
+//
+// WHY THE STRUCT IS DECODED HERE AND NOT IN EVERY SCREEN. `products(uint256)` answers a tuple with
+// a dynamic string in it — the seller's own name for the thing they sell. Decoding it once means
+// every screen reads that name the same way; a second decoder somewhere else would be free to
+// disagree about where the name starts, and the disagreement would show up as a mangled word on a
+// price tag rather than as an error.
+//
+// AN ABSENT RESTRICTION IS NULL, NEVER A ZERO ADDRESS. `onlyBuyer` is `address(0)` on chain when
+// anyone may buy. Served verbatim, that is twenty zero bytes sitting in a field a screen would
+// print beside the words "reserved for", and a zero-looking address reads as a real one. It is
+// served as null, which is the fact: there is no named buyer.
+const CATALOG_KIND_NAMES = ["one-off", "recurring", "permanent"];
+const CATALOG_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const CATALOG_WHOLE_NUMBER = /^[0-9]{1,20}$/;
+const CATALOG_NOBODY = "0x0000000000000000000000000000000000000000";
+
+/** What the query string asked for: one seller's list, one product, or nothing this path serves. */
+function catalogQuery({ seller = null, product = null } = {}) {
+  if (seller !== null && product !== null) return { kind: "bad", error: "ask for one seller or one product, not both" };
+  if (seller !== null) {
+    if (!CATALOG_ADDRESS.test(String(seller))) return { kind: "bad", error: "seller must be an 0x address of forty characters" };
+    return { kind: "seller", seller: String(seller) };
+  }
+  if (product !== null) {
+    const asked = String(product);
+    if (!CATALOG_WHOLE_NUMBER.test(asked) || BigInt(asked) === 0n) return { kind: "bad", error: "product must be a whole number above zero" };
+    return { kind: "product", productId: BigInt(asked).toString() };
+  }
+  return { kind: "bad", error: "name a seller or a product" };
+}
+
+/** A `uint256[]` return: a head word holding the offset, then the length, then the elements. */
+function decodeUintArray(hexData) {
+  const h = String(hexData ?? "").replace(/^0x/, "");
+  if (h.length < 128) return [];
+  const at = Number(BigInt("0x" + h.slice(0, 64))) * 2;
+  const length = Number(BigInt("0x" + h.slice(at, at + 64)));
+  const out = [];
+  for (let i = 0; i < length; i += 1) {
+    const word = h.slice(at + 64 + i * 64, at + 128 + i * 64);
+    if (word.length < 64) break;
+    out.push(BigInt("0x" + word).toString());
+  }
+  return out;
+}
+
+/**
+ * One `Product` (src/unica-v5/IProductCatalog.sol). The struct holds a string, so the return is a
+ * DYNAMIC tuple: the first word is the offset of the tuple itself, the tuple's ten words follow,
+ * and its tenth word is the offset of the name measured from the tuple's own start.
+ */
+function decodeProduct(hexData) {
+  const h = String(hexData ?? "").replace(/^0x/, "");
+  if (h.length < 64) return null;
+  const at = Number(BigInt("0x" + h.slice(0, 64))) * 2;
+  const word = (i) => h.slice(at + i * 64, at + (i + 1) * 64);
+  if (word(9).length < 64) return null;
+  const address = (w) => "0x" + w.slice(24);
+  const nameAt = at + Number(BigInt("0x" + word(9))) * 2;
+  const nameLength = Number(BigInt("0x" + h.slice(nameAt, nameAt + 64)));
+  const nameBytes = new Uint8Array(nameLength);
+  for (let i = 0; i < nameLength; i += 1) nameBytes[i] = parseInt(h.slice(nameAt + 64 + i * 2, nameAt + 66 + i * 2), 16);
+  return {
+    seller: address(word(0)),
+    payout: address(word(1)),
+    asset: address(word(2)),
+    price: BigInt("0x" + word(3)).toString(),
+    kind: CATALOG_KIND_NAMES[Number(BigInt("0x" + word(4)))] ?? null,
+    period: Number(BigInt("0x" + word(5))),
+    onlyBuyer: address(word(6)),
+    active: BigInt("0x" + word(7)) !== 0n,
+    sold: BigInt("0x" + word(8)) !== 0n,
+    name: new TextDecoder().decode(nameBytes),
+  };
+}
+
+/** Nobody listed it: `products()` answers a zero struct for an unknown id rather than refusing. */
+function catalogIsUnknown(decoded) {
+  return !decoded || String(decoded.seller).toLowerCase() === CATALOG_NOBODY;
+}
+
+/**
+ * The one shape every screen consumes. `label` is what the ASSET itself answered when asked its
+ * symbol and its precision; an asset that did not answer leaves both null, and a screen shows the
+ * price as the raw count it is rather than inventing a decimal point.
+ */
+function catalogProduct(productId, decoded, label = {}) {
+  if (!decoded) return null;
+  return {
+    id: String(productId),
+    name: decoded.name,
+    asset: decoded.asset,
+    symbol: label.symbol ?? null,
+    decimals: label.decimals === undefined || label.decimals === null ? null : Number(label.decimals),
+    price: decoded.price,
+    kind: decoded.kind,
+    period: decoded.period,
+    payout: decoded.payout,
+    onlyBuyer: String(decoded.onlyBuyer).toLowerCase() === CATALOG_NOBODY ? null : decoded.onlyBuyer,
+    active: decoded.active,
+    sold: decoded.sold,
+    seller: decoded.seller,
+  };
+}
+// @catalog-end
+
 // ---- reading an asset's own label from the chain -------------------------------------------------
 // A manifest records addresses. A symbol and a decimal count are properties of the token itself,
 // so they are asked of the token, once per address, and cached for the life of this process. An
@@ -411,6 +522,25 @@ async function readTokenLabels(manifest) {
     labels[String(t.address).toLowerCase()] = await readTokenLabel(t.address);
   }
   return labels;
+}
+
+// ---- reading the catalogue through the node -----------------------------------------------------
+// The two selectors are DERIVED from the signatures in src/unica-v5/IProductCatalog.sol rather than
+// typed as four bytes of hex. A mistyped selector reaches a contract as a call to nothing and comes
+// back as empty data, which decodes to a product nobody listed — a wrong answer that looks like a
+// true one. Deriving it means the signature in this file is the thing under test.
+
+const selectorFor = (signature) => toHex(keccak256(new TextEncoder().encode(signature)).slice(0, 4));
+const SELECTOR_PRODUCTS_OF = selectorFor("productsOf(address)");
+const SELECTOR_PRODUCTS = selectorFor("products(uint256)");
+
+const uintWord = (value) => BigInt(value).toString(16).padStart(64, "0");
+const addressWord = (value) => String(value).replace(/^0x/i, "").toLowerCase().padStart(64, "0");
+
+async function catalogReadProduct(catalog, productId) {
+  const decoded = decodeProduct(await rpc("eth_call", [{ to: catalog, data: SELECTOR_PRODUCTS + uintWord(productId) }, "latest"]));
+  if (catalogIsUnknown(decoded)) return null;
+  return catalogProduct(productId, decoded, await readTokenLabel(decoded.asset));
 }
 
 function sendJson(res, status, obj) {
@@ -623,6 +753,47 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 200, { wallet, chainId: manifest?.chainId ?? null, chainHead: projection.chainHead ?? null, payments });
       } catch (e) {
         return sendJson(res, 502, { error: redact(e?.message ?? e), payments: [] });
+      }
+    }
+
+    // What a business sells, read from the catalogue the manifest names. One seller's whole list,
+    // or one product by the id its payment link carries. Nothing here is remembered and nothing is
+    // written: it is `productsOf` and `products` through the node, decoded above, with each asset's
+    // own symbol and precision taken from the same label cache every other screen reads.
+    //
+    // A DEPLOYMENT WITH NO CATALOGUE IS NOT AN ERROR. It answers an empty list and says why, so a
+    // products screen can print one true sentence instead of a failure a shop owner cannot act on.
+    // 404 is kept for what it means: this catalogue exists and nobody has listed that product.
+    if (url.pathname === "/local/catalog") {
+      const asked = catalogQuery({ seller: url.searchParams.get("seller"), product: url.searchParams.get("product") });
+      if (asked.kind === "bad") return sendJson(res, 400, { error: asked.error, products: [], product: null });
+      const manifest = readManifest();
+      const chainId = manifest?.chainId ?? null;
+      const catalog = manifest?.contracts?.productCatalog?.address ?? null;
+      if (!catalog) {
+        return sendJson(res, 200, {
+          seller: asked.seller ?? null,
+          chainId,
+          products: [],
+          product: null,
+          note: "no catalogue on this network",
+        });
+      }
+      try {
+        if (asked.kind === "product") {
+          const product = await catalogReadProduct(catalog, asked.productId);
+          if (!product) return sendJson(res, 404, { error: "no product with that number", product: null, products: [] });
+          return sendJson(res, 200, { chainId, product, products: [product] });
+        }
+        const ids = decodeUintArray(await rpc("eth_call", [{ to: catalog, data: SELECTOR_PRODUCTS_OF + addressWord(asked.seller) }, "latest"]));
+        const products = [];
+        for (const id of ids) {
+          const product = await catalogReadProduct(catalog, id);
+          if (product) products.push(product);
+        }
+        return sendJson(res, 200, { seller: asked.seller, chainId, products });
+      } catch (e) {
+        return sendJson(res, 502, { error: redact(e?.message ?? e), products: [], product: null });
       }
     }
 
