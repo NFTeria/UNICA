@@ -22,7 +22,7 @@ and `DEPLOYER_ACCOUNT` names a keystore. A mainnet chain id additionally require
 | `make anvil-up` | a fresh Anvil on 127.0.0.1:8545, chain id 31337, pinned genesis timestamp, auto-impersonation |
 | `make anvil-deploy` | the whole fixture stack, then the business joining from its own wallet, then `deployments/31337.local.json` |
 | `make anvil-seed` | initialise the pool at the recorded opening price, add the capped no-value seed, ACTIVATE |
-| `make anvil-demo` | the sixteen-step scenario, including the same-asset sale and the sale that converts |
+| `make anvil-demo` | the sixteen-step scenario, plus step 0a, the shop's own list: a sale off that list, the same-asset sale and the sale that converts |
 | `make anvil-attacks` | the refusal matrix: the fork suite, `eth_call` probes, evidence and display decisions |
 | `make anvil-test` | all of the above from an empty chain, then stop the node, and write the run evidence |
 | `make anvil-down` | stop the node, keep the manifest and records for inspection |
