@@ -22,7 +22,8 @@ load_manifest_env
 export DEMO_AMOUNT_IN="${DEMO_AMOUNT_IN:-1000000000000000000}"   # 1.000000 tAST (18 decimals)
 export DEMO_MIN_OUT="${DEMO_MIN_OUT:-1950000}"                      # 1.950000 uUSD (6 decimals)
 export DEMO_TTL_SECONDS="${DEMO_TTL_SECONDS:-1800}"
-export DEMO_ORDER_SEQ="${DEMO_ORDER_SEQ:-1}"
+# One order nonce per run: the block height makes a re-run on the same chain a NEW order, never a replay.
+export DEMO_ORDER_SEQ="${DEMO_ORDER_SEQ:-$(cast block-number --rpc-url "$UNICA_LOCAL_RPC")}"
 RECORD="$REHEARSAL_DIR/demo-record.json"
 FOUNDRY_BROADCAST="$REHEARSAL_DIR/broadcast"; export FOUNDRY_BROADCAST
 
@@ -40,7 +41,7 @@ TOKEN_ID=$(json_get "$PREPARE" .tokenId)
 REPORT_HASH=$(json_get "$PREPARE" .reportHash)
 
 step "5. the lost tablet fails to request a new order (BACKEND_POLICY / ENSV2 authority at admission)"
-DEADLINE=$(( $(cast block --rpc-url "$UNICA_LOCAL_RPC" -f timestamp latest) + DEMO_TTL_SECONDS ))
+DEADLINE=$(( $(cast block latest --field timestamp --rpc-url "$UNICA_LOCAL_RPC") + DEMO_TTL_SECONDS ))
 LOST_NONCE=$(cast keccak "lost-tablet-attempt-$DEMO_ORDER_SEQ")
 LAYER="ENSV2_ONCHAIN+BACKEND_POLICY" expect_revert LOST_TERMINAL_NEW_ORDER 'TerminalNotAuthorized(bytes32,address)' \
   "$UNICA_ADMISSION" 'requestOrder(bytes32,bytes32,bytes32,address,address,uint128,uint128,uint64,bytes32)' \
@@ -48,7 +49,7 @@ LAYER="ENSV2_ONCHAIN+BACKEND_POLICY" expect_revert LOST_TERMINAL_NEW_ORDER 'Term
   "$DEMO_AMOUNT_IN" "$DEMO_MIN_OUT" "$DEADLINE" "$LOST_NONCE" --from "$ANVIL_OP_LOST_TABLET"
 
 step "6. the active terminal admits the exact payer-bound order"
-MERCHANT_BEFORE=$(call "$UNICA_PAYOUT" 'balanceOf(address)(uint256)' "$ANVIL_MERCHANT_PAYOUT")
+MERCHANT_BEFORE=$(call_uint "$UNICA_PAYOUT" 'balanceOf(address)(uint256)' "$ANVIL_MERCHANT_PAYOUT")
 ADMIT=$(run_stage demoAdmit "$ANVIL_OP_CHAIR1" DEMO)
 log "$ADMIT"
 ORDER_ID=$(json_get "$ADMIT" .orderId)
@@ -76,7 +77,7 @@ log "feedIdFor   $ADAPTER_FEED"
 log "condition   $CONDITION   (0 = OK)"
 
 step "10–11. Uniswap v4 settlement executed; the merchant received the output asset"
-MERCHANT_AFTER=$(call "$UNICA_PAYOUT" 'balanceOf(address)(uint256)' "$ANVIL_MERCHANT_PAYOUT")
+MERCHANT_AFTER=$(call_uint "$UNICA_PAYOUT" 'balanceOf(address)(uint256)' "$ANVIL_MERCHANT_PAYOUT")
 DELIVERED=$(node -e 'console.log((BigInt(process.argv[1])-BigInt(process.argv[2])).toString())' "$MERCHANT_AFTER" "$MERCHANT_BEFORE")
 log "merchant payout balance  before $MERCHANT_BEFORE  after $MERCHANT_AFTER  delivered $DELIVERED (uUSD base units)"
 test "$DELIVERED" -ge "$DEMO_MIN_OUT" || die "delivered $DELIVERED is below minOut $DEMO_MIN_OUT"
@@ -90,8 +91,9 @@ DECISION=$(json_get "$EVIDENCE" .decision)
 test "$DECISION" = "VERIFIED" || die "the evidence layer did not verify the receipt: $DECISION"
 
 step "14. the POS shows PAID only from canonical evidence"
-node - "$RECORD" "$MANIFEST_PATH" "$ADMIT" "$PREPARE" "$PAY" "$EVIDENCE" "$MERCHANT_BEFORE" "$MERCHANT_AFTER" "$DELIVERED" "$ADAPTER_FEED" <<'EOF'
-const [out, manifestPath, admit, prepare, pay, evidence, before, after, delivered, feedId] = process.argv.slice(2);
+CHAIN_NOW=$(cast block latest --field timestamp --rpc-url "$UNICA_LOCAL_RPC")
+node - "$RECORD" "$MANIFEST_PATH" "$ADMIT" "$PREPARE" "$PAY" "$EVIDENCE" "$MERCHANT_BEFORE" "$MERCHANT_AFTER" "$DELIVERED" "$ADAPTER_FEED" "$CHAIN_NOW" <<'EOF'
+const [out, manifestPath, admit, prepare, pay, evidence, before, after, delivered, feedId, chainNow] = process.argv.slice(2);
 const fs = require("fs");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const A = JSON.parse(admit), P = JSON.parse(prepare), T = JSON.parse(pay), E = JSON.parse(evidence);
@@ -110,6 +112,7 @@ const record = {
   evidence: E,
   chainId: manifest.chainId,
   connectedPayer: A.payer,
+  now: Number(chainNow),
 };
 fs.writeFileSync(out, JSON.stringify(record, null, 2) + "\n");
 EOF
@@ -133,7 +136,8 @@ step "16. a look-alike hook emits a similar receipt with the official marketId a
 LOOK=$(run_stage lookalike "$ANVIL_ATTACKER" LOOKALIKE)
 log "$LOOK"
 LOOK_ORDER=$(json_get "$LOOK" .orderId)
-LOOK_EVIDENCE=$(node tools/unica-evidence/cli.mjs --order "$LOOK_ORDER" --manifest "$MANIFEST_PATH" --rpc "$UNICA_LOCAL_RPC" --confirmations 0)
+# The evidence CLI exits 1 for REFUSED and 2 for UNKNOWN by design; here REFUSED is the expected answer.
+LOOK_EVIDENCE=$(node tools/unica-evidence/cli.mjs --order "$LOOK_ORDER" --manifest "$MANIFEST_PATH" --rpc "$UNICA_LOCAL_RPC" --confirmations 0 || true)
 LOOK_DECISION=$(json_get "$LOOK_EVIDENCE" .decision)
 test "$LOOK_DECISION" = "REFUSED" || die "the look-alike receipt was not REFUSED: $LOOK_DECISION"
 printf '{"case":"LOOKALIKE_HOOK","decision":"%s","reasonCodes":%s}\n' "$LOOK_DECISION" "$(json_get "$LOOK_EVIDENCE" .reasonCodes)"

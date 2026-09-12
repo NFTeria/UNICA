@@ -15,7 +15,7 @@ UNICA_LOCAL_RPC="${UNICA_LOCAL_RPC:-http://127.0.0.1:8545}"
 UNICA_LOCAL_CHAIN_ID=31337
 UNICA_LOCAL_PORT="${UNICA_LOCAL_PORT:-8545}"
 # Genesis timestamp pinned so a fresh chain starts from one known instant (2026-09-11 00:00 UTC).
-UNICA_LOCAL_GENESIS_TIMESTAMP="${UNICA_LOCAL_GENESIS_TIMESTAMP:-1757548800}"
+UNICA_LOCAL_GENESIS_TIMESTAMP="${UNICA_LOCAL_GENESIS_TIMESTAMP:-1789084800}"
 REHEARSAL_DIR="${REHEARSAL_DIR:-.rehearsal/anvil}"
 MANIFEST_PATH="${MANIFEST_PATH:-deployments/31337.local.json}"
 PID_FILE="$REHEARSAL_DIR/anvil.pid"
@@ -128,6 +128,8 @@ send_as() { # $1 from, rest cast send args
 }
 
 call() { cast call --rpc-url "$UNICA_LOCAL_RPC" "$@"; }
+# cast annotates large integers ("1987612 [1.987e6]"); a number read for arithmetic keeps the first field only.
+call_uint() { cast call --rpc-url "$UNICA_LOCAL_RPC" "$@" | awk '{print $1}'; }
 
 json_get() { # $1 json string, $2 js path expression e.g. .status
   node -e 'const o=JSON.parse(process.argv[1]); const f=new Function("o","return o"+process.argv[2]); const v=f(o); console.log(typeof v==="object"?JSON.stringify(v):String(v))' "$1" "$2"

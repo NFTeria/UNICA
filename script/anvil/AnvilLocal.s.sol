@@ -10,6 +10,7 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
@@ -39,6 +40,7 @@ interface IIdentityToken {
     function mint(address to, bytes32 node, string calldata normalizedName) external returns (uint256);
     function tokenURI(uint256 tokenId) external view returns (string memory);
     function ownerOf(uint256 tokenId) external view returns (address);
+    function token_of_node(bytes32 node) external view returns (uint256);
 }
 
 /// @title AnvilLocal, the complete UNICA vertical slice on a local Anvil chain, and nothing else
@@ -433,10 +435,14 @@ contract AnvilLocal is Script {
         _readDeployed();
         DemoTerms memory t = _terms();
 
-        // 2. the immutable identity badge, minted to the namespace controller
-        vm.startBroadcast(a.admin);
-        uint256 tokenId = IIdentityToken(d.identityToken).mint(a.merchantOwner, d.merchantNode, MERCHANT_NAME);
-        vm.stopBroadcast();
+        // 2. the immutable identity badge, minted once to the namespace controller. A re-run on the
+        //    same chain finds the badge already minted: one token per node, never a second.
+        uint256 tokenId = IIdentityToken(d.identityToken).token_of_node(d.merchantNode);
+        if (tokenId == 0) {
+            vm.startBroadcast(a.admin);
+            tokenId = IIdentityToken(d.identityToken).mint(a.merchantOwner, d.merchantNode, MERCHANT_NAME);
+            vm.stopBroadcast();
+        }
 
         // 4. the lost tablet is revoked: its per-key role is removed and its status text says so
         vm.startBroadcast(a.merchantOwner);
@@ -506,7 +512,8 @@ contract AnvilLocal is Script {
         key.hooks = IHooks(hook);
 
         vm.startBroadcast(a.attacker);
-        LookalikeFactory(lf).initialize(key, m.initSqrtPriceX96);
+        (uint160 sqrtPriceNow,,,) = StateLibrary.getSlot0(IPoolManager(d.poolManager), key.toId());
+        if (sqrtPriceNow == 0) LookalikeFactory(lf).initialize(key, m.initSqrtPriceX96);
         PoolModifyLiquidityTest router = new PoolModifyLiquidityTest(IPoolManager(d.poolManager));
         MockERC20(d.asset).approve(address(router), type(uint256).max);
         MockERC20(d.payout).approve(address(router), type(uint256).max);
@@ -516,7 +523,7 @@ contract AnvilLocal is Script {
             key, ModifyLiquidityParams({tickLower: lower, tickUpper: upper, liquidityDelta: 1e15, salt: 0}), ""
         );
         bytes32 orderId = IUnicaMarketExecutor(executor).createOrder(
-            a.attacker, a.attacker, 1e17, 1, uint64(block.timestamp + 3600), keccak256("lookalike")
+            a.attacker, a.attacker, 1e17, 1, uint64(block.timestamp + 3600), keccak256(abi.encode("lookalike", vm.envUint("DEMO_ORDER_SEQ")))
         );
         MockERC20(d.asset).approve(executor, 1e17);
         IUnicaMarketExecutor(executor).pay(orderId);

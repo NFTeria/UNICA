@@ -46,12 +46,32 @@ async function main() {
     chainHead = fixture.chainHead;
   } else {
     const rpcUrl = args.rpc ?? defaultLocalRpcUrl();
-    const projection = await projectEvidence({
-      rpc: rpcUrl,
-      manifest,
-      fromBlock: args.fromBlock,
-      toBlock: args.toBlock,
-    });
+    let projection;
+    try {
+      projection = await projectEvidence({
+        rpc: rpcUrl,
+        manifest,
+        fromBlock: args.fromBlock,
+        toBlock: args.toBlock,
+      });
+    } catch (e) {
+      // An unreachable or failing evidence source is UNKNOWN, never a crash and never a verdict:
+      // the caller must not read "no answer" as "not paid" or as "paid".
+      const unknown = {
+        decision: "UNKNOWN",
+        reasonCodes: ["EVIDENCE_ENDPOINT_UNAVAILABLE"],
+        registryAuthenticated: false,
+        marketAuthenticated: false,
+        hookMatched: false,
+        executorMatched: false,
+        poolMatched: false,
+        receipt: null,
+        detail: String(e && e.message ? e.message : e),
+      };
+      process.stdout.write(JSON.stringify(unknown, null, 2) + "\n");
+      process.exitCode = 2;
+      return;
+    }
     logs = projection.logs;
     chainHead = projection.chainHead;
   }

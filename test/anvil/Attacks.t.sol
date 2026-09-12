@@ -10,6 +10,7 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
+import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 
 import {UnicaMarketTypes} from "../../src/unica-v4/UnicaMarketTypes.sol";
@@ -271,7 +272,7 @@ contract AttacksTest is Test {
     }
 
     function _demoNonce() internal view returns (bytes32) {
-        return keccak256(abi.encode("freshcuts/chair-1/order", vm.envUint("DEMO_ORDER_SEQ")));
+        return vm.envBytes32("UNICA_DEMO_ORDER_NONCE");
     }
 
     // ---- MARKET ----------------------------------------------------------------------------------
@@ -341,8 +342,10 @@ contract AttacksTest is Test {
             caps: registry.capsOf(marketId)
         });
         bytes memory code = type(UnicaMarketHook).creationCode;
+        (,, bytes memory hookArgs,) = factory.previewMarket(cfg);
+        (, bytes32 minedSalt) = HookMiner.find(address(factory), uint160(0x20C0), code, hookArgs);
         vm.prank(admin);
-        (bool ok, bytes memory data) = address(factory).call(abi.encodeWithSelector(factory.createMarket.selector, cfg, bytes32(0), code));
+        (bool ok, bytes memory data) = address(factory).call(abi.encodeWithSelector(factory.createMarket.selector, cfg, minedSalt, code));
         assertFalse(ok, "a market bound to a feed its adapter does not serve must be refused");
         assertEq(bytes4(data), bytes4(keccak256("OracleFeedMismatch(bytes32,bytes32,bytes32)")), "wrong error");
         _refused("WRONG_FEED_ID", "OracleFeedMismatch", "UNICA_ONCHAIN");
@@ -390,8 +393,9 @@ contract AttacksTest is Test {
         UnicaMarketTypes.Caps memory c = registry.capsOf(marketId);
         uint256 used = executor.payoutUsedOnDay(block.timestamp / 86400);
         uint128 tightened = uint128(used + MIN_OUT); // one more minimal payment would cross it
+        require(tightened <= c.maxPerTxPayout && tightened <= c.maxPerDayPayout, "precondition: a tightening, not a raise");
         vm.prank(admin);
-        registry.tightenCaps(marketId, c.maxPerTxPayout, tightened);
+        registry.tightenCaps(marketId, tightened, tightened);
         bytes32 id = _freshOrder();
         _approve(payer, AMOUNT_IN);
         vm.prank(payer);
@@ -623,7 +627,7 @@ contract AttacksTest is Test {
 
         vm.prank(attacker);
         (bool ok, bytes memory data) = address(policy).call(abi.encodeWithSelector(policy.onReport.selector, _meta(), LocalCreReportFixture.encodeReport(v, r)));
-        assertFalse(ok); assertEq(bytes4(data), bytes4(keccak256("NotForwarder(address)")));
+        assertFalse(ok); assertEq(bytes4(data), bytes4(keccak256("NotForwarder()")));
         _refused("WRONG_FORWARDER", "NotForwarder", "CRE_REPORT_VERIFICATION");
 
         bytes memory badMeta = LocalCreReportFixture.metadata(keccak256("other workflow"), bytes10("unica-adm"), workflowOwner, bytes2(uint16(7)));
