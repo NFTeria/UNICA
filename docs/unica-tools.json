@@ -33,25 +33,10 @@
         "test/ReceiptSchema.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "address",
-          "chainId": 11155111,
-          "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"
-        },
-        {
-          "kind": "transaction",
-          "chainId": 11155111,
-          "value": "0xc76bc0a3ef3cf659fc3c8eb0e76febd2006801b1e0e3fbca4f51bfea4108a014"
-        },
-        {
-          "kind": "transaction",
-          "chainId": 11155111,
-          "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"
-        },
-        {
-          "kind": "command",
-          "value": "make readback"
-        }
+        {"kind": "address", "chainId": 11155111, "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"},
+        {"kind": "transaction", "chainId": 11155111, "value": "0xc76bc0a3ef3cf659fc3c8eb0e76febd2006801b1e0e3fbca4f51bfea4108a014"},
+        {"kind": "transaction", "chainId": 11155111, "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"},
+        {"kind": "command", "value": "make readback"}
       ],
       "limitations": [
         "USDC only; the payout table is compiled in and widening it moves the address",
@@ -82,20 +67,9 @@
         "test/SettlementExecutor.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "address",
-          "chainId": 11155111,
-          "value": "0x044bc8a8773EC7b9B8de2467766636dFFCaC6210"
-        },
-        {
-          "kind": "transaction",
-          "chainId": 11155111,
-          "value": "0x8c06769270297e2794593dfc5084a628e31582492c135419535d3ddcb0c57ebb"
-        },
-        {
-          "kind": "command",
-          "value": "make readback"
-        }
+        {"kind": "address", "chainId": 11155111, "value": "0x044bc8a8773EC7b9B8de2467766636dFFCaC6210"},
+        {"kind": "transaction", "chainId": 11155111, "value": "0x8c06769270297e2794593dfc5084a628e31582492c135419535d3ddcb0c57ebb"},
+        {"kind": "command", "value": "make readback"}
       ],
       "limitations": [
         "native ETH input only",
@@ -125,16 +99,8 @@
         "test/ReceiptSchema.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "transaction",
-          "chainId": 11155111,
-          "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"
-        },
-        {
-          "kind": "address",
-          "chainId": 11155111,
-          "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"
-        }
+        {"kind": "transaction", "chainId": 11155111, "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"},
+        {"kind": "address", "chainId": 11155111, "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"}
       ],
       "limitations": [
         "one receipt exists on chain",
@@ -154,9 +120,9 @@
       "paths": [
         "docs/proof/verify-live.sh",
         "docs/proof/verify-day1.sh",
-        "script/readback.sh",
-        "docs/proof/retry.sh"
-      ],
+        "script/readback.sh"
+      ,
+        "docs/proof/retry.sh"],
       "networks": [
         "ethereum-sepolia"
       ],
@@ -167,20 +133,9 @@
         "docs/proof/verify-live.sh"
       ],
       "evidence": [
-        {
-          "kind": "address",
-          "chainId": 11155111,
-          "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"
-        },
-        {
-          "kind": "transaction",
-          "chainId": 11155111,
-          "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"
-        },
-        {
-          "kind": "command",
-          "value": "make proof"
-        }
+        {"kind": "address", "chainId": 11155111, "value": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0"},
+        {"kind": "transaction", "chainId": 11155111, "value": "0x1120af1810f249ecf366f0a13a1c8cd3dbe0633487849c1d3bcc0a29ee0ecb83"},
+        {"kind": "command", "value": "make proof"}
       ],
       "limitations": [
         "needs a public RPC; a network failure and a false claim look different but must be read"
@@ -211,14 +166,8 @@
         "integrations/graph/tests"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "bash integrations/graph/local-e2e.sh"
-        },
-        {
-          "kind": "artifact",
-          "value": "integrations/graph/STUDIO-PREFLIGHT.md"
-        }
+        {"kind": "command", "value": "bash integrations/graph/local-e2e.sh"},
+        {"kind": "artifact", "value": "integrations/graph/STUDIO-PREFLIGHT.md"}
       ],
       "limitations": [
         "not deployed to Subgraph Studio; that is an owner action and has not been taken",
@@ -251,23 +200,10 @@
         "integrations/ensv2/test.mjs"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/test.mjs"
-        },
-        {
-          "kind": "command",
-          "value": "make gate-live"
-        },
-        {
-          "kind": "address",
-          "chainId": 11155111,
-          "value": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe"
-        },
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/test.mjs — 61 rows"
-        }
+        {"kind": "command", "value": "node integrations/ensv2/test.mjs"},
+        {"kind": "command", "value": "make gate-live"},
+        {"kind": "address", "chainId": 11155111, "value": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe"},
+        {"kind": "command", "value": "node integrations/ensv2/test.mjs — 61 rows"}
       ],
       "limitations": [
         "ASCII names only; it refuses non-ASCII rather than approximating ENSIP-15",
@@ -300,22 +236,10 @@
         "test/v2/InvoiceFill.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "forge test --match-path 'test/v2/HookAdmission.t.sol'"
-        },
-        {
-          "kind": "command",
-          "value": "bash script/mutation-suite.sh"
-        },
-        {
-          "kind": "measurement",
-          "value": "8317 bytes of runtime code"
-        },
-        {
-          "kind": "command",
-          "value": "make fork — 32 rows at pinned Sepolia block 11656449"
-        }
+        {"kind": "command", "value": "forge test --match-path 'test/v2/HookAdmission.t.sol'"},
+        {"kind": "command", "value": "bash script/mutation-suite.sh"},
+        {"kind": "measurement", "value": "8317 bytes of runtime code"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"}
       ],
       "limitations": [
         "not deployed anywhere",
@@ -356,26 +280,11 @@
         "test/v2/SettlementRefusals.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "forge test --match-path 'test/v2/Settlement*.t.sol'"
-        },
-        {
-          "kind": "command",
-          "value": "bash script/mutation-suite.sh"
-        },
-        {
-          "kind": "measurement",
-          "value": "18369 bytes of runtime code"
-        },
-        {
-          "kind": "command",
-          "value": "make fork — 32 rows at pinned Sepolia block 11656449"
-        },
-        {
-          "kind": "measurement",
-          "value": "fork settlement gas 302948; merchant received exactly 100.000000 USDC"
-        }
+        {"kind": "command", "value": "forge test --match-path 'test/v2/Settlement*.t.sol'"},
+        {"kind": "command", "value": "bash script/mutation-suite.sh"},
+        {"kind": "measurement", "value": "18369 bytes of runtime code"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"},
+        {"kind": "measurement", "value": "fork settlement gas 302948; merchant received exactly 100.000000 USDC"}
       ],
       "limitations": [
         "not deployed anywhere",
@@ -413,18 +322,9 @@
         "tools/unica-sign/test.mjs"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "forge test --match-test test_Refuse_EverySignedFieldIsInsideTheDigest"
-        },
-        {
-          "kind": "command",
-          "value": "forge test --match-test test_Settle_TheQuoteDigestIsDerivedTheSameWayTwice"
-        },
-        {
-          "kind": "command",
-          "value": "make fork — 32 rows at pinned Sepolia block 11656449"
-        }
+        {"kind": "command", "value": "forge test --match-test test_Refuse_EverySignedFieldIsInsideTheDigest"},
+        {"kind": "command", "value": "forge test --match-test test_Settle_TheQuoteDigestIsDerivedTheSameWayTwice"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"}
       ],
       "limitations": [
         "the payer is bound, not open; a bearer quote that also names a price is a front-running target",
@@ -460,23 +360,10 @@
         "tools/unica-sign/test.mjs"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/permit2/test.mjs"
-        },
-        {
-          "kind": "command",
-          "value": "forge test --match-path 'test/v2/Permit2Witness.t.sol'"
-        },
-        {
-          "kind": "address",
-          "chainId": 11155111,
-          "value": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
-        },
-        {
-          "kind": "command",
-          "value": "make fork — 32 rows at pinned Sepolia block 11656449"
-        }
+        {"kind": "command", "value": "node integrations/permit2/test.mjs"},
+        {"kind": "command", "value": "forge test --match-path 'test/v2/Permit2Witness.t.sol'"},
+        {"kind": "address", "chainId": 11155111, "value": "0x000000000022D473030F116dDEE9F6B43aC78BA3"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"}
       ],
       "limitations": [
         "Permit2 does not enforce the transfer destination; the executor fixes it in code and the witness records it",
@@ -507,14 +394,8 @@
         "test/v2/SettlementRefusals.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "forge test --match-test test_Settle_TheMerchantIsPaidExactlyAndNobodyElseHoldsAnything"
-        },
-        {
-          "kind": "command",
-          "value": "make fork — 32 rows at pinned Sepolia block 11656449"
-        }
+        {"kind": "command", "value": "forge test --match-test test_Settle_TheMerchantIsPaidExactlyAndNobodyElseHoldsAnything"},
+        {"kind": "command", "value": "make fork — 32 rows at pinned Sepolia block 11656449"}
       ],
       "limitations": [
         "no indexer reads it yet",
@@ -542,14 +423,8 @@
         "test/v2/B1Settlement.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "forge test --match-path 'test/v2/B1Settlement.t.sol'"
-        },
-        {
-          "kind": "measurement",
-          "value": "settle() credited 1003010030091275 from a transfer the lock holder never made"
-        }
+        {"kind": "command", "value": "forge test --match-path 'test/v2/B1Settlement.t.sol'"},
+        {"kind": "measurement", "value": "settle() credited 1003010030091275 from a transfer the lock holder never made"}
       ],
       "limitations": [
         "a stand-in mover, not Permit2; the Permit2 leg is measured separately"
@@ -576,14 +451,8 @@
         "test/v2/ShortFill.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "forge test --match-path 'test/v2/ShortFill.t.sol'"
-        },
-        {
-          "kind": "measurement",
-          "value": "1e18 requested, 2995354955910 delivered, no revert"
-        }
+        {"kind": "command", "value": "forge test --match-path 'test/v2/ShortFill.t.sol'"},
+        {"kind": "measurement", "value": "1e18 requested, 2995354955910 delivered, no revert"}
       ],
       "limitations": [
         "measured against the official PoolManager runtime at one liquidity shape, not proven for all"
@@ -610,14 +479,8 @@
         "test/v2/HookRevertDecoder.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "forge test --match-path 'test/v2/HookRevertDecoder.t.sol'"
-        },
-        {
-          "kind": "measurement",
-          "value": "292-byte wrapper, 200 bytes needed to identify it; 93 cuts readable, 196 rejected"
-        }
+        {"kind": "command", "value": "forge test --match-path 'test/v2/HookRevertDecoder.t.sol'"},
+        {"kind": "measurement", "value": "292-byte wrapper, 200 bytes needed to identify it; 93 cuts readable, 196 rejected"}
       ],
       "limitations": [
         "test-tree only; no contract depends on it",
@@ -645,14 +508,8 @@
         "script/no-copied-source.sh"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "bash script/no-copied-source.sh --self-test"
-        },
-        {
-          "kind": "measurement",
-          "value": "166 files, tracked and untracked, against 1963 vendored body statements, zero reproduced"
-        }
+        {"kind": "command", "value": "bash script/no-copied-source.sh --self-test"},
+        {"kind": "measurement", "value": "166 files, tracked and untracked, against 1963 vendored body statements, zero reproduced"}
       ],
       "limitations": [
         "line identity only; a paraphrase or a reflow defeats it",
@@ -678,10 +535,7 @@
         "script/no-private-leak.sh"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "bash script/no-private-leak.sh"
-        }
+        {"kind": "command", "value": "bash script/no-private-leak.sh"}
       ],
       "limitations": [
         "deliberately NOT in make gate: it reads designated private files and a gate must not depend on them",
@@ -707,18 +561,9 @@
         "script/mutation-suite.sh"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "make mutants"
-        },
-        {
-          "kind": "command",
-          "value": "make fork-mutants"
-        },
-        {
-          "kind": "measurement",
-          "value": "30 local mutations and 18 fork mutations, each killed by the row that names it"
-        }
+        {"kind": "command", "value": "make mutants"},
+        {"kind": "command", "value": "make fork-mutants"},
+        {"kind": "measurement", "value": "30 local mutations and 18 fork mutations, each killed by the row that names it"}
       ],
       "limitations": [
         "a fixed list, not a generator; it proves those defects are caught and nothing more",
@@ -746,10 +591,7 @@
         "integrations/ensv2/test.mjs"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "bash script/check-surface.sh"
-        }
+        {"kind": "command", "value": "bash script/check-surface.sh"}
       ],
       "limitations": [
         "published on GitHub Pages; one real settlement has run through it, made by this project and not by a stranger",
@@ -787,18 +629,9 @@
         "integrations/graph-v2/check.mjs"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "make graph-v2-test — 13 matchstick rows"
-        },
-        {
-          "kind": "command",
-          "value": "node integrations/graph-v2/check.mjs — 17 manifest, ABI and query checks"
-        },
-        {
-          "kind": "measurement",
-          "value": "the fixture is a receipt captured from the pinned fork by test/fork/CaptureReceipt.t.sol"
-        }
+        {"kind": "command", "value": "make graph-v2-test — 13 matchstick rows"},
+        {"kind": "command", "value": "node integrations/graph-v2/check.mjs — 17 manifest, ABI and query checks"},
+        {"kind": "measurement", "value": "the fixture is a receipt captured from the pinned fork by test/fork/CaptureReceipt.t.sol"}
       ],
       "limitations": [
         "not deployed; no Subgraph Studio deployment has been made and none is authorised",
@@ -832,22 +665,15 @@
         "vy/tests"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "cd vy && mox test"
-        },
-        {
-          "kind": "measurement",
-          "value": "244 tests pass under moccasin 0.4.4 / vyper 0.4.3: the 82 legacy model rows unchanged plus 162 rows for the identity art layer (vy/src/math/namecheck.vy, vy/src/art/svgrender.vy, vy/src/art/identity_token.vy) added 2026-09-12; re-measured, not carried forward"
-        }
+        {"kind": "command", "value": "cd vy && mox test"},
+        {"kind": "measurement", "value": "244 tests pass under moccasin 0.4.4 / vyper 0.4.3: the 82 legacy model rows unchanged plus 162 rows for the identity art layer (vy/src/math/namecheck.vy, vy/src/art/svgrender.vy, vy/src/art/identity_token.vy) added 2026-09-12; re-measured, not carried forward"}
       ],
       "limitations": [
-        "the settlement math under vy/src is a model of the arithmetic, not a deployment target",
-        "the identity art layer under vy/src/art and vy/src/math IS deployable (the local Anvil run compiles and deploys identity_token.vy) but is deployed on no public chain at this commit",
+        "the settlement math under vy/src is a model of the arithmetic, not a deployment target; the identity art layer under vy/src/art and vy/src/math is deployable (the local Anvil run compiles and deploys identity_token.vy) and is deployed on no public chain at this commit",
         "not in make gate: it needs a Python toolchain the gate does not require; CI runs it in its own vyper lane"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "a021f9740d4e4d018a3d9a26d622ce5dd19bdd11"
+      "lastVerifiedCommit": "cef11ee868bdfd8d4a98514d7df33756cd83227a"
     },
     {
       "id": "v2-merchant-config-commitment",
@@ -870,22 +696,10 @@
         "tools/unica-verify/test.mjs"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "forge test --match-path 'test/v2/MerchantConfig.t.sol'"
-        },
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "three derivations of one commitment agree: JavaScript, Solidity, and the executor"
-        },
-        {
-          "kind": "measurement",
-          "value": "the fork quotes commit to a real preimage rather than a hash of a phrase, and tools/unica-verify rebuilds the quote digest from it and matches the digest a real receipt carries"
-        }
+        {"kind": "command", "value": "forge test --match-path 'test/v2/MerchantConfig.t.sol'"},
+        {"kind": "command", "value": "node integrations/ensv2/test.mjs"},
+        {"kind": "measurement", "value": "three derivations of one commitment agree: JavaScript, Solidity, and the executor"},
+        {"kind": "measurement", "value": "the fork quotes commit to a real preimage rather than a hash of a phrase, and tools/unica-verify rebuilds the quote digest from it and matches the digest a real receipt carries"}
       ],
       "limitations": [
         "the expiry window is enforced off chain only; a settlement never sees the struct, only its hash",
@@ -929,23 +743,10 @@
         "test/fork/V2ForkHostileInput.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "make fork"
-        },
-        {
-          "kind": "measurement",
-          "value": "42 rows at pinned block 11656955, hash 0xd92c7168…e8cd1da5"
-        },
-        {
-          "kind": "command",
-          "value": "make fork-mutants — 18 mutations, 18 killed by their own row"
-        },
-        {
-          "kind": "address",
-          "chainId": 11155111,
-          "value": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543"
-        }
+        {"kind": "command", "value": "make fork"},
+        {"kind": "measurement", "value": "42 rows at pinned block 11656955, hash 0xd92c7168…e8cd1da5"},
+        {"kind": "command", "value": "make fork-mutants — 18 mutations, 18 killed by their own row"},
+        {"kind": "address", "chainId": 11155111, "value": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543"}
       ],
       "limitations": [
         "FORK-LOCAL: the V2 hook, executor and pool are created inside the fork and do not exist on Sepolia",
@@ -978,14 +779,8 @@
         "test/v2/InterfaceFreeze.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node script/verify-freeze.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "17 checks: 71 error selectors, 2 event topics, 30 function selectors, plus artifact freshness"
-        }
+        {"kind": "command", "value": "node script/verify-freeze.mjs"},
+        {"kind": "measurement", "value": "17 checks: 71 error selectors, 2 event topics, 30 function selectors, plus artifact freshness"}
       ],
       "limitations": [
         "it freezes a SURFACE, not behaviour; a function may change what it does without changing its selector",
@@ -1011,14 +806,8 @@
         "script/size-budget.sh"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "bash script/size-budget.sh"
-        },
-        {
-          "kind": "measurement",
-          "value": "hook 8317/24576 runtime, executor 18369/24576; both initcodes under 40% of EIP-3860"
-        }
+        {"kind": "command", "value": "bash script/size-budget.sh"},
+        {"kind": "measurement", "value": "hook 8317/24576 runtime, executor 18369/24576; both initcodes under 40% of EIP-3860"}
       ],
       "limitations": [
         "90% is a WARNING, per the owner's threshold, not a failure",
@@ -1041,10 +830,7 @@
         "script/validate-tools.mjs"
       ],
       "evidence": [
-        {
-          "kind": "artifact",
-          "value": "docs/CLAIMS.md — 18 rows, each with evidence, scope, network and approved wording"
-        }
+        {"kind": "artifact", "value": "docs/CLAIMS.md — 18 rows, each with evidence, scope, network and approved wording"}
       ],
       "limitations": [
         "prose, not code: the banned-wording check covers the tool ledger and not every document",
@@ -1073,22 +859,10 @@
         "test/v2/SigningVectors.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node tools/unica-sign/test.mjs — 81 rows"
-        },
-        {
-          "kind": "command",
-          "value": "forge test --match-path 'test/v2/SigningVectors.t.sol' — 10 rows"
-        },
-        {
-          "kind": "measurement",
-          "value": "its quote digest equals the one a real settlement produced on the pinned fork: 0x7c5a6166...fbbc3869"
-        },
-        {
-          "kind": "measurement",
-          "value": "its hand-written ABI encoder produces calldata byte-identical to abi.encodeCall, 1060 bytes"
-        }
+        {"kind": "command", "value": "node tools/unica-sign/test.mjs — 81 rows"},
+        {"kind": "command", "value": "forge test --match-path 'test/v2/SigningVectors.t.sol' — 10 rows"},
+        {"kind": "measurement", "value": "its quote digest equals the one a real settlement produced on the pinned fork: 0x7c5a6166...fbbc3869"},
+        {"kind": "measurement", "value": "its hand-written ABI encoder produces calldata byte-identical to abi.encodeCall, 1060 bytes"}
       ],
       "limitations": [
         "it holds no keys and never will: every signing entry point takes a caller-supplied sign(digest) callback",
@@ -1130,26 +904,11 @@
         "test/fork/CaptureReceipt.t.sol"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node tools/unica-verify/test.mjs"
-        },
-        {
-          "kind": "command",
-          "value": "make verify-online"
-        },
-        {
-          "kind": "measurement",
-          "value": "113 rows with no endpoint at all, 113 passed, 0 failed: one positive control, 30 negatives altering exactly one field each, 10 sabotages, and 13 rows driving online mode against a stub node, ten of which go red against the code before daec8f6"
-        },
-        {
-          "kind": "measurement",
-          "value": "online mode emits 57 check rows against a settlement fetched by hash, including 5 dependency code hashes; the nine rows needing a real endpoint were not run in the slice that last measured this"
-        },
-        {
-          "kind": "artifact",
-          "value": "tools/unica-verify/fixtures/fork-settlement.json, a real transaction receipt captured off a local anvil fork of Ethereum Sepolia"
-        }
+        {"kind": "command", "value": "node tools/unica-verify/test.mjs"},
+        {"kind": "command", "value": "make verify-online"},
+        {"kind": "measurement", "value": "113 rows with no endpoint at all, 113 passed, 0 failed: one positive control, 30 negatives altering exactly one field each, 10 sabotages, and 13 rows driving online mode against a stub node, ten of which go red against the code before daec8f6"},
+        {"kind": "measurement", "value": "online mode emits 57 check rows against a settlement fetched by hash, including 5 dependency code hashes; the nine rows needing a real endpoint were not run in the slice that last measured this"},
+        {"kind": "artifact", "value": "tools/unica-verify/fixtures/fork-settlement.json, a real transaction receipt captured off a local anvil fork of Ethereum Sepolia"}
       ],
       "limitations": [
         "the settlement it verifies exists only inside a local fork, because V2 is not deployed to any public chain",
@@ -1182,22 +941,10 @@
         "vy/tests/test_logobackground.py"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "cd vy && mox test -q"
-        },
-        {
-          "kind": "measurement",
-          "value": "20 rows: forward then inverse is the identity over 845 grid points across five seeds, and the map is injective on the grid"
-        },
-        {
-          "kind": "measurement",
-          "value": "every generated affine over 400 seeds has determinant +1 or -1, so the inverse is an integer map"
-        },
-        {
-          "kind": "measurement",
-          "value": "64 seeds produce 64 distinct transform programs, and a one-character name change leaves 0 of 49 cells unchanged"
-        }
+        {"kind": "command", "value": "cd vy && mox test -q"},
+        {"kind": "measurement", "value": "20 rows: forward then inverse is the identity over 845 grid points across five seeds, and the map is injective on the grid"},
+        {"kind": "measurement", "value": "every generated affine over 400 seeds has determinant +1 or -1, so the inverse is an integer map"},
+        {"kind": "measurement", "value": "64 seeds produce 64 distinct transform programs, and a one-character name change leaves 0 of 49 cells unchanged"}
       ],
       "limitations": [
         "namemath.vy had never compiled before this commit: convert(block.prevrandao, bytes32) is a type error in every Vyper 0.4.x",
@@ -1228,18 +975,9 @@
         "integrations/ensv2/test.mjs"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "136 rows in the ENS suite, of which about 60 cover the builder: one positive path, ten classified refusals, and every committed field moved one at a time"
-        },
-        {
-          "kind": "measurement",
-          "value": "five sabotages killed by their own named row: an accepted recipient override, a bypassed payout allowlist, a removed staleness check, a diagnostic that crept into the commitment, and a failed resolution built anyway"
-        }
+        {"kind": "command", "value": "node integrations/ensv2/test.mjs"},
+        {"kind": "measurement", "value": "136 rows in the ENS suite, of which about 60 cover the builder: one positive path, ten classified refusals, and every committed field moved one at a time"},
+        {"kind": "measurement", "value": "five sabotages killed by their own named row: an accepted recipient override, a bypassed payout allowlist, a removed staleness check, a diagnostic that crept into the commitment, and a failed resolution built anyway"}
       ],
       "limitations": [
         "it builds a commitment; it does not resolve, sign, quote or settle",
@@ -1266,35 +1004,14 @@
         "integrations/arc-nanopayments/vectors.json"
       ],
       "networks": [],
-      "dependencies": [
-        "eip-712",
-        "secp256k1",
-        "unica-sign"
-      ],
-      "tests": [
-        "integrations/arc-nanopayments/test.mjs"
-      ],
+      "dependencies": ["eip-712", "secp256k1", "unica-sign"],
+      "tests": ["integrations/arc-nanopayments/test.mjs"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/arc-nanopayments/test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "141 rows, offline: a vector signed by Circle's own SDK at version 2.0.4 verifies against an independent implementation that never imports it"
-        },
-        {
-          "kind": "measurement",
-          "value": "the Gateway authorization signs exactly six fields; resource, request, response, session and cumulative budget are provably outside it"
-        },
-        {
-          "kind": "measurement",
-          "value": "five sabotages killed by their own named row, including one that grades a purchased resource as cryptographically verified"
-        },
-        {
-          "kind": "artifact",
-          "value": "upstream pinned at circlefin/arc-nanopayments a29f920e, Apache-2.0, inspected 2026-09-08"
-        }
+        {"kind": "command", "value": "node integrations/arc-nanopayments/test.mjs"},
+        {"kind": "measurement", "value": "141 rows, offline: a vector signed by Circle's own SDK at version 2.0.4 verifies against an independent implementation that never imports it"},
+        {"kind": "measurement", "value": "the Gateway authorization signs exactly six fields; resource, request, response, session and cumulative budget are provably outside it"},
+        {"kind": "measurement", "value": "five sabotages killed by their own named row, including one that grades a purchased resource as cryptographically verified"},
+        {"kind": "artifact", "value": "upstream pinned at circlefin/arc-nanopayments a29f920e, Apache-2.0, inspected 2026-09-08"}
       ],
       "limitations": [
         "Circle Gateway batching produces OPERATIONAL ACCOUNTING rather than a per-payment commitment: the SDK contains no merkle root, no batch id, no inclusion proof and no indexable event",
@@ -1304,9 +1021,7 @@
         "no Arc transaction has been sent, no wallet created, no faucet used, and nothing settled",
         "not audited"
       ],
-      "sponsorRoles": [
-        "circle"
-      ],
+      "sponsorRoles": ["circle"],
       "lastVerifiedCommit": "3582eb5350e3902baac6f5f54a2f6f3b63409be5"
     },
     {
@@ -1314,27 +1029,14 @@
       "name": "Merchant Settlement Policy (Vyper)",
       "version": "0.1.0",
       "status": "IMPLEMENTED — LOCAL TESTS",
-      "paths": [
-        "vy/src/unica/merchant_policy.vy"
-      ],
+      "paths": ["vy/src/unica/merchant_policy.vy"],
       "networks": [],
       "dependencies": [],
-      "tests": [
-        "vy/tests/test_merchant_policy.py"
-      ],
+      "tests": ["vy/tests/test_merchant_policy.py"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "cd vy && mox test tests/test_merchant_policy.py"
-        },
-        {
-          "kind": "measurement",
-          "value": "13 rows: a split loses nothing at fourteen amounts including 0, 1 and 2^64-1, and the last leg is proven to absorb the flooring remainder"
-        },
-        {
-          "kind": "measurement",
-          "value": "eight refusals: shares off ten thousand in four shapes, a zero token, a bank share with no payout reference, a stranger registering, a double registration, a stranger changing a policy, and an unregistered merchant"
-        }
+        {"kind": "command", "value": "cd vy && mox test tests/test_merchant_policy.py"},
+        {"kind": "measurement", "value": "13 rows: a split loses nothing at fourteen amounts including 0, 1 and 2^64-1, and the last leg is proven to absorb the flooring remainder"},
+        {"kind": "measurement", "value": "eight refusals: shares off ten thousand in four shapes, a zero token, a bank share with no payout reference, a stranger registering, a double registration, a stranger changing a policy, and an unregistered merchant"}
       ],
       "limitations": [
         "PRIOR ART: written before this repository's hackathon window and carried in, not authored during it; see docs/PRIOR-ART.md",
@@ -1352,31 +1054,14 @@
       "name": "PayAny Router (Vyper)",
       "version": "0.1.0",
       "status": "IMPLEMENTED — LOCAL TESTS",
-      "paths": [
-        "vy/src/unica/payany_router.vy"
-      ],
+      "paths": ["vy/src/unica/payany_router.vy"],
       "networks": [],
-      "dependencies": [
-        "chainlink-price-feed",
-        "uniswap-universal-router",
-        "merchant-policy-vy"
-      ],
-      "tests": [
-        "vy/tests/test_payany_router.py"
-      ],
+      "dependencies": ["chainlink-price-feed", "uniswap-universal-router", "merchant-policy-vy"],
+      "tests": ["vy/tests/test_payany_router.py"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "cd vy && mox test tests/test_payany_router.py"
-        },
-        {
-          "kind": "measurement",
-          "value": "14 rows: the Chainlink gate refuses a missing feed, a zero or negative price, a stale answer, a future-dated answer and an incomplete round, with the freshness boundary checked from both sides"
-        },
-        {
-          "kind": "measurement",
-          "value": "an intent is consumed by id alone, so a replay under a different merchant or amount is still refused"
-        }
+        {"kind": "command", "value": "cd vy && mox test tests/test_payany_router.py"},
+        {"kind": "measurement", "value": "14 rows: the Chainlink gate refuses a missing feed, a zero or negative price, a stale answer, a future-dated answer and an incomplete round, with the freshness boundary checked from both sides"},
+        {"kind": "measurement", "value": "an intent is consumed by id alone, so a replay under a different merchant or amount is still refused"}
       ],
       "limitations": [
         "PRIOR ART: written before this repository's hackathon window and carried in, not authored during it; see docs/PRIOR-ART.md",
@@ -1387,10 +1072,7 @@
         "the swap leg itself is untested here: it needs a Universal Router, and only the USDC path runs without one",
         "not deployed anywhere, and not audited"
       ],
-      "sponsorRoles": [
-        "uniswap",
-        "chainlink"
-      ],
+      "sponsorRoles": ["uniswap", "chainlink"],
       "lastVerifiedCommit": "86a402ed68bccb152114bb58bf440d65989d2aaa"
     },
     {
@@ -1406,30 +1088,13 @@
       ],
       "networks": [],
       "dependencies": [],
-      "tests": [
-        "integrations/chainlink-cre-guardian/test.mjs"
-      ],
+      "tests": ["integrations/chainlink-cre-guardian/test.mjs"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/chainlink-cre-guardian/test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "88 offline rows and nine mutations, every one killed by its own named row"
-        },
-        {
-          "kind": "measurement",
-          "value": "all five published scenarios survive every tick with the whole loan kept open, spending between 89 and 231 vETH units of the 500 available and zero vUSD"
-        },
-        {
-          "kind": "measurement",
-          "value": "the untouched starting position is liquidatable at any price at or below 1812.82, which is 9.4 percent below the start"
-        },
-        {
-          "kind": "artifact",
-          "value": "challenge pinned at solangegueiros/cf-liquidation-protection-challenge 58b24604, MIT, inspected 2026-09-08"
-        }
+        {"kind": "command", "value": "node integrations/chainlink-cre-guardian/test.mjs"},
+        {"kind": "measurement", "value": "88 offline rows and nine mutations, every one killed by its own named row"},
+        {"kind": "measurement", "value": "all five published scenarios survive every tick with the whole loan kept open, spending between 89 and 231 vETH units of the 500 available and zero vUSD"},
+        {"kind": "measurement", "value": "the untouched starting position is liquidatable at any price at or below 1812.82, which is 9.4 percent below the start"},
+        {"kind": "artifact", "value": "challenge pinned at solangegueiros/cf-liquidation-protection-challenge 58b24604, MIT, inspected 2026-09-08"}
       ],
       "limitations": [
         "a policy engine only: it decides, and does not observe a chain, sign, send, or run inside a TEE",
@@ -1439,9 +1104,7 @@
         "scoring weights are deliberately NOT compiled in: how continuity and capital efficiency trade off is unanswered by the organisers, so the selector stays configurable",
         "not audited"
       ],
-      "sponsorRoles": [
-        "chainlink"
-      ],
+      "sponsorRoles": ["chainlink"],
       "lastVerifiedCommit": "3186fcbc5f8050adf0bde4d5749299af6a20852c"
     },
     {
@@ -1455,33 +1118,14 @@
         "integrations/chainlink-cre-guardian/evidence.mjs"
       ],
       "networks": [],
-      "dependencies": [
-        "cre-guardian-policy"
-      ],
-      "tests": [
-        "integrations/chainlink-cre-guardian/adapter-test.mjs"
-      ],
+      "dependencies": ["cre-guardian-policy"],
+      "tests": ["integrations/chainlink-cre-guardian/adapter-test.mjs"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/chainlink-cre-guardian/adapter-test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "86 offline rows and ten mutations, every one killed"
-        },
-        {
-          "kind": "measurement",
-          "value": "the adapter's decision equals the frozen policy's in 950 compared states across the whole published price range"
-        },
-        {
-          "kind": "measurement",
-          "value": "observing every price update survives the sudden crash; observing every SECOND update loses it"
-        },
-        {
-          "kind": "artifact",
-          "value": "challenge pinned at solangegueiros/cf-liquidation-protection-challenge 58b24604, MIT"
-        }
+        {"kind": "command", "value": "node integrations/chainlink-cre-guardian/adapter-test.mjs"},
+        {"kind": "measurement", "value": "86 offline rows and ten mutations, every one killed"},
+        {"kind": "measurement", "value": "the adapter's decision equals the frozen policy's in 950 compared states across the whole published price range"},
+        {"kind": "measurement", "value": "observing every price update survives the sudden crash; observing every SECOND update loses it"},
+        {"kind": "artifact", "value": "challenge pinned at solangegueiros/cf-liquidation-protection-challenge 58b24604, MIT"}
       ],
       "limitations": [
         "PUBLIC DEPLOYMENT IS BLOCKED: the challenge README and its own config.staging.json name different lending and token addresses at the pinned commit, and the organisers have not said which is authoritative",
@@ -1491,9 +1135,7 @@
         "whether a cron faster than five minutes is permitted by the DON is not established here",
         "not audited"
       ],
-      "sponsorRoles": [
-        "chainlink"
-      ],
+      "sponsorRoles": ["chainlink"],
       "lastVerifiedCommit": "3186fcbc5f8050adf0bde4d5749299af6a20852c"
     },
     {
@@ -1509,37 +1151,14 @@
         "integrations/ensv2/fixtures/merchant-policy.json"
       ],
       "networks": [],
-      "dependencies": [
-        "ensv2-universal-resolver",
-        "ensv2-config-builder",
-        "merchant-policy-vy",
-        "unica-sign"
-      ],
-      "tests": [
-        "integrations/ensv2/identity-test.mjs",
-        "vy/tests/test_zz_genfix.py"
-      ],
+      "dependencies": ["ensv2-universal-resolver", "ensv2-config-builder", "merchant-policy-vy", "unica-sign"],
+      "tests": ["integrations/ensv2/identity-test.mjs", "vy/tests/test_zz_genfix.py"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/identity-test.mjs"
-        },
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/demo.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "95 rows, 95 passed, 0 failed. Until 2026-09-08 the suite crashed at row 30 on a fixture key that had never existed, so this count was the intended one and not a measured one; the ten mutations recorded here were run by hand during development and have no committed runner, unlike the V2 suite behind make mutants"
-        },
-        {
-          "kind": "measurement",
-          "value": "the policy decoder is checked against the raw ABI bytes merchant_policy.vy itself returned, captured by vy/tests/test_zz_genfix.py out of the in-process EVM"
-        },
-        {
-          "kind": "measurement",
-          "value": "no address can enter through any argument, and a payer supplying any of six immutable quote fields is refused by name"
-        }
+        {"kind": "command", "value": "node integrations/ensv2/identity-test.mjs"},
+        {"kind": "command", "value": "node integrations/ensv2/demo.mjs"},
+        {"kind": "measurement", "value": "95 rows, 95 passed, 0 failed. Until 2026-09-08 the suite crashed at row 30 on a fixture key that had never existed, so this count was the intended one and not a measured one; the ten mutations recorded here were run by hand during development and have no committed runner, unlike the V2 suite behind make mutants"},
+        {"kind": "measurement", "value": "the policy decoder is checked against the raw ABI bytes merchant_policy.vy itself returned, captured by vy/tests/test_zz_genfix.py out of the in-process EVM"},
+        {"kind": "measurement", "value": "no address can enter through any argument, and a payer supplying any of six immutable quote fields is refused by name"}
       ],
       "limitations": [
         "every stage is a local fixture or a local computation; no live chain read happens in the default path",
@@ -1549,10 +1168,7 @@
         "the merchant id derivation is this repository's own, because merchant_policy.vy takes the id as an argument and derives nothing",
         "not audited"
       ],
-      "sponsorRoles": [
-        "ens",
-        "uniswap"
-      ],
+      "sponsorRoles": ["ens", "uniswap"],
       "lastVerifiedCommit": "9cd92e291767d3b0c286a9754a076ffde46494f4"
     },
     {
@@ -1567,41 +1183,20 @@
         "integrations/ensv2/plan-preview.mjs",
         "integrations/ensv2/plan-test.mjs"
       ],
-      "networks": [
-        "ethereum-sepolia"
-      ],
-      "sponsorRoles": [
-        "ens"
-      ],
+      "networks": ["ethereum-sepolia"],
+      "sponsorRoles": ["ens"],
       "lastVerifiedCommit": "b5882411b0003aa8639030cffa55b5bc7bd84a0a",
-      "dependencies": [
-        "ensv2-permissioned-resolver"
-      ],
+      "dependencies": ["ensv2-permissioned-resolver"],
       "tests": [
         "integrations/ensv2/plan-test.mjs",
         "script/ensv2/plan-sabotage.mjs"
       ],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/plan-test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "378 checks, 378 passed, 0 failed, offline"
-        },
-        {
-          "kind": "command",
-          "value": "node script/ensv2/plan-sabotage.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "31 checks, 26 mutations, 26 behaved as expected, 0 unexpected, every file restored"
-        },
-        {
-          "kind": "measurement",
-          "value": "subtree 17 steps / 13 transactions; subregistry 23 steps / 20 transactions"
-        }
+        { "kind": "command", "value": "node integrations/ensv2/plan-test.mjs" },
+        { "kind": "measurement", "value": "378 checks, 378 passed, 0 failed, offline" },
+        { "kind": "command", "value": "node script/ensv2/plan-sabotage.mjs" },
+        { "kind": "measurement", "value": "31 checks, 26 mutations, 26 behaved as expected, 0 unexpected, every file restored" },
+        { "kind": "measurement", "value": "subtree 17 steps / 13 transactions; subregistry 23 steps / 20 transactions" }
       ],
       "limitations": [
         "every plan is signable:false until real eth_estimateGas values are supplied with --gas",
@@ -1621,38 +1216,15 @@
         "integrations/ensv2/permissioned-test.mjs",
         "integrations/ensv2/permissioned-live.mjs"
       ],
-      "networks": [
-        "ethereum-sepolia"
-      ],
-      "dependencies": [
-        "ensv2-merchant-resolver",
-        "ensv2-universal-resolver"
-      ],
-      "tests": [
-        "integrations/ensv2/permissioned-test.mjs"
-      ],
+      "networks": ["ethereum-sepolia"],
+      "dependencies": ["ensv2-merchant-resolver", "ensv2-universal-resolver"],
+      "tests": ["integrations/ensv2/permissioned-test.mjs"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/permissioned-test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "305 rows, 305 passed, 0 failed, offline, no socket opened"
-        },
-        {
-          "kind": "command",
-          "value": "node integrations/ensv2/permissioned-live.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "78 live rows against Sepolia, three of them real refusals decoded from the deployed contract"
-        },
-        {
-          "kind": "address",
-          "chainId": 11155111,
-          "value": "0x9eae5c2730a7dd16bdd1dee6421a1b91e3b0365e"
-        }
+        {"kind": "command", "value": "node integrations/ensv2/permissioned-test.mjs"},
+        {"kind": "measurement", "value": "305 rows, 305 passed, 0 failed, offline, no socket opened"},
+        {"kind": "command", "value": "node integrations/ensv2/permissioned-live.mjs"},
+        {"kind": "measurement", "value": "78 live rows against Sepolia, three of them real refusals decoded from the deployed contract"},
+        {"kind": "address", "chainId": 11155111, "value": "0x9eae5c2730a7dd16bdd1dee6421a1b91e3b0365e"}
       ],
       "limitations": [
         "no name is owned by UNICA: every live row reads a name somebody else registered, discovered from the chain rather than hard-coded",
@@ -1660,9 +1232,7 @@
         "the per-text-key and per-coin-type resource derivations are derived, not confirmed: every refusal observed named the name-level resource",
         "the accepted half of the authorization contrast is an eth_call, not a mined transaction"
       ],
-      "sponsorRoles": [
-        "ens"
-      ],
+      "sponsorRoles": ["ens"],
       "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
     },
     {
@@ -1681,46 +1251,17 @@
         "integrations/arc-treasury/split-test.mjs",
         "integrations/arc-treasury/live-check.mjs"
       ],
-      "networks": [
-        "arc-testnet"
-      ],
-      "dependencies": [
-        "merchant-policy-vy"
-      ],
-      "tests": [
-        "integrations/arc-treasury/test.mjs",
-        "integrations/arc-treasury/split-test.mjs"
-      ],
+      "networks": ["arc-testnet"],
+      "dependencies": ["merchant-policy-vy"],
+      "tests": ["integrations/arc-treasury/test.mjs", "integrations/arc-treasury/split-test.mjs"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/arc-treasury/test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "177 rows, 177 passed, 0 failed, offline"
-        },
-        {
-          "kind": "command",
-          "value": "node integrations/arc-treasury/split-test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "26 rows against 78 vectors captured from the real merchant_policy.vy"
-        },
-        {
-          "kind": "command",
-          "value": "node integrations/arc-treasury/live-check.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "20 live rows against Arc testnet; native reads 18 decimals and the ERC-20 reads 6, at the same block"
-        },
-        {
-          "kind": "address",
-          "chainId": 5042002,
-          "value": "0x3600000000000000000000000000000000000000"
-        }
+        {"kind": "command", "value": "node integrations/arc-treasury/test.mjs"},
+        {"kind": "measurement", "value": "177 rows, 177 passed, 0 failed, offline"},
+        {"kind": "command", "value": "node integrations/arc-treasury/split-test.mjs"},
+        {"kind": "measurement", "value": "26 rows against 78 vectors captured from the real merchant_policy.vy"},
+        {"kind": "command", "value": "node integrations/arc-treasury/live-check.mjs"},
+        {"kind": "measurement", "value": "20 live rows against Arc testnet; native reads 18 decimals and the ERC-20 reads 6, at the same block"},
+        {"kind": "address", "chainId": 5042002, "value": "0x3600000000000000000000000000000000000000"}
       ],
       "limitations": [
         "no transaction has ever been broadcast and no UNICA contract runs on Arc",
@@ -1728,9 +1269,7 @@
         "the 20 Gwei mempool floor is an observation of eth_gasPrice, never an observed rejection",
         "the blocklist-revert-without-receipt divergence is taken from documentation and was never observed"
       ],
-      "sponsorRoles": [
-        "circle"
-      ],
+      "sponsorRoles": ["circle"],
       "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
     },
     {
@@ -1746,37 +1285,15 @@
         "integrations/graph-v2/copilot-test.mjs",
         "integrations/graph-v2/live-proof.mjs"
       ],
-      "networks": [
-        "ethereum-sepolia"
-      ],
-      "dependencies": [
-        "v2-settlement-indexer"
-      ],
-      "tests": [
-        "integrations/graph-v2/provider-test.mjs",
-        "integrations/graph-v2/copilot-test.mjs"
-      ],
+      "networks": ["ethereum-sepolia"],
+      "dependencies": ["v2-settlement-indexer"],
+      "tests": ["integrations/graph-v2/provider-test.mjs", "integrations/graph-v2/copilot-test.mjs"],
       "evidence": [
-        {
-          "kind": "command",
-          "value": "node integrations/graph-v2/provider-test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "147 rows, 147 passed, 0 failed, offline with fetch stubbed"
-        },
-        {
-          "kind": "command",
-          "value": "node integrations/graph-v2/copilot-test.mjs"
-        },
-        {
-          "kind": "measurement",
-          "value": "115 rows, 115 passed, 0 failed, deterministic"
-        },
-        {
-          "kind": "command",
-          "value": "make graph-v2-live"
-        }
+        {"kind": "command", "value": "node integrations/graph-v2/provider-test.mjs"},
+        {"kind": "measurement", "value": "147 rows, 147 passed, 0 failed, offline with fetch stubbed"},
+        {"kind": "command", "value": "node integrations/graph-v2/copilot-test.mjs"},
+        {"kind": "measurement", "value": "115 rows, 115 passed, 0 failed, deterministic"},
+        {"kind": "command", "value": "make graph-v2-live"}
       ],
       "limitations": [
         "no successful live read has ever been observed: nothing is deployed, so the client is proven and the endpoint is not",
@@ -1784,9 +1301,7 @@
         "the copilot thresholds are policy defaults and were never fitted to any real merchant history",
         "the response shapes are written from the GraphQL specification, never captured from a live gateway"
       ],
-      "sponsorRoles": [
-        "thegraph"
-      ],
+      "sponsorRoles": ["thegraph"],
       "lastVerifiedCommit": "507151a7179881f4f63e0a4c9b0717581725b830"
     }
   ]
