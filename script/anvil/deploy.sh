@@ -81,7 +81,7 @@ const rpcCall = async (method, params) => {
 const {execFileSync} = require("child_process");
 const keccakOfCode = (code) => execFileSync("cast", ["keccak", code], {encoding: "utf8"}).trim();
 (async () => {
-  const names = ["poolManager","assetToken","payoutToken","assetUsdFeed","payoutUsdFeed","oracleAdapter","factory","registry","hook","executor","identityFixture","merchantOnboarding","identityToken","forwarderFixture","policyReceiver","terminalAdmission","directSettlement","directAdmission","productCatalog","lookalikeCatalog","lookalikeFactory","lookalikeHook","lookalikeExecutor"];
+  const names = ["poolManager","assetToken","payoutToken","assetUsdFeed","payoutUsdFeed","oracleAdapter","factory","registry","hook","executor","identityFixture","merchantOnboarding","identityToken","forwarderFixture","policyReceiver","terminalAdmission","directSettlement","directAdmission","marketAdmission","productCatalog","lookalikeCatalog","lookalikeFactory","lookalikeHook","lookalikeExecutor"];
   const contracts = {};
   for (const n of names) {
     const address = kv[n]; if (!address) throw new Error(`manifest is missing ${n}`);

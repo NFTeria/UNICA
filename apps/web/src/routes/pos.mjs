@@ -23,10 +23,9 @@ export const POS = [
   <p><label for="amount">Amount to charge</label><br>
   <input id="amount" class="field" type="text" inputmode="decimal" autocomplete="off" placeholder="12.50" aria-describedby="amount-hint"></p>
   <p class="sub" id="amount-hint">Digits and one decimal point. This is what the customer owes.</p>
-  <p><label for="currency">Invoice in</label><br>
+  <p><label for="currency">Customer pays in</label><br>
   <select id="currency" class="field" aria-describedby="currency-hint"></select></p>
-  <p class="sub" id="currency-hint">The currency the amount above is written in. You still receive
-  your payout asset.</p>
+  <p class="sub" id="currency-hint">You still receive your payout asset.</p>
   <p><button type="button" class="cta" id="create" disabled aria-describedby="create-why">Create payment</button></p>
   <p class="sub" id="create-why">Disabled until this register has read its settings and a wallet is
   connected on the right network.</p>

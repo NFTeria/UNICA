@@ -129,12 +129,15 @@ async function main() {
 
   // The asset the customer will spend: the first one that can actually be paid right now. A
   // register with one market has exactly one; a register with more would offer the choice here.
-  const customerAsset = spendable.find((a) => a.role !== "payout") ?? spendable[0];
-  const route = chooseSettlementRoute({
-    customerAsset,
-    payoutAsset,
-    marketPair: config.marketPair,
-    contracts: config.contracts ?? {},
+  // The asset the customer pays with is the one chosen on the register; the route follows from it:
+  // the payout asset itself settles directly, anything else converts on the way.
+  const chosenAsset = () => spendable.find((a) => a.address.toLowerCase() === String(currencySelect?.value ?? "").toLowerCase()) ?? payoutAsset;
+  let customerAsset = chosenAsset();
+  let route = chooseSettlementRoute({ customerAsset, payoutAsset, marketPair: config.marketPair, contracts: config.contracts ?? {} });
+  currencySelect?.addEventListener("change", () => {
+    customerAsset = chosenAsset();
+    route = chooseSettlementRoute({ customerAsset, payoutAsset, marketPair: config.marketPair, contracts: config.contracts ?? {} });
+    say("create-why", route.kind === "none" ? `Disabled: ${route.why}` : `${routeLabel(route)}.`);
   });
   if (route.kind === "none") {
     say("create-status", route.why);
@@ -189,7 +192,7 @@ async function main() {
     if (!customerWallet) return refreshReadiness();
     createBtn.disabled = true;
     try {
-      await createPayment({ config, route, customerAsset, payoutAsset, recipient, customerWallet });
+      await createPayment({ config, route: chooseSettlementRoute({ customerAsset: chosenAsset(), payoutAsset, marketPair: config.marketPair, contracts: config.contracts ?? {} }), customerAsset: chosenAsset(), payoutAsset, recipient, customerWallet });
     } catch (e) {
       say("create-status", `Could not create the payment: ${e.message}`);
     } finally {
@@ -250,8 +253,8 @@ async function createPayment({ config, route, customerAsset, payoutAsset, recipi
   // have their own admission; the settlement contract is named in the request as the executor.
   const manifestContracts = config.manifest?.contracts ?? {};
   const admission = route.kind === "direct"
-    ? (manifestContracts.directAdmission?.address ?? null)
-    : (manifestContracts.terminalAdmission?.address ?? config.contracts?.terminalAdmission ?? null);
+    ? (config.contracts?.directAdmission ?? manifestContracts.directAdmission?.address ?? null)
+    : (config.contracts?.marketAdmission ?? manifestContracts.marketAdmission?.address ?? config.contracts?.terminalAdmission ?? manifestContracts.terminalAdmission?.address ?? null);
   const ensDeploymentId = config.manifest?.identity?.ensDeploymentId ?? config.manifest?.identity?.deploymentId ?? null;
   if (!admission || !ensDeploymentId) throw new Error("This setup names no admission for this register, so it cannot request a payment.");
   const found = await silentReconnect(config);

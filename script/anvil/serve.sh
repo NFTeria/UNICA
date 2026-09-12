@@ -293,6 +293,9 @@ function runtimeConfig(manifest, record, rpc, tokenLabels = {}) {
     marketPair: marketPairFrom(manifest),
     contracts: {
       directSettlement: contracts.directSettlement?.address ?? null,
+      terminalAdmission: contracts.terminalAdmission?.address ?? null,
+      marketAdmission: contracts.marketAdmission?.address ?? null,
+      directAdmission: contracts.directAdmission?.address ?? null,
       productCatalog: contracts.productCatalog?.address ?? null,
       executor: contracts.executor?.address ?? null,
       hook: contracts.hook?.address ?? null,

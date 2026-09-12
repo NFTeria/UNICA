@@ -150,6 +150,7 @@ contract AnvilLocal is Script {
         address lookalikeExecutor;
         address directSettlement;
         address directAdmission;
+        address marketAdmission;
         address productCatalog;
         bytes32 catalogId;
         address lookalikeCatalog;
@@ -407,6 +408,15 @@ contract AnvilLocal is Script {
         TerminalAdmission(d.admission).setDirectSettler(d.directSettlement, true);
         directAdmission.setDirectSettler(d.directSettlement, true);
         direct.setOrderCreator(d.directAdmission, true);
+
+        // The market path's everyday gate: the same ENS admission (this register, under this
+        // business, published active, paying out where the record resolves now) with NO confidential
+        // policy receiver, exactly as the public deployments run today. The policy-gated instance
+        // above stays for the rows that prove the policy layer; a register uses this one.
+        TerminalAdmission marketAdmission =
+            new TerminalAdmission(d.identity, d.registry, d.ensDeploymentId, address(0), TERMINAL_STATUS_KEY);
+        d.marketAdmission = address(marketAdmission);
+        IUnicaMarketRegistry(d.registry).setOrderCreator(d.marketAdmission, true);
         vm.stopBroadcast();
     }
 
@@ -976,6 +986,7 @@ contract AnvilLocal is Script {
         _emit(P, "terminalAdmission", vm.toString(d.admission));
         _emit(P, "directSettlement", vm.toString(d.directSettlement));
         _emit(P, "directAdmission", vm.toString(d.directAdmission));
+        _emit(P, "marketAdmission", vm.toString(d.marketAdmission));
         _emit(P, "productCatalog", vm.toString(d.productCatalog));
         _emit(P, "catalogId", vm.toString(d.catalogId));
         _emit(P, "lookalikeCatalog", vm.toString(d.lookalikeCatalog));
