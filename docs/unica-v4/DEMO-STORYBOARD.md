@@ -1,68 +1,67 @@
-# UNICA demo storyboard — one barbershop, one chair, one lost tablet
+# UNICA storyboard — Fresh Cuts takes a payment
 
-The story a judge follows in under four minutes. Every frame names the command that produces it, what is
-on screen, and the evidence a stranger can re-check. Two environments run the same storyboard: the LOCAL
-one (`LOCAL_ANVIL_NO_VALUE`, one command, deterministic) and the public testnet one
-(`PUBLIC_TESTNET_NO_VALUE`, Sepolia, the owner's keystore, no value). A frame that only exists in one
-environment says so. No frame shows PAID from anything but a VERIFIED receipt.
+Written for business owners. No blockchain words in the frames. The technical evidence for every frame
+is in the appendix at the end, for the person running the demo. Two places run the same story: a
+practice setup on your own computer (one command, always the same result) and the public test network
+(real test money, no value). PAID appears exactly once, and only after the receipt has been checked.
 
-## Cast
+## The people
 
-| Role | Name / address | Where it lives |
-|---|---|---|
-| Merchant | `freshcuts.unica.eth` | ENSv2 subname of `unica.eth`; payout address is its `addr` record |
-| Active terminal | `chair-1.terminals.freshcuts.unica.eth` | text `com.unica.terminal-status = active`; its operator key holds SET_TEXT at that key only |
-| Revoked terminal | `lost-tablet.terminals.freshcuts.unica.eth` | text `… = revoked`; its operator key had SET_TEXT revoked |
-| Identity badge | one non-transferable token per merchant node | Vyper `identity_token.vy`, image and fingerprint deterministic from the name, deployment id and renderer version |
-| Market | `tAST → uUSD` locally, `WETH → USDC` on Sepolia | registry-recorded, factory-created hook + executor, real Uniswap v4 PoolManager |
-| Price route | adapter + `feedIdFor(asset, payout)` | fixture feeds locally; Chainlink ETH/USD and USDC/USD on Sepolia (demonstration market, see the oracle-age finding) |
-| Policy | `LOCAL CRE REPORT FIXTURE — NOT A DON REPORT` | keystone-shaped report through a forwarder fixture; bound to chain, contracts, release, market, merchant, payer, assets, amount, nonce, expiry, terminal, policy and workflow version |
-
-## The one command (local)
-
-```sh
-make anvil-test        # up → deploy → seed → demo → attacks → down, from an empty chain
-```
-
-or frame by frame: `make anvil-up`, `make anvil-deploy`, `make anvil-seed`, `make anvil-demo`,
-`make anvil-attacks`, `make anvil-serve` (the browser pay screen), `make anvil-down`.
+| Who | In the story |
+|---|---|
+| Maria | Owns Fresh Cuts, a barbershop. Has a normal wallet app on her phone. Has never heard of a smart contract. |
+| Fresh Cuts | Her business. Its pay name is `freshcuts.unica.eth`. Customers pay the name, not a long address. |
+| Chair 1 | The register at the first chair. Active. |
+| The lost tablet | A register that walked out of the shop last month. Revoked. |
+| Sam | A customer. Pays from their own wallet. |
+| The copycat | Someone who tries to fake a receipt. |
 
 ## Frames
 
-| # | Frame | What is on screen | Command / evidence |
-|---|---|---|---|
-| 1 | **A name, not an address** | `freshcuts.unica.eth` resolves through the identity authority to the merchant's payout address; the namespace controller is checked, not just the record | `demo.sh` step 1; `EnsV2ResolverAuthority.isNamespaceController` requires both admin bits at the node |
-| 2 | **The badge** | The merchant's identity token renders: name, fingerprint, renderer `unica-identity-svg/1`; the same inputs always draw the same badge | `tokenURI` on the badge; `vy/tests/vectors/identity-golden.json` |
-| 3 | **Two terminals** | `chair-1 … ACTIVE`, `lost-tablet … REVOKED`, read from the text records and the per-key roles | `text(node, "com.unica.terminal-status")`, `hasRoles(perKeyResource, SET_TEXT, operator)` |
-| 4 | **The lost tablet tries** | Order request from the revoked terminal is refused on chain: `TerminalNotAuthorized` | attacks row `REVOKED_TERMINAL`; `LOST_TERMINAL_NEW_ORDER` |
-| 5 | **Chair 1 opens an order** | Exact payer, exact input, minimum output, expiry, terminal node; the order id is derived from the terminal and a salt | `TerminalAdmission.requestOrder` → `OrderCreated`; frame shows `order.id`, `payer`, `marketId` |
-| 6 | **The wrong wallet pays** | Reverts with `WrongPayer`; nothing moves | attacks row `WRONG_PAYER` |
-| 7 | **The right wallet pays** | Approve exactly the input, `pay(orderId)`; one transaction | `demo.sh` step 8; the transaction hash lands in the record |
-| 8 | **Price route checked before the swap** | The market's committed `feedId` equals the adapter's `feedIdFor(asset, payout)`; freshness within `MAX_ORACLE_AGE` (300 s) | `demo.sh` step 9; attacks rows `CHANGED_FEED_ID`, `STALE_ORACLE`, `WRONG_FEED_ID`, `WRONG_ADAPTER` |
-| 9 | **The real swap** | Uniswap v4 PoolManager swap through the registered hook; the hook enforces the oracle band and caps | hook bits `0x20C0` in the address; `SETTLEMENT_RECEIPT_TOPIC` log from the hook |
-| 10 | **The merchant is paid** | Merchant payout balance before / after / delivered ≥ minimum output, in the same transaction | `demo.sh` steps 10–11: `delivered 1987612 uUSD units` locally |
-| 11 | **Evidence, not a screenshot** | registry → market → hook emitter → executor emitter → pool → paired events → finality, each checked; the decision is VERIFIED | `node tools/unica-evidence/cli.mjs --order <id> --manifest <manifest> --rpc <rpc>` exits 0 |
-| 12 | **PAID** | The POS prints PAID only now, from the VERIFIED decision; the customer view shows merchant, badge, `TESTNET / NO VALUE`, payer, assets, amount, minimum output, network, expiry, authorization, receipt status | `node tools/unica-pos-cli/cli.mjs --demo .rehearsal/anvil/demo-record.json`; browser: `make anvil-serve` |
-| 13 | **Revoke after the fact** | Chair 1 is revoked (role cleared, text `revoked`); the receipt is byte-identical, still VERIFIED, the order unchanged; a NEW order from chair 1 is refused | `demo.sh` step 15; attacks row `REVOKED_TERMINAL_AFTER_SETTLEMENT` |
-| 14 | **The impostor** | A look-alike hook emits a receipt with the official market id from an unregistered contract: REFUSED (`UNREGISTERED_EMITTER`, `HOOK_PROVENANCE_MISMATCH`) | attacks row `LOOKALIKE_HOOK`; `COUNTERFEIT_IDENTITY_NFT` for the badge |
-| 15 | **Stale evidence** | The index is behind the required block, or the endpoint is unreachable: UNKNOWN, never PAID | attacks rows `STALE_EVIDENCE`, `UNFINALIZED_EVIDENCE`, `EVIDENCE_ENDPOINT_UNAVAILABLE` |
-| 16 | **Replay** | Paying the settled order again: `OrderNotOpen` | attacks row `REPLAYED_ORDER` (both instruments) |
-| 17 | **The forwarder lies by succeeding** | A malformed, expired, replayed or mis-addressed policy report: the forwarder transaction SUCCEEDS, the receiver rejected, no admission exists | attacks row `FORWARDER_SUCCESS_RECEIVER_REJECTED` (seven sub-cases as the first reason code) |
-| 18 | **What it is not** | The policy report is labelled `LOCAL CRE REPORT FIXTURE — NOT A DON REPORT`; the market on Sepolia is a demonstration market (`demonstrationOnly = true`) until the oracle-age ruling | attacks row `FIXTURE_REPORT_IS_NOT_A_DON_REPORT`; `docs/unica-v4/PUBLIC-DEPLOYMENT-HANDOFF.md` O1–O4 |
+| # | What Maria or Sam sees | What is happening underneath (one line) |
+|---|---|---|
+| 1 | Maria opens UNICA and taps **Connect**. Her wallet app opens; she approves. | Her wallet becomes her login. No password, no signup form. |
+| 2 | She types **freshcuts**. The page says: your pay name will be `freshcuts.unica.eth`. Free. | The name is checked for spelling rules and availability before she pays any fee. |
+| 3 | She taps **Add my business** and confirms once in her wallet. | One transaction creates the business, its first register, and its badge. Money goes to her wallet by default. |
+| 4 | Her page shows: **Fresh Cuts**, pay name, **Register 1: active**, and her business badge. | The badge is drawn from her name and cannot be transferred or copied. |
+| 5 | She adds **Chair 1** and later marks **the lost tablet** as revoked. | Each register has its own key. Revoking one never touches the others. |
+| 6 | The lost tablet tries to start a sale. The screen says **Declined: this register is revoked**. | A revoked register cannot open a sale, on chain, not just in the app. |
+| 7 | Chair 1 opens a sale for Sam: price, what Sam pays, the least Fresh Cuts will receive, and when the offer expires. | The sale is written for Sam's wallet only. Nobody else can pay it. |
+| 8 | A different customer tries to pay Sam's sale. **Declined: this sale belongs to another customer.** | Wrong payer, refused before any money moves. |
+| 9 | Sam taps **Pay** and confirms in their wallet. One confirmation. | Sam's money is converted on Uniswap and delivered to Fresh Cuts in the same transaction. |
+| 10 | The screen shows the price check: **Fair price, checked a moment ago**. | The trade is only allowed inside the band our price source says is fair right now. |
+| 11 | Fresh Cuts' balance goes up by at least the promised minimum. | The conversion and the payout are one atomic step. No pending state. |
+| 12 | The register shows **Checking receipt…** then **PAID (checked)**. | An independent reader verifies the receipt against the public registry before PAID is printed. |
+| 13 | Sam's phone shows the receipt: business, pay name, badge, amount, network, and **Practice mode, test money only** on non-production networks. | Everything on the receipt is derived from the chain, not from the app. |
+| 14 | Maria revokes Chair 1 after closing time. Sam's receipt is unchanged. Chair 1 cannot open a new sale. | Revocation is forward-looking. History is never rewritten. |
+| 15 | The copycat shows a receipt that looks right. The reader says **Declined: not from Fresh Cuts' registered checkout**. | A receipt from an unregistered contract is refused, even with the right names on it. |
+| 16 | The reader's connection lags behind the chain. It says **Not confirmed yet**, never PAID. | Stale or missing evidence is UNKNOWN, never a success. |
+| 17 | Someone tries to pay Sam's finished sale again. **Declined: already paid.** | A sale settles once. |
+| 18 | The presenter says the honest part out loud: practice network, demonstration price setting, local policy fixture. | See the appendix and the talk track. |
 
-## The same story on Sepolia (public testnet, no value)
+## What Maria never had to do
 
-Frames 5–12 run against the public deployment once the owner has sent the four stages
-(`script/unica-v4/deploy-public.sh sepolia_testnet A | B | C | activate`, keystore password typed by the
-owner, addresses recorded into `config/unica-v4/11155111.env` by the wrapper) and the ENS-side records
-exist (`freshcuts.unica.eth` `addr`, terminal status texts, per-key grants, lineage on the adapter).
-The evidence CLI and the POS take the Sepolia manifest (`deployments/unica-v4/11155111.json`, written by
-`script/unica-v4/manifest.sh` from chain reads) and a public endpoint; the decisions are the same three
-words. Local evidence and public evidence are never mixed in one record: the `environment` field says
-which one a judge is looking at.
+Learn a new vocabulary. Copy an address. Trust a screenshot. Wait for a batch. Call anyone to revoke a
+lost device. Explain to a customer what a hash is.
 
-## Closing line
+## Appendix for the person running the demo
 
-"Every screen a judge saw was derived from chain evidence a stranger can re-run; the one word PAID was
-printed exactly once, after the receipt verified, and it stayed printed after the terminal that opened
-the order was revoked."
+| Frame | Command or file | Evidence |
+|---|---|---|
+| 1–5 | `make anvil-up && make anvil-deploy` then `make anvil-serve` (join/ route) | `MerchantOnboarding.join`, `BusinessJoined` event, badge `token_of_node` |
+| 6 | attacks row `REVOKED_TERMINAL`, `LOST_TERMINAL_NEW_ORDER` | `TerminalAdmission` reverts `TerminalNotAuthorized` |
+| 7 | `demo.sh` step 6 | `requestOrder` binds payer, amounts, expiry, terminal node |
+| 8 | attacks row `WRONG_PAYER` | executor reverts `WrongPayer` |
+| 9–11 | `demo.sh` steps 8–11 | Uniswap v4 PoolManager swap through the registered hook; merchant delta ≥ minOut; receipt log |
+| 10 | `demo.sh` step 9; attacks rows `CHANGED_FEED_ID`, `STALE_ORACLE`, `WRONG_FEED_ID` | `feedIdFor` re-verified at settlement; `OracleStale`, `OracleFeedMismatch` |
+| 12–13 | `node tools/unica-evidence/cli.mjs --order <id> --manifest <manifest> --rpc <rpc>`; POS CLI `--demo` | decision VERIFIED, exit 0; PAID rule in `tools/unica-pos-cli/render.mjs` |
+| 14 | `demo.sh` step 15; attacks row `REVOKED_TERMINAL_AFTER_SETTLEMENT` | receipt identical, order unchanged |
+| 15 | attacks row `LOOKALIKE_HOOK`, `COUNTERFEIT_IDENTITY_NFT` | `UNREGISTERED_EMITTER`, `HOOK_PROVENANCE_MISMATCH` |
+| 16 | attacks rows `STALE_EVIDENCE`, `UNFINALIZED_EVIDENCE`, `EVIDENCE_ENDPOINT_UNAVAILABLE` | decision UNKNOWN |
+| 17 | attacks row `REPLAYED_ORDER` | `OrderNotOpen` |
+| 18 | `docs/unica-v4/PUBLIC-DEPLOYMENT-HANDOFF.md` (oracle-age ruling O1–O4), attacks rows `FIXTURE_REPORT_IS_NOT_A_DON_REPORT`, `FORWARDER_SUCCESS_RECEIVER_REJECTED` | demonstration market flag in receipts; fixture label asserted |
+
+One command runs the whole story from an empty chain: `make anvil-test`. The public test network runs
+frames 7 to 13 against the Sepolia deployment once the owner has sent the four stages in the handoff and
+the business's records exist on ENS. Local evidence and public evidence never share a record; the
+environment label on every screen says which one you are looking at.
