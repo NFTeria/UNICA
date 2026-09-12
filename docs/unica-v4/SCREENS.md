@@ -210,28 +210,74 @@ produced these files, so nothing below the line of "the stylesheet says so" was 
 
 ### Some of what these rules style is not on a screen yet
 
-Counted across the twenty-two documents the build emits, at the commit this file lands on. **This is
-a snapshot and it moves**: other screens are being built in parallel, and two of these counts went up
-between the first draft of this file and the commit it landed on.
+Counted across the twenty-two documents the build emits. **This table is checked by machine.**
+`apps/web/tests/fold.test.mjs` re-counts every row against the emitted artifact and fails when a
+number here is wrong, because prose counts do not survive a branch that moves: this table has
+already been wrong twice in one afternoon — once when the checkout and counter screens landed under
+it, and once when `.card` was written as 5 and `.checkout` as 2 by a count that had folded the
+shipped `.co-card` into the contract's `.checkout` and a page's `.co-card`/`.shop-item` into
+`.card`. The count below is by **class token**, the thing a CSS selector actually matches, never by
+`id` and never by a name that merely looks similar.
 
 | Block the rules target | Documents that render it |
 |---|---|
-| `.theme-pick`, `.wchip` | 22 — every page |
-| `.appframe`, `.sidebar` | 7 |
+| `.theme-pick` | 22 — every page |
+| `.wchip` | 22 — every page |
+| `.appframe` | 7 |
+| `.sidebar` | 7 |
 | `.hex` | 7 |
-| `.card` | 5 |
-| `.checkout` | 2 |
-| `.keypad` | 1 |
-| `.register` | **0** — `business/` carries `.registers`, the list, not the register |
+| `.card` | 3 |
+| `.co-card` | 2 — `pay/` and `receipt/` |
+| `.co` | 2 |
+| `.keypad` | 1 — `business/payments/new/` |
+| `.pos` | 1 |
+| `.checkout` | **0** |
+| `.register` | **0** |
 | `.empty` | **0** |
 
-So the `.register` rules are written **against `apps/web/DESIGN.md`**, which is the contract that
-screen will be built to, and not against anything a person can look at yet. Correct with respect to
-the design system and unproven with respect to the product are different claims, and this table is
-where the difference is recorded rather than glossed.
+### The contract name and the shipped name are not the same name
 
-The two screens that have landed since — the checkout at `assets/screens/checkout.css` and the
-register at `assets/screens/pos.css` — style their own `.co` and `.pos` blocks rather than the
-design-system ones, and both are loaded **after** `fold.css`, so a route-specific rule of theirs beats
-a global rule here at equal specificity. That is the right way round, and it is the reason the rules
-in this file stay layout-shaped and stop short of dictating a screen's own composition.
+`apps/web/DESIGN.md` names the checkout card `.checkout` and the counter `.register`. **No document
+emits either class.** The screens that exist render `.co-card` inside `.lay-checkout` and `.pos`
+inside `.lay-app` — the same two things under other names. `pay/` does carry `id="checkout"`, which
+is what makes the mistake above easy to make and is exactly why the count is by class token.
+
+This is not a naming quibble. "The checkout card is capped at 28rem" was true of `.checkout` and
+therefore true of nothing a customer could see. `fold.css` § 7 bridges the two and is kept as one
+separable section so it can be deleted whole on the day the screens are rebuilt on the contract
+names. So the rules written against `.checkout`, `.register` and `.empty` are **correct with respect
+to the design system and unexercised by the product**; the rules written against `.co-card`, `.pos`,
+`.keypad`, `.card`, `.appframe` and `.hex` are the ones on screen today. Those are different claims
+and the table is where the difference is recorded rather than glossed.
+
+### The cascade order is load-bearing, and it fails silently
+
+`assets/fold.css` is linked in `<head>`. A route's own `assets/screens/*.css` is linked **inside
+`<main>`** — later in document order — so **at equal specificity the route stylesheet wins**.
+`screens/checkout.css` already declares `.co { max-width: 34rem }` and
+`.co-card { background: var(--paper) }` at specificity (0,1,0).
+
+That is the right way round for a route's own composition, and it is why the rules in this file stay
+layout-shaped. Where § 7 must reach past it, every selector is prefixed with its layout class to
+reach (0,2,0) — and the prefix earns its place differently in the two cases:
+
+- **The folded glass needs it today.** `background` is a shorthand that sets `background-color`, so
+  an unprefixed `.co-card { background-color: … }` in `fold.css` is overwritten and the see-through
+  treatment does nothing on the only checkout that exists. Removing the prefix was tried; the test
+  goes red, and it did not before the scanner was taught about shorthands.
+- **The 28rem cap does not need it today.** `checkout.css` caps `.co`, not `.co-card`. The prefix is
+  defensive: `.co-card` is that file's own block and a width is exactly what it would be entitled to
+  add next.
+
+Drop a prefix and the rule stops applying **in silence** — nothing turns red, the page simply keeps
+the other file's value. Three tests hold the mechanism down: one compares every rule in `fold.css`
+against all three route stylesheets with shorthands expanded and fails on any rule that would be
+beaten; one asserts the two deliberate exceptions are still genuinely beaten, so the excuse list
+cannot outlive its reasons; and one asserts the link order that makes the 44px override of
+`.theme-pick > select` work at all.
+
+**Where that scanner is blind, since a check's limits belong next to its result.** It compares the
+classes of the key compound, so a collision on a selector whose key compound is a bare element —
+`.theme-pick > select`, the one order-dependent override here — is invisible to it and is covered by
+that separate named test instead. Its shorthand table is the ten these four stylesheets use, not the
+whole specification, and nothing here uses `!important`.
