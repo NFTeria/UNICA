@@ -35,6 +35,7 @@ import {
   withinPaymentLimit,
 } from "./product.js";
 import { readBusiness, silentReconnect } from "./session.js";
+import { listRegisters } from "./local-join.js";
 import { connectWallet, discoverProviders, waitForReceipt } from "./wallet.js";
 
 /** How long a customer has to pay before the sale stops being payable, in seconds. */
@@ -243,10 +244,31 @@ async function createPayment({ config, route, customerAsset, payoutAsset, recipi
 
   const deadline = Math.floor(Date.now() / 1000) + PAYMENT_WINDOW_SECONDS;
   const salt = "0x" + [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join("");
-  say("create-status", "Confirm the new payment in your wallet. Nothing is charged to the customer by this step.");
+  // A register never speaks to the settlement contract directly: the order is REQUESTED through
+  // the admission contract, which checks that this register is an active one under the business
+  // and that the business still pays out where it said. The market path and the direct path each
+  // have their own admission; the settlement contract is named in the request as the executor.
+  const manifestContracts = config.manifest?.contracts ?? {};
+  const admission = route.kind === "direct"
+    ? (manifestContracts.directAdmission?.address ?? null)
+    : (manifestContracts.terminalAdmission?.address ?? config.contracts?.terminalAdmission ?? null);
+  const ensDeploymentId = config.manifest?.identity?.ensDeploymentId ?? config.manifest?.identity?.deploymentId ?? null;
+  if (!admission || !ensDeploymentId) throw new Error("This setup names no admission for this register, so it cannot request a payment.");
+  const found = await silentReconnect(config);
+  const business = found ? await readBusiness(found.session, config) : null;
+  if (!business?.joined) throw new Error("Sign in with the wallet that owns this business first.");
+  const statusKey = config.terminalStatusKey ?? "com.unica.terminal-status";
+  const registers = await listRegisters(session, config.identity, business.terminalsNode, statusKey);
+  const active = registers.find((r) => String(r.status).toLowerCase() === "active");
+  if (!active) throw new Error("This business has no active register. Add one before charging.");
+  say("create-status", `Confirm the new payment in your wallet (register ${active.label}). Nothing is charged to the customer by this step.`);
   const hash = await session.send({
-    to: route.contract,
-    data: encodeCall("createOrder(address,address,uint128,uint128,uint64,bytes32)", [
+    to: admission,
+    data: encodeCall("requestOrder(bytes32,bytes32,bytes32,address,address,address,uint128,uint128,uint64,bytes32)", [
+      business.merchantNode,
+      active.node,
+      ensDeploymentId,
+      route.contract,
       recipient,
       customerWallet,
       quote.amountIn.toString(),
