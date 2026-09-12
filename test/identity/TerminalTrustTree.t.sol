@@ -11,6 +11,7 @@ import {LocalEnsV2Fixture} from "../../src/identity/LocalEnsV2Fixture.sol";
 import {TerminalAdmission} from "../../src/identity/TerminalAdmission.sol";
 import {UnicaMarketTypes} from "../../src/unica-v4/UnicaMarketTypes.sol";
 import {ExecutorDouble} from "./util/ExecutorDouble.sol";
+import {RegistryDouble} from "./util/RegistryDouble.sol";
 import {PolicyDouble} from "./util/PolicyDouble.sol";
 
 /// @title TerminalTrustTree
@@ -37,6 +38,7 @@ contract TerminalTrustTreeTest is Test {
     TerminalAdmission internal admission; // POLICY = address(0): no policy gate
     TerminalAdmission internal admissionWithPolicy; // POLICY = policyDouble
     ExecutorDouble internal executor;
+    RegistryDouble internal registryDouble;
     PolicyDouble internal policyDouble;
 
     address internal merchant = makeAddr("merchant");
@@ -47,6 +49,8 @@ contract TerminalTrustTreeTest is Test {
     address internal payer = makeAddr("payer");
     address internal attacker = makeAddr("attacker");
     address internal payoutAddr = makeAddr("merchantPayout");
+    /// @dev What each terminal quotes as the merchant's payout address (see `_admit`).
+    mapping(bytes32 => address) internal quotedPayout;
 
     bytes32 internal ethNode;
     bytes32 internal unicaNode;
@@ -78,6 +82,7 @@ contract TerminalTrustTreeTest is Test {
         unicaNode = ens.register(ethNode, "unica", address(this));
         merchantNode = ens.register(unicaNode, "freshcuts", merchant);
 
+        quotedPayout[merchantNode] = payoutAddr;
         vm.startPrank(merchant);
         ens.setAddr(merchantNode, payoutAddr);
         terminalsNode = ens.register(merchantNode, "terminals", merchant);
@@ -103,8 +108,13 @@ contract TerminalTrustTreeTest is Test {
         executor = new ExecutorDouble(makeAddr("hook"), makeAddr("registry"), MARKET_ID, ASSET_TOKEN, PAYOUT_TOKEN);
         policyDouble = new PolicyDouble();
 
-        admission = new TerminalAdmission(address(ens), ENS_DEPLOYMENT_ID, address(0), STATUS_KEY);
-        admissionWithPolicy = new TerminalAdmission(address(ens), ENS_DEPLOYMENT_ID, address(policyDouble), STATUS_KEY);
+        registryDouble = new RegistryDouble();
+        registryDouble.vouch(address(executor), MARKET_ID);
+        admission =
+            new TerminalAdmission(address(ens), address(registryDouble), ENS_DEPLOYMENT_ID, address(0), STATUS_KEY);
+        admissionWithPolicy = new TerminalAdmission(
+            address(ens), address(registryDouble), ENS_DEPLOYMENT_ID, address(policyDouble), STATUS_KEY
+        );
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────────────────────────
@@ -113,12 +123,17 @@ contract TerminalTrustTreeTest is Test {
         internal
         returns (bytes32 orderId)
     {
+        // The terminal quotes the payout address it resolved for the merchant, as a real terminal
+        // would; kept in a test-side map so the helper makes no external read while a
+        // `vm.expectRevert` is armed for the admission call.
+        address quoted = quotedPayout[merchantNode_];
         vm.prank(caller);
         orderId = a.requestOrder(
             merchantNode_,
             terminalNode_,
             ENS_DEPLOYMENT_ID,
             address(executor),
+            quoted,
             payer,
             AMOUNT_IN,
             MIN_OUT,
@@ -209,6 +224,7 @@ contract TerminalTrustTreeTest is Test {
             chair1Node,
             wrongId,
             address(executor),
+            payoutAddr,
             payer,
             AMOUNT_IN,
             MIN_OUT,
@@ -221,6 +237,7 @@ contract TerminalTrustTreeTest is Test {
 
     function test_TerminalUnderAnotherMerchant_Refused() public {
         bytes32 otherMerchantNode = ens.register(unicaNode, "otherco", operatorC);
+        quotedPayout[otherMerchantNode] = makeAddr("otherPayout");
         vm.startPrank(operatorC);
         ens.setAddr(otherMerchantNode, makeAddr("otherPayout"));
         bytes32 otherTerminals = ens.register(otherMerchantNode, "terminals", operatorC);
@@ -520,5 +537,65 @@ contract TerminalTrustTreeTest is Test {
     function test_TextResource_MatchesIndependentDerivation() public view {
         bytes32 independent = keccak256(abi.encode(chair1Node, keccak256(bytes(STATUS_KEY))));
         assertEq(ens.textResource(chair1Node, STATUS_KEY), uint256(independent));
+    }
+
+    // ── review finding 2: an executor the registry does not know is refused ────────────────────
+
+    function test_UnregisteredExecutor_Refused() public {
+        ExecutorDouble stub =
+            new ExecutorDouble(makeAddr("hook2"), makeAddr("registry2"), MARKET_ID, ASSET_TOKEN, PAYOUT_TOKEN);
+        vm.prank(operatorA);
+        vm.expectRevert(abi.encodeWithSelector(TerminalAdmission.ExecutorNotRegistered.selector, address(stub)));
+        admission.requestOrder(
+            merchantNode,
+            chair1Node,
+            ENS_DEPLOYMENT_ID,
+            address(stub),
+            payoutAddr,
+            payer,
+            AMOUNT_IN,
+            MIN_OUT,
+            DEADLINE,
+            bytes32(uint256(77))
+        );
+        // control: the vouched executor is admitted with the same terms
+        _admit(admission, merchantNode, chair1Node, operatorA, bytes32(uint256(78)));
+    }
+
+    // ── review finding 3: the quoted recipient must equal the resolved one ─────────────────────
+
+    function test_RecipientChangedBetweenQuoteAndAdmission_Refused() public {
+        address moved = makeAddr("moved payout");
+        vm.prank(merchant);
+        ens.setAddr(merchantNode, moved);
+        vm.prank(operatorA);
+        vm.expectRevert(abi.encodeWithSelector(TerminalAdmission.RecipientMismatch.selector, payoutAddr, moved));
+        admission.requestOrder(
+            merchantNode,
+            chair1Node,
+            ENS_DEPLOYMENT_ID,
+            address(executor),
+            payoutAddr,
+            payer,
+            AMOUNT_IN,
+            MIN_OUT,
+            DEADLINE,
+            bytes32(uint256(79))
+        );
+        // control: quoting the record as it now stands is admitted
+        vm.prank(operatorA);
+        bytes32 id = admission.requestOrder(
+            merchantNode,
+            chair1Node,
+            ENS_DEPLOYMENT_ID,
+            address(executor),
+            moved,
+            payer,
+            AMOUNT_IN,
+            MIN_OUT,
+            DEADLINE,
+            bytes32(uint256(80))
+        );
+        assertEq(admission.admissionOf(id).recipientAtAdmission, moved);
     }
 }

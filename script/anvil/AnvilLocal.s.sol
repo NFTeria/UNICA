@@ -322,7 +322,7 @@ contract AnvilLocal is Script {
     function _deployAdmission() internal {
         vm.startBroadcast(a.admin);
         TerminalAdmission admission =
-            new TerminalAdmission(d.identity, d.ensDeploymentId, d.policyReceiver, TERMINAL_STATUS_KEY);
+            new TerminalAdmission(d.identity, d.registry, d.ensDeploymentId, d.policyReceiver, TERMINAL_STATUS_KEY);
         d.admission = address(admission);
         IUnicaMarketRegistry(d.registry).setOrderCreator(d.admission, true);
         vm.stopBroadcast();
@@ -491,6 +491,7 @@ contract AnvilLocal is Script {
                 d.chair1Node,
                 d.ensDeploymentId,
                 d.executor,
+                a.merchantPayout,
                 a.payer,
                 t.amountIn,
                 t.minOut,

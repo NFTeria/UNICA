@@ -7,6 +7,7 @@ pragma solidity ^0.8.30;
 // network. Pinned Sepolia configuration lives in integrations/ensv2/profile.mjs.
 
 import {IIdentityAuthority} from "./interfaces/IIdentityAuthority.sol";
+import {IUnicaMarketRegistry} from "../unica-v4/interfaces/IUnicaMarketRegistry.sol";
 import {IUnicaMarketExecutor} from "../unica-v4/interfaces/IUnicaMarketExecutor.sol";
 import {IUnicaPolicyReceiver} from "../unica-v4/policy/IUnicaPolicyReceiver.sol";
 
@@ -59,6 +60,7 @@ contract TerminalAdmission {
         uint128 minOut;
         uint64 deadline;
         bytes32 salt;
+        address expectedRecipient;
         address recipient;
         bytes32 marketId;
         address assetToken;
@@ -66,7 +68,16 @@ contract TerminalAdmission {
     }
 
     IIdentityAuthority public immutable IDENTITY;
+    /// @notice A configuration pin, compared against the caller's claim so a client built for one
+    ///         ENS deployment cannot admit through a gate configured for another. It is a typo
+    ///         guard between two configurations, never on-chain provenance: nothing here proves that
+    ///         `IDENTITY` belongs to this deployment id. That binding is the deployment manifest's,
+    ///         checked off-chain (rulings N6, H11).
     bytes32 public immutable ENS_DEPLOYMENT_ID;
+    /// @notice The official UNICA v4 registry. An order is admitted only on an executor this
+    ///         registry knows (`marketIdOfExecutor != 0`), so an admission record and its event are
+    ///         evidence about an official market and never about a stub that echoes one.
+    IUnicaMarketRegistry public immutable REGISTRY;
     /// @notice Zero means no policy gate: every ENS-admitted terminal is admitted outright.
     IUnicaPolicyReceiver public immutable POLICY;
     /// @notice The ENS text key a terminal must publish `"active"` under to admit orders
@@ -93,10 +104,25 @@ contract TerminalAdmission {
     error TerminalNotAuthorized(bytes32 terminalNode, address caller);
     error TerminalNotActive(bytes32 terminalNode, string statusText);
     error MerchantHasNoPayoutAddress(bytes32 merchantNode);
+    /// @notice The payout address the terminal quoted is not the one the merchant's record resolves
+    ///         to now. A record changed between quote and admission refuses the order instead of
+    ///         silently paying the new address (security review, finding 3).
+    error RecipientMismatch(address expected, address resolved);
+    /// @notice The executor is not one the official registry knows (security review, finding 2).
+    error ExecutorNotRegistered(address executor);
     error PolicyNotAuthorized(bytes32 salt);
+    error ZeroAddress();
 
-    constructor(address identity, bytes32 ensDeploymentId, address policyReceiver, string memory terminalStatusKey) {
+    constructor(
+        address identity,
+        address registry,
+        bytes32 ensDeploymentId,
+        address policyReceiver,
+        string memory terminalStatusKey
+    ) {
+        if (identity == address(0) || registry == address(0)) revert ZeroAddress();
         IDENTITY = IIdentityAuthority(identity);
+        REGISTRY = IUnicaMarketRegistry(registry);
         ENS_DEPLOYMENT_ID = ensDeploymentId;
         POLICY = IUnicaPolicyReceiver(policyReceiver);
         TERMINAL_STATUS_KEY = terminalStatusKey;
@@ -108,11 +134,15 @@ contract TerminalAdmission {
     ///         that its published status is `"active"`, that the merchant still has a payout
     ///         address, and — when a policy gate is configured — that the policy receiver admits
     ///         this exact set of terms.
+    /// @param expectedRecipient the payout address the terminal quoted to the customer; admission
+    ///        refuses if the merchant's record now resolves elsewhere, so a mutable ENS record can
+    ///        neither redirect an existing order (it is frozen) nor a quoted one (it is compared).
     function requestOrder(
         bytes32 merchantNode,
         bytes32 terminalNode,
         bytes32 ensDeploymentId,
         address executor,
+        address expectedRecipient,
         address payer,
         uint128 amountIn,
         uint128 minOut,
@@ -122,11 +152,13 @@ contract TerminalAdmission {
         if (ensDeploymentId != ENS_DEPLOYMENT_ID) {
             revert WrongEnsDeployment(ENS_DEPLOYMENT_ID, ensDeploymentId);
         }
+        if (REGISTRY.marketIdOfExecutor(executor) == bytes32(0)) revert ExecutorNotRegistered(executor);
 
         Request memory req;
         req.merchantNode = merchantNode;
         req.terminalNode = terminalNode;
         req.executor = executor;
+        req.expectedRecipient = expectedRecipient;
         req.payer = payer;
         req.amountIn = amountIn;
         req.minOut = minOut;
@@ -164,6 +196,7 @@ contract TerminalAdmission {
 
         req.recipient = IDENTITY.addr(req.merchantNode);
         if (req.recipient == address(0)) revert MerchantHasNoPayoutAddress(req.merchantNode);
+        if (req.recipient != req.expectedRecipient) revert RecipientMismatch(req.expectedRecipient, req.recipient);
     }
 
     /// @dev Check (f): the optional confidential-policy gate. Only ever called when `POLICY` is

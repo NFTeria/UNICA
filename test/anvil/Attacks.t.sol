@@ -566,8 +566,9 @@ contract AttacksTest is Test {
         _refused("WRONG_ENS_DEPLOYMENT", "WrongEnsDeployment", "BACKEND_POLICY");
         // An admission bound to a different resolver knows no merchant node: nothing resolves.
         LocalEnsV2Fixture other = new LocalEnsV2Fixture();
-        TerminalAdmission foreign =
-            new TerminalAdmission(address(other), ensDeploymentId, address(0), "com.unica.terminal-status");
+        TerminalAdmission foreign = new TerminalAdmission(
+            address(other), address(registry), ensDeploymentId, address(0), "com.unica.terminal-status"
+        );
         vm.prank(opChair1);
         (ok, data) = address(foreign)
             .call(

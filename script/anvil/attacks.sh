@@ -36,8 +36,8 @@ expect_revert REPLAY_SETTLED_ORDER 'OrderNotOpen(bytes32,uint8)' "$UNICA_EXECUTO
 expect_revert WRONG_PAYER_REPLAY 'OrderNotOpen(bytes32,uint8)' "$UNICA_EXECUTOR" 'pay(bytes32)' "$ORDER_ID" --from "$ANVIL_WRONG_PAYER"
 expect_revert UNKNOWN_ORDER 'UnknownOrder(bytes32)' "$UNICA_EXECUTOR" 'pay(bytes32)' "$(cast keccak nonexistent)" --from "$ANVIL_PAYER"
 LAYER="ENSV2_ONCHAIN+BACKEND_POLICY" expect_revert WRONG_ENS_DEPLOYMENT 'WrongEnsDeployment(bytes32,bytes32)' \
-  "$UNICA_ADMISSION" 'requestOrder(bytes32,bytes32,bytes32,address,address,uint128,uint128,uint64,bytes32)' \
-  "$UNICA_MERCHANT_NODE" "$UNICA_CHAIR1_NODE" "$(cast keccak other-deployment)" "$UNICA_EXECUTOR" "$ANVIL_PAYER" \
+  "$UNICA_ADMISSION" 'requestOrder(bytes32,bytes32,bytes32,address,address,address,uint128,uint128,uint64,bytes32)' \
+  "$UNICA_MERCHANT_NODE" "$UNICA_CHAIR1_NODE" "$(cast keccak other-deployment)" "$UNICA_EXECUTOR" "$ANVIL_MERCHANT_PAYOUT" "$ANVIL_PAYER" \
   1000000000000000000 1950000 4102444800 "$(cast keccak wrong-deployment)" --from "$ANVIL_OP_CHAIR1"
 LAYER="UNICA_ONCHAIN" expect_revert UNAUTHORIZED_CREATOR_DIRECT 'NotOrderCreator(address)' \
   "$UNICA_EXECUTOR" 'createOrder(address,address,uint128,uint128,uint64,bytes32)' \

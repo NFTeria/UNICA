@@ -44,8 +44,8 @@ step "5. the lost tablet fails to request a new order (BACKEND_POLICY / ENSV2 au
 DEADLINE=$(( $(cast block latest --field timestamp --rpc-url "$UNICA_LOCAL_RPC") + DEMO_TTL_SECONDS ))
 LOST_NONCE=$(cast keccak "lost-tablet-attempt-$DEMO_ORDER_SEQ")
 LAYER="ENSV2_ONCHAIN+BACKEND_POLICY" expect_revert LOST_TERMINAL_NEW_ORDER 'TerminalNotAuthorized(bytes32,address)' \
-  "$UNICA_ADMISSION" 'requestOrder(bytes32,bytes32,bytes32,address,address,uint128,uint128,uint64,bytes32)' \
-  "$UNICA_MERCHANT_NODE" "$UNICA_LOST_TABLET_NODE" "$UNICA_ENS_DEPLOYMENT_ID" "$UNICA_EXECUTOR" "$ANVIL_PAYER" \
+  "$UNICA_ADMISSION" 'requestOrder(bytes32,bytes32,bytes32,address,address,address,uint128,uint128,uint64,bytes32)' \
+  "$UNICA_MERCHANT_NODE" "$UNICA_LOST_TABLET_NODE" "$UNICA_ENS_DEPLOYMENT_ID" "$UNICA_EXECUTOR" "$ANVIL_MERCHANT_PAYOUT" "$ANVIL_PAYER" \
   "$DEMO_AMOUNT_IN" "$DEMO_MIN_OUT" "$DEADLINE" "$LOST_NONCE" --from "$ANVIL_OP_LOST_TABLET"
 
 step "6. the active terminal admits the exact payer-bound order"
@@ -128,8 +128,8 @@ ORDER_FINAL=$(call "$UNICA_EXECUTOR" 'orders(bytes32)((address,address,address,u
 test "$ORDER_FINAL" = "$ORDER_AFTER" || die "the on-chain order changed after revocation"
 log "receipt identical, decision VERIFIED, order unchanged; chair-1 now reads: $(call "$UNICA_IDENTITY" 'text(bytes32,string)(string)' "$UNICA_CHAIR1_NODE" 'com.unica.terminal-status')"
 LAYER="ENSV2_ONCHAIN+BACKEND_POLICY" expect_revert REVOKED_TERMINAL_AFTER_SETTLEMENT 'TerminalNotAuthorized(bytes32,address)' \
-  "$UNICA_ADMISSION" 'requestOrder(bytes32,bytes32,bytes32,address,address,uint128,uint128,uint64,bytes32)' \
-  "$UNICA_MERCHANT_NODE" "$UNICA_CHAIR1_NODE" "$UNICA_ENS_DEPLOYMENT_ID" "$UNICA_EXECUTOR" "$ANVIL_PAYER" \
+  "$UNICA_ADMISSION" 'requestOrder(bytes32,bytes32,bytes32,address,address,address,uint128,uint128,uint64,bytes32)' \
+  "$UNICA_MERCHANT_NODE" "$UNICA_CHAIR1_NODE" "$UNICA_ENS_DEPLOYMENT_ID" "$UNICA_EXECUTOR" "$ANVIL_MERCHANT_PAYOUT" "$ANVIL_PAYER" \
   "$DEMO_AMOUNT_IN" "$DEMO_MIN_OUT" "$DEADLINE" "$(cast keccak "chair-1-after-revocation-$DEMO_ORDER_SEQ")" --from "$ANVIL_OP_CHAIR1"
 
 step "16. a look-alike hook emits a similar receipt with the official marketId and is REFUSED"
