@@ -90,13 +90,25 @@ bash script/unica-v4/deploy-public.sh arbitrum_testnet readback
 bash script/unica-v4/manifest.sh arbitrum_testnet config/unica-v4/421614.env
 ```
 
-## Unichain Sepolia (1301) — alias `unichain_testnet` — BLOCKED
+## Unichain Sepolia (1301) — alias `unichain_testnet` — READY as a demonstration market (no oracle, no ENS)
 
-PoolManager `0x00B036B58a818B1BC34d502D3fE730Db729e62AC`, WETH `0x4200000000000000000000000000000000000006` and USDC
-`0x31d0220469e10c4E71834a79b1f276d740d3768F` are verified live, but: (1) no Chainlink Data Feed was verified on this
-chain, and the deployment script requires feed addresses even for a demonstration market; (2) the deployer holds 0.0196
-test ETH against ≈0.08 needed. Unblock by funding the deployer and either verifying feeds from Chainlink's directory or
-landing the "feeds optional when the oracle is not required" change to `DeployPublic._load`.
+PoolManager `0x00B036B58a818B1BC34d502D3fE730Db729e62AC` (24,009 bytes), WETH `0x4200000000000000000000000000000000000006` and USDC
+`0x31d0220469e10c4E71834a79b1f276d740d3768F` verified live. No Chainlink Data Feed was verified on this chain, so the configuration
+carries no feed and the market is a labelled demonstration market; the deploy script accepts that only while `UNICA_REQUIRE_ORACLE=false`
+and refuses a zero feed the moment the oracle is required. Deployer 0.0196 test ETH and 20 test USDC; measured gas price 0.0015 gwei,
+stage A dry run 12,045,988 gas ≈ 0.000012 ETH, the whole sequence ≈ 27.2M gas ≈ 0.00004 ETH, so funding is not the blocker it looked
+like at Ethereum prices. Preflight: go.
+
+```sh
+bash script/unica-v4/deploy-public.sh unichain_testnet preflight
+env $L bash script/unica-v4/deploy-public.sh unichain_testnet A        # 1 tx; predicted factory 0xcD59…7728, registry 0xC29b…4296 at nonce 45
+env $L bash script/unica-v4/deploy-public.sh unichain_testnet B
+env $L bash script/unica-v4/deploy-public.sh unichain_testnet C
+bash script/unica-v4/deploy-public.sh unichain_testnet readback
+env $L bash script/unica-v4/deploy-public.sh unichain_testnet activate
+bash script/unica-v4/deploy-public.sh unichain_testnet readback
+bash script/unica-v4/manifest.sh unichain_testnet config/unica-v4/1301.env
+```
 
 ## Owner gates that are not deployments
 
