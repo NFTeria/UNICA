@@ -92,3 +92,38 @@ export function v3PinsTable() {
     <tr><th scope="row">Release</th><td>${V3.releaseTag} at ${V3.releaseCommit}</td></tr>
   </tbody></table>`);
 }
+
+/**
+ * The one place a person may read the machinery, behind a disclosure they have to open.
+ *
+ * WHY A DISCLOSURE AND NOT A SEPARATE PAGE. The people who need these identifiers — an auditor, a
+ * judge, the business owner arguing with their accountant — need them for THIS payment, next to
+ * the amount they are checking. Putting them on another page means correlating by hand. Putting
+ * them on the surface means a customer buying a haircut reads the words pool and executor. A
+ * closed disclosure serves both: nothing machine-shaped is on screen until somebody asks for it.
+ *
+ * Every value is filled by script from what the network answered. The served HTML carries the
+ * labels and an em dash, so a page with no script still says which facts exist and shows none of
+ * them as zero.
+ */
+export function advancedVerification(idPrefix = "adv") {
+  const row = (label, id) => h`<dt>${label}</dt><dd id="${idPrefix}-${id}" class="hex">—</dd>`;
+  return raw(h`<details class="fold" data-advanced="true">
+  <summary>Advanced verification</summary>
+  <p class="sub">These identifiers are for checking this payment against the network. Nothing here
+  changes what was paid.</p>
+  <dl class="evidence-key">
+    ${raw(row("Registry and release", "release"))}
+    ${raw(row("Market id", "market"))}
+    ${raw(row("Hook", "hook"))}
+    ${raw(row("Executor", "executor"))}
+    ${raw(row("Pool", "pool"))}
+    ${raw(row("Oracle adapter", "adapter"))}
+    ${raw(row("Feed id", "feed"))}
+    ${raw(row("Name lineage", "ens"))}
+    ${raw(row("Order hash", "order"))}
+    ${raw(row("Transaction hash", "tx"))}
+    ${raw(row("Verification reason codes", "reasons"))}
+  </dl>
+</details>`);
+}

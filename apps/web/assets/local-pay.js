@@ -1,12 +1,17 @@
 /**
- * Progressive enhancement for the /pay/ route ONLY, wiring it to a companion demo server
- * (script/anvil/serve.sh) that fronts a loopback Anvil chain. If that server is not running, the
- * fetch below 404s (or errors) and this file does nothing further: the page stays the static
- * document it already is.
+ * The customer's checkout (/pay/), wired to a companion demo server (script/anvil/serve.sh) that
+ * fronts a loopback Anvil chain. If that server is not answering, this file does nothing further:
+ * the page stays the static document it already is, which is still a correct description of a
+ * checkout rather than a broken one.
+ *
+ * WHAT A CUSTOMER READS HERE. The business and its pay name, the amount due, the most they can be
+ * charged, what the business is guaranteed to receive, whether a conversion is involved, the fees,
+ * the network, the expiry, and which assets can be paid with at this moment. Everything else is
+ * behind a disclosure.
  *
  * NOTHING HERE IS BAKED IN. The RPC endpoint, chain id, deployment manifest and demo record all
- * come from one relative fetch (`./../local/config.json`), never a literal address written in this
- * file. `apps/web/build.mjs`'s FORBIDDEN_IN_OUTPUT scan enforces exactly this for every file this
+ * come from one fetch of the companion server's `/local/config.json`, never a literal address
+ * written in this file. `apps/web/build.mjs`'s FORBIDDEN_IN_OUTPUT scan enforces exactly this for every file this
  * build emits, assets included.
  *
  * SENDING GOES THROUGH apps/web/assets/wallet.js. A browser wallet, when one is installed, signs in
@@ -30,6 +35,8 @@
 import { canAuthorizePayment, canInitiateSale, paymentStatus } from "../../../tools/unica-pos-cli/render.mjs";
 import { keccak256, toHex } from "../../../web/ensv2/keccak.mjs";
 import { PRACTICE_MODE_LABEL, connectWallet, discoverProviders, networkName, waitForReceipt } from "./wallet.js";
+import { fillAdvanced, loadConfig, loadEvidence, say as setText, show as unhideId } from "./local.js";
+import { ASSET_STATUS, assetLabel, assetMenu, chooseSettlementRoute, formatAmountFor, routeLabel, validateEnvironment } from "./product.js";
 
 // ---- labels ---------------------------------------------------------------------------------------
 
@@ -97,6 +104,24 @@ export { canAuthorizePayment, canInitiateSale, paymentStatus };
 /** Thin, named wrapper: the txHash-alone-is-never-PAID rule, under the name this file's tests use. */
 export function deriveStatus({ txSubmitted = false, txHash = null, txReceipt = null, evidence = null } = {}) {
   return paymentStatus({ txSubmitted, txHash, txReceipt, evidence });
+}
+
+/**
+ * What a customer is told about conversion, in the two phrases this product uses and no others.
+ * The order itself already fixes both amounts, so the sentence never implies a price the customer
+ * could still be moved off.
+ */
+export function conversionLine(record, config) {
+  const inputAsset = record?.order?.inputAsset;
+  const outputAsset = record?.order?.outputAsset;
+  if (!inputAsset || !outputAsset) return "Not known yet.";
+  const route = chooseSettlementRoute({
+    customerAsset: { address: inputAsset },
+    payoutAsset: { address: outputAsset },
+    marketPair: config?.marketPair ?? null,
+    contracts: config?.contracts ?? {},
+  });
+  return routeLabel(route);
 }
 
 /** The words a customer reads for each status. "Paid (checked)" only ever comes from PAID. */
@@ -230,15 +255,25 @@ if (typeof document !== "undefined" && document.getElementById("checkout")) {
 }
 
 async function main() {
-  let res;
-  try {
-    res = await fetch("./../local/config.json");
-  } catch {
-    return; // no companion server reachable: the page stays exactly the static document it was
-  }
-  if (!res.ok) return; // 404: no companion server. Nothing here is required for the static site.
-  const config = await res.json();
+  const config = await loadConfig();
+  // No companion server: the page stays exactly the static document it already is, which is a
+  // correct description of a checkout rather than a broken one.
+  if (!config) return;
   const record = config.record;
+
+  const environment = validateEnvironment(config.manifest ?? config);
+  const banner = document.getElementById("env-banner");
+  if (banner) {
+    banner.textContent = environment.banner
+      ? `${environment.banner} — ${environment.networkName}. ${environment.reason}`
+      : `${environment.networkName}. ${environment.reason}`;
+  }
+  renderPayableAssets(config);
+  fillAdvanced(config, {
+    order: record?.order?.id ?? null,
+    tx: record?.settlement?.transactionHash ?? null,
+    reasons: record?.evidence?.reasonCodes ?? null,
+  });
 
   say("terms", record
     ? "Sale read from the local practice server."
@@ -254,8 +289,17 @@ async function main() {
       ? `${m.identityToken ?? "?"} (a badge is not proof of who owns the address)`
       : "(none recorded)");
     set("order-id", record.order?.id ?? "(unknown)");
-    set("order-input", formatAmount(record.order?.inputAmount, record.order?.inputSymbol));
-    set("order-output", `at least ${formatAmount(record.order?.minimumOutput, record.order?.outputSymbol)}`);
+    set("pay-business", businessNameFrom(record.merchant?.name));
+    set("pay-verified-name", record.merchant?.name ? `Paying ${record.merchant.name}` : "This business has no pay name.");
+    const due = formatAmountFor(record.order?.inputAmount, record.order?.inputAsset, config);
+    const floor = formatAmountFor(record.order?.minimumOutput, record.order?.outputAsset, config);
+    set("pay-amount-due", due);
+    set("order-input", due);
+    set("order-max", `${due} — this is the exact amount, and it cannot rise`);
+    set("order-output", `at least ${floor}`);
+    set("order-route", conversionLine(record, config));
+    const receiptLink = document.getElementById("receipt-link");
+    if (receiptLink && record.order?.id) receiptLink.href = `../receipt/?order=${record.order.id}`;
     set("order-network", networkName(record.chainId ?? config.chainId));
     set("order-fees", formatFeesLine(record.evidence?.receipt));
     const expiryEl = document.getElementById("order-expiry");
@@ -319,14 +363,14 @@ async function main() {
   const showEvidence = (verdict) => {
     show("evidence-output");
     set("evidence-decision", decisionText(verdict?.decision));
-    const pre = document.getElementById("evidence-json");
-    if (pre) pre.textContent = JSON.stringify(verdict, null, 2);
+    fillAdvanced(config, {
+      order: record?.order?.id ?? null,
+      tx: record?.settlement?.transactionHash ?? null,
+      reasons: verdict?.reasonCodes ?? null,
+    });
   };
 
-  const fetchEvidence = async (orderId) => {
-    const evRes = await fetch(`./../local/evidence?order=${orderId}`);
-    return evRes.json();
-  };
+  const fetchEvidence = (orderId) => loadEvidence(orderId);
 
   const checkAndRenderStatus = async (orderId, { txReceipt = null } = {}) => {
     const verdict = await fetchEvidence(orderId);
@@ -381,6 +425,33 @@ async function main() {
   }
 
   renderBlockers();
+}
+
+/**
+ * The assets this checkout can accept at this moment. A customer holding one that is temporarily
+ * unavailable should read that here, before connecting anything, rather than discover it from a
+ * refusal.
+ */
+function renderPayableAssets(config) {
+  const list = document.getElementById("pay-asset-list");
+  if (!list) return;
+  const menu = assetMenu(config);
+  list.innerHTML = "";
+  for (const asset of menu) {
+    const li = document.createElement("li");
+    const sym = document.createElement("span");
+    sym.className = "sym";
+    sym.textContent = assetLabel(asset);
+    const badge = document.createElement("span");
+    badge.className = "availability";
+    badge.dataset.status = asset.status;
+    badge.textContent = asset.text;
+    li.append(sym, badge);
+    list.appendChild(li);
+  }
+  const available = menu.filter((a) => a.status !== ASSET_STATUS.UNAVAILABLE).length;
+  setText("pay-assets-said", `${menu.length} payment asset${menu.length === 1 ? "" : "s"} read, ${available} available right now.`);
+  unhideId("pay-asset-list");
 }
 
 function say(id, text) {

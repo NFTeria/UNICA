@@ -138,5 +138,34 @@ chk("the experiment preview card is its own, not the generic one", exp.includes(
 const absolute = docs.filter(([, d]) => /(?:href|src)="\/[^/]/.test(d)).map(([r]) => r);
 chk("no route uses an absolute-root href or src", absolute.length === 0, absolute.join(","));
 
+// ── the environment label, and the one input that may remove it ───────────────────────────────
+// The label is not a decoration: it is the sentence that stops somebody treating a fixture as a
+// bank. So the check is run in both directions. A default build must carry it on every document,
+// and a build explicitly told the environment is PUBLIC_MAINNET must carry it on none — same
+// source, one input, opposite requirement, and the generator refuses to emit a mismatch either way.
+const NO_VALUE = "TESTNET / NO VALUE";
+const withoutLabel = docs.filter(([, d]) => !d.includes(NO_VALUE)).map(([r]) => r);
+chk(`all ${docs.length} documents of a default build carry the ${NO_VALUE} label`, withoutLabel.length === 0, withoutLabel.join(","));
+
+const mainnetBuild = execFileSync(process.execPath, [join(APP, "build.mjs")], {
+  encoding: "utf8",
+  env: { ...process.env, UNICA_BUILD_ENVIRONMENT: "PUBLIC_MAINNET" },
+});
+const mainnetManifest = JSON.parse(readFileSync(join(OUT, "manifest.json"), "utf8"));
+const mainnetDocs = mainnetManifest.routes.map((r) => readFileSync(join(OUT, r.file), "utf8"));
+chk(
+  "a build told the environment is PUBLIC_MAINNET emits no document carrying the test label",
+  mainnetDocs.every((d) => !d.includes(NO_VALUE)),
+);
+chk("that build says which environment it checked", mainnetBuild.includes("PUBLIC_MAINNET declared"));
+// Control: the flag is load-bearing. Rebuild without it and the label must come back everywhere,
+// or the check above was passing for a reason that has nothing to do with the flag.
+build();
+const restored = JSON.parse(readFileSync(join(OUT, "manifest.json"), "utf8")).routes.map((r) => readFileSync(join(OUT, r.file), "utf8"));
+chk(
+  "control: without that input every document carries the label again",
+  restored.length > 0 && restored.every((d) => d.includes(NO_VALUE)),
+);
+
 console.log(`\nchecks run: ${ok + fail}, passed: ${ok}, failed: ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

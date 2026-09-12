@@ -65,3 +65,60 @@ test("an empty manifest yields nulls, not a crash", () => {
   assert.equal(c.chainId, null);
   assert.equal(c.merchantOnboarding, null);
 });
+
+// ---- the business screens' half of the configuration ------------------------------------------
+
+const UUSD = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+const TAST = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+const LABELS = { [UUSD.toLowerCase()]: { symbol: "uUSD", decimals: 6 }, [TAST.toLowerCase()]: { symbol: "tAST", decimals: 18 } };
+const withAssets = {
+  chainId: 31337,
+  environment: "LOCAL_ANVIL_NO_VALUE",
+  contracts: { payoutToken: { address: UUSD }, assetToken: { address: TAST }, executor: { address: "0xexec" } },
+  market: { marketId: "0xmarket", poolKey: { currency0: UUSD, currency1: TAST }, poolId: "0xpool", status: 4 },
+  identity: {},
+};
+
+test("the assets are served with the role, symbol and decimal count each screen needs", () => {
+  const c = runtimeConfig(withAssets, null, "REDACTED", LABELS);
+  assert.deepEqual(c.assets.map((a) => [a.role, a.symbol, a.decimals, a.labelled]), [
+    ["payout", "uUSD", 6, true],
+    ["customer", "tAST", 18, true],
+  ]);
+  assert.equal(c.assets[0].address, UUSD);
+});
+test("an asset whose label could not be read is served unlabelled, never guessed", () => {
+  const c = runtimeConfig(withAssets, null, "REDACTED", {});
+  assert.deepEqual(c.assets.map((a) => [a.symbol, a.decimals, a.labelled]), [
+    [null, null, false],
+    [null, null, false],
+  ]);
+});
+test("the market pair is active only at status 4", () => {
+  assert.equal(runtimeConfig(withAssets, null, "REDACTED", LABELS).marketPair.active, true);
+  const paused = { ...withAssets, market: { ...withAssets.market, status: 5 } };
+  assert.equal(runtimeConfig(paused, null, "REDACTED", LABELS).marketPair.active, false);
+  const seeded = { ...withAssets, market: { ...withAssets.market, status: 3 } };
+  assert.equal(runtimeConfig(seeded, null, "REDACTED", LABELS).marketPair.active, false);
+});
+test("a manifest with no market serves no pair at all, rather than an empty one that looks usable", () => {
+  const c = runtimeConfig({ chainId: 31337, contracts: {}, identity: {} }, null, "REDACTED", {});
+  assert.equal(c.marketPair, null);
+});
+test("the direct settler is null until the deployment carries one", () => {
+  assert.equal(runtimeConfig(withAssets, null, "REDACTED", LABELS).contracts.directSettlement, null);
+  const withDirect = { ...withAssets, contracts: { ...withAssets.contracts, directSettlement: { address: "0xdirect" } } };
+  assert.equal(runtimeConfig(withDirect, null, "REDACTED", LABELS).contracts.directSettlement, "0xdirect");
+});
+test("the environment the manifest declares is served verbatim, for the label rule to judge", () => {
+  assert.equal(runtimeConfig(withAssets, null, "REDACTED", LABELS).environment, "LOCAL_ANVIL_NO_VALUE");
+  assert.equal(runtimeConfig({ chainId: 1, contracts: {}, identity: {} }, null, "REDACTED", {}).environment, null);
+});
+test("the committed local manifest serves both of its assets and its own market pair", () => {
+  const c = runtimeConfig(fullManifest, null, "REDACTED", LABELS);
+  assert.equal(c.assets.length, 2);
+  assert.equal(c.marketPair.marketId, fullManifest.market.marketId);
+  assert.equal(c.marketPair.active, true); // the committed manifest records seed status 4, ACTIVE
+  assert.equal(c.contracts.executor, fullManifest.contracts.executor.address);
+  assert.equal(c.contracts.directSettlement, null);
+});

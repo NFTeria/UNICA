@@ -26,7 +26,8 @@ import { join, dirname, relative, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { ROUTES, NOT_FOUND } from "./src/routes.mjs";
-import { document_ } from "./src/shell.mjs";
+import { BUILT_FOR_MAINNET, document_ } from "./src/shell.mjs";
+import { NO_VALUE_BANNER } from "./assets/product.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "out");
@@ -112,6 +113,30 @@ for (const rel of emitted) {
     const m = text.match(/\$\{[A-Za-z_]/);
     if (m) fail(`${rel} contains an unresolved template expression: ${JSON.stringify(m[0])}`);
   }
+}
+
+// ── 3b. the environment label is on every page, or the build said it is a public network ──────
+// A build cannot drop the no-value label by accident: it has to be told UNICA_BUILD_ENVIRONMENT is
+// PUBLIC_MAINNET, and then it must not carry the label either, so the artifact and the claim about
+// the artifact can never disagree. This is the build-time half of `validateEnvironment`, which
+// enforces the same rule at runtime against whatever deployment a page is actually reading.
+{
+  const htmlFiles = emitted.filter((f) => f.endsWith(".html"));
+  const missing = [];
+  const stale = [];
+  for (const rel of htmlFiles) {
+    const text = readFileSync(join(OUT, rel), "utf8");
+    const hasLabel = text.includes(NO_VALUE_BANNER);
+    if (!BUILT_FOR_MAINNET && !hasLabel) missing.push(rel);
+    if (BUILT_FOR_MAINNET && hasLabel) stale.push(rel);
+  }
+  if (missing.length) fail(`these documents do not carry the ${NO_VALUE_BANNER} label: ${missing.join(", ")}`);
+  if (stale.length) fail(`this build declares a public network but these documents still carry the ${NO_VALUE_BANNER} label: ${stale.join(", ")}`);
+  console.log(
+    BUILT_FOR_MAINNET
+      ? `environment: PUBLIC_MAINNET declared; ${htmlFiles.length} documents checked, 0 carry the test label`
+      : `environment: test network; ${htmlFiles.length} documents checked, ${htmlFiles.length} carry the ${NO_VALUE_BANNER} label`,
+  );
 }
 
 // ── 4. every internal link resolves to a file that exists ─────────────────────────────────────

@@ -28,243 +28,74 @@
  * network". No contract name, no calldata, and no hex reaches the page outside a "details"
  * disclosure, where one short copyable id is offered for support conversations.
  */
-import { keccak256, toHex } from "../../../web/ensv2/keccak.mjs";
 import { connectWallet, discoverProviders, isPracticeNetwork, networkName, waitForReceipt } from "./wallet.js";
+import { loadConfig } from "./local.js";
+import { ASSET_STATUS, assetMenu, validateEnvironment } from "./product.js";
+import {
+  wordFromAddress,
+  wordFromUint,
+  wordFromBytes32,
+  wordFromBool,
+  paddedUtf8Hex,
+  abiEncode,
+  selectorOf,
+  topicOf,
+  typesOf,
+  encodeCall,
+  wordsOf,
+  decodeBool,
+  decodeBytes32,
+  decodeUint,
+  decodeAddress,
+  decodeStringAt,
+  decodeString,
+  isZeroBytes32,
+  BUSINESS_JOINED_SIGNATURE,
+  SUBNAME_REGISTERED_SIGNATURE,
+  ROLES_GRANTED_SIGNATURE,
+  ROLES_REVOKED_SIGNATURE,
+  decodeBusinessJoinedLog,
+  decodeSubnameRegisteredLog,
+  foldRoleEvents,
+  childNode,
+  textResource,
+} from "./abi.js";
+// Re-exported so this file stays the one place the join screen is imported from, and so
+// apps/web/tests/local-join.test.mjs keeps exercising these through the screen that uses them.
+export {
+  wordFromAddress,
+  wordFromUint,
+  wordFromBytes32,
+  wordFromBool,
+  paddedUtf8Hex,
+  abiEncode,
+  selectorOf,
+  topicOf,
+  typesOf,
+  encodeCall,
+  wordsOf,
+  decodeBool,
+  decodeBytes32,
+  decodeUint,
+  decodeAddress,
+  decodeStringAt,
+  decodeString,
+  isZeroBytes32,
+  BUSINESS_JOINED_SIGNATURE,
+  SUBNAME_REGISTERED_SIGNATURE,
+  ROLES_GRANTED_SIGNATURE,
+  ROLES_REVOKED_SIGNATURE,
+  decodeBusinessJoinedLog,
+  decodeSubnameRegisteredLog,
+  foldRoleEvents,
+  childNode,
+  textResource,
+};
 
-// ---- ABI encoding: static words and dynamic strings ---------------------------------------------
-
-const stripHex = (h) => (typeof h === "string" && (h.startsWith("0x") || h.startsWith("0X")) ? h.slice(2) : h);
-const WORD = 64;
-
-export function wordFromAddress(address) {
-  const h = stripHex(address).toLowerCase();
-  if (!/^[0-9a-f]{40}$/.test(h)) throw new Error(`not a 20-byte address: ${address}`);
-  return h.padStart(WORD, "0");
-}
-
-export function wordFromUint(value) {
-  const v = typeof value === "bigint" ? value : BigInt(value);
-  if (v < 0n) throw new Error("uint256 is unsigned");
-  const h = v.toString(16);
-  if (h.length > WORD) throw new Error("value does not fit in 32 bytes");
-  return h.padStart(WORD, "0");
-}
-
-export function wordFromBytes32(value) {
-  const h = stripHex(value).toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(h)) throw new Error(`not 32 bytes: ${value}`);
-  return h;
-}
-
-export function wordFromBool(value) {
-  return wordFromUint(value ? 1 : 0);
-}
-
-/** UTF-8 bytes of `s`, as hex, right-padded to a whole number of 32-byte words. */
-export function paddedUtf8Hex(s) {
-  const bytes = new TextEncoder().encode(String(s));
-  let hex = "";
-  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
-  const remainder = hex.length % WORD;
-  if (remainder !== 0) hex += "0".repeat(WORD - remainder);
-  return { hex, byteLength: bytes.length };
-}
-
-const isDynamic = (type) => type === "string" || type === "bytes";
-
-function encodeStatic(type, value) {
-  switch (type) {
-    case "address": return wordFromAddress(value);
-    case "uint256": return wordFromUint(value);
-    case "bytes32": return wordFromBytes32(value);
-    case "bool": return wordFromBool(value);
-    default: throw new Error(`unsupported static type: ${type}`);
-  }
-}
-
-function encodeDynamic(type, value) {
-  if (type !== "string") throw new Error(`unsupported dynamic type: ${type}`);
-  const { hex, byteLength } = paddedUtf8Hex(value);
-  return wordFromUint(byteLength) + hex;
-}
-
-/**
- * Encode `values` as the argument tuple for `types`. Static arguments occupy one head word each;
- * a dynamic argument's head word is the byte offset of its tail, measured from the start of the
- * tuple, and the tails follow the head in argument order.
- */
-export function abiEncode(types, values) {
-  if (types.length !== values.length) throw new Error(`expected ${types.length} values, got ${values.length}`);
-  const headBytes = types.length * 32;
-  const heads = [];
-  const tails = [];
-  let tailBytes = 0;
-  for (let i = 0; i < types.length; i++) {
-    if (isDynamic(types[i])) {
-      const tail = encodeDynamic(types[i], values[i]);
-      heads.push(wordFromUint(headBytes + tailBytes));
-      tails.push(tail);
-      tailBytes += tail.length / 2;
-    } else {
-      heads.push(encodeStatic(types[i], values[i]));
-    }
-  }
-  return heads.join("") + tails.join("");
-}
-
-export function selectorOf(signature) {
-  return toHex(keccak256(new TextEncoder().encode(signature)).slice(0, 4));
-}
-
-/** keccak-256 of an event signature: the first topic of every log that event emits. */
-export function topicOf(signature) {
-  return toHex(keccak256(new TextEncoder().encode(signature)));
-}
-
-export function typesOf(signature) {
-  const inner = signature.slice(signature.indexOf("(") + 1, signature.lastIndexOf(")"));
-  return inner === "" ? [] : inner.split(",").map((t) => t.trim());
-}
-
-/** Selector plus encoded arguments: the `data` field of a call or a transaction. */
-export function encodeCall(signature, values) {
-  return selectorOf(signature) + abiEncode(typesOf(signature), values);
-}
-
-// ---- ABI decoding of what the chain answers -----------------------------------------------------
-
-export function wordsOf(hex) {
-  const h = stripHex(hex ?? "");
-  const out = [];
-  for (let i = 0; i + WORD <= h.length; i += WORD) out.push(h.slice(i, i + WORD));
-  return out;
-}
-
-export function decodeBool(hex) {
-  return BigInt("0x" + (wordsOf(hex)[0] ?? "0")) !== 0n;
-}
-
-export function decodeBytes32(hex) {
-  const w = wordsOf(hex)[0];
-  return w ? "0x" + w : null;
-}
-
-export function decodeUint(hex) {
-  const w = wordsOf(hex)[0];
-  return w ? BigInt("0x" + w) : null;
-}
-
-export function decodeAddress(hex) {
-  const w = wordsOf(hex)[0];
-  return w ? "0x" + w.slice(24) : null;
-}
-
-/** Decode one `string` at byte offset `at` of the tuple `hex` (the offset a head word named). */
-export function decodeStringAt(hex, at) {
-  const h = stripHex(hex);
-  const start = at * 2;
-  const length = Number(BigInt("0x" + h.slice(start, start + WORD)));
-  const data = h.slice(start + WORD, start + WORD + length * 2);
-  const bytes = new Uint8Array(length);
-  for (let i = 0; i < length; i++) bytes[i] = parseInt(data.slice(i * 2, i * 2 + 2), 16);
-  return new TextDecoder().decode(bytes);
-}
-
-/** A function that returns a single `string`: head word is the offset, then length, then bytes. */
-export function decodeString(hex) {
-  const words = wordsOf(hex);
-  if (words.length < 2) return "";
-  return decodeStringAt(hex, Number(BigInt("0x" + words[0])));
-}
-
-const ZERO32 = "0x" + "0".repeat(64); // bytes32 zero: "nobody joined with it" in the interface
-export function isZeroBytes32(value) {
-  return !value || String(value).toLowerCase() === ZERO32;
-}
-
-export const BUSINESS_JOINED_SIGNATURE = "BusinessJoined(bytes32,address,string,address,bytes32,bytes32,uint256)";
-export const SUBNAME_REGISTERED_SIGNATURE = "SubnameRegistered(bytes32,bytes32,string,address)";
-export const ROLES_GRANTED_SIGNATURE = "RolesGranted(uint256,uint256,address)";
-export const ROLES_REVOKED_SIGNATURE = "RolesRevoked(uint256,uint256,address)";
-
-/** `BusinessJoined`: topics carry merchantNode and owner; data carries the rest. */
-export function decodeBusinessJoinedLog(log) {
-  const topics = log?.topics ?? [];
-  if (topics.length !== 3) return null;
-  const words = wordsOf(log.data);
-  if (words.length < 5) return null;
-  return {
-    merchantNode: topics[1],
-    owner: "0x" + stripHex(topics[2]).slice(24),
-    label: decodeStringAt(log.data, Number(BigInt("0x" + words[0]))),
-    payout: "0x" + words[1].slice(24),
-    terminalsNode: "0x" + words[2],
-    firstTerminalNode: "0x" + words[3],
-    badgeTokenId: BigInt("0x" + words[4]),
-  };
-}
-
-/** `SubnameRegistered`: topics carry parent and node; data carries label and owner. */
-export function decodeSubnameRegisteredLog(log) {
-  const topics = log?.topics ?? [];
-  if (topics.length !== 3) return null;
-  const words = wordsOf(log.data);
-  if (words.length < 2) return null;
-  return {
-    parent: topics[1],
-    node: topics[2],
-    label: decodeStringAt(log.data, Number(BigInt("0x" + words[0]))),
-    owner: "0x" + words[1].slice(24),
-  };
-}
-
-/**
- * Replay grant and revoke logs in chain order and return the accounts that currently hold the
- * role. A revoke after a grant removes the account; a grant after a revoke restores it.
- */
-export function foldRoleEvents(events) {
-  const held = new Set();
-  const sorted = [...events].sort((a, b) => {
-    const blockDelta = Number(BigInt(a.blockNumber ?? 0)) - Number(BigInt(b.blockNumber ?? 0));
-    if (blockDelta !== 0) return blockDelta;
-    return Number(BigInt(a.logIndex ?? 0)) - Number(BigInt(b.logIndex ?? 0));
-  });
-  for (const ev of sorted) {
-    const account = ("0x" + stripHex(ev.topics?.[2] ?? "").slice(24)).toLowerCase();
-    if (ev.kind === "granted") held.add(account);
-    else if (ev.kind === "revoked") held.delete(account);
-  }
-  return [...held];
-}
-
-// ---- name math, the same derivations the fixture uses -------------------------------------------
-
-function hexToBytes(hex) {
-  const h = stripHex(hex);
-  const out = new Uint8Array(h.length / 2);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
-  return out;
-}
-
-/** keccak256(parent ‖ keccak256(label)): the node of `<label>.<parent>`, as namehash defines it. */
-export function childNode(parentNode, label) {
-  const labelHash = keccak256(new TextEncoder().encode(label));
-  const packed = new Uint8Array(64);
-  packed.set(hexToBytes(parentNode), 0);
-  packed.set(labelHash, 32);
-  return toHex(keccak256(packed));
-}
-
-/** uint256(keccak256(abi.encode(node, keccak256(key)))): the per-key text resource. */
-export function textResource(node, key) {
-  const keyHash = keccak256(new TextEncoder().encode(key));
-  const packed = new Uint8Array(64);
-  packed.set(hexToBytes(node), 0);
-  packed.set(keyHash, 32);
-  return toHex(keccak256(packed));
-}
 
 // ---- label rules, mirrored for instant feedback; the contract's isValidLabel is the truth ------
+
+export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export const LABEL_RULE_SENTENCE = "Use 3 to 32 lowercase letters, numbers and single hyphens, with no hyphen at the start or end.";
 
@@ -308,16 +139,47 @@ export function joinReadiness(state = {}) {
   if (!state.labelValid) return { ready: false, sentence: LABEL_RULE_SENTENCE };
   if (state.labelChecked === false) return { ready: false, sentence: "Checking whether that name is free..." };
   if (state.labelTaken) return { ready: false, sentence: "That name is already taken. Try another." };
-  if (!state.payoutValid) return { ready: false, sentence: "The payout address must be a full address starting with 0x." };
+  if (!state.payoutValid) return { ready: false, sentence: "The payout wallet must be a full address starting with 0x." };
+  if (state.payoutAssetChosen === false) return { ready: false, sentence: "Choose the asset you want to receive." };
+  if (state.acceptedCount === 0) return { ready: false, sentence: "Choose at least one asset your customers may pay with." };
   if (!state.registerValid) return { ready: false, sentence: `Give the first register a name. ${LABEL_RULE_SENTENCE}` };
+  if (state.limitValid === false) return { ready: false, sentence: "A transaction limit must be digits, for example 250. Leave it empty for no limit." };
   return { ready: true, sentence: "Ready. Your wallet will ask you to confirm one transaction." };
+}
+
+/**
+ * An optional transaction limit, as typed. Empty means no limit, which is a real answer rather
+ * than a missing one; anything that is not a plain number is refused instead of silently ignored,
+ * because a limit a business believes it set and this page dropped is worse than no limit at all.
+ */
+export function readLimit(text) {
+  const value = String(text ?? "").trim();
+  if (value === "") return { valid: true, limit: null, sentence: "No limit. Any amount may be charged." };
+  if (!/^\d+(\.\d+)?$/.test(value)) return { valid: false, limit: null, sentence: "A transaction limit must be digits, for example 250. Leave it empty for no limit." };
+  return { valid: true, limit: value, sentence: `No single payment above ${value}.` };
+}
+
+/**
+ * The lines shown under "Confirm", so a person reads back exactly what they are about to create.
+ * It is a pure function of the answers, which is why the confirmation cannot drift away from the
+ * form: there is nowhere else for these sentences to come from.
+ */
+export function summariseJoin(answers = {}) {
+  const label = String(answers.label ?? "").trim();
+  return {
+    name: label || "Not chosen yet",
+    payName: label ? payNameFor(label, answers.parentName) : "Not chosen yet",
+    payout: answers.payout && answers.payout !== ZERO_ADDRESS ? answers.payout : "The wallet you connected",
+    asset: answers.payoutAssetSymbol ?? "Not chosen yet",
+    accepts: Array.isArray(answers.accepted) && answers.accepted.length ? answers.accepted.join(", ") : "Nothing chosen yet",
+    register: answers.register ? answers.register : "Not named yet",
+    limit: answers.limit ? `No single payment above ${answers.limit}` : "No limit",
+  };
 }
 
 export function isAddress(value) {
   return /^0x[0-9a-fA-F]{40}$/.test(String(value ?? ""));
 }
-
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 // ---- the badge ------------------------------------------------------------------------------------
 
@@ -416,6 +278,44 @@ export async function listRegisters(session, identity, terminalsNode, statusKey)
   return registers;
 }
 
+/**
+ * Revoke one register, on chain, in the order that leaves nothing half-done if a step is declined:
+ * every operator loses the right to run it FIRST, and only then is it marked revoked. Doing it the
+ * other way round would leave a register marked revoked that an operator could still be authorized
+ * on, which is the difference between a switched-off till and one that only looks switched off.
+ *
+ * `onStep(n, total, sentence)` is called before each wallet confirmation so a screen can say which
+ * step a person is being asked to approve. Both screens that revoke use this function; neither has
+ * its own copy of the order of operations.
+ */
+export async function revokeRegisterOnChain({ session, identity, statusKey, register, onStep = () => {}, waitFor = waitForReceipt }) {
+  const operators = register?.operators ?? [];
+  const total = operators.length + 1;
+  let n = 0;
+  const send = async (label, tx) => {
+    const hash = await session.send(tx);
+    const receipt = await waitFor(session, hash);
+    if (!receipt) throw new Error(`${label} was sent but is not confirmed yet. Reload this page in a moment.`);
+    if (Number(receipt.status) === 0) throw new Error(`${label} was declined by the network.`);
+    return receipt;
+  };
+  for (const operator of operators) {
+    n++;
+    onStep(n, total, `Step ${n} of ${total}: removing ${shortId(operator)} from "${register.label}". Confirm in your wallet.`);
+    await send(`Step ${n} of ${total} (removing an operator)`, {
+      to: identity,
+      data: encodeCall("authorizeTextRoles(bytes32,string,address,bool)", [register.node, statusKey, operator, false]),
+    });
+  }
+  n++;
+  onStep(n, total, `Step ${n} of ${total}: marking "${register.label}" revoked. Confirm in your wallet.`);
+  await send(`Step ${n} of ${total} (marking it revoked)`, {
+    to: identity,
+    data: encodeCall("setText(bytes32,string,string)", [register.node, statusKey, "revoked"]),
+  });
+  return { steps: total };
+}
+
 /** The status word a person reads for a register's text value. */
 export function registerStatusText(status) {
   const s = String(status ?? "").toLowerCase();
@@ -435,14 +335,18 @@ if (typeof document !== "undefined" && document.getElementById("join")) {
 }
 
 async function main() {
-  let res;
-  try {
-    res = await fetch("./../local/config.json");
-  } catch {
-    return; // no companion server: the page stays the static document it already is
+  const config = await loadConfig();
+  // No companion server: the page stays the static document it already is, which still describes
+  // every step honestly.
+  if (!config) return;
+
+  const environment = validateEnvironment(config.manifest ?? config);
+  const banner = document.getElementById("env-banner");
+  if (banner) {
+    banner.textContent = environment.banner
+      ? `${environment.banner} — ${environment.networkName}. ${environment.reason}`
+      : `${environment.networkName}. ${environment.reason}`;
   }
-  if (!res.ok) return;
-  const config = await res.json();
 
   const onboarding = config.merchantOnboarding ?? null;
   const identity = config.identity ?? null;
@@ -462,7 +366,10 @@ async function main() {
     labelChecked: false,
     labelTaken: false,
     payoutValid: true,
+    payoutAssetChosen: false,
+    acceptedCount: 0,
     registerValid: true,
+    limitValid: true,
   };
   if (!state.onboardingPresent) {
     say("join-status", joinReadiness(state).sentence);
@@ -483,15 +390,95 @@ async function main() {
   if (connectBtn) connectBtn.disabled = false;
   say("wallet", "No wallet is connected yet.");
 
+  // What the owner has answered so far. The payout asset, the accepted assets and any limit are
+  // register settings this browser keeps: the frozen onboarding call takes a name, a payout wallet
+  // and a first register, and nothing else, so claiming these were written to the network would be
+  // a claim this product cannot back up. The page says so, under the button.
+  const answers = { label: "", parentName, payout: ZERO_ADDRESS, payoutAssetSymbol: null, accepted: [], register: "", limit: null };
+
   const refresh = () => {
     const verdict = joinReadiness(state);
     if (joinBtn) joinBtn.disabled = !verdict.ready;
     say("join-why", verdict.sentence);
+    const summary = summariseJoin(answers);
+    say("confirm-name", summary.name);
+    say("confirm-payname", summary.payName);
+    say("confirm-payout", summary.payout);
+    say("confirm-asset", summary.asset);
+    say("confirm-accepts", summary.accepts);
+    say("confirm-register", summary.register);
+    say("confirm-limit", summary.limit);
   };
+
+  // The assets this setup can actually handle, offered as answers 4 and 5.
+  const menu = assetMenu(config);
+  const payoutSelect = document.getElementById("payout-asset");
+  if (payoutSelect) {
+    payoutSelect.innerHTML = "";
+    for (const asset of menu.filter((a) => a.labelled)) {
+      const option = document.createElement("option");
+      option.value = asset.address;
+      option.textContent = asset.symbol;
+      payoutSelect.appendChild(option);
+    }
+    const preferred = menu.find((a) => a.role === "payout" && a.labelled) ?? menu.find((a) => a.labelled) ?? null;
+    if (preferred) payoutSelect.value = preferred.address;
+    state.payoutAssetChosen = Boolean(preferred);
+    answers.payoutAssetSymbol = preferred?.symbol ?? null;
+    payoutSelect.addEventListener("change", () => {
+      const chosen = menu.find((a) => a.address === payoutSelect.value) ?? null;
+      state.payoutAssetChosen = Boolean(chosen);
+      answers.payoutAssetSymbol = chosen?.symbol ?? null;
+      refresh();
+    });
+  }
+
+  const acceptList = document.getElementById("accept-list");
+  if (acceptList) {
+    acceptList.innerHTML = "";
+    for (const asset of menu) {
+      const li = document.createElement("li");
+      const label = document.createElement("label");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.value = asset.symbol ?? asset.address;
+      box.checked = asset.status !== ASSET_STATUS.UNAVAILABLE;
+      box.disabled = asset.status === ASSET_STATUS.UNAVAILABLE;
+      label.append(box, document.createTextNode(` ${asset.symbol ?? asset.address}`));
+      const badge = document.createElement("span");
+      badge.className = "availability";
+      badge.dataset.status = asset.status;
+      badge.textContent = asset.text;
+      const why = document.createElement("span");
+      why.className = "why";
+      why.textContent = asset.why;
+      li.append(label, badge, why);
+      acceptList.appendChild(li);
+      box.addEventListener("change", () => {
+        answers.accepted = [...acceptList.querySelectorAll("input:checked")].map((i) => i.value);
+        state.acceptedCount = answers.accepted.length;
+        refresh();
+      });
+    }
+    answers.accepted = [...acceptList.querySelectorAll("input:checked")].map((i) => i.value);
+    state.acceptedCount = answers.accepted.length;
+    const offered = menu.filter((a) => a.status !== ASSET_STATUS.UNAVAILABLE).length;
+    say("accept-said", `${menu.length} payment asset${menu.length === 1 ? "" : "s"} read, ${offered} can be accepted right now.`);
+  }
+
+  const limitInput = document.getElementById("tx-limit");
+  limitInput?.addEventListener("input", () => {
+    const verdict = readLimit(limitInput.value);
+    state.limitValid = verdict.valid;
+    answers.limit = verdict.limit;
+    say("limit-hint", verdict.sentence);
+    refresh();
+  });
 
   const readSlug = () => slugify(registerInput?.value ?? "Register 1");
   const updateRegisterHint = () => {
     const slug = readSlug();
+    answers.register = slug;
     state.registerValid = isValidLabelLocal(slug);
     say("register-hint", state.registerValid ? `Saved as ${slug}.` : LABEL_RULE_SENTENCE);
     refresh();
@@ -501,12 +488,14 @@ async function main() {
     const other = Boolean(payoutOther?.checked);
     if (payoutInput) payoutInput.disabled = !other;
     state.payoutValid = !other || isAddress(payoutInput?.value);
+    answers.payout = other && isAddress(payoutInput?.value) ? payoutInput.value.trim() : ZERO_ADDRESS;
     refresh();
   };
 
   let labelSeq = 0;
   const updateLabel = async () => {
     const label = String(nameInput?.value ?? "").trim().toLowerCase();
+    answers.label = label;
     const seq = ++labelSeq;
     state.labelValid = isValidLabelLocal(label);
     state.labelChecked = false;
@@ -643,16 +632,13 @@ async function main() {
   };
 
   const revokeRegister = async (joined, r) => {
-    const steps = r.operators.length + 1;
-    let n = 0;
-    for (const operator of r.operators) {
-      n++;
-      say("registers-said", `Step ${n} of ${steps}: removing ${shortId(operator)} from "${r.label}". Confirm in your wallet.`);
-      await sendAndWait(`Step ${n} of ${steps} (removing an operator)`, { to: identity, data: encodeCall("authorizeTextRoles(bytes32,string,address,bool)", [r.node, statusKey, operator, false]) });
-    }
-    n++;
-    say("registers-said", `Step ${n} of ${steps}: marking "${r.label}" revoked. Confirm in your wallet.`);
-    await sendAndWait(`Step ${n} of ${steps} (marking it revoked)`, { to: identity, data: encodeCall("setText(bytes32,string,string)", [r.node, statusKey, "revoked"]) });
+    await revokeRegisterOnChain({
+      session,
+      identity,
+      statusKey,
+      register: r,
+      onStep: (_n, _total, sentence) => say("registers-said", sentence),
+    });
     await renderRegisters(joined);
   };
 

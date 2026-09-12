@@ -75,9 +75,9 @@ const REQUIRED = new Set([
   "security",
   "proof",
   "status",
-  "merchant",
-  "merchant/payments",
-  "merchant/payments/new",
+  "business",
+  "business/payments",
+  "business/payments/new",
   "payment",
   "checkout",
   "receipt",
@@ -108,10 +108,10 @@ if (!existsSync(OUT)) {
     "/security/",
     "/proof/",
     "/status/",
-    "/merchant/",
-    "/merchant/payments/",
-    "/merchant/payments/new/",
-    "/merchant/payments/details/",
+    "/business/",
+    "/business/payments/",
+    "/business/payments/new/",
+    "/business/payments/details/",
     "/pay/",
     "/join/",
     "/receipt/",
@@ -133,12 +133,18 @@ if (!existsSync(OUT)) {
     !current.includes("Add your business") && !current.includes("join(string"),
   );
   const joinDoc = docs.get("/join/") ?? "";
-  const STEPS = /1\. Connect[\s\S]*2\. Business name[\s\S]*3\. Where the money goes[\s\S]*4\. Name your first register[\s\S]*5\. Add my business/;
-  chk("the join route names its five steps in order", STEPS.test(joinDoc));
-  chk("control: the step check fails on steps out of order", !STEPS.test("1. Connect 3. Where the money goes 2. Business name 4. Name your first register 5. Add my business"));
+  // The join questions, in the order a business owner is asked them. The numbers are drawn by the
+  // stylesheet from the list itself, so the assertion is on the ORDER of the headings, which is
+  // what a person actually experiences, rather than on hand-typed digits that could drift.
+  const STEPS = /Connect your wallet[\s\S]*Business name[\s\S]*Payout wallet[\s\S]*Preferred payout asset[\s\S]*Customer assets to accept[\s\S]*Name your first register[\s\S]*Transaction limit[\s\S]*Confirm/;
+  chk("the join route asks its seven questions, then confirm, in order", STEPS.test(joinDoc));
+  chk(
+    "control: the step check fails when two questions are swapped",
+    !STEPS.test("Connect your wallet Payout wallet Business name Preferred payout asset Customer assets to accept Name your first register Transaction limit Confirm"),
+  );
   chk("the join route's one button is disabled until script says why", /<button[^>]*id="join-submit"[^>]*disabled[^>]*aria-describedby="join-why"/.test(joinDoc));
   chk("the join route carries the practice-mode banner in the served HTML", joinDoc.includes("Practice mode, test money only"));
-  chk("the join route offers Take a payment and Registers after success", joinDoc.includes(">Take a payment<") && joinDoc.includes(">Registers<"));
+  chk("the join route offers the dashboard, the register and Registers after success", joinDoc.includes(">Open my business<") && joinDoc.includes(">Create payment<") && joinDoc.includes(">Registers<"));
   chk(
     "the join route shows no contract word to a business owner",
     !/\b(hook|executor|registry|calldata)\b/i.test(joinDoc.replace(/<script[\s\S]*?<\/script>/g, "")),
@@ -146,10 +152,34 @@ if (!existsSync(OUT)) {
   chk("the join route loads its own script and nothing else new", joinDoc.includes('src="../assets/local-join.js"'));
   const payDoc = docs.get("/pay/") ?? "";
   chk(
-    "the pay route's visible rows use the dictionary: Business, Pay name, Register, Amount you pay, They receive, Network, Expires",
-    ["<dt>Business</dt>", "<dt>Pay name</dt>", "<dt>Register</dt>", "<dt>Amount you pay</dt>", "<dt>They receive</dt>", "<dt>Network</dt>", "<dt>Expires</dt>"].every((s) => payDoc.includes(s)),
+    "the checkout's visible rows use the dictionary and name every term a customer needs",
+    [
+      "<dt>Business</dt>",
+      "<dt>Pay name</dt>",
+      "<dt>Register</dt>",
+      "<dt>Asset to spend</dt>",
+      "<dt>Most you can be charged</dt>",
+      "<dt>The business is guaranteed at least</dt>",
+      "<dt>Conversion</dt>",
+      "<dt>Fees</dt>",
+      "<dt>Network</dt>",
+      "<dt>Expires</dt>",
+    ].every((s) => payDoc.includes(s)),
   );
-  chk("the pay route no longer shows Merchant or [TEST MODE] to a customer", !/<dt>Merchant/.test(payDoc) && !payDoc.includes("[TEST MODE]"));
+  chk("the checkout never shows Merchant or [TEST MODE] to a customer", !/<dt>Merchant/.test(payDoc) && !payDoc.includes("[TEST MODE]"));
+  chk("the checkout carries the no-value label in the served HTML", payDoc.includes("TESTNET / NO VALUE"));
+
+  // The machine words are allowed inside the Advanced verification disclosure and nowhere else.
+  // This is the check that keeps the product surface readable by the person paying for a haircut.
+  const visible = (doc) => doc.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<details class="fold" data-advanced="true">[\s\S]*?<\/details>/g, "");
+  const leaked = [];
+  for (const [route, doc] of docs) {
+    if (route === "/proof/" || route === "/how-it-works/" || route === "/security/" || route === "/networks/" || route === "/experiments/robinhood/" || route === "/supported-assets/" || route === "/status/") continue;
+    const words = /\b(hook|executor|registry|calldata|tick)s?\b/i.exec(visible(doc));
+    if (words) leaked.push(`${route}:${words[0]}`);
+  }
+  chk("no product screen shows a machine word outside Advanced verification", leaked.length === 0, leaked.join(","));
+  chk("control: the machine-word check catches one that is planted", /\b(hook|executor|registry|calldata|tick)s?\b/i.test("the executor did it"));
 
   // THE ROWS. Each asserts the mapped CONTROL exists, via its data-parity attribute — not that
   // some matching prose appears. Prose drifts into a page by accident; an attribute does not.

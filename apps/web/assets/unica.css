@@ -83,3 +83,50 @@ label { font-weight: 500; }
   border-bottom: 1px solid var(--line); }
 @media (min-width: 40rem) { .modes { grid-template-columns: 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ── the product surface ─────────────────────────────────────────────────────────────────────── */
+/* The environment label. It sits above everything, in flow, so it cannot be scrolled past or
+   covered: a page that says nothing about which network it is on is the one that costs money. */
+.envbar { margin: 0; padding: 8px 20px; background: var(--surface); color: var(--ink);
+  border-bottom: 1px solid var(--line); font-size: 0.85rem; text-align: center; }
+.envbar strong { letter-spacing: 0.06em; }
+
+/* One accent only, on the primary action. Everything else earns attention through position. */
+.card { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px;
+  margin: 16px 0; background: var(--paper); }
+.card > :first-child { margin-top: 0; }
+.card h2, .card h3 { border-top: 0; padding-top: 0; margin-top: 0; }
+.headline { font-size: 1.6rem; line-height: 1.25; margin: 4px 0 8px; letter-spacing: -0.01em; }
+.big { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; }
+.kpis { display: grid; gap: 12px; grid-template-columns: 1fr; margin: 12px 0; }
+.kpi { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+.kpi dt { color: var(--muted); font-size: 0.85rem; }
+.kpi dd { margin: 4px 0 0; font-size: 1.15rem; }
+@media (min-width: 40rem) { .kpis { grid-template-columns: repeat(3, 1fr); } }
+
+/* Asset availability. The word carries the meaning; the mark repeats it for anyone who cannot
+   tell the hues apart, and neither is ever the only signal. */
+.assets { list-style: none; padding: 0; margin: 12px 0; }
+.assets li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--line); }
+.assets .sym { font-weight: 600; min-width: 5rem; }
+.availability { display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 10px; font-size: 0.85rem; }
+.availability[data-status="DIRECT"] { border-color: var(--accent); font-weight: 600; }
+.availability[data-status="CONVERSION"] { border-style: dashed; }
+.availability[data-status="UNAVAILABLE"] { border-style: dotted; color: var(--muted); }
+.assets .why { flex-basis: 100%; color: var(--muted); font-size: 0.9rem; }
+
+/* The customer link and its square. The square is drawn by the page; when it cannot be, the link
+   is still the whole payment, and the page says which one the customer is looking at. */
+.paylink { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.paylink input { flex: 1 1 18rem; }
+.qr { width: 220px; height: 220px; max-width: 100%; border: 1px solid var(--line);
+  border-radius: var(--radius); background: #fff; display: grid; place-items: center; margin: 12px 0; }
+.qr img, .qr canvas { display: block; max-width: 100%; height: auto; }
+
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps > li { counter-increment: step; padding: 0 0 12px 0; }
+.steps > li > h2::before { content: counter(step) ". "; color: var(--muted); }
+.receipt-lines dt { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+.receipt-lines dd { margin: 2px 0 0; }

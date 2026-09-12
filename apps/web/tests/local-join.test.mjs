@@ -250,7 +250,7 @@ test("parseTokenUri decodes the badge's data URI and refuses anything else", () 
 
 // ---- the readiness rule: the first unmet step, in reading order ------------------------------------
 
-const READY = { onboardingPresent: true, connected: true, alreadyJoined: false, labelValid: true, labelChecked: true, labelTaken: false, payoutValid: true, registerValid: true };
+const READY = { onboardingPresent: true, connected: true, alreadyJoined: false, labelValid: true, labelChecked: true, labelTaken: false, payoutValid: true, payoutAssetChosen: true, acceptedCount: 1, registerValid: true, limitValid: true };
 test("joinReadiness is ready only when every step is met", () => {
   assert.deepEqual(joinReadiness(READY), { ready: true, sentence: "Ready. Your wallet will ask you to confirm one transaction." });
 });
@@ -263,8 +263,11 @@ test("joinReadiness asks for a wallet, then refuses a second business, then the 
   assert.equal(joinReadiness({ ...READY, labelValid: false }).sentence, LABEL_RULE_SENTENCE);
   assert.match(joinReadiness({ ...READY, labelChecked: false }).sentence, /Checking whether/);
   assert.match(joinReadiness({ ...READY, labelTaken: true }).sentence, /already taken/);
-  assert.match(joinReadiness({ ...READY, payoutValid: false }).sentence, /payout address/);
+  assert.match(joinReadiness({ ...READY, payoutValid: false }).sentence, /payout wallet/);
+  assert.match(joinReadiness({ ...READY, payoutAssetChosen: false }).sentence, /asset you want to receive/);
+  assert.match(joinReadiness({ ...READY, acceptedCount: 0 }).sentence, /at least one asset/);
   assert.match(joinReadiness({ ...READY, registerValid: false }).sentence, /first register/);
+  assert.match(joinReadiness({ ...READY, limitValid: false }).sentence, /transaction limit must be digits/);
 });
 test("joinReadiness sentences never show hex or a contract word", () => {
   for (const s of Object.keys(READY).map((k) => joinReadiness({ ...READY, [k]: !READY[k] }).sentence)) {
