@@ -1,0 +1,121 @@
+{
+  "environment": "PUBLIC_TESTNET_NO_VALUE",
+  "designation": "TEST_ONLY_NO_VALUE",
+  "chainId": 11155111,
+  "commit": "95fa9b95c2fdc1450ca386717cc7e3ad8f05cc42",
+  "readAtBlock": 11690204,
+  "releaseTag": "unica-v4/sepolia-rehearsal-1",
+  "verification": {
+    "status": "not verified",
+    "note": "no read-only explorer result was supplied"
+  },
+  "contracts": {
+    "poolManager": {
+      "address": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+      "codeHash": "0x09930125a49f5b95caf8052991cc14d1240dca8b43f42b899115b86867e4bce1",
+      "codeSize": 24009
+    },
+    "assetToken": {
+      "address": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+      "codeHash": "0xc864e10689f2da18833652a3b075d43106e87f0f90d95ee64f6f0b33bc026083",
+      "codeSize": 3124
+    },
+    "payoutToken": {
+      "address": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "codeHash": "0xcd3f29e2ea9c61dadd48bfeaf8b2884b6de9dfee7bf45329452c4c33d0868ceb",
+      "codeSize": 1798
+    },
+    "factory": {
+      "address": "0x49241d0f80728CDd0933a4131529b2e084D96192",
+      "codeHash": "0xdf6479223cece2220ce2048603e696ffacd19e2581bd39cea51214c7a0fe476f",
+      "codeSize": 20116
+    },
+    "registry": {
+      "address": "0x8789366A3dDd465D3bf612c914E29419d0dDAa11",
+      "codeHash": "0x71294a4ef706395bfe8ff408cdf67bb1ca194966f451360c71b841f49014ce8e",
+      "codeSize": 22257
+    },
+    "hook": {
+      "address": "0x2570a593e0D24ede29eC926e0c5a88B427b9A0c0",
+      "codeHash": "0x2b7198ce2c7f4f3900f03702e8d9064e5d2c65cbadf172168240f01223f984da",
+      "codeSize": 18148
+    },
+    "executor": {
+      "address": "0x36DD3d5d2dd0124331Cc3874A7bb07B3A6d48ede",
+      "codeHash": "0x64c9ab6e9644481aa90f0b18beb4c713008202198b2a4b6c184319d3a34ad187",
+      "codeSize": 17280
+    },
+    "terminalAdmission": {
+      "address": "0x95ee6cCde9B03C8841972DB52b4cBe38e7d99399",
+      "codeHash": "0x1d1935fc8a37aa2e69d724d7779f561ee5c246dc77062b63459629142b427206",
+      "codeSize": 9551
+    },
+    "identityToken": {
+      "address": "0xaEB244C4FE0f995403eC230683d2DC84D41157CA",
+      "codeHash": "0xb8b591cf7b7122301146aad829ea2a4ad2925962c479cdd5b2234b63d292b3e3",
+      "codeSize": 16931
+    },
+    "identityAuthority": {
+      "address": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+      "codeHash": "0x663f6bc9e7b51de123c9f02e855ae4becf161fe9e1be689883de93513cea1387",
+      "codeSize": 5381
+    },
+    "ensV2Resolver": {
+      "address": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+      "codeHash": "0x6b78f4d89953a4fefb1573c422ecd1243b1272a25105b4bdd22e727f2fcf25a6",
+      "codeSize": 77
+    }
+  },
+  "market": {
+    "marketId": "0x99f138caff24fe5dbe437093bac3bf66b2605e7940887fa648e5409dddaefb93",
+    "version": 1,
+    "status": 4,
+    "demonstrationOnly": true,
+    "poolKey": {
+      "currency0": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "currency1": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "hooks": "0x2570a593e0D24ede29eC926e0c5a88B427b9A0c0"
+    },
+    "poolId": "0x52752e18305fbbe3a709da10edde94ff9ff7b7c246d614624f0abaa2f7f773f9",
+    "adapter": "0x0000000000000000000000000000000000000000",
+    "feedId": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "oracle": {
+      "maxAge": 0,
+      "maxDeviationBps": 0,
+      "enabled": false
+    },
+    "caps": {
+      "maxPerTxPayout": "10000000",
+      "maxPerDayPayout": "25000000",
+      "maxSeedPayout": "5000000"
+    },
+    "rateE18": "2515000000000000000000",
+    "rateLabel": "a demonstration rate the admin sets, never a market price",
+    "initSqrtPriceX96": "1583006913070903104376321276546258",
+    "initTick": 198060,
+    "seedDepth": "333131895132",
+    "assetDecimals": 18,
+    "payoutDecimals": 6,
+    "assetIsCurrency0": false
+  },
+  "accounts": {
+    "admin": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+    "pauser": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+    "deployer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73"
+  },
+  "identity": {
+    "authority": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+    "authorityKind": "EnsV2ResolverAuthority over the chain's ENSv2 permissioned resolver",
+    "ensV2Resolver": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+    "ensDeploymentId": "0xb21f8341b4168d56bf301fbc8f2923f2210b99ddcfd72e1fdad2113ba862bb90",
+    "terminalAdmission": "0x95ee6cCde9B03C8841972DB52b4cBe38e7d99399",
+    "identityToken": "0xaEB244C4FE0f995403eC230683d2DC84D41157CA",
+    "rendererVersion": "unica-identity-svg/1",
+    "terminalStatusKey": "com.unica.terminal-status"
+  },
+  "policy": {
+    "note": "no confidential-policy receiver configured on this chain"
+  }
+}
