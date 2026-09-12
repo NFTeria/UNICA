@@ -1,5 +1,17 @@
-import { h, raw, hex, evidenceBadge } from "../html.mjs";
-import { SITE, V3, EXPERIMENT } from "../site.mjs";
+/**
+ * The receipt: what a customer keeps and a business shows its accountant.
+ *
+ * THE LINK IS THE RECEIPT. The network, the transaction and, for a catalogue sale, the sale id all
+ * ride in the query string, so the same link always rebuilds the same record and nothing depends on
+ * what this browser remembers. A static host cannot serve one file per transaction, which is why
+ * these are query parameters rather than a path.
+ *
+ * ONE VERDICT, AND IT IS NOT DECIDED HERE. The pill says Paid only when the payment check answered
+ * VERIFIED; every other answer reads Checking, Refused or Unknown, and the reason codes sit behind
+ * the Advanced verification disclosure. `assets/storefront.js` owns that mapping so the checkout
+ * and this page cannot come to different conclusions about the same payment.
+ */
+import { h, raw } from "../html.mjs";
 import * as C from "../components.mjs";
 
 const P = (id) => raw(` data-parity="${id}"`);
@@ -15,43 +27,42 @@ export const RECEIPT = [
     ogDescription: "Rebuildable from the network alone.",
     ogImage: "og-receipt.svg",
     body: h`
-<p class="sub">This page takes <code>?chain=</code>, <code>?tx=</code> and <code>?order=</code> from
-the link. The state is entirely in the link, so it reloads and shares correctly. A static host
-cannot serve one file per transaction, which is why these are query parameters.</p>
-<section class="card"${P("receipt")} id="receipt-card">
-  <p class="headline" id="r-business">This business</p>
-  <p class="big" id="r-amount">—</p>
-  <p id="r-statement" class="sub">Nothing has been checked yet.</p>
-  <dl class="receipt-lines">
-    <dt>Paid amount</dt><dd id="r-paid">—</dd>
-    <dt>Customer asset</dt><dd id="r-customer-asset">—</dd>
-    <dt>Payout asset</dt><dd id="r-payout-asset">—</dd>
-    <dt>Date and time</dt><dd id="r-when">—</dd>
-    <dt>Order number</dt><dd id="r-order" class="hex">—</dd>
-    <dt>Payment status</dt><dd id="r-status">—</dd>
-    <dt>Verification status</dt><dd id="r-verification">—</dd>
-    <dt>Transaction</dt><dd id="r-tx" class="hex">—</dd>
-  </dl>
-  <p class="ctas">
-    <button type="button" class="cta cta-quiet" id="r-download" disabled aria-describedby="r-download-why">Download this receipt</button>
-    <button type="button" class="cta cta-quiet" id="r-share" disabled aria-describedby="r-download-why">Share this receipt</button>
-  </p>
-  <p class="sub" id="r-download-why">Available once this receipt has been read from the network.</p>
-  ${C.statusRegion("receipt", "No transaction in this link.")}
-  ${C.evidenceKey()}
-</section>
-<section${P("graph")}>
-  <h2>Indexed payments</h2>
-  ${C.statusRegion("graph", "The index has not been read yet.")}
-  <p${P("graph-fail")}>An index that cannot be reached and an index holding nothing are different
-  answers, and this page never shows one as the other. A failed read says it failed.</p>
-</section>
-<section>
-  <h2>Without the index</h2>
-  <p>Every line above can be rebuilt from the transaction's own record and the network's own state.
-  The index makes it faster; it is never the only route.</p>
-</section>
-${C.advancedVerification("adv")}
+<link rel="stylesheet" href="../assets/screens/checkout.css">
+<div class="co">
+  <div class="co-id">
+    <span class="co-badge" id="r-badge"></span>
+    <div class="co-id-text">
+      <p class="co-name" id="r-business">This business</p>
+      <p class="co-payname"><span id="r-payname">—</span><span class="int" data-int="ens" id="r-ens" hidden>ENS</span></p>
+    </div>
+  </div>
+  <section class="co-card"${P("receipt")} id="receipt-card">
+    <div class="rc-head">
+      <p class="rc-amount" id="r-amount">—</p>
+      <span class="pill" data-status="pending" id="r-verdict"><span aria-hidden="true">◐</span> Checking</span>
+    </div>
+    <dl class="rc-rows">
+      <dt>Amount</dt><dd id="r-paid">—</dd>
+      <dt>Asset</dt><dd id="r-asset">—</dd>
+      <dt>When</dt><dd id="r-when">—</dd>
+      <dt>Network</dt><dd id="r-network">—</dd>
+      <dt>Transaction</dt><dd id="r-tx" class="hex">—</dd>
+    </dl>
+    <p class="rc-links">
+      <a href="#" id="r-explorer" hidden>Open on the network's own explorer</a>
+      <button type="button" class="cta cta-quiet" id="r-download" disabled aria-describedby="r-keep-why">Download</button>
+      <button type="button" class="cta cta-quiet" id="r-share" disabled aria-describedby="r-keep-why">Share</button>
+    </p>
+    <p class="sub" id="r-keep-why">Available once this receipt has been read from the network.</p>
+    <p class="status" id="receipt" role="status" aria-live="polite">No payment in this link.</p>
+  </section>
+  <section class="graph-panel"${P("graph")}>
+    <p><span id="graph-line">Not indexed yet</span> <span class="int" data-int="graph" id="graph-mark" hidden>The Graph</span></p>
+    <ul class="graph-rows" id="graph-rows" hidden></ul>
+    <p class="sub"${P("graph-fail")}>An index that did not answer and an index holding nothing are different answers.</p>
+  </section>
+  ${C.advancedVerification("adv")}
+</div>
 <script type="module" src="../assets/receipt.js"></script>`,
   },
 ];
