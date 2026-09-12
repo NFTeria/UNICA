@@ -11,7 +11,7 @@ NET=${1:?alias}; STEP=${2:?step}
 case "$NET" in sepolia_testnet) C=11155111;; base_testnet) C=84532;; arbitrum_testnet) C=421614;; unichain_testnet) C=1301;; *) echo "STOP: unknown alias $NET"; exit 1;; esac
 CFG=config/unica-v4/$C.env; MAN=deployments/unica-v4/$C.json
 fail() { echo "STOP: $1"; exit 1; }
-cfg() { grep -E "^$1=" "$CFG" | head -1 | cut -d= -f2 | awk '{print $1}'; }
+cfg() { { grep -E "^$1=" "$CFG" || true; } | head -1 | cut -d= -f2 | awk '{print $1}'; }   # a missing key is empty, never a failure under pipefail
 chain() { [ "$(cast chain-id --rpc-url "$NET")" = "$C" ] || fail "$NET is not chain $C"; echo "chain ok $C ($NET)"; }
 code() { local i; for i in 1 2 3 4 5 6 7 8 9 10; do if [ "$(cast code "$1" --rpc-url "$NET")" != "0x" ]; then echo "code ok $1"; return 0; fi; sleep 3; done; fail "no runtime code at $1 after 30 s"; }
 need_account() { [ -n "${DEPLOYER_ACCOUNT:-}" ] || { echo "set DEPLOYER_ACCOUNT to one of:"; cast wallet list; exit 1; }; }
