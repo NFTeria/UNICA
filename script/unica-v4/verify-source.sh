@@ -20,9 +20,36 @@ test -f "$MANIFEST" || { echo "STOP: no manifest at $MANIFEST"; exit 1; }
 test -f "$BDIR/stageA-latest.json" || { echo "STOP: no stage A broadcast record at $BDIR/stageA-latest.json"; exit 1; }
 m() { node -e 'const m=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log(process.argv[2].split(".").reduce((o,k)=>o?.[k], m) ?? "")' "$MANIFEST" "$1"; }
 RPC=${RPC_ALIAS:-}
-if [ -n "${ETHERSCAN_API_KEY:-}" ]; then VERIFIER=(--verifier etherscan --etherscan-api-key "$ETHERSCAN_API_KEY"); else VERIFIER=(--verifier sourcify); fi
-run() { if [ "$DRY" = 1 ]; then printf 'DRY: forge verify-contract --chain-id %s --watch %s %s --constructor-args %s\n' "$CHAIN" "$2" "$3" "$4"; else forge verify-contract --chain-id "$CHAIN" --watch "${VERIFIER[@]}" --constructor-args "$4" "$2" "$3" || { echo "PENDING/RETRY: $1 at $2 (re-run this command later; an explorer queue is not a failure of the deployment)"; PENDING=$((PENDING+1)); }; fi; }
+# Which verifier, in order of preference: an explicit UNICA_VERIFIER (+ UNICA_VERIFIER_URL) on the command line;
+# a chain whose public explorer is a Blockscout instance forge can talk to directly (no key involved); Etherscan V2
+# when ETHERSCAN_API_KEY is in the shell; Sourcify otherwise. The Blockscout table holds public explorer API
+# bases only, never an RPC.
+blockscout_api_of() { case "$1" in
+  46630) echo "https://explorer.testnet.chain.robinhood.com/api";;   # Robinhood Chain testnet explorer (docs/chains/ROBINHOOD.md)
+  *) echo "";; esac; }
+if [ -n "${UNICA_VERIFIER:-}" ]; then
+  VERIFIER=(--verifier "$UNICA_VERIFIER"); [ -n "${UNICA_VERIFIER_URL:-}" ] && VERIFIER+=(--verifier-url "$UNICA_VERIFIER_URL")
+elif [ -n "$(blockscout_api_of "$CHAIN")" ]; then
+  VERIFIER=(--verifier blockscout --verifier-url "$(blockscout_api_of "$CHAIN")")
+elif [ -n "${ETHERSCAN_API_KEY:-}" ]; then VERIFIER=(--verifier etherscan --etherscan-api-key "$ETHERSCAN_API_KEY"); else VERIFIER=(--verifier sourcify); fi
 PENDING=0
+LOG=$(mktemp -t unica-verify.XXXXXX)
+trap 'rm -f "$LOG"' EXIT
+# Etherscan V2 covers many chains and not all of ours; when forge answers "No known Etherscan API URL" for this
+# chain the run switches to Sourcify for the rest of it and retries the same contract, because a shell that
+# happens to carry an explorer key must not turn a supported chain into four false "pending" rows.
+verify_once() { forge verify-contract --chain-id "$CHAIN" --watch "${VERIFIER[@]}" --constructor-args "$4" "$2" "$3" 2>&1 | tee "$LOG"; return "${PIPESTATUS[0]}"; }
+run() {
+  if [ "$DRY" = 1 ]; then printf 'DRY: forge verify-contract --chain-id %s --watch %s %s --constructor-args %s\n' "$CHAIN" "$2" "$3" "$4"; return 0; fi
+  if verify_once "$@"; then return 0; fi
+  if [ "${VERIFIER[1]}" = etherscan ] && grep -q "No known Etherscan API URL" "$LOG"; then
+    echo "etherscan has no endpoint for chain $CHAIN; switching this run to sourcify"
+    VERIFIER=(--verifier sourcify)
+    if verify_once "$@"; then return 0; fi
+  fi
+  echo "PENDING/RETRY: $1 at $2 via ${VERIFIER[1]} (re-run this command later; an explorer queue is not a failure of the deployment)"
+  PENDING=$((PENDING+1))
+}
 sig_of() { case "$1" in
   UnicaMarketFactory) echo "constructor(address,address,bytes32,bool)";;
   EnsV2ResolverAuthority) echo "constructor(address)";;
@@ -39,12 +66,14 @@ echo "== source verification for chain $CHAIN (manifest $MANIFEST; verifier ${VE
 # 1. contracts the deployer created directly in stage A, arguments as recorded by forge. Every run file in
 #    the directory is read and only the CREATE whose address the MANIFEST names is used, so a repeated stage
 #    that left an orphan pair behind cannot be verified in place of the recorded one.
-node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const want=new Set(Object.values(m.contracts).map(c=>c.address.toLowerCase())); const seen=new Set(); for (const f of fs.readdirSync(process.argv[2]).filter(f=>f.endsWith(".json"))) { const j=JSON.parse(fs.readFileSync(process.argv[2]+"/"+f,"utf8")); for (const t of (j.transactions||[])) if (t.transactionType==="CREATE" && t.contractName && want.has((t.contractAddress||"").toLowerCase()) && !seen.has(t.contractAddress.toLowerCase())) { seen.add(t.contractAddress.toLowerCase()); console.log(t.contractName, t.contractAddress, JSON.stringify(t.arguments||[])) } }' "$MANIFEST" "$BDIR" | while read -r name addr args; do
+node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const want=new Set(Object.values(m.contracts).map(c=>c.address.toLowerCase())); const seen=new Set(); for (const f of fs.readdirSync(process.argv[2]).filter(f=>f.endsWith(".json"))) { const j=JSON.parse(fs.readFileSync(process.argv[2]+"/"+f,"utf8")); for (const t of (j.transactions||[])) if (t.transactionType==="CREATE" && t.contractName && want.has((t.contractAddress||"").toLowerCase()) && !seen.has(t.contractAddress.toLowerCase())) { seen.add(t.contractAddress.toLowerCase()); console.log(t.contractName, t.contractAddress, JSON.stringify(t.arguments||[])) } }' "$MANIFEST" "$BDIR" > "$LOG.creates"
+while read -r name addr args; do
   sig=$(sig_of "$name"); [ -n "$sig" ] || { echo "skip $name at $addr (not a forge-verifiable Solidity contract here)"; continue; }
   # shellcheck disable=SC2046
   encoded=$(cast abi-encode "$sig" $(node -e 'for (const a of JSON.parse(process.argv[1])) console.log(a)' "$args"))
   run "$name" "$addr" "$(path_of "$name")" "$encoded"
-done
+done < "$LOG.creates"
+rm -f "$LOG.creates"
 # 2. the registry, created by the factory's constructor: (admin, requireOracle) where requireOracle is read from the registry
 REG=$(m contracts.registry.address); ADMIN=$(m accounts.admin)
 if [ "$DRY" = 1 ]; then REQ=false; else REQ=$(cast call "$REG" 'REQUIRE_ORACLE()(bool)' --rpc-url "${RPC:?set RPC_ALIAS to the foundry.toml alias}"); fi
