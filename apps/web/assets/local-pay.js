@@ -1,53 +1,61 @@
 /**
  * Progressive enhancement for the /pay/ route ONLY, wiring it to a companion demo server
  * (script/anvil/serve.sh) that fronts a loopback Anvil chain. If that server is not running, the
- * fetch below 404s (or errors) and this file does nothing further — the page stays the static
+ * fetch below 404s (or errors) and this file does nothing further: the page stays the static
  * document it already is.
  *
  * NOTHING HERE IS BAKED IN. The RPC endpoint, chain id, deployment manifest and demo record all
  * come from one relative fetch (`./../local/config.json`), never a literal address written in this
- * file — `apps/web/build.mjs`'s FORBIDDEN_IN_OUTPUT scan enforces exactly this for every file this
+ * file. `apps/web/build.mjs`'s FORBIDDEN_IN_OUTPUT scan enforces exactly this for every file this
  * build emits, assets included.
  *
- * THE PAYER SIGNS NOTHING. The "wallet" here is one of the loopback chain's own pre-funded,
- * already-unlocked accounts, driven with `eth_sendTransaction({from})` and no private key anywhere
- * — the same impersonation discipline `script/anvil/lib.sh`'s `send_as` uses from the shell.
+ * SENDING GOES THROUGH apps/web/assets/wallet.js. A browser wallet, when one is installed, signs in
+ * its own extension; on the local practice network with no wallet, the chain's own already-unlocked
+ * account executes `eth_sendTransaction({from})` with no key anywhere. This file never sees either.
  *
  * THE PAID RULE IS NOT REIMPLEMENTED HERE. `paymentStatus`, `canAuthorizePayment` and
- * `canInitiateSale` are imported from `tools/unica-pos-cli/render.mjs` — the one place UNICA already
- * states "PAID only when evidence.decision === 'VERIFIED'" (docs/unica-v4/EVENT-SCHEMA.md F8). That
- * file has no imports of its own, so it is already browser-safe; this file does not re-derive its
- * rule, only its text. The selector this file needs for `approve`/`pay` calldata reuses the same
- * keccak-256 implementation the ENSv2 layer already carries at `web/ensv2/keccak.mjs` (also import-
- * free of anything Node-only). Both are fetched, at runtime, from the two exact repository paths a
- * plain relative import already names below — `script/anvil/serve.sh` serves those two files
- * verbatim (read, never copied) so the identical import specifier resolves the same way whether this
- * file runs under `node --test` (real filesystem) or in a browser (through the demo server).
+ * `canInitiateSale` are imported from `tools/unica-pos-cli/render.mjs`, the one place UNICA states
+ * "PAID only when evidence.decision === 'VERIFIED'" (docs/unica-v4/EVENT-SCHEMA.md F8). This file
+ * only turns that status into the words a customer reads: "Paid (checked)" appears when, and only
+ * when, that function answers PAID. The selector this file needs for `approve`/`pay` calldata reuses
+ * the same keccak-256 implementation the ENSv2 layer already carries at `web/ensv2/keccak.mjs`.
+ * Both are fetched, at runtime, from the two exact repository paths a plain relative import already
+ * names below; `script/anvil/serve.sh` serves those two files verbatim so the identical import
+ * specifier resolves the same way under `node --test` and in a browser.
+ *
+ * WORDS ON SCREEN. A customer reads "business", "pay name", "register", "sale", "amount you pay",
+ * "they receive", "Local practice network". Contract names, calldata and hex stay out of the page
+ * except inside a "Details" disclosure.
  */
 import { canAuthorizePayment, canInitiateSale, paymentStatus } from "../../../tools/unica-pos-cli/render.mjs";
 import { keccak256, toHex } from "../../../web/ensv2/keccak.mjs";
+import { PRACTICE_MODE_LABEL, connectWallet, discoverProviders, networkName, waitForReceipt } from "./wallet.js";
 
-// ---- labels, kept identical to the text tools/unica-pos-cli/render.mjs already uses -------------
+// ---- labels ---------------------------------------------------------------------------------------
 
-export const TEST_MODE_LABEL = "[TEST MODE]";
-export const NO_VALUE_LABEL = "Testnet demonstration -- no real value";
+/** The practice-mode words, from the business-language dictionary. */
+export const TEST_MODE_LABEL = "Practice mode";
+export const NO_VALUE_LABEL = PRACTICE_MODE_LABEL;
+export { PRACTICE_MODE_LABEL };
 
 const REASON_TEXT = {
-  WRONG_NETWORK: "Wrong network: this demo server's chain does not match the pinned deployment.",
-  WRONG_PAYER: "This order is bound to a different address than the one connected (?as=0x..).",
-  ORDER_EXPIRED: "This order expired before it was paid. Nothing was charged.",
-  TERMINAL_REVOKED: "The terminal that admitted this order has since been revoked.",
+  WRONG_NETWORK: "Wrong network. This sale was created on a different network than the one this page is connected to.",
+  WRONG_PAYER: "This sale is for a different customer wallet than the one connected.",
+  ORDER_EXPIRED: "This sale expired before it was paid. Nothing was charged.",
+  TERMINAL_REVOKED: "The register that started this sale has since been revoked.",
 };
 export { REASON_TEXT };
 
 // ---- pure blocker functions, unit-tested directly -----------------------------------------------
 
 /** `config` is the object served by GET /local/config.json: {rpc, chainId, manifest, record}. */
-export function wrongNetworkBlocker(config) {
+export function wrongNetworkBlocker(config, walletChainId = null) {
   if (!config || !config.manifest) return false;
   const manifestChainId = config.manifest.chainId;
   if (manifestChainId === undefined || manifestChainId === null) return false;
-  return Number(config.chainId) !== Number(manifestChainId);
+  if (Number(config.chainId) !== Number(manifestChainId)) return true;
+  if (walletChainId !== null && walletChainId !== undefined && Number(walletChainId) !== Number(manifestChainId)) return true;
+  return false;
 }
 
 /** `record` is the demo record shape written by script/anvil/demo.sh (or null). */
@@ -69,13 +77,13 @@ export function terminalRevokedBlocker(record) {
 }
 
 /**
- * Every reason this payer may not proceed, found rather than short-circuited on the first one — a
- * countertop screen that shows only one blocker at a time makes a payer fix it and then discover
- * the next (the same reasoning `canAuthorizePayment` itself documents).
+ * Every reason this customer may not proceed, found rather than short-circuited on the first one.
+ * A countertop screen that shows only one blocker at a time makes a customer fix it and then
+ * discover the next (the same reasoning `canAuthorizePayment` itself documents).
  */
-export function computeBlockers({ config, record, connectedAddress, now } = {}) {
+export function computeBlockers({ config, record, connectedAddress, walletChainId = null, now } = {}) {
   const reasons = [];
-  if (wrongNetworkBlocker(config)) reasons.push("WRONG_NETWORK");
+  if (wrongNetworkBlocker(config, walletChainId)) reasons.push("WRONG_NETWORK");
   if (wrongPayerBlocker(record, connectedAddress)) reasons.push("WRONG_PAYER");
   if (orderExpiredBlocker(record, now)) reasons.push("ORDER_EXPIRED");
   if (terminalRevokedBlocker(record)) reasons.push("TERMINAL_REVOKED");
@@ -91,11 +99,31 @@ export function deriveStatus({ txSubmitted = false, txHash = null, txReceipt = n
   return paymentStatus({ txSubmitted, txHash, txReceipt, evidence });
 }
 
+/** The words a customer reads for each status. "Paid (checked)" only ever comes from PAID. */
+export function statusText(status) {
+  switch (status) {
+    case "PAID": return "Paid (checked).";
+    case "FAILED": return "Declined. Nothing was charged.";
+    case "PENDING": return "Waiting for the network to confirm...";
+    case "SUBMITTED": return "Sent. Waiting for the network...";
+    case "UNKNOWN": return "Not confirmed yet.";
+    default: return "Waiting for the customer.";
+  }
+}
+
+/** The words for the payment check's own decision, shown above the raw details. */
+export function decisionText(decision) {
+  switch (decision) {
+    case "VERIFIED": return "Paid (checked)";
+    case "REFUSED": return "Declined";
+    case "UNKNOWN": return "Not confirmed yet";
+    default: return "No check yet";
+  }
+}
+
 // ---- ABI encoding, by hand ------------------------------------------------------------------------
 // Exactly the shapes `approve(address,uint256)` and `pay(bytes32)` need: static words only. Written
-// from the ABI specification rather than imported, per this task's own instruction; the one piece
-// reused is keccak-256 itself (see the file banner), because re-deriving Keccak-f[1600] here would
-// not make this file more auditable, only longer.
+// from the ABI specification rather than imported; the one piece reused is keccak-256 itself.
 
 const stripHex = (h) => (typeof h === "string" && (h.startsWith("0x") || h.startsWith("0X")) ? h.slice(2) : h);
 const padLeft = (hex, len) => hex.padStart(len, "0");
@@ -120,7 +148,7 @@ export function wordFromBytes32(value) {
   return h;
 }
 
-/** The first 4 bytes of keccak256(signature) — a Solidity function selector, computed, not looked up. */
+/** The first 4 bytes of keccak256(signature): a Solidity function selector, computed, not looked up. */
 export function selectorOf(signature) {
   const digest = keccak256(new TextEncoder().encode(signature));
   return toHex(digest.slice(0, 4));
@@ -142,9 +170,9 @@ export function formatAmount(amount, symbol) {
 }
 
 export function formatFeesLine(receipt) {
-  if (!receipt) return "Fees: not yet known -- available once a receipt is authenticated.";
+  if (!receipt) return "Fees: not known yet. Shown once the payment is checked.";
   const pct = (pips) => (Number(pips ?? 0) / 10000).toFixed(2) + "%";
-  return `Fees: LP ${pct(receipt.lpFeePips)} . Protocol ${pct(receipt.protocolFeePips)} . UNICA ${pct(receipt.hookFeePips)}`;
+  return `Fees: market ${pct(receipt.lpFeePips)} . protocol ${pct(receipt.protocolFeePips)} . UNICA ${pct(receipt.hookFeePips)}`;
 }
 
 /** `mm:ss`, or "expired" once `nowSeconds` reaches `deadlineSeconds`. Never negative. */
@@ -157,55 +185,47 @@ export function formatCountdown(deadlineSeconds, nowSeconds = Math.floor(Date.no
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** The full text block the "Payment terms" panel renders, so its labels are independently testable. */
+/** "freshcuts.unica.eth" -> "freshcuts": the business as a person names it. */
+export function businessNameFrom(payName) {
+  if (!payName) return "(unknown)";
+  return String(payName).split(".")[0] || String(payName);
+}
+
+/** "chair-1.terminals.freshcuts.unica.eth" -> "chair-1": the register's own name. */
+export function registerNameFrom(terminalName) {
+  if (!terminalName) return "(unknown)";
+  return String(terminalName).split(".")[0] || String(terminalName);
+}
+
+/** The full text block the "Sale" panel renders, so its labels are independently testable. */
 export function renderTermsText(record) {
   const m = record?.merchant ?? {};
   const o = record?.order ?? {};
+  const chainId = record?.chainId ?? record?.manifest?.chainId;
   const lines = [];
   lines.push(TEST_MODE_LABEL);
   lines.push(NO_VALUE_LABEL);
-  lines.push(`Merchant: ${m.name ?? "(unknown)"}`);
-  lines.push(`Merchant address (full): ${m.address ?? "(unknown)"}`);
-  if (m.identityToken || m.rendererVersion) {
-    lines.push(`Identity art: token ${m.identityToken ?? "?"}, renderer ${m.rendererVersion ?? "?"} -- not proof of address ownership`);
-  }
-  lines.push(`You pay (max): ${formatAmount(o.inputAmount, o.inputSymbol)}`);
-  lines.push(`Merchant receives (minimum): ${formatAmount(o.minimumOutput, o.outputSymbol)}`);
-  lines.push(`Network: ${record?.manifest?.environment ?? "unknown"} (chainId ${record?.chainId ?? record?.manifest?.chainId ?? "?"})`);
-  lines.push(`Expires in: ${formatCountdown(o.expiry)}`);
+  lines.push(`Business: ${businessNameFrom(m.name)}`);
+  lines.push(`Pay name: ${m.name ?? "(unknown)"}`);
+  lines.push(`Register: ${registerNameFrom(record?.terminal?.name)}`);
+  lines.push(`Amount you pay: ${formatAmount(o.inputAmount, o.inputSymbol)}`);
+  lines.push(`They receive: at least ${formatAmount(o.minimumOutput, o.outputSymbol)}`);
+  lines.push(`Network: ${networkName(chainId)}`);
+  lines.push(`Expires: ${formatCountdown(o.expiry)}`);
   lines.push(formatFeesLine(record?.evidence?.receipt));
+  lines.push(`Where the money goes: ${m.address ?? "(unknown)"}`);
+  if (m.identityToken || m.rendererVersion) {
+    lines.push(`Business badge: ${m.identityToken ?? "?"} (a badge is not proof of who owns the address)`);
+  }
   return lines.join("\n");
 }
 
-// ---- JSON-RPC, over fetch, to whatever endpoint the demo server names ----------------------------
-
-async function rpcCall(rpcUrl, method, params = []) {
-  const res = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
-  });
-  const body = await res.json();
-  if (body.error) throw new Error(`${method} refused: ${body.error.message}`);
-  return body.result;
-}
-
-async function pollReceipt(rpcUrl, hash, { intervalMs = 500, timeoutMs = 30000 } = {}) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const receipt = await rpcCall(rpcUrl, "eth_getTransactionReceipt", [hash]);
-    if (receipt) return receipt;
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return null;
-}
-
-// ---- DOM wiring — never runs under `node --test`; document is undefined there --------------------
+// ---- DOM wiring; never runs under `node --test`; document is undefined there --------------------
 
 if (typeof document !== "undefined" && document.getElementById("checkout")) {
   main().catch((e) => {
     const wallet = document.getElementById("wallet");
-    if (wallet) wallet.textContent = `Local demo server unreachable or misbehaving: ${e.message}`;
+    if (wallet) wallet.textContent = `The local practice server could not be reached: ${e.message}`;
   });
 }
 
@@ -214,26 +234,29 @@ async function main() {
   try {
     res = await fetch("./../local/config.json");
   } catch {
-    return; // no companion server reachable — the page stays exactly the static document it was
+    return; // no companion server reachable: the page stays exactly the static document it was
   }
   if (!res.ok) return; // 404: no companion server. Nothing here is required for the static site.
   const config = await res.json();
   const record = config.record;
 
   say("terms", record
-    ? "Terms read from the local demo server's record."
-    : "The local demo server is running, but no demo order has been recorded yet. Run: make anvil-demo");
+    ? "Sale read from the local practice server."
+    : "The local practice server is running, but no sale has been recorded yet. Run: make anvil-demo");
   if (record) {
     show("order-terms");
-    set("order-merchant-name", record.merchant?.name ?? "(unknown)");
+    set("order-merchant-name", businessNameFrom(record.merchant?.name));
+    set("order-merchant-payname", record.merchant?.name ?? "(unknown)");
+    set("order-terminal", registerNameFrom(record.terminal?.name));
     set("order-merchant-address", record.merchant?.address ?? "(unknown)");
     const m = record.merchant ?? {};
     set("order-identity-art", m.identityToken || m.rendererVersion
-      ? `token ${m.identityToken ?? "?"}, renderer ${m.rendererVersion ?? "?"} -- not proof of address ownership`
+      ? `${m.identityToken ?? "?"} (a badge is not proof of who owns the address)`
       : "(none recorded)");
+    set("order-id", record.order?.id ?? "(unknown)");
     set("order-input", formatAmount(record.order?.inputAmount, record.order?.inputSymbol));
-    set("order-output", formatAmount(record.order?.minimumOutput, record.order?.outputSymbol));
-    set("order-network", `${record.manifest?.environment ?? "unknown"} (chainId ${record.chainId ?? config.chainId})`);
+    set("order-output", `at least ${formatAmount(record.order?.minimumOutput, record.order?.outputSymbol)}`);
+    set("order-network", networkName(record.chainId ?? config.chainId));
     set("order-fees", formatFeesLine(record.evidence?.receipt));
     const expiryEl = document.getElementById("order-expiry");
     if (expiryEl) {
@@ -248,11 +271,11 @@ async function main() {
   const verifyAgainBtn = document.getElementById("verify-again");
   if (connectBtn) connectBtn.disabled = false;
 
-  let connectedAddress = null;
+  let session = null;
 
   const renderBlockers = () => {
     const now = Math.floor(Date.now() / 1000);
-    const { allowed, reasons } = computeBlockers({ config, record, connectedAddress, now });
+    const { allowed, reasons } = computeBlockers({ config, record, connectedAddress: session?.address ?? null, walletChainId: session?.chainId ?? null, now });
     const list = document.getElementById("active-blockers");
     if (list) {
       list.innerHTML = "";
@@ -267,23 +290,27 @@ async function main() {
         }
       }
     }
-    if (payBtn) payBtn.disabled = !allowed || !connectedAddress || Boolean(record?.settlement?.transactionHash);
+    if (payBtn) payBtn.disabled = !allowed || !session || Boolean(record?.settlement?.transactionHash);
     return { allowed, reasons };
   };
 
   if (connectBtn) {
     connectBtn.addEventListener("click", async () => {
-      say("wallet", "Reading unlocked accounts from the local chain...");
+      say("wallet", "Looking for a wallet in this browser...");
       try {
-        await rpcCall(config.rpc, "eth_accounts", []);
+        const providers = await discoverProviders(window);
         const asParam = new URLSearchParams(location.search).get("as");
-        connectedAddress = asParam || record?.order?.payer || null;
-        say("wallet", connectedAddress
-          ? `Connected as ${connectedAddress}. This order's bound payer: ${record?.order?.payer ?? "(none)"}.`
-          : "Connected, but this link names no order to read a bound payer from.");
-        say("network", `chainId ${config.chainId} (${record?.manifest?.environment ?? "local"})`);
+        const result = await connectWallet({ config, providers, localFrom: asParam || record?.order?.payer || null });
+        if (result.blocked) {
+          say("wallet", result.blocked);
+          say("network", "Not connected.");
+          return;
+        }
+        session = result.session;
+        say("wallet", `Connected: ${session.address}${result.note ? `. ${result.note}` : "."}`);
+        say("network", session.networkName);
       } catch (e) {
-        say("wallet", `Could not read accounts: ${e.message}`);
+        say("wallet", `Could not connect: ${e.message}`);
       }
       renderBlockers();
     });
@@ -291,7 +318,7 @@ async function main() {
 
   const showEvidence = (verdict) => {
     show("evidence-output");
-    set("evidence-decision", `Decision: ${verdict?.decision ?? "NONE"}${verdict?.reasonCodes?.length ? ` (${verdict.reasonCodes.join(", ")})` : ""}`);
+    set("evidence-decision", decisionText(verdict?.decision));
     const pre = document.getElementById("evidence-json");
     if (pre) pre.textContent = JSON.stringify(verdict, null, 2);
   };
@@ -309,7 +336,7 @@ async function main() {
     return status;
   };
 
-  // Already settled by the demo script: never re-send, only ever re-verify.
+  // Already paid by the demo script: never re-send, only ever re-check.
   if (record?.settlement?.transactionHash && record?.order?.id) {
     unhide(verifyAgainBtn);
     checkAndRenderStatus(record.order.id, { txReceipt: { status: record.settlement.status } }).catch(() => {});
@@ -317,27 +344,24 @@ async function main() {
 
   if (verifyAgainBtn) {
     verifyAgainBtn.addEventListener("click", () => {
-      if (record?.order?.id) checkAndRenderStatus(record.order.id).catch((e) => say("payment-status", `Could not re-verify: ${e.message}`));
+      if (record?.order?.id) checkAndRenderStatus(record.order.id).catch((e) => say("payment-status", `Could not check again: ${e.message}`));
     });
   }
 
   if (payBtn) {
     payBtn.addEventListener("click", async () => {
       const { allowed } = renderBlockers();
-      if (!allowed || !connectedAddress || !record?.order?.id) return;
+      if (!allowed || !session || !record?.order?.id) return;
       payBtn.disabled = true;
       try {
         say("payment-status", statusText("SUBMITTED"));
         const executor = record.manifest?.contracts?.executor?.address;
         const asset = record.order.inputAsset;
-        const approveData = encodeApproveCalldata(executor, record.order.inputAmount);
-        await rpcCall(config.rpc, "eth_sendTransaction", [{ from: connectedAddress, to: asset, data: approveData }]);
+        await session.send({ to: asset, data: encodeApproveCalldata(executor, record.order.inputAmount) });
+        const payHash = await session.send({ to: executor, data: encodePayCalldata(record.order.id) });
+        say("payment-status", statusText("PENDING"));
 
-        const payData = encodePayCalldata(record.order.id);
-        const payHash = await rpcCall(config.rpc, "eth_sendTransaction", [{ from: connectedAddress, to: executor, data: payData }]);
-        say("payment-status", `${statusText("PENDING")} (${payHash})`);
-
-        const receipt = await pollReceipt(config.rpc, payHash);
+        const receipt = await waitForReceipt(session, payHash);
         if (!receipt) {
           say("payment-status", statusText("UNKNOWN"));
           return;
@@ -359,24 +383,12 @@ async function main() {
   renderBlockers();
 }
 
-function statusText(status) {
-  switch (status) {
-    case "PAID": return "Paid.";
-    case "FAILED": return "Not settled. Nothing was charged.";
-    case "PENDING": return "Waiting for network confirmation...";
-    case "SUBMITTED": return "Submitted, waiting for a transaction hash...";
-    case "UNKNOWN": return "Evidence unavailable -- status unknown.";
-    default: return "Awaiting payer.";
-  }
-}
-
 function say(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
 function set(id, text) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = text;
+  say(id, text);
 }
 function show(id) {
   const el = document.getElementById(id);

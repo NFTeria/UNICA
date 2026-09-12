@@ -10,15 +10,20 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  REASON_TEXT,
+  businessNameFrom,
   computeBlockers,
+  decisionText,
   deriveStatus,
   encodeApproveCalldata,
   encodePayCalldata,
   formatCountdown,
   formatFeesLine,
   orderExpiredBlocker,
+  registerNameFrom,
   renderTermsText,
   selectorOf,
+  statusText,
   terminalRevokedBlocker,
   wordFromAddress,
   wordFromBytes32,
@@ -45,8 +50,8 @@ function baseRecord(overrides = {}) {
       outputSymbol: "uUSD",
       expiry: 2_000_000_000, // far future
     },
-    terminal: { name: "chair-1", statusAtAdmission: "ACTIVE" },
-    merchant: { name: "Fresh Cuts", address: "0x2222222222222222222222222222222222222222" },
+    terminal: { name: "chair-1.terminals.freshcuts.unica.eth", statusAtAdmission: "ACTIVE" },
+    merchant: { name: "freshcuts.unica.eth", address: "0x2222222222222222222222222222222222222222" },
     evidence: null,
     ...overrides,
   };
@@ -65,6 +70,11 @@ test("wrongNetworkBlocker is true when config.chainId disagrees with the manifes
 });
 test("wrongNetworkBlocker is false (not a crash) with no manifest at all", () => {
   assert.equal(wrongNetworkBlocker({ chainId: 1 }), false);
+});
+test("wrongNetworkBlocker is true when the connected wallet's chain disagrees with the manifest", () => {
+  assert.equal(wrongNetworkBlocker(baseConfig(), 11155111), true);
+  assert.equal(wrongNetworkBlocker(baseConfig(), 31337), false);
+  assert.equal(wrongNetworkBlocker(baseConfig(), null), false);
 });
 
 // ---- blockers: wrong payer --------------------------------------------------------------------------
@@ -123,6 +133,45 @@ test("computeBlockers reports every blocker at once, not only the first", () => 
   for (const code of ["WRONG_NETWORK", "WRONG_PAYER", "ORDER_EXPIRED", "TERMINAL_REVOKED"]) {
     assert.ok(result.reasons.includes(code), `expected ${code} in ${result.reasons.join(",")}`);
   }
+});
+test("computeBlockers blocks a wallet connected on the wrong network even when the server agrees with its manifest", () => {
+  const result = computeBlockers({ config: baseConfig(), record: baseRecord(), connectedAddress: PAYER, walletChainId: 11155111, now: 1_000_000_000 });
+  assert.deepEqual(result, { allowed: false, reasons: ["WRONG_NETWORK"] });
+});
+
+// ---- the words a customer reads ----------------------------------------------------------------------
+
+test("every blocker sentence uses the business-language dictionary, never the contract words", () => {
+  for (const s of Object.values(REASON_TEXT)) {
+    assert.doesNotMatch(s, /\border\b|\bpayer\b|\bterminal\b|\bmerchant\b|hook|executor|registry|calldata|0x/i, s);
+  }
+  assert.match(REASON_TEXT.WRONG_PAYER, /customer/);
+  assert.match(REASON_TEXT.TERMINAL_REVOKED, /register/);
+  assert.match(REASON_TEXT.ORDER_EXPIRED, /sale/);
+});
+test("statusText says Paid (checked) for PAID and for nothing else", () => {
+  assert.equal(statusText("PAID"), "Paid (checked).");
+  for (const s of ["FAILED", "PENDING", "SUBMITTED", "UNKNOWN", "AWAITING_PAYER", undefined]) {
+    assert.doesNotMatch(statusText(s), /paid/i, String(s));
+  }
+  assert.equal(statusText("FAILED"), "Declined. Nothing was charged.");
+  assert.equal(statusText("UNKNOWN"), "Not confirmed yet.");
+  assert.equal(statusText("AWAITING_PAYER"), "Waiting for the customer.");
+});
+test("decisionText maps VERIFIED / REFUSED / UNKNOWN to the dictionary words", () => {
+  assert.equal(decisionText("VERIFIED"), "Paid (checked)");
+  assert.equal(decisionText("REFUSED"), "Declined");
+  assert.equal(decisionText("UNKNOWN"), "Not confirmed yet");
+  assert.doesNotMatch(decisionText(undefined), /paid/i);
+});
+test("the PAID rule and the words agree: a bare hash never reads as paid", () => {
+  assert.doesNotMatch(statusText(deriveStatus({ txHash: "0xabc" })), /paid/i);
+  assert.match(statusText(deriveStatus({ txHash: "0xabc", evidence: { decision: "VERIFIED" } })), /Paid \(checked\)/);
+});
+test("businessNameFrom and registerNameFrom take the first label of a full name", () => {
+  assert.equal(businessNameFrom("freshcuts.unica.eth"), "freshcuts");
+  assert.equal(registerNameFrom("chair-1.terminals.freshcuts.unica.eth"), "chair-1");
+  assert.equal(businessNameFrom(undefined), "(unknown)");
 });
 
 // ---- status derivation: the PAID rule, from local-pay.js's own export -------------------------------
@@ -196,20 +245,30 @@ test("formatCountdown reads 'unknown' with no deadline at all", () => {
   assert.equal(formatCountdown(undefined, 1_000_000), "unknown");
 });
 
-test("formatFeesLine states fees are not yet known before a receipt exists", () => {
-  assert.match(formatFeesLine(null), /not yet known/);
+test("formatFeesLine states fees are not known yet before a receipt exists", () => {
+  assert.match(formatFeesLine(null), /not known yet/);
 });
 test("formatFeesLine renders pips as percentages once a receipt exists", () => {
   const line = formatFeesLine({ lpFeePips: 3000, protocolFeePips: 0, hookFeePips: 500 });
-  assert.equal(line, "Fees: LP 0.30% . Protocol 0.00% . UNICA 0.05%");
+  assert.equal(line, "Fees: market 0.30% . protocol 0.00% . UNICA 0.05%");
 });
 
-test("renderTermsText carries the TEST MODE and no-value labels", () => {
+test("renderTermsText carries the practice-mode label", () => {
   const text = renderTermsText(baseRecord());
-  assert.match(text, /\[TEST MODE\]/);
-  assert.match(text, /Testnet demonstration -- no real value/);
+  assert.match(text, /Practice mode, test money only/);
 });
-test("renderTermsText carries the full merchant address, not a truncated one", () => {
+test("renderTermsText uses the dictionary rows: Business, Pay name, Register, Amount you pay, They receive, Network, Expires", () => {
+  const text = renderTermsText(baseRecord());
+  assert.match(text, /^Business: freshcuts$/m);
+  assert.match(text, /^Pay name: freshcuts\.unica\.eth$/m);
+  assert.match(text, /^Register: chair-1$/m);
+  assert.match(text, /^Amount you pay: /m);
+  assert.match(text, /^They receive: at least /m);
+  assert.match(text, /^Network: Local practice network$/m);
+  assert.match(text, /^Expires: /m);
+  assert.doesNotMatch(text, /Merchant|chainId|\[TEST MODE\]/);
+});
+test("renderTermsText carries the full payout address, not a truncated one", () => {
   const record = baseRecord();
   const text = renderTermsText(record);
   assert.ok(text.includes(record.merchant.address));
@@ -219,8 +278,8 @@ test("renderTermsText carries the exact input amount and the minimum output", ()
   assert.match(text, /1000000000000000000 tAST/);
   assert.match(text, /1950000 uUSD/);
 });
-test("renderTermsText carries the identity-art provenance line when present", () => {
-  const record = baseRecord({ merchant: { name: "Fresh Cuts", address: "0x22", identityToken: "0xabc:1", rendererVersion: "v1" } });
+test("renderTermsText carries the badge line, marked as not proof of ownership, when present", () => {
+  const record = baseRecord({ merchant: { name: "freshcuts.unica.eth", address: "0x22", identityToken: "0xabc:1", rendererVersion: "v1" } });
   const text = renderTermsText(record);
-  assert.match(text, /token 0xabc:1, renderer v1/);
+  assert.match(text, /Business badge: 0xabc:1 \(a badge is not proof of who owns the address\)/);
 });

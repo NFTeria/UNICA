@@ -34,6 +34,7 @@ settlement at all.</p>
 <p class="ctas">
   <a class="cta" href="pay/"${P("cta-pay")}>Try the payment</a>
   <a class="cta cta-quiet" href="receipt/"${P("cta-proof")}>View a receipt</a>
+  <a class="cta cta-quiet" href="join/">Add your business</a>
 </p>
 <p class="sub">Testnet only. One confirmation, or a full revert — there is no partial settlement.</p>
 <nav aria-label="Sections"${P("anchor-rail")}><ul class="nav">
@@ -239,7 +240,8 @@ ${C.banner("info", "This page is static.", raw(`It states what was true when the
   <h2>Merchant mode</h2>
   <p>Register an order. The recipient is resolved once, now, and then stored on chain.</p>
   <p><a class="cta" href="payments/new/">Create a payment</a>
-     <a class="cta cta-quiet" href="payments/">See payments</a></p>
+     <a class="cta cta-quiet" href="payments/">See payments</a>
+     <a class="cta cta-quiet" href="../join/">Add your business</a></p>
 </section>
 <section${P("ens-resolve")}>
   <h2>Merchant identity</h2>
@@ -310,28 +312,35 @@ ${C.statusRegion("order-detail", "No order in this link.")}
     h1: "Make a payment",
     title: "Pay — UNICA",
     description:
-      "Pay an order. Every term was fixed when the order was created; the payer chooses only whether to proceed.",
+      "Pay a sale. Every term was fixed when the sale was created; the customer chooses only whether to proceed.",
     ogTitle: "Pay with UNICA",
-    ogDescription: "The merchant receives their currency, or it reverts.",
+    ogDescription: "The business receives its currency, or nothing moves.",
     ogImage: "og-checkout.svg",
     body: h`
 <section${P("demo")} id="checkout">
-  <h2>Payment terms</h2>
-  <p class="sub">Add an order to this link as <code>?order=0x…</code> to pay a specific one.</p>
-  ${C.statusRegion("terms", "Terms are read from the chain when script runs.")}
+  <h2>Sale</h2>
+  <p class="sub">Add a sale to this link as <code>?order=…</code> to pay a specific one.</p>
+  ${C.statusRegion("terms", "The sale is read from the network when script runs.")}
   <div id="order-terms" class="status" role="status" aria-live="polite" hidden>
-    <p id="order-test-mode" class="tag">[TEST MODE]</p>
-    <p id="order-no-value" class="sub">Testnet demonstration -- no real value</p>
+    <p id="order-test-mode" class="tag">Practice mode</p>
+    <p id="order-no-value" class="sub">Practice mode, test money only</p>
     <dl class="evidence-key">
-      <dt>Merchant</dt><dd id="order-merchant-name">—</dd>
-      <dt>Merchant address (full)</dt><dd id="order-merchant-address">—</dd>
-      <dt>Identity art</dt><dd id="order-identity-art">—</dd>
-      <dt>You pay (max)</dt><dd id="order-input">—</dd>
-      <dt>Merchant receives (minimum)</dt><dd id="order-output">—</dd>
+      <dt>Business</dt><dd id="order-merchant-name">—</dd>
+      <dt>Pay name</dt><dd id="order-merchant-payname">—</dd>
+      <dt>Register</dt><dd id="order-terminal">—</dd>
+      <dt>Amount you pay</dt><dd id="order-input">—</dd>
+      <dt>They receive</dt><dd id="order-output">—</dd>
       <dt>Network</dt><dd id="order-network">—</dd>
-      <dt>Expires in</dt><dd id="order-expiry">—</dd>
+      <dt>Expires</dt><dd id="order-expiry">—</dd>
       <dt>Fees</dt><dd id="order-fees">—</dd>
     </dl>
+    <details class="fold"><summary>Details</summary>
+      <dl class="evidence-key">
+        <dt>Where the money goes</dt><dd id="order-merchant-address">—</dd>
+        <dt>Business badge</dt><dd id="order-identity-art">—</dd>
+        <dt>Sale id</dt><dd id="order-id">—</dd>
+      </dl>
+    </details>
   </div>
   ${C.v3Disclosure()}
 </section>
@@ -339,43 +348,129 @@ ${C.statusRegion("order-detail", "No order in this link.")}
   <h2>Wallet</h2>
   ${C.statusRegion("wallet", "No wallet has been connected.")}
   <p><button type="button" class="cta" id="connect" disabled aria-describedby="connect-why">Connect a wallet</button></p>
-  <p class="sub" id="connect-why">Disabled until this demo's runtime configuration has been read.</p>
+  <p class="sub" id="connect-why">Disabled until this page has read its settings.</p>
 </section>
 <section${P("chain-switch")}>
   <h2>Network</h2>
-  <p>This payment settles on ${V3.chainName} (${V3.chainId}). A wallet on another network is asked
-  to switch; it is never paid from the wrong chain.</p>
+  <p>This payment settles on the network the sale was created on. A wallet on another network is
+  asked to switch; nothing is paid from the wrong network.</p>
   ${C.statusRegion("network", "Network has not been read.")}
 </section>
 <section${P("blockers")}>
   <h2>When this page disables everything</h2>
   <p>Each of these disables the payment and says so in one sentence rather than failing quietly:</p>
   <ul>
-    <li>The chain could not be read.</li>
-    <li>A pinned value disagrees with the chain.</li>
-    <li>The pool holds no liquidity, or too little for this order.</li>
+    <li>The network could not be read.</li>
+    <li>A saved setting disagrees with the network.</li>
+    <li>The market holds too little to complete this sale.</li>
     <li>No wallet, or a wallet on the wrong network.</li>
-    <li>The live quote is below the order's committed minimum.</li>
+    <li>The live quote is below what the business must receive.</li>
   </ul>
   <ul id="active-blockers" class="status" role="status" aria-live="polite" hidden></ul>
 </section>
 <section${P("pay")}>
   <h2>Pay</h2>
   <p><button type="button" class="cta" id="pay" disabled aria-describedby="pay-why">Pay</button></p>
-  <p class="sub" id="pay-why">Disabled until an order is loaded, a wallet is connected on the right
+  <p class="sub" id="pay-why">Disabled until a sale is loaded, a wallet is connected on the right
   network, and every check above has passed.</p>
-  <p${P("expired")}>An expired order cannot be paid. The page says so and offers a new one.</p>
-  <p${P("settled")}>A settled order cannot be paid twice. The page offers a way to register another.</p>
-  ${C.statusRegion("payment-status", "Awaiting payer.")}
-  <p><button type="button" class="cta cta-quiet" id="verify-again" hidden aria-describedby="verify-again-why">Verify again</button></p>
-  <p class="sub" id="verify-again-why">Re-checks this order's evidence without sending another transaction.</p>
+  <p${P("expired")}>An expired sale cannot be paid. The page says so and offers a new one.</p>
+  <p${P("settled")}>A paid sale cannot be paid twice. The page offers a way to start another.</p>
+  ${C.statusRegion("payment-status", "Waiting for the customer.")}
+  <p><button type="button" class="cta cta-quiet" id="verify-again" hidden aria-describedby="verify-again-why">Check again</button></p>
+  <p class="sub" id="verify-again-why">Re-checks this sale's payment without sending anything.</p>
   <div id="evidence-output" hidden>
-    <h3>Verified receipt</h3>
+    <h3>Payment check</h3>
     <p id="evidence-decision" class="sub"></p>
-    <pre id="evidence-json" class="evidence-json"></pre>
+    <details class="fold"><summary>Details</summary>
+      <pre id="evidence-json" class="evidence-json"></pre>
+    </details>
   </div>
 </section>
 <script type="module" src="../assets/local-pay.js"></script>`,
+  },
+  {
+    route: "join",
+    h1: "Add your business",
+    title: "Add your business — UNICA",
+    description:
+      "Set up a business in one step from your own wallet: a pay name, where the money goes, a first register, and a business badge.",
+    ogTitle: "Add your business to UNICA",
+    ogDescription: "One wallet confirmation sets up a pay name, a payout and a first register.",
+    ogImage: "og-merchant.svg",
+    body: h`
+<section id="join">
+  <p class="lead">Connect your wallet, pick a name, and press one button. Your wallet confirms one
+  transaction. When it is done you own a pay name, a place the money goes, a first register and a
+  business badge.</p>
+  ${C.banner("info", "Practice mode, test money only.", raw(`Nothing on <span id="join-network">this network</span> has value. The steps are the real steps; the money is not real.`))}
+  <div id="form">
+    <h2>1. Connect your wallet</h2>
+    <p>The wallet you connect becomes the owner of the business. Only it can add or revoke registers.</p>
+    ${C.statusRegion("wallet", "No wallet has been connected.")}
+    <p><button type="button" class="cta" id="connect" disabled aria-describedby="connect-why">Connect wallet</button></p>
+    <p class="sub" id="connect-why">Disabled until this page has read its settings. Without a companion
+    server this page stays a description of the steps.</p>
+
+    <h2>2. Business name</h2>
+    <p><label for="business-name">Business name</label><br>
+    <input id="business-name" class="field" type="text" autocomplete="organization" spellcheck="false" inputmode="text" maxlength="32" placeholder="freshcuts" aria-describedby="name-check"></p>
+    ${C.statusRegion("name-check", "Type the name customers will pay. Lowercase letters, numbers and hyphens.")}
+
+    <h2>3. Where the money goes</h2>
+    <p>By default, payments go to the wallet you connected.</p>
+    <p><label><input type="checkbox" id="payout-other"> Send payments to a different address</label></p>
+    <p><label for="payout-address">Payout address</label><br>
+    <input id="payout-address" class="field" type="text" spellcheck="false" placeholder="0x…" disabled aria-describedby="payout-hint"></p>
+    <p class="sub" id="payout-hint">Only when a different address should receive the money. It cannot be changed from this page afterwards.</p>
+
+    <h2>4. Name your first register</h2>
+    <p><label for="register-name">First register</label><br>
+    <input id="register-name" class="field" type="text" value="Register 1" maxlength="40" aria-describedby="register-hint"></p>
+    ${C.statusRegion("register-hint", "Saved as register-1.")}
+
+    <h2>5. Add my business</h2>
+    <p><button type="button" class="cta" id="join-submit" disabled aria-describedby="join-why">Add my business</button></p>
+    <p class="sub" id="join-why">Connect a wallet first. It becomes the owner of the business.</p>
+  </div>
+  ${C.statusRegion("join-status", "Nothing has been sent.")}
+
+  <div id="success" hidden>
+    <h2>Your business is set up</h2>
+    <dl class="evidence-key">
+      <dt>Business</dt><dd id="done-business">—</dd>
+      <dt>Pay name</dt><dd id="done-payname">—</dd>
+      <dt>First register</dt><dd id="done-register">—</dd>
+      <dt>Network</dt><dd id="done-network">—</dd>
+    </dl>
+    <p><img id="badge-image" class="badge-image" alt="" hidden></p>
+    ${C.statusRegion("badge-said", "Reading your badge...")}
+    <p class="ctas">
+      <a class="cta" href="../pay/">Take a payment</a>
+      <a class="cta cta-quiet" href="#registers">Registers</a>
+    </p>
+    <details class="fold"><summary>Details</summary>
+      <p>Business id: <span id="done-id" class="hex" translate="no">—</span>
+      <button type="button" class="cta cta-quiet" id="copy-id">Copy the full id</button>
+      <span id="copy-said" class="sub"></span></p>
+    </details>
+
+    <h2 id="registers">Registers</h2>
+    <p>Each register is a place a sale can start. Revoking one stops new sales from it; sales it
+    already started are unaffected.</p>
+    <ul id="register-list" class="registers"></ul>
+    ${C.statusRegion("registers-said", "Registers are read after your business is set up.")}
+    <h3>Add a register</h3>
+    <p><label for="new-register-name">Register name</label><br>
+    <input id="new-register-name" class="field" type="text" placeholder="Front counter" maxlength="40"></p>
+    <details class="fold"><summary>Advanced: who runs it</summary>
+      <p><label for="new-register-operator">Operator address (leave empty to use this wallet)</label><br>
+      <input id="new-register-operator" class="field" type="text" spellcheck="false" placeholder="0x…"></p>
+    </details>
+    <p><button type="button" class="cta" id="add-register">Add register</button></p>
+    <p class="sub">Adding a register takes three wallet confirmations: create it, allow the operator, switch it on.</p>
+  </div>
+</section>
+<script type="module" src="../assets/local-join.js"></script>`,
   },
   {
     route: "receipt",

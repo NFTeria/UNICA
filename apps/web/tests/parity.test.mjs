@@ -113,6 +113,7 @@ if (!existsSync(OUT)) {
     "/merchant/payments/new/",
     "/merchant/payments/details/",
     "/pay/",
+    "/join/",
     "/receipt/",
     "/experiments/robinhood/",
     "/support/",
@@ -123,6 +124,32 @@ if (!existsSync(OUT)) {
   const absent = REQ.filter((r) => !docs.has(r));
   chk(`all ${REQ.length} required routes emit a document`, absent.length === 0, absent.join(","));
   chk("404.html exists and is a real document", existsSync(join(OUT, "404.html")));
+
+  // THE JOIN ROUTE HAS NO PARITY ROW, AND THAT IS A STATED NEGATIVE, NOT AN OMISSION. The legacy
+  // artifact has no onboarding surface at all, so there is nothing for a row's currentAnchor to
+  // point at. The route is new capability; its checks are structural and live here instead.
+  chk(
+    "the legacy artifact has no onboarding surface (so the join route cannot have a parity row)",
+    !current.includes("Add your business") && !current.includes("join(string"),
+  );
+  const joinDoc = docs.get("/join/") ?? "";
+  const STEPS = /1\. Connect[\s\S]*2\. Business name[\s\S]*3\. Where the money goes[\s\S]*4\. Name your first register[\s\S]*5\. Add my business/;
+  chk("the join route names its five steps in order", STEPS.test(joinDoc));
+  chk("control: the step check fails on steps out of order", !STEPS.test("1. Connect 3. Where the money goes 2. Business name 4. Name your first register 5. Add my business"));
+  chk("the join route's one button is disabled until script says why", /<button[^>]*id="join-submit"[^>]*disabled[^>]*aria-describedby="join-why"/.test(joinDoc));
+  chk("the join route carries the practice-mode banner in the served HTML", joinDoc.includes("Practice mode, test money only"));
+  chk("the join route offers Take a payment and Registers after success", joinDoc.includes(">Take a payment<") && joinDoc.includes(">Registers<"));
+  chk(
+    "the join route shows no contract word to a business owner",
+    !/\b(hook|executor|registry|calldata)\b/i.test(joinDoc.replace(/<script[\s\S]*?<\/script>/g, "")),
+  );
+  chk("the join route loads its own script and nothing else new", joinDoc.includes('src="../assets/local-join.js"'));
+  const payDoc = docs.get("/pay/") ?? "";
+  chk(
+    "the pay route's visible rows use the dictionary: Business, Pay name, Register, Amount you pay, They receive, Network, Expires",
+    ["<dt>Business</dt>", "<dt>Pay name</dt>", "<dt>Register</dt>", "<dt>Amount you pay</dt>", "<dt>They receive</dt>", "<dt>Network</dt>", "<dt>Expires</dt>"].every((s) => payDoc.includes(s)),
+  );
+  chk("the pay route no longer shows Merchant or [TEST MODE] to a customer", !/<dt>Merchant/.test(payDoc) && !payDoc.includes("[TEST MODE]"));
 
   // THE ROWS. Each asserts the mapped CONTROL exists, via its data-parity attribute — not that
   // some matching prose appears. Prose drifts into a page by accident; an attribute does not.
