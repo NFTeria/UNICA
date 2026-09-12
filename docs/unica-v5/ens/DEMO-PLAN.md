@@ -16,7 +16,7 @@ where the evidence gathered for `PRIZE-FIT.md` disagrees with it.
 
 **Runway, corrected.** `PRIZE-FIT.md` §3 records a direct conflict between this file's own retrieval
 of the ETHOnline 2026 submission deadline (2026-09-13, 12:00 pm EDT, quoted verbatim from the
-official page, retrieved twice) and the Graph sibling stream's "runs through 2026-09-16" / "five
+official page, retrieved twice) and the Graph sibling stream's "runs through 2026-09-16" / "five (the sibling file was corrected on 2026-09-11; it now states 2026-09-13)
 days of runway" figure drawn from the same URL. This file uses the tighter, directly-quoted number:
 **roughly two days of runway from this file's retrieval date (2026-09-11), not five.** Every score
 and recommendation below assumes the tighter number; if an identifiable ETHGlobal source later

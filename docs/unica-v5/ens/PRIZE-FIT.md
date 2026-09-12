@@ -126,7 +126,7 @@ rule, quoted: entrants "can select up to 3 Partner Prizes to apply for," with a 
 tracks counting as one selection.
 
 **Conflict, recorded rather than silently resolved.** `docs/unica-v5/graph/PRIZE-FIT.md` §7 and
-`DEMO-PLAN.md` §1 state "ETHOnline 2026 runs through 2026-09-16" and compute "five days of runway"
+`DEMO-PLAN.md` §1 state "ETHOnline 2026 runs through 2026-09-16" and compute "five days of runway" (the sibling file was corrected on 2026-09-11; it now states 2026-09-13)
 from a 2026-09-11 retrieval of the same info/details page this file also retrieved. **This file's own
 retrieval of that exact URL, twice, on 2026-09-11, returns only one explicit date: the submission
 deadline quoted above, Sunday 2026-09-13 at 12:00 pm EDT — not 2026-09-16.** A general web search
@@ -431,7 +431,7 @@ ENS team member, none of these is claimed as settled.
 
 1. **The submission deadline conflict is unresolved.** This file's own retrieval of
    `ethonline2026/info/details` (twice) finds only a 2026-09-13 12:00 pm EDT submission deadline
-   quoted verbatim; the Graph sibling file cites the same URL for "runs through 2026-09-16." No
+   quoted verbatim; the Graph sibling file cites the same URL for "runs through 2026-09-16." (the sibling file was corrected on 2026-09-11; it now states 2026-09-13) No
    single source fetched for either file states both dates together, so neither claim can be ruled
    out from what was retrieved (§3).
 2. Whether "built on ENSv2 (Sepolia)" (§3) is satisfied, in the judges' own reading, by resolving and
