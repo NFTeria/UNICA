@@ -171,15 +171,35 @@ if (!existsSync(OUT)) {
 
   // The machine words are allowed inside the Advanced verification disclosure and nowhere else.
   // This is the check that keeps the product surface readable by the person paying for a haircut.
-  const visible = (doc) => doc.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<details class="fold" data-advanced="true">[\s\S]*?<\/details>/g, "");
+  //
+  // TWO THINGS THIS GOT WRONG BEFORE, both of which made it report clean while the surface leaked.
+  //   1. It listed five of the eight words the dictionary bans, so `pool`, `feed` and `hex` were
+  //      never looked for. The risks page said "a thin pool moves on small size", on a page linked
+  //      from every footer, and the check passed.
+  //   2. It scanned the raw markup, so a CSS class or an element id counted as something a person
+  //      reads. With the full word list that turns `class="hex"` into a false leak. Tags are
+  //      stripped first, and only the TEXT a person actually sees is scanned.
+  const MACHINE_WORDS = /\b(hook|executor|registry|pool|tick|feed|calldata|hex)s?\b/i;
+  const visible = (doc) =>
+    doc
+      .replace(/<script[\s\S]*?<\/script>/g, "")
+      .replace(/<details class="fold" data-advanced="true">[\s\S]*?<\/details>/g, "")
+      .replace(/<[^>]+>/g, " ");
   const leaked = [];
   for (const [route, doc] of docs) {
     if (route === "/proof/" || route === "/how-it-works/" || route === "/security/" || route === "/networks/" || route === "/experiments/robinhood/" || route === "/supported-assets/" || route === "/status/") continue;
-    const words = /\b(hook|executor|registry|calldata|tick)s?\b/i.exec(visible(doc));
+    const words = MACHINE_WORDS.exec(visible(doc));
     if (words) leaked.push(`${route}:${words[0]}`);
   }
   chk("no product screen shows a machine word outside Advanced verification", leaked.length === 0, leaked.join(","));
-  chk("control: the machine-word check catches one that is planted", /\b(hook|executor|registry|calldata|tick)s?\b/i.test("the executor did it"));
+  chk("control: the machine-word check catches one that is planted", MACHINE_WORDS.test("the executor did it"));
+  // Two more controls, one per newly covered word, so the widening is itself proven and not merely
+  // asserted. Without these the added coverage would be a regex nobody has ever seen fire.
+  chk("control: the widened check catches 'pool', which the narrow one missed", MACHINE_WORDS.test("a thin pool moves on small size"));
+  chk("control: the widened check catches 'hex' in prose", MACHINE_WORDS.test("the hex string below"));
+  // And the tag strip is proven too: a class name is not something a person reads, so it must NOT
+  // count. Otherwise the fix for (1) would have been paid for by a false positive.
+  chk("control: a machine word inside markup, not prose, is not a leak", !MACHINE_WORDS.test(visible('<dd id="r-tx" class="hex">0x00</dd>')));
 
   // THE ROWS. Each asserts the mapped CONTROL exists, via its data-parity attribute — not that
   // some matching prose appears. Prose drifts into a page by accident; an attribute does not.

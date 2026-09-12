@@ -747,7 +747,7 @@ index; those third parties see the request as any web request. Nothing is stored
   <li><strong>Not audited.</strong> No external audit has been performed.</li>
   <li><strong>Testnet assets have no value.</strong> Faucet tokens are not shares or securities.</li>
   <li><strong>An experiment is not a product.</strong> The experimental route has never settled.</li>
-  <li><strong>Liquidity is not guaranteed</strong> by anyone, and a thin pool moves on small size.</li>
+  <li><strong>Liquidity is not guaranteed</strong> by anyone, and a thin market moves on small size.</li>
 </ul>`,
   },
 ];
