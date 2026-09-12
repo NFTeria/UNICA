@@ -49,6 +49,13 @@
   border-color: var(--muted);
 }
 
+/* The two columns start on the same line: the sale's heading is a column head, not a new section. */
+.pos-sale h2 {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 /* the one integration this view may name: its own colour as a rule, its name as the meaning */
 .pos-mark {
   display: inline-block;
