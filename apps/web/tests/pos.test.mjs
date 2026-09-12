@@ -383,7 +383,7 @@ test("control: a value too wide for its declared width is refused, not silently 
         (2n ** 64n).toString(),
         "0x" + "11".repeat(32),
       ]),
-    /uint64 cannot hold/,
+    /does not fit uint64/,
   );
   assert.throws(() => encodeCall("f(uint7)", ["1"]), /unsupported static type/);
 });
