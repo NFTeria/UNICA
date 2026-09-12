@@ -12,16 +12,26 @@
  *
  * Offline. No network, no chain, no wallet.
  */
-import { readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, existsSync, mkdtempSync } from "node:fs";
 import { NO_VALUE_BANNER } from "../assets/product.js";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
 const matrix = JSON.parse(readFileSync(join(HERE, "parity.matrix.json"), "utf8"));
 const current = readFileSync(join(ROOT, matrix.artifact), "utf8");
-const OUT = join(ROOT, "apps", "web", "out");
+// The replacement side is read from a build this file makes for itself, never from apps/web/out: another
+// test may be rebuilding that directory at the same moment, and a half-written or control build there
+// would fail rows here for reasons that have nothing to do with parity.
+const OUT = mkdtempSync(join(tmpdir(), "unica-parity-"));
+try {
+  execFileSync(process.execPath, [join(ROOT, "apps", "web", "build.mjs")], { encoding: "utf8", env: { ...process.env, UNICA_BUILD_OUT: OUT } });
+} catch {
+  // left empty on purpose: the PENDING branch below says the build is missing
+}
 
 let ok = 0,
   fail = 0,
@@ -94,7 +104,7 @@ chk("every replacement route is one of the required surfaces", strays.length ===
 // ── 5. the candidate side ─────────────────────────────────────────────────────────────────────
 if (!existsSync(OUT)) {
   pending = matrix.rows.length;
-  console.log(`\nPENDING  ${pending} rows: apps/web/out does not exist. Run: node apps/web/build.mjs`);
+  console.log(`\nPENDING  ${pending} rows: the build did not succeed. Run: node apps/web/build.mjs`);
 } else {
   const manifest = JSON.parse(readFileSync(join(OUT, "manifest.json"), "utf8"));
   const docs = new Map();

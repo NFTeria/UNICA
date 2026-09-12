@@ -3,7 +3,7 @@
  * Offline. No network, no chain, no secret.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdtempSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -12,7 +12,9 @@ import { NO_VALUE_BANNER } from "../assets/product.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, "..");
-const OUT = join(APP, "out");
+// Every build this file makes goes to its own directory: apps/web/out belongs to the product build, and a
+// mainnet control build written there would strip the label from under any test reading it at the same time.
+const OUT = mkdtempSync(join(tmpdir(), "unica-build-test-"));
 let ok = 0,
   fail = 0;
 const chk = (n, p, d = "") => {
@@ -24,7 +26,7 @@ const chk = (n, p, d = "") => {
     console.log(`FAIL  ${n}${d ? `  [${d}]` : ""}`);
   }
 };
-const build = () => execFileSync(process.execPath, [join(APP, "build.mjs")], { encoding: "utf8" });
+const build = () => execFileSync(process.execPath, [join(APP, "build.mjs")], { encoding: "utf8", env: { ...process.env, UNICA_BUILD_OUT: OUT } });
 
 // ── escaping ──────────────────────────────────────────────────────────────────────────────────
 chk(
@@ -150,7 +152,7 @@ chk(`all ${docs.length} documents of a default build carry the ${NO_VALUE} label
 
 const mainnetBuild = execFileSync(process.execPath, [join(APP, "build.mjs")], {
   encoding: "utf8",
-  env: { ...process.env, UNICA_BUILD_ENVIRONMENT: "PUBLIC_MAINNET" },
+  env: { ...process.env, UNICA_BUILD_ENVIRONMENT: "PUBLIC_MAINNET", UNICA_BUILD_OUT: OUT },
 });
 const mainnetManifest = JSON.parse(readFileSync(join(OUT, "manifest.json"), "utf8"));
 const mainnetDocs = mainnetManifest.routes.map((r) => readFileSync(join(OUT, r.file), "utf8"));
