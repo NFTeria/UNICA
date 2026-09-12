@@ -1,6 +1,194 @@
-/* PLACEHOLDER, OWNED BY ANOTHER SCREEN. The shell references this file unconditionally so the
-   reference is already in place when the disclosure ("fold") work lands; replace it wholesale.
+/* fold.css — every screen at every size, and the fold.
+   Loaded AFTER assets/unica.css, from the shell, so every route inherits it. It adds nothing to the
+   vocabulary in apps/web/DESIGN.md: no new class, no new colour, no new token that a page has to
+   know about. It only says how the three frames behave as the viewport narrows, widens, or arrives
+   in two pieces.
 
-   It declares nothing on purpose. An artifact built before that work exists is therefore
-   byte-for-byte the artifact built without the reference, and the build's link check — which
-   fails on a stylesheet that resolves to no file — still has something real to resolve. */
+   WHY THE RULES ARE KEYED TO WIDTHS AND NOT TO DEVICES. docs/unica-v4/SCREENS.md carries the
+   measured viewport table, and the thing that table proves is that no device list can be the
+   contract: on Android the CSS viewport is physical pixels divided by a display density the OWNER
+   OF THE PHONE can change in Settings, and two reputable databases already disagree about the same
+   Galaxy Z Fold6 by ninety CSS pixels for exactly that reason. A rule written against "the Fold6"
+   is a rule written against one person's density setting. So the device table is evidence that the
+   breakpoints below cover real widths, and the breakpoints are the contract.
+
+   WHAT IS HERE. The three frames from 320 CSS px upward: no horizontal scroll, 44px targets on a
+   coarse pointer, the checkout card capped and centred, the keypad filling a phone, and the
+   sidebar's collapsed state. The fold itself — segments and posture — is the next commit. */
+
+/* ── 1. no horizontal scroll, at any width ───────────────────────────────────────────────────
+   The page never scrolls sideways; a container may. Anything that can be wider than its column —
+   a table, a long reference, a code block — is given its own scroller or told to break, so the
+   document's own inline axis stays fixed. `overflow-x: clip` is deliberately NOT used on <body>:
+   it hides the bug instead of fixing it, and it also clips position: sticky. */
+img,
+svg,
+canvas,
+video,
+iframe {
+  max-width: 100%;
+  height: auto;
+}
+pre,
+.evidence-json {
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+}
+.hex {
+  overflow-wrap: anywhere;
+}
+/* The one input that is asked to hold a whole payment link. It shrinks rather than pushing. */
+.paylink input {
+  min-width: 0;
+}
+.paylink,
+.ctas,
+.actions,
+.stepper,
+.assets li,
+.registers li,
+.product,
+.order-row {
+  min-width: 0;
+}
+
+/* ── 2. forty-four pixels, where a finger is the pointer ─────────────────────────────────────
+   assets/unica.css already gives the primary controls a 44px minimum. Three smaller ones remain,
+   because on a mouse they are correct at 32: the chip's inline button, a disclosure summary, and
+   the chip's network select. On a coarse pointer they are not, so they grow — and only there, so
+   the desk layout does not inflate. */
+@media (pointer: coarse) {
+  .wchip .cta,
+  .wchip select,
+  .fold summary {
+    min-height: 44px;
+  }
+  .sidenav a,
+  ul.nav a {
+    min-height: 44px;
+  }
+}
+
+/* ── 3. the three frames, narrow first ───────────────────────────────────────────────────────
+   320 is the floor this product supports. The narrowest CSS viewport in SCREENS.md is 323 (the
+   Galaxy Z Fold6 cover screen at its shipped density), so 320 is a real floor with three pixels
+   of margin rather than a round number somebody liked. */
+
+/* Below 30rem — every phone in SCREENS.md, and both cover screens — the frame stops spending
+   width on chrome. */
+@media (max-width: 29.999rem) {
+  header.site,
+  main,
+  footer {
+    padding-left: var(--s3);
+    padding-right: var(--s3);
+  }
+  .topbar {
+    padding-left: var(--s3);
+    padding-right: var(--s3);
+  }
+  .envbar {
+    padding-left: var(--s3);
+    padding-right: var(--s3);
+  }
+  /* The signed-in menu is a top ROW, not a stack that pushes the page down: one line that scrolls
+     sideways inside itself. The page's own inline axis does not move. */
+  .sidenav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sidenav a {
+    white-space: nowrap;
+  }
+  /* The register fills the screen: at 320 a 24rem cap would leave the keypad floating in a column
+     narrower than the display above it. */
+  .register {
+    max-width: none;
+  }
+  .keypad {
+    gap: var(--s2);
+  }
+  .keypad .key {
+    min-height: calc(var(--space) * 15);
+    font-size: 1.35rem;
+  }
+  .hero {
+    padding-top: var(--s5);
+  }
+  .hero h1 {
+    font-size: 1.75rem;
+  }
+  .checkout {
+    padding: var(--s4);
+  }
+}
+
+/* The checkout card: capped and centred at every width, so the thing a customer is about to pay
+   for is the same shape on a phone, a tablet and a desk. 28rem is the cap; the column around it
+   may be wider, the card is not. */
+.checkout {
+  max-width: 28rem;
+  margin-inline: auto;
+}
+.lay-checkout main > .checkout,
+.lay-checkout .checkout {
+  margin-inline: auto;
+}
+
+/* 30rem and up: the keypad has room to be a comfortable block rather than the whole width. */
+@media (min-width: 30rem) {
+  .register {
+    max-width: 24rem;
+  }
+}
+
+/* The sidebar collapse boundary is 52rem, and it is DECLARED here as well as inherited, because a
+   builder reading this file must be able to see the number without opening the other one.
+   assets/unica.css turns .appframe into `14rem minmax(0, 1fr)` at (min-width: 52rem); below that
+   it is a single column and .sidebar is a top row with a bottom border. This block does not move
+   the boundary — it only makes the collapsed row behave like a row. */
+@media (max-width: 51.999rem) {
+  .appframe {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--paper);
+  }
+  .lay-app main,
+  .lay-app footer {
+    max-width: none;
+  }
+}
+
+/* Tablet and small laptop: 744 (iPad in a narrow split), 820 (iPad portrait), 1024. */
+@media (min-width: 46.5rem) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 64rem) {
+  .lay-app main {
+    max-width: 58rem;
+  }
+  .pagehead {
+    align-items: center;
+  }
+}
+/* 1280 and 1440: the measure stops growing. A line of body text is not more readable at 1100px
+   wide, so the extra width becomes margin. */
+@media (min-width: 80rem) {
+  .lay-marketing header.site,
+  .lay-marketing main,
+  .lay-marketing footer {
+    max-width: 64rem;
+  }
+  .lay-app .appframe {
+    max-width: 80rem;
+    margin-inline: auto;
+  }
+}
