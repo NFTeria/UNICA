@@ -55,6 +55,7 @@ import { join, extname, normalize, sep } from "node:path";
 
 import { authenticateDirectReceipt, authenticateProductSale, authenticateReceipt, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
 import { ExplorerLogs } from "./tools/unica-evidence/explorer.mjs";
+import { selectorOf } from "./tools/unica-sign/abi.mjs";
 
 const ROOT = process.cwd();
 const OUT_DIR = join(ROOT, process.env.UNICA_OUT_DIR);
@@ -64,7 +65,7 @@ const HOST = process.env.UNICA_HOST;
 const PORT = Number(process.env.UNICA_PORT);
 const RPC_URL = process.env.UNICA_RPC_URL;
 const RPC_PROXY_PATH = "/local/rpc";
-const ORDERS_SELECTOR_HEX = "7bcb4a76"; // keccak256("orders(bytes32)") first four bytes, the same view on both settlers
+const ORDERS_SELECTOR_HEX = selectorOf("orders(bytes32)").replace(/^0x/, ""); // computed, never typed: the same view on both settlers
 const ORDER_SETTLED = 3; // UnicaMarketTypes.OrderStatus.Settled, frozen numbering
 const LOCAL_CHAIN = 31337;
 // Public nodes cap how many blocks one eth_getLogs may span; the practice chain does not. A scan
