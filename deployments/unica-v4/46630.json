@@ -2,12 +2,20 @@
   "environment": "PUBLIC_TESTNET_NO_VALUE",
   "designation": "TEST_ONLY_NO_VALUE",
   "chainId": 46630,
-  "commit": "82cbe02635dbd2ca6ceaaf76fb5f48b1629cbf8e",
-  "readAtBlock": 118243452,
+  "commit": "e7264f546e5eb374ffe8887c79288d8b938ef8ed",
+  "readAtBlock": 118246596,
   "releaseTag": "unica-v5/robinhood-testnet-1",
   "verification": {
-    "status": "not verified",
-    "note": "no read-only explorer result was supplied"
+    "status": "verified",
+    "verifier": "blockscout (Robinhood Chain testnet explorer)",
+    "checkedAt": "2026-09-12",
+    "tool": "script/unica-v4/verify-source.sh",
+    "contracts": {
+      "factory": "verified",
+      "registry": "verified",
+      "hook": "verified",
+      "executor": "verified"
+    }
   },
   "contracts": {
     "poolManager": {
