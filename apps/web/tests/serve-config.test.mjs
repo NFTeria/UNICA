@@ -128,6 +128,15 @@ test("the direct settler is null until the deployment carries one", () => {
   const withDirect = { ...withAssets, contracts: { ...withAssets.contracts, directSettlement: { address: "0xdirect" } } };
   assert.equal(runtimeConfig(withDirect, null, "REDACTED", LABELS).contracts.directSettlement, "0xdirect");
 });
+test("the product catalogue is null until the deployment carries one, and served verbatim once it does", () => {
+  assert.equal(runtimeConfig(withAssets, null, "REDACTED", LABELS).contracts.productCatalog, null);
+  const withCatalog = { ...withAssets, contracts: { ...withAssets.contracts, productCatalog: { address: "0xcatalog" } } };
+  const c = runtimeConfig(withCatalog, null, "REDACTED", LABELS);
+  assert.equal(c.contracts.productCatalog, "0xcatalog");
+  // The control on the row: the two manifests differ in that one field and nothing else, so a
+  // screen that finds no catalogue is being told the truth about the deployment, not guessing.
+  assert.equal(c.contracts.executor, runtimeConfig(withAssets, null, "REDACTED", LABELS).contracts.executor);
+});
 test("the environment the manifest declares is served verbatim, for the label rule to judge", () => {
   assert.equal(runtimeConfig(withAssets, null, "REDACTED", LABELS).environment, "LOCAL_ANVIL_NO_VALUE");
   assert.equal(runtimeConfig({ chainId: 1, contracts: {}, identity: {} }, null, "REDACTED", {}).environment, null);
