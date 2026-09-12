@@ -7,7 +7,8 @@
  *   1. An integration, in that integration's own colour, only where that integration is the thing
  *      on screen: Uniswap where a payment is converted, The Graph where a receipt is indexed, ENS
  *      where a name is registered or resolved, Chainlink where a price feed is what set the price
- *      the person is reading. Attribution, not decoration; never more than one of them in a view.
+ *      the person is reading, Robinhood Chain green where a tokenized stock is what is held or paid
+ *      with. Attribution, not decoration; never more than one of them in a view.
  *   2. The business itself. Every business owns a badge whose colours come from its ENS node, so
  *      the business's accent in the app is the HUE of its badge's ground, held at a calm saturation
  *      and a lightness the scheme needs. The badge and the app then agree without either shouting.
@@ -21,6 +22,7 @@ export const INTEGRATIONS = Object.freeze({
   graph: Object.freeze({ name: "The Graph", colour: "#6F4CFF", where: "a receipt is indexed" }),
   ens: Object.freeze({ name: "ENS", colour: "#5298FF", where: "a name is registered or resolved" }),
   chainlink: Object.freeze({ name: "Chainlink", colour: "#375BD2", where: "a price feed set the price on screen" }),
+  robinhood: Object.freeze({ name: "Robinhood Chain", colour: "#00C805", where: "a tokenized stock on Robinhood Chain testnet is what is held or paid with" }),
 });
 
 const INK = "#111111";

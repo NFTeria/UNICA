@@ -18,7 +18,7 @@ test("every integration colour carries readable text, and each is named with the
     assert.ok(contrastRatio(it.colour, textOn(it.colour)) >= 4.5, `${key}: ${it.colour} text contrast`);
     assert.ok(it.where.length > 10, `${key} says where it may appear`);
   }
-  assert.equal(Object.keys(INTEGRATIONS).join(","), "uniswap,graph,ens,chainlink");
+  assert.equal(Object.keys(INTEGRATIONS).join(","), "uniswap,graph,ens,chainlink,robinhood");
 });
 
 test("the badge colours are read from the node exactly where the renderer reads them", () => {
