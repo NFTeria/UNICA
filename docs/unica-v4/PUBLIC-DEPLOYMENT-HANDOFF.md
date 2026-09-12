@@ -77,6 +77,9 @@ nonce 492), with the identity layer configured (`UNICA_ENSV2_RESOLVER`, the badg
 | C | initialise, router, two approvals, seed 4.9 USDC over ticks 198060–205020, `markSeeded` | 3,524,821 | ≈ 0.007 | depth 333,131,895,132, status SEEDED |
 | activate | `setPauser`, allow the admission gate as order creator, `activate` | 177,525 | < 0.001 | status ACTIVE; `orderCreator` = the admission gate; `marketIdOfHook/Executor/Pool` all equal the market id |
 
+The wrapper's own dry run of stage A against live Sepolia (block 11686104, nothing signed) predicted the
+same four addresses and the same 20,826,683 gas, ≈ 0.039 ETH at the live 1.85 gwei.
+
 Addresses are predictions for nonce 492 and change if the deployer sends anything first; **re-run the
 dry run of each stage immediately before sending it**, as the wrapper does by default. Fourteen
 transactions in total, ≈ 0.078 ETH at the fork's gas price. The market is a demonstration market
