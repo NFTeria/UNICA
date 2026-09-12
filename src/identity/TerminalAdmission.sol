@@ -89,6 +89,15 @@ contract TerminalAdmission {
 
     mapping(bytes32 => AdmissionRecord) private _admissions;
 
+    /// @notice The direct settlers this gate will admit an order on, alongside the markets the
+    ///         official registry knows. A UNICA v5 direct settler moves one asset from the customer
+    ///         to the business without a pool, so it has no market id and the registry has never
+    ///         heard of it; without this list every same asset sale would be refused as an
+    ///         unregistered executor. The list is deliberately small and explicit: an address is on
+    ///         it only because the registry's own admin put it there, which is the same authority
+    ///         that decides who may raise an order at all.
+    mapping(address => bool) private _directSettlers;
+
     event OrderAdmitted(
         bytes32 indexed orderId,
         bytes32 indexed merchantNode,
@@ -99,6 +108,8 @@ contract TerminalAdmission {
         bytes32 orderNonce
     );
 
+    event DirectSettlerSet(address indexed settler, bool allowed);
+
     error WrongEnsDeployment(bytes32 expected, bytes32 got);
     error TerminalNotUnderMerchant(bytes32 terminalNode, bytes32 merchantNode);
     error TerminalNotAuthorized(bytes32 terminalNode, address caller);
@@ -108,8 +119,11 @@ contract TerminalAdmission {
     ///         to now. A record changed between quote and admission refuses the order instead of
     ///         silently paying the new address (security review, finding 3).
     error RecipientMismatch(address expected, address resolved);
-    /// @notice The executor is not one the official registry knows (security review, finding 2).
+    /// @notice The executor is not one the official registry knows, and not an allowlisted direct
+    ///         settler either (security review, finding 2).
     error ExecutorNotRegistered(address executor);
+    /// @notice Only the official registry's admin may change the direct settler allowlist.
+    error NotRegistryAdmin(address caller);
     error PolicyNotAuthorized(bytes32 salt);
     error ZeroAddress();
 
@@ -152,7 +166,9 @@ contract TerminalAdmission {
         if (ensDeploymentId != ENS_DEPLOYMENT_ID) {
             revert WrongEnsDeployment(ENS_DEPLOYMENT_ID, ensDeploymentId);
         }
-        if (REGISTRY.marketIdOfExecutor(executor) == bytes32(0)) revert ExecutorNotRegistered(executor);
+        if (REGISTRY.marketIdOfExecutor(executor) == bytes32(0) && !_directSettlers[executor]) {
+            revert ExecutorNotRegistered(executor);
+        }
 
         Request memory req;
         req.merchantNode = merchantNode;
@@ -172,6 +188,23 @@ contract TerminalAdmission {
 
     function admissionOf(bytes32 orderId) external view returns (AdmissionRecord memory) {
         return _admissions[orderId];
+    }
+
+    /// @notice Whether `settler` is an allowlisted UNICA v5 direct settler for this gate.
+    function isDirectSettler(address settler) external view returns (bool) {
+        return _directSettlers[settler];
+    }
+
+    /// @notice Adds or removes a direct settler. The caller must be the official registry's admin,
+    ///         read live rather than copied at construction, so this gate cannot outlive a handover
+    ///         of that role. This is the only writable configuration on this contract, and it
+    ///         changes what a FUTURE call to `requestOrder` will accept: an order already admitted
+    ///         is untouched, because nothing here reaches back into one.
+    function setDirectSettler(address settler, bool allowed) external {
+        if (msg.sender != REGISTRY.admin()) revert NotRegistryAdmin(msg.sender);
+        if (settler == address(0)) revert ZeroAddress();
+        _directSettlers[settler] = allowed;
+        emit DirectSettlerSet(settler, allowed);
     }
 
     /// @dev Checks (b)-(e): the terminal lives under the claimed merchant, `msg.sender` currently

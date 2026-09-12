@@ -13,6 +13,8 @@ import {UnicaMarketTypes} from "../../src/unica-v4/UnicaMarketTypes.sol";
 import {ExecutorDouble} from "./util/ExecutorDouble.sol";
 import {RegistryDouble} from "./util/RegistryDouble.sol";
 import {PolicyDouble} from "./util/PolicyDouble.sol";
+import {DirectSettlement} from "../../src/unica-v5/DirectSettlement.sol";
+import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 
 /// @title TerminalTrustTree
 /// @notice The barbershop tree (`docs/unica-v5/ens/POS-TERMINALS.md` §3-6,
@@ -33,6 +35,7 @@ contract TerminalTrustTreeTest is Test {
         address payer,
         bytes32 orderNonce
     );
+    event DirectSettlerSet(address indexed settler, bool allowed);
 
     LocalEnsV2Fixture internal ens;
     TerminalAdmission internal admission; // POLICY = address(0): no policy gate
@@ -597,5 +600,127 @@ contract TerminalTrustTreeTest is Test {
             bytes32(uint256(80))
         );
         assertEq(admission.admissionOf(id).recipientAtAdmission, moved);
+    }
+
+    // ── 19. the UNICA v5 direct settler allowlist ───────────────────────────────────────────────
+    //
+    // A direct settler moves one asset from the customer straight to the business, so it has no
+    // market and `marketIdOfExecutor` will never know it. These three rows are the whole of what
+    // the allowlist changes: who may be named as the executor, and who may say so.
+
+    /// @dev A settler the gate has not been told about, and the same settler once it has been.
+    function test_DirectSettler_NotListedRefused_ThenListedAdmits() public {
+        (DirectSettlement settler,) = _newDirectSettler();
+
+        vm.prank(operatorA);
+        vm.expectRevert(abi.encodeWithSelector(TerminalAdmission.ExecutorNotRegistered.selector, address(settler)));
+        admission.requestOrder(
+            merchantNode,
+            chair1Node,
+            ENS_DEPLOYMENT_ID,
+            address(settler),
+            payoutAddr,
+            payer,
+            AMOUNT_IN,
+            AMOUNT_IN,
+            DEADLINE,
+            bytes32(uint256(91))
+        );
+        assertFalse(admission.isDirectSettler(address(settler)));
+
+        vm.mockCall(address(registryDouble), abi.encodeWithSignature("admin()"), abi.encode(address(this)));
+        vm.expectEmit(true, true, true, true, address(admission));
+        emit DirectSettlerSet(address(settler), true);
+        admission.setDirectSettler(address(settler), true);
+        assertTrue(admission.isDirectSettler(address(settler)));
+
+        settler.setOrderCreator(address(admission), true);
+        vm.prank(operatorA);
+        bytes32 orderId = admission.requestOrder(
+            merchantNode,
+            chair1Node,
+            ENS_DEPLOYMENT_ID,
+            address(settler),
+            payoutAddr,
+            payer,
+            AMOUNT_IN,
+            AMOUNT_IN,
+            DEADLINE,
+            bytes32(uint256(91))
+        );
+        assertEq(settler.orders(orderId).recipient, payoutAddr, "the business address is frozen from the ENS record");
+        assertEq(admission.admissionOf(orderId).terminalNode, chair1Node);
+    }
+
+    /// @dev The list is the registry admin's, and nobody else's. The admin is read live, so a
+    ///      handover of that role moves this power with it.
+    function test_StrangerCannotSetDirectSettler() public {
+        (DirectSettlement settler,) = _newDirectSettler();
+        vm.mockCall(address(registryDouble), abi.encodeWithSignature("admin()"), abi.encode(address(this)));
+
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(TerminalAdmission.NotRegistryAdmin.selector, attacker));
+        admission.setDirectSettler(address(settler), true);
+
+        // the merchant's own key does not carry it either
+        vm.prank(merchant);
+        vm.expectRevert(abi.encodeWithSelector(TerminalAdmission.NotRegistryAdmin.selector, merchant));
+        admission.setDirectSettler(address(settler), true);
+        assertFalse(admission.isDirectSettler(address(settler)));
+
+        // control: the admin the registry names right now
+        admission.setDirectSettler(address(settler), true);
+        assertTrue(admission.isDirectSettler(address(settler)));
+    }
+
+    /// @dev Taking a settler off the list refuses the next admission and leaves the last one alone.
+    function test_RemovingDirectSettler_RefusesTheNextAdmissionOnly() public {
+        (DirectSettlement settler,) = _newDirectSettler();
+        vm.mockCall(address(registryDouble), abi.encodeWithSignature("admin()"), abi.encode(address(this)));
+        admission.setDirectSettler(address(settler), true);
+        settler.setOrderCreator(address(admission), true);
+
+        vm.prank(operatorA);
+        bytes32 admitted = admission.requestOrder(
+            merchantNode,
+            chair1Node,
+            ENS_DEPLOYMENT_ID,
+            address(settler),
+            payoutAddr,
+            payer,
+            AMOUNT_IN,
+            AMOUNT_IN,
+            DEADLINE,
+            bytes32(uint256(92))
+        );
+
+        admission.setDirectSettler(address(settler), false);
+        vm.prank(operatorA);
+        vm.expectRevert(abi.encodeWithSelector(TerminalAdmission.ExecutorNotRegistered.selector, address(settler)));
+        admission.requestOrder(
+            merchantNode,
+            chair1Node,
+            ENS_DEPLOYMENT_ID,
+            address(settler),
+            payoutAddr,
+            payer,
+            AMOUNT_IN,
+            AMOUNT_IN,
+            DEADLINE,
+            bytes32(uint256(93))
+        );
+
+        assertEq(
+            uint8(settler.orders(admitted).status),
+            uint8(UnicaMarketTypes.OrderStatus.Open),
+            "the sale already admitted is untouched"
+        );
+    }
+
+    /// @dev A settler on a fresh local test dollar, admitted by this test contract, which is also
+    ///      the admin the mocked registry names.
+    function _newDirectSettler() internal returns (DirectSettlement settler, MockERC20 uusd) {
+        uusd = new MockERC20("Unica test dollar", "uUSD", 6);
+        settler = new DirectSettlement(address(uusd), address(this));
     }
 }
