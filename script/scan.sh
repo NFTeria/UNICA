@@ -46,7 +46,7 @@ marks='unica-closet|claude-toolkit|SESSION-PROMPT|prize-watch/|/Users/'
 # anyone — the token id is keccak256(label) with its low 32 bits cleared. `token ?id` deliberately
 # requires the `id`, so a bare `token:` beside a 64-hex value stays caught; an API token is exactly
 # the shape this rule exists to find. Both words have a control below in each direction.
-label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id[[:space:]:]|swap|receipt|topic|digest|witness|domain|vector|curve|signature|resource|roles|token ?id'
+label='pool ?id|salt|hash|keccak|sha-?256|tx|transaction|block|bytes32|id"?[[:space:]:]|swap|receipt|topic|digest|witness|domain|vector|curve|signature|resource|roles|token ?id'
 
 # The controls, first: each pattern must catch a planted bad input and pass a planted good one.
 chk "control: a labelled key is caught"        "printf 'PRIVATE_KEY=0x%064d\n' 1 | grep -qiE '$secrets'"
