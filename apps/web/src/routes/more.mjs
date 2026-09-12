@@ -11,7 +11,7 @@ export const MORE = [
     experimental: true,
     title: "Robinhood testnet experiment — UNICA",
     description:
-      "A local-only prototype settling a faucet-issued test token into a local payout fixture. Nothing is deployed, nothing has settled, and the live action is disabled.",
+      "A local-only prototype settling a faucet-issued test token into a local test dollar. Nothing is deployed, nothing has settled, and the live action is disabled.",
     ogTitle: "UNICA testnet experiment",
     ogDescription: "Local-only prototype. Nothing deployed, nothing settled.",
     ogImage: "og-experiment.svg",
@@ -22,7 +22,7 @@ ${C.banner("warn", "This is a testnet experiment.", raw(`Nothing here is deploye
   <table class="pins"><tbody>
     <tr><th scope="row">Chain</th><td>${EXPERIMENT.chainName} (${EXPERIMENT.chainId})</td></tr>
     <tr><th scope="row">Input</th><td>${EXPERIMENT.inputSymbol}, a <strong>faucet-issued test token</strong>. Not a share, not a security, not owned by anyone. ${hex(EXPERIMENT.inputToken, "input token address")}</td></tr>
-    <tr><th scope="row">Payout</th><td>${EXPERIMENT.payoutName} (${EXPERIMENT.payoutSymbol}), a <strong>local test fixture</strong>. Not a stablecoin, nothing backs it, and it exists only in local tests.</td></tr>
+    <tr><th scope="row">Payout</th><td>${EXPERIMENT.payoutName} (${EXPERIMENT.payoutSymbol}), a <strong>local test token</strong>. Not a stablecoin, nothing backs it, and it exists only in local tests.</td></tr>
   </tbody></table>
 </section>
 <section>

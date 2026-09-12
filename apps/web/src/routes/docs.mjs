@@ -57,10 +57,10 @@ export const DOCS = [
 <section>
   <h2>Robinhood testnet experiment <span class="tag">testnet experiment</span></h2>
   <p>The experiment models an ERC-20 input. Its input is a faucet-issued test token bearing the
-  symbol ${EXPERIMENT.inputSymbol}; its payout is a local fixture named
+  symbol ${EXPERIMENT.inputSymbol}; its payout is a local test dollar named
   ${EXPERIMENT.payoutName} (${EXPERIMENT.payoutSymbol}).</p>
   <p><strong>Neither is a real asset.</strong> The input is a testnet faucet token and is not a
-  share, a security, or anything anyone owns. The payout fixture is not a stablecoin and nothing
+  share, a security, or anything anyone owns. The payout token is not a stablecoin and nothing
   backs it. See <a href="../experiments/robinhood/">the experiment</a>.</p>
 </section>`,
   },
