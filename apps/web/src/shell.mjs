@@ -26,6 +26,7 @@
  */
 import { h, raw, esc } from "./html.mjs";
 import { SITE } from "./site.mjs";
+import { sidebarNav, walletChip } from "./components.mjs";
 import { MAINNET_ENVIRONMENT, NO_VALUE_BANNER } from "../assets/product.js";
 
 /**
@@ -96,25 +97,13 @@ function nav(p, current) {
   return `<nav aria-label="Primary"><ul class="nav">${items.join("")}</ul></nav>`;
 }
 
-function sidebar(p, current) {
-  const items = SIDENAV.map(([href, label]) => {
-    const isCurrent = href === current;
-    return h`<li><a href="${p}${href}"${isCurrent ? raw(' aria-current="page"') : ""}>${label}</a></li>`;
-  });
-  return `<nav class="sidebar" aria-label="Primary"><ul class="sidenav">${items.join("")}</ul></nav>`;
-}
-
 /**
- * The wallet chip. The served text is the truth without script — a sentence saying that the wallet
- * IS the sign-in — and `apps/web/assets/app.js` replaces it with the address, the network and a way
- * in or out once it has read the active deployment. `data-prefix` is how that script knows where
- * "business" and "join" are from this depth, since every link in this artifact is relative.
+ * The wallet chip and the signed-in menu are defined once, in src/components.mjs, and only PLACED
+ * here. `data-prefix` is how apps/web/assets/app.js knows where "business" and "join" are from this
+ * depth, since every link in this artifact is relative to the document that carries it.
  */
-function walletChip(p) {
-  return h`<div class="wchip" id="wallet-chip" data-prefix="${p}">
-    <span class="wchip-line" id="wallet-chip-text">Your wallet is your sign-in. No account, no password.</span>
-  </div>`;
-}
+const chip = (p) => walletChip(p).__raw;
+const sidebar = (p, current) => sidebarNav(p, current, SIDENAV).__raw;
 
 function footer(p) {
   const items = FOOTER.map(([href, label]) => h`<li><a href="${p}${href}">${label}</a></li>`);
@@ -130,7 +119,7 @@ function marketingBody(page, p, navKey) {
   return `<header class="site">
   <a class="mark" href="${esc(p)}"><span aria-hidden="true">◇</span> ${esc(SITE.name)}</a>
   ${nav(p, navKey)}
-  ${walletChip(p)}
+  ${chip(p)}
 </header>
 <main id="main" tabindex="-1">
 <div class="hero"><h1>${esc(page.h1)}</h1></div>
@@ -144,7 +133,7 @@ function appBody(page, p) {
   return `<header class="topbar">
   <a class="mark" href="${esc(p)}"><span aria-hidden="true">◇</span> ${esc(SITE.name)}</a>
   <span class="topbar-business" id="topbar-business">Not signed in yet</span>
-  ${walletChip(p)}
+  ${chip(p)}
 </header>
 <div class="appframe">
 ${sidebar(p, here)}
@@ -166,7 +155,7 @@ function checkoutBody(page, p) {
     <li><a href="${esc(p)}">Home</a></li>
     <li><a href="${esc(p)}support/">Support</a></li>
   </ul></nav>
-  ${walletChip(p)}
+  ${chip(p)}
 </header>
 <main id="main" tabindex="-1">
 <p class="bizid" id="checkout-identity">The business you are paying is named on the payment below.</p>
