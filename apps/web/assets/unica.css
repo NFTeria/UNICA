@@ -69,5 +69,8 @@ th[scope="row"] { font-weight: 500; white-space: nowrap; padding-right: 16px; }
 .mode-exp { border-style: dashed; }
 .blockers li { margin-bottom: 6px; }
 .evidence-key dt { margin-top: 8px; } .evidence-key dd { margin: 2px 0 0 0; color: var(--muted); }
+.evidence-json { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem;
+  white-space: pre-wrap; overflow-wrap: break-word; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
 @media (min-width: 40rem) { .modes { grid-template-columns: 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

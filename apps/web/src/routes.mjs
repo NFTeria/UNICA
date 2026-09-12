@@ -319,12 +319,27 @@ ${C.statusRegion("order-detail", "No order in this link.")}
   <h2>Payment terms</h2>
   <p class="sub">Add an order to this link as <code>?order=0x…</code> to pay a specific one.</p>
   ${C.statusRegion("terms", "Terms are read from the chain when script runs.")}
+  <div id="order-terms" class="status" role="status" aria-live="polite" hidden>
+    <p id="order-test-mode" class="tag">[TEST MODE]</p>
+    <p id="order-no-value" class="sub">Testnet demonstration -- no real value</p>
+    <dl class="evidence-key">
+      <dt>Merchant</dt><dd id="order-merchant-name">—</dd>
+      <dt>Merchant address (full)</dt><dd id="order-merchant-address">—</dd>
+      <dt>Identity art</dt><dd id="order-identity-art">—</dd>
+      <dt>You pay (max)</dt><dd id="order-input">—</dd>
+      <dt>Merchant receives (minimum)</dt><dd id="order-output">—</dd>
+      <dt>Network</dt><dd id="order-network">—</dd>
+      <dt>Expires in</dt><dd id="order-expiry">—</dd>
+      <dt>Fees</dt><dd id="order-fees">—</dd>
+    </dl>
+  </div>
   ${C.v3Disclosure()}
 </section>
 <section${P("wallet")}>
   <h2>Wallet</h2>
   ${C.statusRegion("wallet", "No wallet has been connected.")}
-  <p><button type="button" class="cta" id="connect">Connect a wallet</button></p>
+  <p><button type="button" class="cta" id="connect" disabled aria-describedby="connect-why">Connect a wallet</button></p>
+  <p class="sub" id="connect-why">Disabled until this demo's runtime configuration has been read.</p>
 </section>
 <section${P("chain-switch")}>
   <h2>Network</h2>
@@ -342,6 +357,7 @@ ${C.statusRegion("order-detail", "No order in this link.")}
     <li>No wallet, or a wallet on the wrong network.</li>
     <li>The live quote is below the order's committed minimum.</li>
   </ul>
+  <ul id="active-blockers" class="status" role="status" aria-live="polite" hidden></ul>
 </section>
 <section${P("pay")}>
   <h2>Pay</h2>
@@ -350,7 +366,16 @@ ${C.statusRegion("order-detail", "No order in this link.")}
   network, and every check above has passed.</p>
   <p${P("expired")}>An expired order cannot be paid. The page says so and offers a new one.</p>
   <p${P("settled")}>A settled order cannot be paid twice. The page offers a way to register another.</p>
-</section>`,
+  ${C.statusRegion("payment-status", "Awaiting payer.")}
+  <p><button type="button" class="cta cta-quiet" id="verify-again" hidden aria-describedby="verify-again-why">Verify again</button></p>
+  <p class="sub" id="verify-again-why">Re-checks this order's evidence without sending another transaction.</p>
+  <div id="evidence-output" hidden>
+    <h3>Verified receipt</h3>
+    <p id="evidence-decision" class="sub"></p>
+    <pre id="evidence-json" class="evidence-json"></pre>
+  </div>
+</section>
+<script type="module" src="../assets/local-pay.js"></script>`,
   },
   {
     route: "receipt",
