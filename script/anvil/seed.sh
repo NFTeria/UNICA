@@ -17,7 +17,7 @@ SEED_LOG="$REHEARSAL_DIR/seed.log"
 FOUNDRY_BROADCAST="$REHEARSAL_DIR/broadcast" forge script script/anvil/AnvilLocal.s.sol:AnvilLocal \
   --sig 'seed()' --rpc-url "$UNICA_LOCAL_RPC" --unlocked --sender "$ANVIL_ADMIN" --broadcast -vv \
   | tee "$SEED_LOG"
-SEED=$(grep -o 'SEED:.*' "$SEED_LOG" | sed 's/^SEED://')
+SEED="{$(grep -o 'SEED:.*' "$SEED_LOG" | sed 's/^SEED://' | tr -d '\n' | sed 's/,$//')}"
 test -n "$SEED" || die "seed() printed no record"
 
 node - "$SEED" "$MANIFEST_PATH" <<'EOF'

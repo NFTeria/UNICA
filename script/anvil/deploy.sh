@@ -38,7 +38,7 @@ FOUNDRY_BROADCAST="$REHEARSAL_DIR/broadcast" forge script script/anvil/AnvilLoca
   --sig 'deploy()' --rpc-url "$UNICA_LOCAL_RPC" --unlocked --sender "$ANVIL_ADMIN" --broadcast -vv \
   | tee "$DEPLOY_LOG"
 
-RAW=$(grep -o 'MANIFEST:.*' "$DEPLOY_LOG" | sed 's/^MANIFEST://' | tr -d '\n')
+RAW="{$(grep -o 'MANIFEST:.*' "$DEPLOY_LOG" | sed 's/^MANIFEST://' | tr -d '\n' | sed 's/,$//')}"
 test -n "$RAW" || die "the deploy script printed no manifest"
 
 step "writing $MANIFEST_PATH"

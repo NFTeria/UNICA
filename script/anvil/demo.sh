@@ -30,7 +30,7 @@ run_stage() { # $1 sig, $2 sender, $3 tag to extract
   local log="$REHEARSAL_DIR/demo-$1.log"
   forge script script/anvil/AnvilLocal.s.sol:AnvilLocal --sig "$1()" --rpc-url "$UNICA_LOCAL_RPC" \
     --unlocked --sender "$2" --broadcast -vv >"$log" 2>&1 || { cat "$log"; die "stage $1 failed"; }
-  grep -o "$3:.*" "$log" | sed "s/^$3://"
+  printf '{%s}' "$(grep -o "$3:.*" "$log" | sed "s/^$3://" | tr -d '\n' | sed 's/,$//')"
 }
 
 step "1–4. identity exists (deploy); mint the identity badge; revoke the lost tablet; refresh the fixture feeds; deliver the LOCAL CRE REPORT FIXTURE"
