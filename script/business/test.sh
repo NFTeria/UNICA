@@ -7,6 +7,6 @@ cd "$(dirname "$0")/../.."
 . script/business/lib.sh
 banner
 heading "Running the full check from an empty chain"
-log "  This installs the product, sells twice, and then tries every way a payment should be"
+log "  This installs the product, sells three times, and then tries every way a payment should be"
 log "  refused. It fails loudly on the first thing that does not behave. It takes a few minutes."
 bash script/anvil/test.sh

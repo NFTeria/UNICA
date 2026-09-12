@@ -6,8 +6,9 @@
 #   registered Uniswap v4 market under an authenticated (fixture-fed) price; the receipt is
 #   authenticated by the evidence layer before the POS may say PAID.
 #
-# Sixteen numbered steps, matching docs/unica-v4/ANVIL-DEMO.md. Positive steps broadcast from
-# impersonated Anvil accounts; every expected refusal is an eth_call whose revert selector is
+# Sixteen numbered steps, matching docs/unica-v4/ANVIL-DEMO.md, plus step 0a, in which the shop
+# writes down what it sells and a customer buys one of the things on the list. Positive steps
+# broadcast from impersonated Anvil accounts; every expected refusal is an eth_call whose revert selector is
 # checked by name, so a refusal that stopped refusing turns this script red. No failed step is
 # ever printed as a payment.
 set -euo pipefail
@@ -26,10 +27,16 @@ export DEMO_TTL_SECONDS="${DEMO_TTL_SECONDS:-1800}"
 # out in. Six decimals, so 2_500_000 base units.
 export DIRECT_AMOUNT="${DIRECT_AMOUNT:-2500000}"
 export DIRECT_TTL_SECONDS="${DIRECT_TTL_SECONDS:-1800}"
+# What the shop sells. Six decimals, so 25_000_000 is 25.00 of the local test dollar, and a period
+# of 2_592_000 seconds is thirty days.
+export PRODUCT_HAIRCUT_PRICE="${PRODUCT_HAIRCUT_PRICE:-25000000}"
+export PRODUCT_MEMBERSHIP_PRICE="${PRODUCT_MEMBERSHIP_PRICE:-40000000}"
+export PRODUCT_MEMBERSHIP_PERIOD="${PRODUCT_MEMBERSHIP_PERIOD:-2592000}"
 # One order nonce per run: the block height makes a re-run on the same chain a NEW order, never a replay.
 export DEMO_ORDER_SEQ="${DEMO_ORDER_SEQ:-$(cast block-number --rpc-url "$UNICA_LOCAL_RPC")}"
 export DIRECT_ORDER_SEQ="${DIRECT_ORDER_SEQ:-$DEMO_ORDER_SEQ}"
 RECORD="$REHEARSAL_DIR/demo-record.json"
+PRODUCTS_RECORD="$REHEARSAL_DIR/products-record.json"
 JOIN_RECORD="$REHEARSAL_DIR/join-record.json"
 FOUNDRY_BROADCAST="$REHEARSAL_DIR/broadcast"; export FOUNDRY_BROADCAST
 
@@ -47,6 +54,68 @@ log "payment address  $(json_get "$JOIN" .payoutAddress)"
 JOINED_BY=$(json_get "$JOIN" .joinedBy | tr 'A-F' 'a-f')
 test "$JOINED_BY" = "$(printf '%s' "$ANVIL_MERCHANT_OWNER" | tr 'A-F' 'a-f')" \
   || die "the join record names $JOINED_BY, which is not the business owner $ANVIL_MERCHANT_OWNER"
+
+step "0a. Fresh Cuts writes down what it sells, and a customer buys one of the things on the list"
+# Two things, listed by the shop's OWN wallet: a haircut anyone can buy any number of times, and a
+# membership paid for a month at a time. Nothing here asks anyone's permission, because a shop's own
+# list of its own prices is the shop's business.
+PRODUCTS=$(run_stage listProducts "$ANVIL_MERCHANT_OWNER" PRODUCTS)
+log "$PRODUCTS"
+CATALOG=$(json_get "$PRODUCTS" .catalog)
+HAIRCUT_ID=$(json_get "$PRODUCTS" .haircutId)
+HAIRCUT_PRICE=$(json_get "$PRODUCTS" .haircutPrice)
+log "on the list      $(json_get "$PRODUCTS" .haircutName) at $HAIRCUT_PRICE (uUSD base units, local test dollar), anyone, any number of times"
+log "on the list      $(json_get "$PRODUCTS" .membershipName) at $(json_get "$PRODUCTS" .membershipPrice) every $(json_get "$PRODUCTS" .membershipPeriod) seconds"
+log "money goes to    $(json_get "$PRODUCTS" .payTo)"
+test "$(json_get "$PRODUCTS" .listedBy | tr 'A-F' 'a-f')" = "$(printf '%s' "$ANVIL_MERCHANT_OWNER" | tr 'A-F' 'a-f')" \
+  || die "the list was written by somebody other than the business owner"
+
+# The sale id is derived HERE, from the counter read before the sale and the documented expression,
+# and only then looked for on the chain. Reading it back off the log would prove nothing about the
+# derivation the receipt screen depends on.
+SALES_BEFORE=$(call_uint "$CATALOG" 'salesCount()(uint256)')
+SHOP_BEFORE=$(call_uint "$UNICA_PAYOUT" 'balanceOf(address)(uint256)' "$ANVIL_MERCHANT_PAYOUT")
+send_as "$ANVIL_PAYER" "$UNICA_PAYOUT" 'approve(address,uint256)' "$CATALOG" "$HAIRCUT_PRICE" >/dev/null
+BUY=$(send_as "$ANVIL_PAYER" "$CATALOG" 'buy(uint256)' "$HAIRCUT_ID")
+BUY_STATUS=$(json_get "$BUY" .status)
+BUY_HASH=$(json_get "$BUY" .transactionHash)
+test "$BUY_STATUS" = "0x1" || die "the customer's purchase did not succeed: status $BUY_STATUS"
+SHOP_AFTER=$(call_uint "$UNICA_PAYOUT" 'balanceOf(address)(uint256)' "$ANVIL_MERCHANT_PAYOUT")
+SHOP_RECEIVED=$(node -e 'console.log((BigInt(process.argv[1])-BigInt(process.argv[2])).toString())' "$SHOP_AFTER" "$SHOP_BEFORE")
+log "tx $BUY_HASH  status $BUY_STATUS"
+log "shop balance     before $SHOP_BEFORE  after $SHOP_AFTER  received $SHOP_RECEIVED (uUSD base units, local test dollar)"
+# Nothing is converted on this path, so the amount received is not "at least" the price: it is
+# exactly the price, and anything else is a defect rather than a better deal.
+test "$SHOP_RECEIVED" = "$HAIRCUT_PRICE" \
+  || die "the purchase delivered $SHOP_RECEIVED, not the exact $HAIRCUT_PRICE"
+
+SALE_ID=$(cast keccak "$(cast abi-encode 'sale(uint256,address,uint256,address,uint256)' \
+  "$UNICA_LOCAL_CHAIN_ID" "$CATALOG" "$HAIRCUT_ID" "$ANVIL_PAYER" "$SALES_BEFORE")")
+SALE_EVIDENCE=$(node tools/unica-evidence/cli.mjs --sale "$SALE_ID" --manifest "$MANIFEST_PATH" --rpc "$UNICA_LOCAL_RPC" --confirmations 0)
+SALE_DECISION=$(json_get "$SALE_EVIDENCE" .decision)
+test "$SALE_DECISION" = "VERIFIED" || die "the sale was not authenticated: $SALE_DECISION -- $SALE_EVIDENCE"
+log "sale             $SALE_ID"
+log "reader says      $SALE_DECISION (the sale came from the list this deployment names)"
+node - "$PRODUCTS_RECORD" "$PRODUCTS" "$SALE_ID" "$BUY_HASH" "$SHOP_BEFORE" "$SHOP_AFTER" "$SALE_EVIDENCE" <<'EOF'
+const [out, products, saleId, txHash, before, after, evidence] = process.argv.slice(2);
+const fs = require("fs");
+const P = JSON.parse(products);
+fs.writeFileSync(out, JSON.stringify({
+  environment: "LOCAL_ANVIL_NO_VALUE",
+  catalog: P.catalog, catalogId: P.catalogId, listedBy: P.listedBy, payTo: P.payTo,
+  asset: P.asset, assetSymbol: "uUSD",
+  onTheList: [
+    {id: P.haircutId, name: P.haircutName, price: P.haircutPrice, kind: "permanent",
+     label: "anyone can buy it, any number of times"},
+    {id: P.membershipId, name: P.membershipName, price: P.membershipPrice, kind: "recurring",
+     periodSeconds: P.membershipPeriod, label: "paid one period at a time; the buyer is paid through a date"},
+  ],
+  sale: {id: saleId, productId: P.haircutId, txHash, buyerPaid: P.haircutPrice,
+    shopBalanceBefore: before, shopBalanceAfter: after,
+    decision: JSON.parse(evidence).decision, evidence: JSON.parse(evidence)},
+}, null, 2) + "\n");
+EOF
+log "record: $PRODUCTS_RECORD"
 
 step "1–4. identity exists (from the join); read the business badge back; revoke the lost tablet; refresh the fixture feeds; deliver the LOCAL CRE REPORT FIXTURE"
 PREPARE=$(run_stage demoPrepare "$ANVIL_ADMIN" PREPARE)
@@ -106,8 +175,8 @@ test "$DECISION" = "VERIFIED" || die "the evidence layer did not verify the rece
 
 step "14. the POS shows PAID only from canonical evidence"
 CHAIN_NOW=$(cast block latest --field timestamp --rpc-url "$UNICA_LOCAL_RPC")
-node - "$RECORD" "$MANIFEST_PATH" "$ADMIT" "$PREPARE" "$PAY" "$EVIDENCE" "$MERCHANT_BEFORE" "$MERCHANT_AFTER" "$DELIVERED" "$ADAPTER_FEED" "$CHAIN_NOW" <<'EOF'
-const [out, manifestPath, admit, prepare, pay, evidence, before, after, delivered, feedId, chainNow] = process.argv.slice(2);
+node - "$RECORD" "$MANIFEST_PATH" "$ADMIT" "$PREPARE" "$PAY" "$EVIDENCE" "$MERCHANT_BEFORE" "$MERCHANT_AFTER" "$DELIVERED" "$ADAPTER_FEED" "$CHAIN_NOW" "$PRODUCTS_RECORD" <<'EOF'
+const [out, manifestPath, admit, prepare, pay, evidence, before, after, delivered, feedId, chainNow, productsPath] = process.argv.slice(2);
 const fs = require("fs");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const A = JSON.parse(admit), P = JSON.parse(prepare), T = JSON.parse(pay), E = JSON.parse(evidence);
@@ -127,6 +196,9 @@ const record = {
   chainId: manifest.chainId,
   connectedPayer: A.payer,
   now: Number(chainNow),
+  // What the shop sells, and the one purchase step 0a made from that list. Read from the file that
+  // step wrote, so this record carries it verbatim rather than restating it.
+  products: fs.existsSync(productsPath) ? JSON.parse(fs.readFileSync(productsPath, "utf8")) : null,
 };
 fs.writeFileSync(out, JSON.stringify(record, null, 2) + "\n");
 EOF
@@ -213,9 +285,23 @@ LOOK_EVIDENCE=$(node tools/unica-evidence/cli.mjs --order "$LOOK_ORDER" --manife
 LOOK_DECISION=$(json_get "$LOOK_EVIDENCE" .decision)
 test "$LOOK_DECISION" = "REFUSED" || die "the look-alike receipt was not REFUSED: $LOOK_DECISION"
 printf '{"case":"LOOKALIKE_HOOK","decision":"%s","reasonCodes":%s}\n' "$LOOK_DECISION" "$(json_get "$LOOK_EVIDENCE" .reasonCodes)"
-node - "$RECORD" "$LOOK" "$LOOK_EVIDENCE" <<'EOF'
-const [out, look, ev] = process.argv.slice(2); const fs = require("fs");
-const r = JSON.parse(fs.readFileSync(out, "utf8")); r.lookalike = {...JSON.parse(look), evidence: JSON.parse(ev)};
+# The counterfeit SHOPFRONT, alongside the counterfeit settlement: the attacker's own catalogue
+# sells a product with the same name at the same price and sends the money to the real shop's
+# wallet, so even the shop's own list of what it was paid shows the sale. The reader refuses it on
+# the one thing that differs, the address it came from.
+LOOKSALE=$(run_stage lookalikeSale "$ANVIL_ATTACKER" LOOKSALE)
+log "$LOOKSALE"
+LOOK_SALE_ID=$(json_get "$LOOKSALE" .saleId)
+LOOK_SALE_EVIDENCE=$(node tools/unica-evidence/cli.mjs --sale "$LOOK_SALE_ID" --manifest "$MANIFEST_PATH" --rpc "$UNICA_LOCAL_RPC" --confirmations 0 || true)
+LOOK_SALE_DECISION=$(json_get "$LOOK_SALE_EVIDENCE" .decision)
+test "$LOOK_SALE_DECISION" = "REFUSED" || die "the counterfeit shopfront's sale was not REFUSED: $LOOK_SALE_DECISION"
+printf '{"case":"PRODUCT_LOOKALIKE_CATALOG","decision":"%s","reasonCodes":%s}\n' \
+  "$LOOK_SALE_DECISION" "$(json_get "$LOOK_SALE_EVIDENCE" .reasonCodes)"
+node - "$RECORD" "$LOOK" "$LOOK_EVIDENCE" "$LOOKSALE" "$LOOK_SALE_EVIDENCE" <<'EOF'
+const [out, look, ev, looksale, saleEv] = process.argv.slice(2); const fs = require("fs");
+const r = JSON.parse(fs.readFileSync(out, "utf8"));
+r.lookalike = {...JSON.parse(look), evidence: JSON.parse(ev)};
+r.lookalikeCatalogSale = {...JSON.parse(looksale), evidence: JSON.parse(saleEv), decision: JSON.parse(saleEv).decision};
 fs.writeFileSync(out, JSON.stringify(r, null, 2) + "\n");
 EOF
 
