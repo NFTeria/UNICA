@@ -550,3 +550,13 @@ else ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
 else
 	@echo "LOCAL FORK on $(LOCAL_RPC_URL), impersonating $(DEPLOYER); start it with: make anvil"
 endif
+
+# The UNICA v4 mutation suite: eighteen specific defects across the v4 executor, hook and registry,
+# each applied to the real tree and each required to turn the ONE row that NAMES it red. It exists
+# because the v4 security review found six money-path guards in the executor that no row could turn
+# red at all. Separate from `mutants` (V2) because it runs a different table against different
+# rows; not in `make gate` because it recompiles eighteen times. It writes to out-guards/ and
+# cache-guards/ so it never fights a build in progress. Do not run it while someone is editing
+# src/unica-v4/: it restores each file byte-for-byte and would overwrite a concurrent edit.
+mutants-unica-v4:
+	bash script/mutation-unica-v4.sh
