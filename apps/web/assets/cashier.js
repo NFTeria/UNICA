@@ -201,6 +201,10 @@ export function saleVerdict({ evidence = null, expired = false, txHash = null, t
   const status = paymentStatus({ txSubmitted: Boolean(txHash), txHash, txReceipt, evidence });
   if (status === "PAID") return { word: "Paid", done: true, line: "Paid. Checked against the network." };
   if (status === "FAILED") return { word: "Refused", done: true, line: "Refused. Nothing was taken." };
+  // An open order is not an unanswered check: the customer has simply not paid yet, so keep watching.
+  if (Array.isArray(evidence?.reasonCodes) && evidence.reasonCodes.includes("ORDER_OPEN")) {
+    return { word: "Waiting", done: false, line: "Waiting for the customer." };
+  }
   if (status === "UNKNOWN") return { word: "Unknown", done: true, line: "Unknown. The check could not answer for this sale." };
   if (expired) return { word: "Unknown", done: true, line: "Unknown. This sale's time is up and nothing was checked." };
   return { word: "Checking", done: false, line: "Checking. Nothing is paid until it has been checked." };
@@ -660,7 +664,16 @@ async function chargeNow() {
   }
 
   const quote = await priceThisSale(minOut);
-  const deadline = Math.floor(Date.now() / 1000) + PAYMENT_WINDOW_SECONDS;
+  // The deadline is the CHAIN's clock plus the window, never this browser's: an order lives on the
+  // chain, and a local testnet's clock can sit hours away from the wall clock.
+  let chainNow = Math.floor(Date.now() / 1000);
+  try {
+    const head = await session.request("eth_getBlockByNumber", ["latest", false]);
+    if (head?.timestamp) chainNow = Number(BigInt(head.timestamp));
+  } catch {
+    // the wall clock stands in when the chain does not answer
+  }
+  const deadline = chainNow + PAYMENT_WINDOW_SECONDS;
   const salt = "0x" + [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join("");
   const gate = gateFor(till.route, till.config.manifest ?? {});
   const ensDeploymentId = till.config.manifest?.identity?.ensDeploymentId ?? till.business.ensDeploymentId ?? null;
