@@ -14,6 +14,8 @@ from src import (
     rattler,
     sidewinder,
 )
+from src.art import svgrender
+from src.math import namecheck
 from moccasin.boa_tools import VyperContract
 
 
@@ -28,6 +30,11 @@ def deploy_all() -> dict[str, VyperContract]:
         # shares the EVM and nothing else.
         "namemath": namemath.deploy(),
         "logobackground": logobackground.deploy(),
+        # UNICA identity NFT art layer (H1-H12, N1-N9): a separate layer beside settlement,
+        # under vy/src/math and vy/src/art, importing nothing from vy/src/unica or the
+        # legacy namemath.vy/logobackground.vy above (H3, H10).
+        "namecheck": namecheck.deploy(),
+        "svgrender": svgrender.deploy(),
     }
 
 

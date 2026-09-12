@@ -1,0 +1,78 @@
+{
+  "renderer_version": "unica-identity-svg/1",
+  "ens_deployment_id_bytes32": "0x86e0579c0a94d742bab50f11d1dc299ea57fc3991a3da84c2f92b1bdcfb3e80c",
+  "chain_id": 11155111,
+  "universal_resolver_proxy": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
+  "vectors": [
+    {
+      "name": "acme.unica.eth",
+      "is_normalized": true,
+      "namehash": "0xc8af5379d4e0ffacb486e0ee7fa4030c186ac79e0f3cba906b4df2898ed0da2e",
+      "label_count": 3,
+      "last_two_labels": "unica.eth",
+      "truncate_for_svg": "acme.unica.eth",
+      "has_confusable_ascii": false,
+      "fingerprint": "78ff2081"
+    },
+    {
+      "name": "a.b",
+      "is_normalized": true,
+      "namehash": "0xa57dcb7e802753630ec035bae538ca332465791509b1375525fe8b3b0bada7ef",
+      "label_count": 2,
+      "last_two_labels": "a.b",
+      "truncate_for_svg": "a.b",
+      "has_confusable_ascii": false,
+      "fingerprint": "662d7885"
+    },
+    {
+      "name": "sub.merchant.unica.eth",
+      "is_normalized": true,
+      "namehash": "0xbcc2d3829794e0170153e3d5544dea4c6cf6e10a3537a2c8c4d0294811444610",
+      "label_count": 4,
+      "last_two_labels": "unica.eth",
+      "truncate_for_svg": "sub.merchant.unica.eth",
+      "has_confusable_ascii": false,
+      "fingerprint": "6e794a3b"
+    },
+    {
+      "name": "x0.unica.eth",
+      "is_normalized": true,
+      "namehash": "0xcac9bb2f2dc4f69808bab02e0613a4d1fc56d849540f9fd4a070a60a60454672",
+      "label_count": 3,
+      "last_two_labels": "unica.eth",
+      "truncate_for_svg": "x0.unica.eth",
+      "has_confusable_ascii": false,
+      "fingerprint": "eb8e8e15"
+    },
+    {
+      "name": "burnaby.unica.eth",
+      "is_normalized": true,
+      "namehash": "0xbf24e25c68422a17eff1e23468b724403b096f13f07de0c4232bc2f06d3af33b",
+      "label_count": 3,
+      "last_two_labels": "unica.eth",
+      "truncate_for_svg": "burnaby.unica.eth",
+      "has_confusable_ascii": true,
+      "fingerprint": "8706df77"
+    },
+    {
+      "name": "bumaby.unica.eth",
+      "is_normalized": true,
+      "namehash": "0xd378b15d4709f8c678ab936565ce2afad8de0fd0cad24e929d163880702b3ef6",
+      "label_count": 3,
+      "last_two_labels": "unica.eth",
+      "truncate_for_svg": "bumaby.unica.eth",
+      "has_confusable_ascii": false,
+      "fingerprint": "4728f587"
+    },
+    {
+      "name": "verylongmerchantlabelthatexceedstwentyfourchars.unica.eth",
+      "is_normalized": true,
+      "namehash": "0x7f18dad6775335f4276ddffd0eb42f7f12f8aa4376652d881a79884bcfaf6821",
+      "label_count": 3,
+      "last_two_labels": "unica.eth",
+      "truncate_for_svg": "...unica.eth",
+      "has_confusable_ascii": false,
+      "fingerprint": "dd8429b2"
+    }
+  ]
+}
