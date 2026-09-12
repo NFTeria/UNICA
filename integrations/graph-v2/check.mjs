@@ -108,20 +108,23 @@ if (network && address && startBlock) {
       "graph build takes the address from networks.json; a disagreement means the built subgraph is not the one reviewed");
 }
 
-// ---- the frozen V1 subgraph is untouched -------------------------------------------------------
+// ---- the sibling subgraph stays a separate namespace ------------------------------------------
 //
-// This namespace exists so V1 does not have to change. Saying so is cheap; proving it is cheaper
-// than discovering otherwise.
+// ../graph indexes the live Sepolia market (UnicaMarketHook), the direct settler and the product
+// catalogue; this namespace indexes the invoice path. Neither is edited for the other. Saying so
+// is cheap; proving it is cheaper than discovering otherwise.
 
 const v1Manifest = text(`${V1}/subgraph.yaml`);
-chk("the V1 manifest still names the V1 hook",
-    v1Manifest.includes("0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0")
-      && v1Manifest.includes("V4SettlementHook"),
-    "the frozen V1 subgraph has been edited");
-chk("the V1 schema still declares Settlement and not InvoiceSettlement",
+chk("the sibling manifest names the Sepolia market hook and nothing from this namespace",
+    v1Manifest.includes("0x2570a593e0D24ede29eC926e0c5a88B427b9A0c0")
+      && v1Manifest.includes("UnicaMarketHook")
+      && !v1Manifest.includes("InvoiceSettlement")
+      && !v1Manifest.includes("QuoteSettled"),
+    "the sibling subgraph has been pulled into the invoice path, or lost its market source");
+chk("the sibling schema declares Settlement and not InvoiceSettlement",
     text(`${V1}/schema.graphql`).includes("type Settlement ")
       && !text(`${V1}/schema.graphql`).includes("InvoiceSettlement"),
-    "the frozen V1 schema has been edited");
+    "the sibling schema has been edited for this namespace");
 chk("the V2 schema declares InvoiceSettlement and not Settlement",
     text(`${HERE}/schema.graphql`).includes("type InvoiceSettlement ")
       && !/type Settlement\s/.test(text(`${HERE}/schema.graphql`)),

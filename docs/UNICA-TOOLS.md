@@ -943,7 +943,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
 - Evidence: 13 matchstick rows against a fixture CAPTURED from the pinned fork by
   `test/fork/CaptureReceipt.t.sol`, plus 17 manifest, ABI and query checks — four of them sabotaged
   and seen red: a manifest subscribing to a different event shape, a renamed schema field, an
-  edited V1 manifest, and a hand-edited ABI.
+  edited sibling manifest, and a hand-edited ABI.
 - Tests: `integrations/graph-v2/tests/invoice-settlement.test.ts`, `integrations/graph-v2/check.mjs`
 - Deployment: none. No Studio deployment has been made and none is authorised.
 - Limitations: the manifest's address is the fork-local executor, because V2 is not deployed
@@ -952,7 +952,7 @@ PoolManager runtime and the official Permit2 runtime, both constructed at their 
   it. A reverted settlement cannot be tested, because reverted logs never reach an indexer.
 - Sponsor relevance: The Graph. Qualification remains **HOLD**, and no claim of hosted status is
   made.
-- Last verified commit: `22747b818f2f`
+- Last verified commit: `486cd6b59f1d`
 
 ---
 

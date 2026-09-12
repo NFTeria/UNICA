@@ -1,7 +1,7 @@
 # UNICA V2 — invoice settlement indexer
 
-A **separate namespace** from [`../graph`](../graph), whose manifest and schema are frozen and are
-not edited for this. Two subgraphs, two entity types, two sets of guarantees.
+A **separate namespace** from [`../graph`](../graph), which indexes the live Sepolia market and shop
+and is not edited for this. Two subgraphs, two entity types, two sets of guarantees.
 
 **Not deployed.** No Subgraph Studio deployment has been made and none is authorised. The address in
 `subgraph.yaml` is the **fork-local** executor from `test/fork` — V2 is not deployed to any public
@@ -158,7 +158,7 @@ look the same.
 | the ABI matches the compiled contract | `check.mjs` |
 | the manifest subscribes to the frozen topic | `check.mjs` |
 | the manifest names a chain, an address and a start block | `check.mjs` |
-| the frozen V1 subgraph is untouched | `check.mjs` |
+| the sibling subgraph stays a separate namespace | `check.mjs` |
 | every query field exists in the schema | `check.mjs` |
 | every query FILTER field exists in the schema | `check.mjs` |
 | the provider's fields and the copilot's fields exist in the schema | `check.mjs` |
