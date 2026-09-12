@@ -43,6 +43,8 @@ export const PAYMENT_WINDOW_SECONDS = 900;
 
 /** `OrderCreated(bytes32,address,address,address,uint128,uint128,uint64)` puts the id in topic 1. */
 export const ORDER_CREATED_SIGNATURE = "OrderCreated(bytes32,address,address,address,uint128,uint128,uint64)";
+/** The direct settler's own `OrderCreated(bytes32,address,address,uint128,uint64,bytes32)`: same id in topic 1, no minimum and no creator topic. */
+export const DIRECT_ORDER_CREATED_SIGNATURE = "OrderCreated(bytes32,address,address,uint128,uint64,bytes32)";
 
 /**
  * The order id this transaction created, taken from the log the settlement contract itself emitted
@@ -290,7 +292,8 @@ async function createPayment({ config, route, customerAsset, payoutAsset, recipi
     say("create-status", "The network declined this payment. Nothing was created and nothing was charged.");
     return;
   }
-  const orderId = orderIdFromReceipt(receipt, route.contract, topicOf(ORDER_CREATED_SIGNATURE));
+  const orderId = orderIdFromReceipt(receipt, route.contract, topicOf(route.kind === "direct" ? DIRECT_ORDER_CREATED_SIGNATURE : ORDER_CREATED_SIGNATURE))
+    ?? orderIdFromReceipt(receipt, route.contract, topicOf(route.kind === "direct" ? ORDER_CREATED_SIGNATURE : DIRECT_ORDER_CREATED_SIGNATURE));
   if (!orderId) {
     say("create-status", "The payment was created but this register could not read its number back. Open your receipts to find it.");
     return;
