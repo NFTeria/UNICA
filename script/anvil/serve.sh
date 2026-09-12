@@ -54,6 +54,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 
 import { authenticateDirectReceipt, authenticateReceipt, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
+import { ExplorerLogs } from "./tools/unica-evidence/explorer.mjs";
 
 const ROOT = process.cwd();
 const OUT_DIR = join(ROOT, process.env.UNICA_OUT_DIR);
@@ -85,6 +86,16 @@ async function projectAll(manifest) {
   if (projectionMemo.value && projectionMemo.head === head && now - projectionMemo.at < PROJECTION_TTL_MS) return projectionMemo.value;
   const local = Number(manifest?.chainId) === LOCAL_CHAIN;
   const start = local ? 0 : Number(manifest?.deployedAtBlock ?? 0);
+  // A public chain whose manifest names a Blockscout API gets its logs from the explorer in one
+  // range; the node still answers block numbers, receipts and calls. Without an explorer the walk
+  // below runs in windows, which a free-tier node may still refuse: the error then says so.
+  const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
+  if (explorerApi) {
+    const client = new ExplorerLogs({ api: explorerApi, rpc: RPC_URL });
+    const one = await projectEvidence({ rpc: client, manifest, fromBlock: start, toBlock: head });
+    projectionMemo = { head, at: now, value: one };
+    return one;
+  }
   if (local || !Number.isFinite(LOG_WINDOW) || LOG_WINDOW <= 0) {
     const one = await projectEvidence({ rpc: RPC_URL, manifest, fromBlock: start, toBlock: head });
     projectionMemo = { head, at: now, value: one };

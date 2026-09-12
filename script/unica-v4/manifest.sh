@@ -58,6 +58,7 @@ const manifest = {
   environment: env.UNICA_IS_MAINNET === "true" ? "PUBLIC_MAINNET" : "PUBLIC_TESTNET_NO_VALUE",
   designation: env.UNICA_IS_MAINNET === "true" ? "PRODUCTION" : "TEST_ONLY_NO_VALUE",
   chainId: Number(chain), commit, readAtBlock: Number(headBlock), releaseTag: env.UNICA_RELEASE_TAG || null,
+  explorer: env.UNICA_EXPLORER_API ? {kind: "blockscout", api: env.UNICA_EXPLORER_API, url: env.UNICA_EXPLORER_URL || null, note: "public, keyless; a source of logs and links, never a judge"} : null,
   deployedAtBlock: (() => { try { const j = JSON.parse(fs.readFileSync("broadcast/DeployPublic.s.sol/" + chain + "/stageA-latest.json", "utf8")); const b = (j.receipts || []).map((r) => Number(BigInt(r.blockNumber))).filter(Number.isFinite); return b.length ? Math.min(...b) : null; } catch { return null; } })(),
   verification: env.UNICA_VERIFICATION_JSON ? JSON.parse(env.UNICA_VERIFICATION_JSON) : {status: "not verified", note: "no read-only explorer result was supplied"},
   contracts: JSON.parse("{" + contracts + "}"),

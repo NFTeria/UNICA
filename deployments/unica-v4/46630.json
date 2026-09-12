@@ -4,6 +4,12 @@
   "chainId": 46630,
   "commit": "e7264f546e5eb374ffe8887c79288d8b938ef8ed",
   "readAtBlock": 118246596,
+  "explorer": {
+    "kind": "blockscout",
+    "api": "https://explorer.testnet.chain.robinhood.com/api",
+    "url": "https://explorer.testnet.chain.robinhood.com",
+    "note": "public, keyless; a source of logs and links, never a judge"
+  },
   "deployedAtBlock": 118242754,
   "releaseTag": "unica-v5/robinhood-testnet-1",
   "verification": {

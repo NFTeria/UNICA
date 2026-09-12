@@ -4,6 +4,12 @@
   "chainId": 11155111,
   "commit": "95fa9b95c2fdc1450ca386717cc7e3ad8f05cc42",
   "readAtBlock": 11690204,
+  "explorer": {
+    "kind": "blockscout",
+    "api": "https://eth-sepolia.blockscout.com/api",
+    "url": "https://eth-sepolia.blockscout.com",
+    "note": "public, keyless; a source of logs and links, never a judge"
+  },
   "deployedAtBlock": 11690161,
   "releaseTag": "unica-v4/sepolia-rehearsal-1",
   "verification": {
