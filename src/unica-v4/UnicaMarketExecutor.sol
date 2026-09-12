@@ -97,6 +97,12 @@ contract UnicaMarketExecutor is IUnicaMarketExecutor, IUnlockCallback {
     ///      00:00 UTC and a new day starts at zero without anyone writing to storage.
     uint256 private constant SECONDS_PER_DAY = 86400;
 
+    /// @dev The swap's price limits: one step inside each end of the usable range, so the pool, not
+    ///      a limit, decides how much of the exact input is consumed; the hook then refuses anything
+    ///      short of the whole amount (PartialFill).
+    uint160 private constant LIMIT_TOWARDS_ZERO = TickMath.MIN_SQRT_PRICE + 1;
+    uint160 private constant LIMIT_TOWARDS_MAX = TickMath.MAX_SQRT_PRICE - 1;
+
     /// @dev The largest exact input a v4 swap can carry: `amountSpecified` is an `int256` but every
     ///      balance delta component is an `int128`, so anything above this cannot be represented on
     ///      the way back out.
@@ -319,7 +325,7 @@ contract UnicaMarketExecutor is IUnicaMarketExecutor, IUnlockCallback {
             SwapParams({
                 zeroForOne: zeroForOne,
                 amountSpecified: -int256(uint256(amountIn)),
-                sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+                sqrtPriceLimitX96: zeroForOne ? LIMIT_TOWARDS_ZERO : LIMIT_TOWARDS_MAX
             }),
             abi.encode(orderId)
         );

@@ -319,7 +319,7 @@ contract SwapDuringUnlockAsset is MockERC20 {
                 SwapParams({
                     zeroForOne: zeroForOne,
                     amountSpecified: -int256(1e12),
-                    sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+                    sqrtPriceLimitX96: _priceLimitFor(zeroForOne)
                 }),
                 ""
             ) returns (
@@ -341,5 +341,11 @@ contract SwapDuringUnlockAsset is MockERC20 {
             }
         }
         return ok;
+    }
+
+    /// @dev One step inside the usable range on the side the swap moves towards.
+    function _priceLimitFor(bool zeroForOne) internal pure returns (uint160) {
+        if (zeroForOne) return TickMath.MIN_SQRT_PRICE + 1;
+        return TickMath.MAX_SQRT_PRICE - 1;
     }
 }

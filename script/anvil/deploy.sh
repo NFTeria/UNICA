@@ -43,7 +43,8 @@ test -n "$RAW" || die "the deploy script printed no manifest"
 
 step "writing $MANIFEST_PATH"
 COMMIT=$(git rev-parse HEAD)
-DIRTY=$(git status --porcelain | grep -v '^??' | wc -l | tr -d ' ')
+# grep -v exits 1 when nothing survives (a clean tree), which under pipefail would abort the stage.
+DIRTY=$(git status --porcelain | { grep -v '^??' || true; } | wc -l | tr -d ' ')
 node - "$RAW" "$MANIFEST_PATH" "$UNICA_LOCAL_RPC" "$COMMIT" "$DIRTY" "$FORGE_VERSION" "$ANVIL_VERSION" "$VYPER_VERSION" "$NODE_VERSION" <<'EOF'
 const [raw, out, rpc, commit, dirty, forge, anvil, vyper, node] = process.argv.slice(2);
 const kv = JSON.parse(raw);

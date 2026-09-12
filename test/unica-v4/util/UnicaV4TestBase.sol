@@ -297,8 +297,8 @@ abstract contract UnicaV4TestBase is Test {
         uint256 ratioQ192 = ((10 ** uint256(dec1)) << 192) / (10 ** uint256(dec0));
         sqrtPriceX96 = uint160(_sqrt(ratioQ192));
 
-        tick = TickMath.getTickAtSqrtPrice(sqrtPriceX96);
-        tick = _floorToSpacing(tick, key.tickSpacing);
+        int24 rawTick = TickMath.getTickAtSqrtPrice(sqrtPriceX96);
+        tick = _floorToSpacing(rawTick, key.tickSpacing);
         sqrtPriceX96 = TickMath.getSqrtPriceAtTick(tick);
     }
 

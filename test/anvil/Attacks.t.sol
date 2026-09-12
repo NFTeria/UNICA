@@ -484,9 +484,7 @@ contract AttacksTest is Test {
         PoolKey memory k = factory.poolKeyOf(marketId);
         bool zeroForOne = address(asset) < address(payout);
         SwapParams memory params = SwapParams({
-            zeroForOne: zeroForOne,
-            amountSpecified: -int256(1e16),
-            sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+            zeroForOne: zeroForOne, amountSpecified: -int256(1e16), sqrtPriceLimitX96: _priceLimitFor(zeroForOne)
         });
         PoolSwapTest.TestSettings memory settings =
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
@@ -801,5 +799,11 @@ contract AttacksTest is Test {
             if (match_) return true;
         }
         return false;
+    }
+
+    /// @dev One step inside the usable range on the side the swap moves towards.
+    function _priceLimitFor(bool zeroForOne) internal pure returns (uint160) {
+        if (zeroForOne) return TickMath.MIN_SQRT_PRICE + 1;
+        return TickMath.MAX_SQRT_PRICE - 1;
     }
 }
