@@ -356,7 +356,7 @@ contract UnicaMarketHook is BaseHook, IUnicaMarketHook {
 
     /// @dev The mark, the count and the sixteen fields, last, after every check has passed.
     function _emitReceipt(ReceiptData memory receipt) private {
-        
+        _markSwapped(receipt.orderId);
         unchecked {
             ++receiptCount;
         }
