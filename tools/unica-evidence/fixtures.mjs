@@ -4,7 +4,7 @@
 //
 // Not itself a test file (no `.test.mjs` suffix), so `node --test` does not try to run it directly.
 
-import {recomputeMarketId, recomputeSettlementId} from "./codec.mjs";
+import {recomputeCatalogId, recomputeMarketId, recomputeSettlementId} from "./codec.mjs";
 
 export const addr = (n) => "0x" + n.toString(16).padStart(40, "0");
 export const bytes32 = (n) => "0x" + n.toString(16).padStart(64, "0");
@@ -27,6 +27,13 @@ export const LOOKALIKE_DIRECT_SETTLEMENT = addr(0xbad3);
 export const DIRECT_ASSET = addr(0x91);
 export const DIRECT_RECIPIENT = addr(0x92);
 export const DIRECT_PAYER = addr(0x93);
+export const PRODUCT_CATALOG = addr(0xa0);
+export const LOOKALIKE_PRODUCT_CATALOG = addr(0xbad4);
+export const PRODUCT_ASSET = addr(0xa1);
+export const PRODUCT_PAYOUT = addr(0xa2);
+export const PRODUCT_SELLER = addr(0xa3);
+export const PRODUCT_BUYER = addr(0xa4);
+export const SALE_ID = bytes32(0x4000);
 
 export const POOL_ID = bytes32(0x2000);
 export const ORDER_ID = bytes32(0x3000);
@@ -57,6 +64,10 @@ export const DIRECT_SETTLEMENT_ID = recomputeSettlementId({
   settler: DIRECT_SETTLEMENT,
   asset: DIRECT_ASSET,
 });
+
+// Recomputed the same way ProductCatalog.sol's own constructor computes it, for the same reason
+// the two ids above are recomputed rather than chosen.
+export const CATALOG_ID = recomputeCatalogId({chainId: CHAIN_ID, catalog: PRODUCT_CATALOG});
 
 export function makeManifest(overrides = {}) {
   const base = {
@@ -89,6 +100,8 @@ export function makeManifest(overrides = {}) {
         asset: DIRECT_ASSET,
       },
       lookalikeDirectSettlement: {address: LOOKALIKE_DIRECT_SETTLEMENT, codeHash: bytes32(0xb6)},
+      productCatalog: {address: PRODUCT_CATALOG, codeHash: bytes32(0xb7), catalogId: CATALOG_ID},
+      lookalikeProductCatalog: {address: LOOKALIKE_PRODUCT_CATALOG, codeHash: bytes32(0xb8)},
     },
     // Symbol/decimals labels for the assets this manifest names, keyed by role — the shape
     // apps/web's own manifest reading expects (role, symbol, decimals, address), trimmed to the one

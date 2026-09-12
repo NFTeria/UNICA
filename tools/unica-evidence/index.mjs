@@ -19,7 +19,7 @@
 import {toHex} from "../../web/ensv2/keccak.mjs";
 import {ReadOnlyRpc} from "../unica-verify/rpc.mjs";
 import {bytesFromHex, readAddress, readUint, selectorOf, wordBytes32} from "../unica-sign/abi.mjs";
-import {TOPIC0, decodeLog, identifyLog, recomputeMarketId, recomputeSettlementId} from "./codec.mjs";
+import {TOPIC0, decodeLog, identifyLog, recomputeCatalogId, recomputeMarketId, recomputeSettlementId} from "./codec.mjs";
 
 // ---- small shared helpers -------------------------------------------------------------------------
 
@@ -84,6 +84,7 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
     addressOf(contracts.terminalAdmission),
     addressOf(contracts.policyReceiver),
     addressOf(contracts.directSettlement),
+    addressOf(contracts.productCatalog),
   ].filter(Boolean);
 
   const from = toBlockTag(fromBlock ?? 0);
@@ -96,6 +97,7 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
     // hook (EVENT-SCHEMA.md §2's rule cuts both ways for both settlement kinds).
     client.logs({topics: [TOPIC0.SettlementReceipt], fromBlock: from, toBlock: to}),
     client.logs({topics: [TOPIC0.DirectReceipt], fromBlock: from, toBlock: to}),
+    client.logs({topics: [TOPIC0.ProductSold], fromBlock: from, toBlock: to}),
   ]);
 
   const seen = new Set();
@@ -120,7 +122,7 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
   const settlementTxHashes = [
     ...new Set(
       logs
-        .filter((l) => identifyLog(l) === "SettlementReceipt" || identifyLog(l) === "DirectReceipt")
+        .filter((l) => ["SettlementReceipt", "DirectReceipt", "ProductSold"].includes(identifyLog(l)))
         .map((l) => lc(l.transactionHash)),
     ),
   ];
@@ -137,37 +139,68 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
 
 const ORDERS_SELECTOR = selectorOf("orders(bytes32)");
 
-/// Every receipt whose recipient is one wallet, newest first: both receipt shapes decoded by codec,
-/// with the block and log position kept for ordering and links. This LISTS; it does not judge. Pass
-/// each orderId to authenticateReceipt or authenticateDirectReceipt for a verdict, because a
-/// receipt-shaped log from an unregistered emitter is exactly what those two exist to refuse.
+/// The three kinds of product-catalogue listing, by the `uint8` the sale event carries
+/// (src/unica-v5/IProductCatalog.sol `Kind`). Named here so a screen shows a word rather than a
+/// number; an unknown number stays null rather than being guessed at.
+const PRODUCT_KIND_NAMES = ["one-off", "recurring", "permanent"];
+
+/// Every payment one wallet has received, newest first: all three shapes this layer decodes — a
+/// market settlement, a same-asset settlement and a product-catalogue sale — with the block and log
+/// position kept for ordering and links. This LISTS; it does not judge. Pass each row's `orderId`
+/// to `authenticateReceipt`, `authenticateDirectReceipt` or `authenticateProductSale` according to
+/// its `kind`, because a receipt-shaped log from an unregistered emitter is exactly what those
+/// three exist to refuse.
 export function receiptsForRecipient({logs = [], recipient} = {}) {
   const who = String(recipient ?? "").toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(who)) return [];
   const out = [];
   for (const log of Array.isArray(logs) ? logs : []) {
     const name = identifyLog(log);
-    if (name !== "SettlementReceipt" && name !== "DirectReceipt") continue;
+    if (name !== "SettlementReceipt" && name !== "DirectReceipt" && name !== "ProductSold") continue;
     let d;
     try {
       d = decodeLog(name, log);
     } catch {
       continue; // a malformed log is not a payment
     }
-    if (String(d.recipient).toLowerCase() !== who) continue;
-    const direct = name === "DirectReceipt";
-    out.push({
-      kind: direct ? "direct" : "market",
-      orderId: String(d.orderId),
-      recipient: String(d.recipient),
-      payer: String(d.payer),
-      asset: String(direct ? d.asset : d.currencyOut),
-      amount: String(direct ? d.amount : d.amountOut),
-      settledAt: direct ? Number(d.settledAt) : null,
+    // A catalogue sale names the wallet it paid `payout`, not `recipient`: it is the same
+    // question — which wallet received this money — asked of a different event.
+    const paidTo = name === "ProductSold" ? d.payout : d.recipient;
+    if (String(paidTo).toLowerCase() !== who) continue;
+    const common = {
+      recipient: String(paidTo),
       emitter: String(log.address ?? ""),
       transactionHash: log.transactionHash ?? null,
       blockNumber: Number(toBig(log.blockNumber ?? 0)),
       logIndex: Number(toBig(log.logIndex ?? 0)),
+    };
+    if (name === "ProductSold") {
+      out.push({
+        kind: "product",
+        // The id this row is judged by, in the same field every other row uses, so a caller can
+        // pass `row.orderId` to the matching authenticator without knowing which kind it holds.
+        orderId: String(d.saleId),
+        payer: String(d.buyer),
+        asset: String(d.asset),
+        amount: String(d.amount),
+        settledAt: null, // ProductSold carries no time of its own; the block it landed in does
+        productId: String(d.productId),
+        seller: String(d.seller),
+        productKind: PRODUCT_KIND_NAMES[Number(d.kind)] ?? null,
+        paidThrough: Number(d.paidThrough) || null,
+        ...common,
+      });
+      continue;
+    }
+    const direct = name === "DirectReceipt";
+    out.push({
+      kind: direct ? "direct" : "market",
+      orderId: String(d.orderId),
+      payer: String(d.payer),
+      asset: String(direct ? d.asset : d.currencyOut),
+      amount: String(direct ? d.amount : d.amountOut),
+      settledAt: direct ? Number(d.settledAt) : null,
+      ...common,
     });
   }
   out.sort((a, b) => (b.blockNumber - a.blockNumber) || (b.logIndex - a.logIndex));
@@ -649,6 +682,189 @@ function directReceiptView(entry) {
     terminalNode: r.terminalNode,
     settledAt: r.settledAt.toString(),
     settler: entry.address,
+    blockNumber: entry.raw.blockNumber,
+    transactionHash: entry.raw.transactionHash,
+    logIndex: entry.raw.logIndex,
+  };
+}
+
+// ---- Layer 2, the product catalogue: one sale from the shop's own list (IProductCatalog.sol) ------
+
+const PRODUCT_KIND_ONE_OFF = 0;
+const PRODUCT_KIND_RECURRING = 1;
+const PRODUCT_KIND_PERMANENT = 2;
+
+/// The catalogue counterpart to `authenticateReceipt` and `authenticateDirectReceipt`, for a
+/// `ProductSold`. A catalogue sale has no registry, no hook, no executor, no pool and no price
+/// feed (ProductCatalog.sol "WHAT THIS CONTRACT CANNOT DO"), so what survives of the ten-link chain
+/// is the part that still applies:
+///
+///   1. the catalogue must be named, off-chain, exactly once (manifest.contracts.productCatalog)
+///   2. the log's emitter must equal that address — anybody can deploy this same source and sell
+///      the same named product at the same price to the same buyer, and the sale event they emit
+///      is identical in every field a shopper can see (test/unica-v5/ProductCatalogAttacks.t.sol
+///      S6 measures exactly that), so a sale from an unnamed catalogue is REFUSED
+///      UNREGISTERED_EMITTER and never quietly accepted
+///   3. the catalogue's own `CATALOG_ID` is recomputed from (chainId, catalogue) and compared with
+///      what the manifest records, when the manifest records one — the same "recompute; never read
+///      and agree" rule the other two chains follow. It proves the manifest is internally
+///      consistent about which catalogue it means; it is NOT a second opinion on the sale.
+///   4. the sale's own fields must be consistent with what the contract can emit: a kind outside
+///      the three it knows, a paid-through date on a kind that covers no stretch of time, one
+///      missing from a kind that does, or an amount of nothing, means this log is not the event it
+///      claims to be
+///   5. finality, checked last, exactly as the other two check it
+///
+/// WHAT THIS CHAIN DELIBERATELY DOES NOT DO, and why. `authenticateDirectReceipt` cross-checks its
+/// receipt against the settler's stored order, because that order was raised in an EARLIER
+/// transaction by a DIFFERENT contract, so it is independent evidence. A catalogue sale has no such
+/// second witness: the product row and the sale event are written by one contract in one
+/// transaction, so reading the row back would prove only that the contract agrees with itself.
+/// Saying so is better than performing a check that looks like corroboration and is not.
+///
+/// Never issues an RPC call; never reduces its answer to a boolean; UNKNOWN fails closed.
+export function authenticateProductSale({
+  saleId,
+  logs = [],
+  manifest,
+  chainHead,
+  requiredConfirmations = 0,
+  indexHead,
+  transactionHash = null,
+  transactionReceipts = [],
+} = {}) {
+  const reasonCodes = [];
+  const result = {
+    decision: "REFUSED",
+    reasonCodes,
+    kind: "product",
+    catalogAuthenticated: false,
+    emitterMatched: false,
+    catalogIdMatched: false,
+    fieldsConsistent: false,
+    receipt: null,
+    finality: null,
+  };
+  const refuse = (...codes) => {
+    reasonCodes.push(...codes);
+    result.decision = "REFUSED";
+    return result;
+  };
+  const unknown = (...codes) => {
+    reasonCodes.push(...codes);
+    result.decision = "UNKNOWN";
+    return result;
+  };
+
+  if (typeof saleId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(saleId)) return unknown("MALFORMED_SALE_ID");
+
+  // ---- link 1: the catalogue must be named, off-chain, exactly once ------------------------------
+  const catalogAddr = lc(addressOf(manifest?.contracts?.productCatalog));
+  if (!catalogAddr) return unknown("PRODUCT_CATALOG_NOT_CONFIGURED");
+  result.catalogAuthenticated = true;
+
+  if (chainHead === undefined || chainHead === null || Number.isNaN(Number(chainHead))) {
+    return unknown("EVIDENCE_ENDPOINT_UNAVAILABLE");
+  }
+  const head = toBig(chainHead);
+
+  if (transactionHash) {
+    const known = transactionReceipts.find((r) => sameHex(r.transactionHash, transactionHash));
+    if (known && toBig(known.status) === 0n) return refuse("TRANSACTION_REVERTED");
+  }
+
+  const candidates = [];
+  for (const raw of logs) {
+    if (identifyLog(raw) !== "ProductSold") continue;
+    let decoded;
+    try {
+      decoded = decodeLog("ProductSold", raw);
+    } catch {
+      continue; // not evidence — the same rule the other two chains apply to a malformed log
+    }
+    if (sameHex(decoded.saleId, saleId)) candidates.push({address: lc(raw.address), raw, log: decoded});
+  }
+  if (candidates.length === 0) return refuse("MISSING_PRODUCT_SALE");
+
+  const earliestCandidateBlock = candidates.reduce(
+    (min, d) => (min === null ? toBig(d.raw.blockNumber) : minBig(min, toBig(d.raw.blockNumber))),
+    null,
+  );
+  if (indexHead !== undefined && indexHead !== null && toBig(indexHead) < earliestCandidateBlock) {
+    return unknown("INDEX_BEHIND_REQUIRED_BLOCK");
+  }
+
+  // Two sales cannot honestly share an id: `saleId` commits to the catalogue, the product, the
+  // buyer and a counter that only ever goes up, so a second one means a second emitter.
+  if (candidates.length > 1) {
+    const sorted = [...candidates].sort(
+      (a, b) =>
+        Number(toBig(a.raw.blockNumber) - toBig(b.raw.blockNumber)) ||
+        Number(toBig(a.raw.logIndex) - toBig(b.raw.logIndex)),
+    );
+    result.receipt = productSaleView(sorted[0]);
+    return refuse("DUPLICATE_SALE_ID");
+  }
+  const entry = candidates[0];
+
+  // ---- link 2: the log's emitter must equal the manifest's named catalogue -----------------------
+  if (!sameAddr(entry.address, catalogAddr)) return refuse("UNREGISTERED_EMITTER");
+  result.emitterMatched = true;
+
+  // ---- link 3: recompute CATALOG_ID from (chainId, catalogue), compare ---------------------------
+  const configuredCatalogId = manifest?.contracts?.productCatalog?.catalogId ?? null;
+  if (configuredCatalogId) {
+    const recomputed = recomputeCatalogId({chainId: manifest.chainId, catalog: catalogAddr});
+    if (!sameHex(recomputed, configuredCatalogId)) return refuse("CATALOG_ID_MISMATCH");
+  }
+  result.catalogIdMatched = true;
+
+  // ---- link 4: the sale's own fields must be ones the contract could have emitted ----------------
+  const kind = Number(entry.log.kind);
+  if (kind !== PRODUCT_KIND_ONE_OFF && kind !== PRODUCT_KIND_RECURRING && kind !== PRODUCT_KIND_PERMANENT) {
+    return refuse("UNKNOWN_PRODUCT_KIND");
+  }
+  const paidThrough = toBig(entry.log.paidThrough);
+  if (kind === PRODUCT_KIND_RECURRING && paidThrough === 0n) return refuse("RECURRING_WITHOUT_PAID_THROUGH");
+  if (kind !== PRODUCT_KIND_RECURRING && paidThrough !== 0n) return refuse("PAID_THROUGH_ON_NON_RECURRING");
+  if (toBig(entry.log.amount) === 0n) return refuse("ZERO_AMOUNT");
+  result.fieldsConsistent = true;
+
+  // ---- link 5: finality, checked last ------------------------------------------------------------
+  const saleBlock = toBig(entry.raw.blockNumber);
+  const confirmations = Number(head - saleBlock);
+  result.finality = {
+    chainHead: Number(head),
+    receiptBlockNumber: Number(saleBlock),
+    confirmations,
+    requiredConfirmations,
+    final: confirmations >= requiredConfirmations,
+  };
+  result.receipt = productSaleView(entry);
+  if (confirmations < requiredConfirmations) {
+    reasonCodes.push("AWAITING_FINALITY");
+    result.decision = "UNKNOWN";
+    return result;
+  }
+
+  result.decision = "VERIFIED";
+  return result;
+}
+
+function productSaleView(entry) {
+  const r = entry.log;
+  return {
+    kind: "product",
+    saleId: r.saleId,
+    productId: r.productId.toString(),
+    productKind: PRODUCT_KIND_NAMES[Number(r.kind)] ?? null,
+    buyer: r.buyer,
+    seller: r.seller,
+    recipient: r.payout,
+    asset: r.asset,
+    amount: r.amount.toString(),
+    paidThrough: r.paidThrough.toString(),
+    catalog: entry.address,
     blockNumber: entry.raw.blockNumber,
     transactionHash: entry.raw.transactionHash,
     logIndex: entry.raw.logIndex,
