@@ -44,7 +44,7 @@ HEAD_BLOCK=$(cast block-number --rpc-url "$RPC")
 
 codeOf() { local c; c=$(cast code "$1" --rpc-url "$RPC"); test "$c" != "0x" || fail "$2 at $1 has no code"; printf '{"address":"%s","codeHash":"%s","codeSize":%s}' "$1" "$(cast keccak "$c")" "$(( (${#c} - 2) / 2 ))"; }
 CONTRACTS="\"poolManager\":$(codeOf "$UNICA_POOL_MANAGER" poolManager),\"assetToken\":$(codeOf "$UNICA_ASSET" asset),\"payoutToken\":$(codeOf "$UNICA_PAYOUT" payout),\"factory\":$(codeOf "$UNICA_FACTORY" factory),\"registry\":$(codeOf "$UNICA_REGISTRY" registry),\"hook\":$(codeOf "$HOOK_ADDR" hook),\"executor\":$(codeOf "$EXEC_ADDR" executor)"
-for opt in UNICA_ORACLE_ADAPTER:oracleAdapter UNICA_POLICY_RECEIVER:policyReceiver UNICA_ADMISSION:terminalAdmission UNICA_IDENTITY_TOKEN:identityToken UNICA_FORWARDER:forwarderFixture UNICA_IDENTITY_AUTHORITY:identityAuthority UNICA_ENSV2_RESOLVER:ensV2Resolver; do
+for opt in UNICA_ORACLE_ADAPTER:oracleAdapter UNICA_POLICY_RECEIVER:policyReceiver UNICA_ADMISSION:terminalAdmission UNICA_IDENTITY_TOKEN:identityToken UNICA_FORWARDER:forwarderFixture UNICA_IDENTITY_AUTHORITY:identityAuthority UNICA_ENSV2_RESOLVER:ensV2Resolver UNICA_PRODUCT_CATALOG:productCatalog; do
   var=${opt%%:*}; name=${opt##*:}; val=${!var:-}
   if [ -n "$val" ] && [ "$val" != "0x0000000000000000000000000000000000000000" ]; then CONTRACTS="$CONTRACTS,\"$name\":$(codeOf "$val" "$name")"; fi
 done
