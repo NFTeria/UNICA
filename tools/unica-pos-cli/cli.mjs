@@ -109,20 +109,52 @@ export function buildSummary(record) {
   };
 }
 
+/// Identity-art provenance is a pointer check, nothing more (rulings N1, N6): the client accepts
+/// the identity contract the deployment manifest names and refuses every other contract, however
+/// perfect its bytecode. A match proves the pointer, never current ENS control or merchant status.
+export function identityProvenance(manifest, contractAddress, tokenId) {
+  const expected = manifest.contracts?.identityToken?.address;
+  const reasonCodes = [];
+  if (!expected) reasonCodes.push("MANIFEST_HAS_NO_IDENTITY_CONTRACT");
+  else if (String(contractAddress).toLowerCase() !== String(expected).toLowerCase()) reasonCodes.push("IDENTITY_CONTRACT_MISMATCH");
+  const expectedId = manifest.identity?.tokenId ? String(manifest.identity.tokenId).split(" ")[0] : null;
+  if (expectedId && String(tokenId) !== expectedId) reasonCodes.push("TOKEN_ID_MISMATCH");
+  return {
+    case: "COUNTERFEIT_IDENTITY_NFT",
+    decision: reasonCodes.length === 0 ? "POINTER_MATCHES" : "REFUSED",
+    reasonCodes,
+    proves: "identity-art provenance pointer only; never current ENS control, address ownership, merchant status, payment or endorsement",
+    expected: expected ?? null,
+    presented: `${contractAddress}:${tokenId}`,
+  };
+}
+
 function parseArgs(argv) {
-  const out = {};
+  const out = {jsonOnly: false};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--demo") out.demo = argv[++i];
-    else throw new Error(`unrecognised argument: ${argv[i]}`);
+    else if (argv[i] === "--json-only") out.jsonOnly = true;
+    else if (argv[i] === "--provenance-check") {
+      out.provenance = {manifest: argv[++i], contractAddress: argv[++i], tokenId: argv[++i]};
+    } else throw new Error(`unrecognised argument: ${argv[i]}`);
   }
-  if (!out.demo) throw new Error("--demo path/to/demo-record.json is required");
+  if (!out.demo && !out.provenance) throw new Error("--demo path/to/demo-record.json or --provenance-check <manifest> <address> <tokenId> is required");
   return out;
 }
 
 function main() {
-  const {demo} = parseArgs(process.argv.slice(2));
-  const record = JSON.parse(readFileSync(resolve(demo), "utf8"));
+  const args = parseArgs(process.argv.slice(2));
+  if (args.provenance) {
+    const manifest = JSON.parse(readFileSync(resolve(args.provenance.manifest), "utf8"));
+    console.log(JSON.stringify(identityProvenance(manifest, args.provenance.contractAddress, args.provenance.tokenId)));
+    return;
+  }
+  const record = JSON.parse(readFileSync(resolve(args.demo), "utf8"));
   const state = buildState(record);
+  if (args.jsonOnly) {
+    console.log(JSON.stringify(buildSummary(record), null, 2));
+    return;
+  }
 
   console.log("==== Merchant view ".padEnd(60, "="));
   console.log(renderMerchantView(state));
