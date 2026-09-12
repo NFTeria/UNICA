@@ -66,8 +66,8 @@ describe("handleProductSold", () => {
   });
 
   test("the same buyer buying a permanent product twice is two rows, because the sale ids differ", () => {
-    const first = Bytes.fromHexString("0xef83000000000000000000000000000000000000000000000000000000000002");
-    const second = Bytes.fromHexString("0xef83000000000000000000000000000000000000000000000000000000000003");
+    const first = Bytes.fromHexString("0xef83000000000000000000000000000000000000000000000000000000000002"); // sale id 2
+    const second = Bytes.fromHexString("0xef83000000000000000000000000000000000000000000000000000000000003"); // sale id 3
     handleProductSold(plantedSale(first, 2, BigInt.zero()));
     handleProductSold(plantedSale(second, 2, BigInt.zero()));
     assert.entityCount("ProductSale", 2);
