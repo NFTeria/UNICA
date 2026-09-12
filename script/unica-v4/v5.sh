@@ -13,7 +13,7 @@ CFG=config/unica-v4/$C.env; MAN=deployments/unica-v4/$C.json
 fail() { echo "STOP: $1"; exit 1; }
 cfg() { grep -E "^$1=" "$CFG" | head -1 | cut -d= -f2 | awk '{print $1}'; }
 chain() { [ "$(cast chain-id --rpc-url "$NET")" = "$C" ] || fail "$NET is not chain $C"; echo "chain ok $C ($NET)"; }
-code() { [ "$(cast code "$1" --rpc-url "$NET")" != "0x" ] || fail "no runtime code at $1"; echo "code ok $1"; }
+code() { local i; for i in 1 2 3 4 5 6 7 8 9 10; do if [ "$(cast code "$1" --rpc-url "$NET")" != "0x" ]; then echo "code ok $1"; return 0; fi; sleep 3; done; fail "no runtime code at $1 after 30 s"; }
 need_account() { [ -n "${DEPLOYER_ACCOUNT:-}" ] || { echo "set DEPLOYER_ACCOUNT to one of:"; cast wallet list; exit 1; }; }
 live() { need_account; chain; LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT="$DEPLOYER_ACCOUNT" bash script/unica-v4/deploy-public.sh "$NET" "$1"; }
 status_is() { local out; out=$(bash script/unica-v4/deploy-public.sh "$NET" readback 2>/dev/null || true); grep -q "\"status\":\"$1\"" <<<"$out" || fail "readback status is not $1"; echo "readback status $1 ok"; }
