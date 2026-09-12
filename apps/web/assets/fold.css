@@ -12,9 +12,13 @@
    is a rule written against one person's density setting. So the device table is evidence that the
    breakpoints below cover real widths, and the breakpoints are the contract.
 
-   WHAT IS HERE. The three frames from 320 CSS px upward: no horizontal scroll, 44px targets on a
-   coarse pointer, the checkout card capped and centred, the keypad filling a phone, and the
-   sidebar's collapsed state. The fold itself — segments and posture — is the next commit. */
+   THE FOLD IS EXPRESSED IN STANDARDS, NOT IN MODEL NAMES. Three features do the work, and no
+   user-agent string is read anywhere:
+     horizontal-viewport-segments / vertical-viewport-segments  the window is in two pieces
+     env(viewport-segment-*)                                    where the pieces are
+     device-posture                                             folded, or continuous
+   A browser that implements none of them gets the single-pane layout above, which is the whole
+   product. Nothing here is load-bearing for a payment. */
 
 /* ── 1. no horizontal scroll, at any width ───────────────────────────────────────────────────
    The page never scrolls sideways; a container may. Anything that can be wider than its column —
@@ -190,5 +194,209 @@ pre,
   .lay-app .appframe {
     max-width: 80rem;
     margin-inline: auto;
+  }
+}
+
+/* ── 4. two segments, side by side ───────────────────────────────────────────────────────────
+   The window is reported in two pieces with a gap between them. The gap is not guessed and not
+   measured from a device list: it is the distance between the right edge of segment (0,0) and the
+   left edge of segment (1,0), which is exactly what the two env() functions below return. The
+   fallbacks make the declaration harmless on a browser that knows the media feature but not the
+   variables — the frame simply keeps a normal gutter.
+
+   The assumption this makes, stated so it can be checked: .appframe spans the viewport's inline
+   axis from its origin, so segment (0,0)'s right edge is also the left pane's width. <body> carries
+   only the safe-area insets, which are zero on the segmented layouts in SCREENS.md. */
+@media (horizontal-viewport-segments: 2) {
+  :root {
+    --seg-a-end: env(viewport-segment-right 0 0, 50%);
+    --seg-b-start: env(viewport-segment-left 1 0, 50%);
+    --hinge: calc(var(--seg-b-start) - var(--seg-a-end));
+  }
+
+  /* app — the sidebar takes the left pane, the content takes the right, the hinge is the gutter
+     and holds nothing. Neither pane's content is ever cut by the seam. */
+  .appframe {
+    display: grid;
+    grid-template-columns: var(--seg-a-end) minmax(0, 1fr);
+    column-gap: var(--hinge);
+  }
+  .sidebar {
+    border-bottom: 0;
+    border-right: 1px solid var(--line);
+    min-height: 60vh;
+    position: static;
+  }
+  .sidenav {
+    display: block;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .sidenav li + li {
+    margin-top: var(--s1);
+  }
+  .lay-app main {
+    max-width: none;
+  }
+
+  /* checkout — the card stays whole inside the left pane. A total and the button under it must
+     never sit on opposite sides of a seam. */
+  .lay-checkout header.site,
+  .lay-checkout main,
+  .lay-checkout footer {
+    max-width: var(--seg-a-end);
+    margin-inline: 0 auto;
+  }
+
+  /* marketing — one measure, inside one pane, so no line of text crosses the gap. */
+  .lay-marketing header.site,
+  .lay-marketing main,
+  .lay-marketing footer {
+    max-width: var(--seg-a-end);
+    margin-inline: 0 auto;
+  }
+}
+
+/* ── 5. two segments, stacked ────────────────────────────────────────────────────────────────
+   The same idea on the block axis: the gap is the distance between the bottom of segment (0,0) and
+   the top of segment (0,1). The frame stacks and the seam becomes the row gap, so nothing lands
+   half in each half. */
+@media (vertical-viewport-segments: 2) {
+  :root {
+    --seg-a-end-block: env(viewport-segment-bottom 0 0, 50%);
+    --seg-b-start-block: env(viewport-segment-top 0 1, 50%);
+    --hinge-block: calc(var(--seg-b-start-block) - var(--seg-a-end-block));
+  }
+  .appframe {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--hinge-block);
+  }
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    min-height: 0;
+    position: static;
+  }
+  .sidenav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  /* A control the customer is reaching for should not be scrolled to rest under the seam. */
+  main {
+    scroll-padding-block-end: var(--hinge-block);
+  }
+  .checkout,
+  .register {
+    scroll-margin-block-end: var(--hinge-block);
+  }
+}
+
+/* ── 6. posture ──────────────────────────────────────────────────────────────────────────────
+   The web platform exposes POSTURE, not angle: `folded` or `continuous`, and nothing between them.
+   So this is a transition between two states when the device changes posture, never an animation
+   driven by how far open the hinge is — docs/unica-v4/SCREENS.md says the same in prose, because
+   somebody will eventually ask for the per-degree version and the answer has to be findable.
+
+   Two ways in, on purpose. The media feature is the standard; `data-posture` on <html> is what
+   assets/fold.js writes from the DevicePosture API, for the browsers that ship the object but not
+   the media feature (and it is the only thing that file does). Either one is enough. */
+:root {
+  --frame-panel: var(--paper);
+  --frame-quiet: var(--surface);
+  --frame-glass: none;
+  --frame-panel-line: var(--line);
+}
+
+.topbar,
+.card,
+.checkout,
+.empty {
+  background-color: var(--frame-panel);
+  backdrop-filter: var(--frame-glass);
+  -webkit-backdrop-filter: var(--frame-glass);
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    backdrop-filter 240ms ease,
+    -webkit-backdrop-filter 240ms ease;
+}
+.envbar,
+.status {
+  background-color: var(--frame-quiet);
+  backdrop-filter: var(--frame-glass);
+  -webkit-backdrop-filter: var(--frame-glass);
+  transition:
+    background-color 240ms ease,
+    backdrop-filter 240ms ease,
+    -webkit-backdrop-filter 240ms ease;
+}
+
+/* The folded state. The panels go translucent and, where the browser can, blur what is behind
+   them, so the frame reads as glass while the device is closing and as solid when it is open.
+
+   THE CONTRAST WAS COMPUTED, NOT EYEBALLED. At 62% the panel composites over whatever page surface
+   is behind it. The worst pairing in either scheme is body ink over a panel sitting on --line:
+   14.69:1 in the dark scheme, 15.74:1 in the light one; the quietest text, --muted, bottoms out at
+   5.15:1 (light, over --line). apps/web/tests/fold.test.mjs recomputes all of it from the hex in
+   assets/unica.css and this alpha, and fails below 4.5:1 — with a control proving the arithmetic
+   can fail. */
+@media (device-posture: folded) {
+  :root {
+    --frame-panel: color-mix(in srgb, var(--paper) 62%, transparent);
+    --frame-quiet: color-mix(in srgb, var(--surface) 62%, transparent);
+    --frame-panel-line: color-mix(in srgb, var(--ink) 22%, transparent);
+  }
+  .topbar,
+  .card,
+  .checkout,
+  .empty {
+    border-color: var(--frame-panel-line);
+  }
+}
+:root[data-posture="folded"] {
+  --frame-panel: color-mix(in srgb, var(--paper) 62%, transparent);
+  --frame-quiet: color-mix(in srgb, var(--surface) 62%, transparent);
+  --frame-panel-line: color-mix(in srgb, var(--ink) 22%, transparent);
+}
+:root[data-posture="folded"] .topbar,
+:root[data-posture="folded"] .card,
+:root[data-posture="folded"] .checkout,
+:root[data-posture="folded"] .empty {
+  border-color: var(--frame-panel-line);
+}
+
+/* The blur is an enhancement, not the effect: without it the panels are still translucent. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media (device-posture: folded) {
+    :root {
+      --frame-glass: blur(12px) saturate(1.08);
+    }
+  }
+  :root[data-posture="folded"] {
+    --frame-glass: blur(12px) saturate(1.08);
+  }
+}
+
+/* `continuous` is the solid state, and it is written down rather than left to the absence of the
+   folded rule, so a posture that arrives late still puts the frame back. */
+:root[data-posture="continuous"] {
+  --frame-panel: var(--paper);
+  --frame-quiet: var(--surface);
+  --frame-glass: none;
+  --frame-panel-line: var(--line);
+}
+
+/* Reduced motion: the state still changes, the change is just not animated. assets/unica.css
+   already carries a blanket rule; this one is here so that THIS file is correct on its own, and so
+   the test that reads the emitted stylesheet is reading a guarantee rather than a coincidence. */
+@media (prefers-reduced-motion: reduce) {
+  .topbar,
+  .card,
+  .checkout,
+  .empty,
+  .envbar,
+  .status {
+    transition: none;
   }
 }
