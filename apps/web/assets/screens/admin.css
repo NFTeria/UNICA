@@ -1,0 +1,100 @@
+/**
+ * The business admin's own rules, and the public shop page that shares its vocabulary. Loaded by
+ * the screens under business/ and by shop/, and by nothing else.
+ *
+ * IT ADDS BLOCKS; IT NEVER RESTYLES ONE. Everything already in assets/unica.css — the card, the
+ * table, the pill, the form field, the product row, the empty state — is used as it is. What is
+ * here is the handful of arrangements only an admin needs: a payment link beside its code, a row of
+ * facts, a colour that belongs to one business, and the small mark that names an integration.
+ *
+ * TWO COLOURS ARE ALLOWED IN, AND BOTH ARRIVE FROM SCRIPT, NEVER FROM THIS FILE.
+ *
+ *   --business-accent / --business-accent-text  the business's own colour, derived by
+ *       assets/brand.js from the hue of its badge, with the text colour on it COMPUTED to clear
+ *       4.5:1. Set on the app frame by the screen, so this file only ever consumes it and falls
+ *       back to the neutral brand accent for a business with no badge yet.
+ *
+ *   --int  one integration's colour, for the one place in a view where that integration is the
+ *       thing on screen. It is a 3px rule and a small dot; it is never a background, never the
+ *       text colour, and never the only thing carrying the meaning — the mark says the name in
+ *       ink beside it. The exact brand hex is used wherever it clears 3:1 against the page ground
+ *       and its lightness is moved until it does where it does not; assets/business.js owns that
+ *       arithmetic and apps/web/tests/admin.test.mjs proves the floor in both schemes.
+ */
+
+/* ---- the signed-in gate ------------------------------------------------------------------------ */
+/* One line and the wallet control in the header. Never a second login, never a wall of prose. */
+.adm-gate { margin: var(--s6) 0; }
+
+/* ---- a row of facts: what this business is, in the fewest words that are still true ------------- */
+.adm-facts { display: grid; gap: var(--s3); grid-template-columns: 1fr; margin: var(--s3) 0; }
+.adm-facts > div { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s3) var(--s4); }
+.adm-facts dt { color: var(--muted); font-size: 0.85rem; }
+.adm-facts dd { margin: var(--s1) 0 0; overflow-wrap: anywhere; }
+@media (min-width: 40rem) { .adm-facts { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---- the business's own colour ------------------------------------------------------------------ */
+/* A 3px rule down the side of the page's identity, and a swatch in Settings. Nothing else. */
+.adm-owned { border-left: 3px solid var(--business-accent, var(--accent)); padding-left: var(--s4); }
+.adm-swatch { display: inline-flex; align-items: center; gap: var(--s2);
+  background: var(--business-accent, var(--accent)); color: var(--business-accent-text, var(--on-accent));
+  border-radius: 999px; padding: var(--s1) var(--s3); font-size: 0.9rem; font-weight: 500; }
+
+/* ---- an integration's mark ---------------------------------------------------------------------- */
+.adm-mark { display: inline-flex; align-items: center; gap: var(--s2); border: 1px solid var(--line);
+  border-left: 3px solid var(--int, var(--line)); border-radius: var(--radius);
+  padding: var(--s1) var(--s3); font-size: 0.85rem; color: var(--ink); white-space: nowrap; }
+.adm-mark::before { content: ""; width: 8px; height: 8px; border-radius: 999px;
+  background: var(--int, var(--line)); flex: 0 0 auto; }
+.adm-marks { display: inline-flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+
+/* ---- a payment link: the code, the link itself, and the two ways to pass it on ------------------ */
+.adm-share { display: grid; gap: var(--s3); grid-template-columns: 1fr; align-items: start;
+  margin: var(--s3) 0; }
+@media (min-width: 34rem) { .adm-share { grid-template-columns: auto minmax(0, 1fr); } }
+.adm-share .qr { width: 148px; height: 148px; padding: var(--s2); }
+.adm-share .qr svg { display: block; width: 100%; height: 100%; }
+.adm-link { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem;
+  user-select: all; overflow-wrap: anywhere; display: block; margin: 0 0 var(--s2); }
+
+/* ---- one product ---------------------------------------------------------------------------------- */
+/* The .product row from the design system, opened out so its link and its code sit under it. */
+.adm-product { display: block; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: var(--s4); margin: 0 0 var(--s3); }
+.adm-product-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.adm-product-head .product-name { flex: 1 1 12rem; }
+.adm-product-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.adm-product-actions .cta { padding: var(--s1) var(--s3); min-height: calc(var(--space) * 9);
+  font-size: 0.9rem; }
+
+/* ---- the new-product form, two questions to a row where there is room ---------------------------- */
+.adm-form { display: grid; gap: 0 var(--s4); grid-template-columns: 1fr; }
+@media (min-width: 40rem) { .adm-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.adm-form .adm-wide { grid-column: 1 / -1; }
+
+/* ---- a customer's line ------------------------------------------------------------------------- */
+.adm-who { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+.adm-num { font-variant-numeric: tabular-nums; }
+
+/* ---- the shop page: the same business, seen from the other side of the counter ------------------- */
+/* A customer meets the business before they meet a price, so the identity comes first and the
+   business's own accent is the only colour on it. The offers are the design system's product rows,
+   opened out enough to carry one button and one code each. */
+.shop { max-width: 44rem; margin: 0 auto; }
+.shop-id { display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0 var(--s5); }
+.shop-badge { width: calc(var(--space) * 14); height: calc(var(--space) * 14); flex: 0 0 auto;
+  border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; display: block;
+  background: var(--business-accent, var(--surface)); }
+.shop-badge img, .shop-badge svg { display: block; width: 100%; height: 100%; }
+.shop-id-text { min-width: 0; }
+.shop-name { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.shop-payname { margin: var(--s1) 0 0; display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--s2); color: var(--muted); font-size: 0.95rem; overflow-wrap: anywhere; }
+.shop-offer { display: block; border: 1px solid var(--line); border-left: 3px solid var(--business-accent, var(--accent));
+  border-radius: var(--radius); padding: var(--s4); margin: 0 0 var(--s3); }
+.shop-offer-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2) var(--s3); }
+.shop-offer-head .product-name { flex: 1 1 12rem; font-weight: 500; }
+.shop-offer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3);
+  margin-top: var(--s3); }
+.shop-offer-foot .qr { width: 96px; height: 96px; }
+.shop-offer-foot .qr svg { display: block; width: 100%; height: 100%; }
