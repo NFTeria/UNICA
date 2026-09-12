@@ -530,9 +530,8 @@ async function readTokenLabels(manifest) {
 // back as empty data, which decodes to a product nobody listed — a wrong answer that looks like a
 // true one. Deriving it means the signature in this file is the thing under test.
 
-const selectorFor = (signature) => toHex(keccak256(new TextEncoder().encode(signature)).slice(0, 4));
-const SELECTOR_PRODUCTS_OF = selectorFor("productsOf(address)");
-const SELECTOR_PRODUCTS = selectorFor("products(uint256)");
+const SELECTOR_PRODUCTS_OF = selectorOf("productsOf(address)");
+const SELECTOR_PRODUCTS = selectorOf("products(uint256)");
 
 const uintWord = (value) => BigInt(value).toString(16).padStart(64, "0");
 const addressWord = (value) => String(value).replace(/^0x/i, "").toLowerCase().padStart(64, "0");
