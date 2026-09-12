@@ -91,6 +91,16 @@ generations, which have their own records.
 The full mutation table and its verdicts live in `script/mutation-unica-v4.sh` and are reproduced by
 `make mutants-unica-v4`; the run's output is the evidence, not this paragraph.
 
+## Process incident, recorded
+
+While the mutation runner was being built it operated on the working tree, applying one mutant at a
+time and restoring the file afterwards. A formatting commit was staged in that window and shipped the
+hook without its `_markSwapped` line; no test went red, which is exactly the gap finding 1 describes. The
+next diff exposed it and the line was restored in the following commit. Two rules follow and are now in
+force: the runner works on a copy of the tree, never the working tree; and files are staged by name,
+never by directory, while any tool that rewrites sources is running. The incident is left in the history
+on purpose: a review record that hid its own slip would be worth less than one that shows it.
+
 ## What a third-party audit should start from
 
 The finding list above, the mutation table, `docs/unica-v4/THREAT-MODEL.md`, the enforcement-layer matrix,
