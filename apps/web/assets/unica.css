@@ -434,5 +434,9 @@ select.field { appearance: none; background-image: none; }
 @media (max-width: 39.99rem) {
   header.site ul.nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: var(--s1); }
   header.site ul.nav::-webkit-scrollbar { display: none; }
+  /* a flex item's minimum width is its content unless told otherwise: without these two lines the row
+     is as wide as its links, the header grows to fit it, and the WHOLE page scrolls sideways */
+  header.site nav { min-width: 0; max-width: 100%; }
+  header.site ul.nav { min-width: 0; max-width: 100%; }
   header.site ul.nav a { white-space: nowrap; }
 }
