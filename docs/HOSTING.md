@@ -49,3 +49,11 @@ deployment, and every screen reads the one manifest they name. Two networks mean
 projects, one per network, or changing those two variables and deploying again — there is no switch
 in the product, because a page that could silently change which chain it is describing is a page
 that can show a customer terms from a chain they are not paying on.
+
+**The pipe hides the node's URL, not the node's quota.** `/local/rpc` refuses a browser page on
+another site (the browser says so in `Sec-Fetch-Site`, and the pipe reads it), so no other site
+can spend the node through a visitor's browser. A client that is not a browser page — `curl`, a
+script — is let through, because the same-origin question has no answer for it. So the URL never
+leaves the host, and anyone who finds the pipe can still spend the node's request quota through
+it. The remedy is a limit on the node provider's side or a rate rule on the host; neither is set
+up here, and this document does not claim otherwise.
