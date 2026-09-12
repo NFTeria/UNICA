@@ -52,7 +52,12 @@ pre,
 .assets li,
 .registers li,
 .product,
-.order-row {
+.order-row,
+.co-lines,
+.co-flow,
+.co-line-what,
+.pos-picks,
+.pos-assets {
   min-width: 0;
 }
 
@@ -404,6 +409,100 @@ pre,
   .empty,
   .envbar,
   .status {
+    transition: none;
+  }
+}
+
+/* ── 7. the same rules, reaching the blocks the product renders TODAY ────────────────────────
+   Sections 1–6 are written against apps/web/DESIGN.md, which names the checkout card `.checkout`
+   and the counter `.register`. Those are the contract and they stay. But the screens that exist on
+   this branch right now render `.co-card` inside `.lay-checkout`, and `.pos` inside `.lay-app` —
+   different names for the same two things. A rule that reaches only the contract name is correct on
+   paper and absent from the screen, and "the checkout card is capped at 28rem" would then be a
+   claim about a stylesheet rather than about anything a customer sees. So this section bridges the
+   two, and it is kept separate rather than merged into the selector lists above so that the day the
+   screens are rebuilt on the contract names, the whole bridge can be deleted in one piece.
+
+   SPECIFICITY HERE IS LOAD-BEARING, AND IT IS NOT TASTE. assets/fold.css is linked in <head>;
+   a route's own assets/screens/*.css is linked inside <main>, which is LATER IN DOCUMENT ORDER. At
+   equal specificity the route stylesheet therefore wins, and it already declares `.co { max-width:
+   34rem }` and `.co-card { background: var(--paper) }` at (0,1,0). Every selector below is prefixed
+   with its layout class to reach (0,2,0) so the cascade resolves the way this file's comments claim
+   it does. Remove a prefix and the rule silently stops applying — silently, because nothing turns
+   red: the page just keeps the other file's value. */
+
+/* The cap the owner asked for, on the card that is actually on screen. The COLUMN around it may
+   stay wider — assets/screens/checkout.css puts `.co` at 34rem and that is its business — but the
+   card a customer reads a total off is the same 28rem on a phone, a tablet and a desk. */
+.lay-checkout .co-card {
+  max-width: 28rem;
+  margin-inline: auto;
+}
+
+/* Below 30rem the card spends its width on the total and the button, not on padding, matching what
+   section 3 does for `.checkout`. */
+@media (max-width: 29.999rem) {
+  .lay-checkout .co-card {
+    padding: var(--s4);
+  }
+  /* The till fills the screen. assets/screens/pos.css is already one column below 52rem, so this
+     only tightens the gap between the keypad and the sale so both fit above the fold at 320. */
+  .lay-app .pos {
+    gap: var(--s4);
+  }
+}
+
+/* Posture, section 6, reaching the same two blocks. `.co-card` sits on --paper exactly as
+   `.checkout` does, so the contrast arithmetic in apps/web/tests/fold.test.mjs covers it without a
+   second computation — the panel colour and the alpha are the same two values. */
+.lay-checkout .co-card,
+.lay-app .pos-sale {
+  background-color: var(--frame-panel);
+  backdrop-filter: var(--frame-glass);
+  -webkit-backdrop-filter: var(--frame-glass);
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    backdrop-filter 240ms ease,
+    -webkit-backdrop-filter 240ms ease;
+}
+
+@media (device-posture: folded) {
+  .lay-checkout .co-card,
+  .lay-app .pos-sale {
+    border-color: var(--frame-panel-line);
+  }
+}
+:root[data-posture="folded"] .lay-checkout .co-card,
+:root[data-posture="folded"] .lay-app .pos-sale {
+  border-color: var(--frame-panel-line);
+}
+
+/* Two segments: the checkout card and the till stay whole inside one pane. A total and the button
+   under it on opposite sides of a seam is the single worst thing this file could allow. */
+@media (horizontal-viewport-segments: 2) {
+  .lay-checkout .co {
+    max-width: none;
+  }
+  .lay-app .pos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (vertical-viewport-segments: 2) {
+  .lay-checkout .co-card,
+  .lay-app .pos-pad {
+    scroll-margin-block-end: var(--hinge-block);
+  }
+  /* Sticky positioning and a seam disagree: a keypad pinned to the top of the lower segment sits
+     against the hinge. It scrolls with the page instead. */
+  .lay-app .pos-pad {
+    position: static;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lay-checkout .co-card,
+  .lay-app .pos-sale {
     transition: none;
   }
 }
