@@ -126,8 +126,11 @@ contract DeployPublic is Script {
         c.poolManager = vm.envAddress("UNICA_POOL_MANAGER");
         c.asset = vm.envAddress("UNICA_ASSET");
         c.payout = vm.envAddress("UNICA_PAYOUT");
-        c.assetFeed = vm.envAddress("UNICA_ASSET_FEED");
-        c.quoteFeed = vm.envAddress("UNICA_QUOTE_FEED");
+        // Feeds are optional ONLY for a demonstration market (requireOracle=false): no adapter is deployed
+        // and the market carries an all-zero policy, so no feed is read. With the oracle required, a
+        // zero feed still fails closed in _guards (NoCode), exactly as before.
+        c.assetFeed = vm.envOr("UNICA_ASSET_FEED", address(0));
+        c.quoteFeed = vm.envOr("UNICA_QUOTE_FEED", address(0));
         c.sequencerFeed = vm.envOr("UNICA_SEQUENCER_FEED", address(0));
         c.gracePeriod = vm.envOr("UNICA_SEQUENCER_GRACE_PERIOD", uint256(3600));
         c.rateE18 = vm.envUint("UNICA_RATE_E18");
