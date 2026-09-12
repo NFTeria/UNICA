@@ -1,5 +1,17 @@
-import { h, raw, hex, evidenceBadge } from "../html.mjs";
-import { SITE, V3, EXPERIMENT } from "../site.mjs";
+/**
+ * The customer's screen. One card: who is being paid, what for, how much, one button.
+ *
+ * THE SAME CARD SERVES ALL THREE LINKS. `?order=` is a payment a register created, `?product=` is
+ * one thing out of a business's catalogue, and `?business=` is the whole shop. They differ in what
+ * fills the card, never in what the card looks like, so a customer who has paid once recognises
+ * the second one immediately.
+ *
+ * WHAT IS IN THE SERVED HTML. The frame, the labels, the em dashes and the disabled button with
+ * its reason. Every figure arrives from the chain through `assets/local-pay.js`; nothing here is a
+ * placeholder amount, because a plausible number on a checkout is indistinguishable from a real
+ * one until somebody pays it.
+ */
+import { h, raw } from "../html.mjs";
 import * as C from "../components.mjs";
 
 const P = (id) => raw(` data-parity="${id}"`);
@@ -15,13 +27,45 @@ export const PAY = [
     ogDescription: "The business receives its asset, or nothing moves.",
     ogImage: "og-checkout.svg",
     body: h`
-<section class="card"${P("demo")} id="checkout">
-  <p class="headline" id="pay-business">This business</p>
-  <p class="sub" id="pay-verified-name">—</p>
-  <p class="big" id="pay-amount-due">—</p>
-  <p class="sub">Amount due</p>
-  ${C.statusRegion("terms", "This payment is read from the network when the page runs.")}
-  <div id="order-terms" class="status" role="status" aria-live="polite" hidden>
+<link rel="stylesheet" href="../assets/screens/checkout.css">
+<div class="co">
+  <div class="co-id">
+    <span class="co-badge" id="co-badge"></span>
+    <div class="co-id-text">
+      <p class="co-name" id="co-business">This business</p>
+      <p class="co-payname"><span id="co-payname">—</span><span class="int" data-int="ens" id="co-ens" hidden>ENS</span></p>
+    </div>
+  </div>
+  <section class="co-card"${P("demo")} id="checkout">
+    <div class="co-lines" id="co-lines">
+      <div class="co-line"><span class="co-line-what" id="co-line-what">—</span><span class="co-line-much" id="co-line-much">—</span></div>
+    </div>
+    <ul class="shop" id="co-shop" hidden></ul>
+    <p class="co-total"><span>Total</span><span id="co-total">—</span></p>
+    <ul class="co-flow">
+      <li><span class="co-k">You pay</span><span class="co-v" id="co-pay-asset">—</span></li>
+      <li><span class="co-k">They receive</span><span class="co-v" id="co-receive-asset">—</span><span class="int" data-int="uniswap" id="co-uniswap" hidden>Uniswap</span></li>
+    </ul>
+    <p class="co-note"><span id="co-price-note">—</span><span class="int" data-int="chainlink" id="co-chainlink" hidden>Chainlink</span></p>
+    <p class="co-actions"${P("pay")}>
+      <button type="button" class="cta charge" id="co-pay" disabled aria-describedby="co-why">Pay</button>
+    </p>
+    <p class="sub" id="co-why">Disabled until this payment has been read.</p>
+    <p class="co-status status" id="co-status" role="status" aria-live="polite">Waiting for the customer.</p>
+    <p class="status" id="co-expired"${P("expired")} role="status" aria-live="polite" hidden></p>
+    <p class="status" id="co-settled"${P("settled")} role="status" aria-live="polite" hidden></p>
+    <p class="co-after" id="co-after" hidden><a href="../receipt/" id="co-receipt-link">View the receipt</a>
+      <button type="button" class="cta cta-quiet" id="co-recheck">Check again</button></p>
+  </section>
+  <p class="status" id="wallet"${P("wallet")} role="status" aria-live="polite">No wallet is connected.</p>
+  <p class="status" id="network"${P("chain-switch")} role="status" aria-live="polite">The network has not been read.</p>
+  <details class="fold"${P("blockers")}>
+    <summary>What disables everything</summary>
+    <ul class="status" id="active-blockers" role="status" aria-live="polite"></ul>
+    <p class="sub" id="blockers-none">Each refusal names itself here before the button is pressed.</p>
+  </details>
+  <details class="fold" id="order-terms">
+    <summary>Payment details</summary>
     <dl class="evidence-key">
       <dt>Business</dt><dd id="order-merchant-name">—</dd>
       <dt>Pay name</dt><dd id="order-merchant-payname">—</dd>
@@ -33,62 +77,12 @@ export const PAY = [
       <dt>Fees</dt><dd id="order-fees">—</dd>
       <dt>Network</dt><dd id="order-network">—</dd>
       <dt>Expires</dt><dd id="order-expiry">—</dd>
+      <dt>Where the money goes</dt><dd id="order-merchant-address">—</dd>
+      <dt>Order number</dt><dd id="order-id">—</dd>
     </dl>
-    <details class="fold"><summary>Details</summary>
-      <dl class="evidence-key">
-        <dt>Where the money goes</dt><dd id="order-merchant-address">—</dd>
-        <dt>Business badge</dt><dd id="order-identity-art">—</dd>
-        <dt>Order number</dt><dd id="order-id">—</dd>
-      </dl>
-    </details>
-  </div>
-</section>
-<section>
-  <h2>Assets you can pay with right now</h2>
-  <ul id="pay-asset-list" class="assets"></ul>
-  ${C.statusRegion("pay-assets-said", "Payment assets have not been read yet.")}
-</section>
-<section${P("wallet")}>
-  <h2>Your wallet</h2>
-  ${C.statusRegion("wallet", "No wallet has been connected.")}
-  <p><button type="button" class="cta" id="connect" disabled aria-describedby="connect-why">Connect a wallet</button></p>
-  <p class="sub" id="connect-why">Disabled until this page has read its settings.</p>
-</section>
-<section${P("chain-switch")}>
-  <h2>Network</h2>
-  <p>This payment happens on the network the sale was created on. A wallet on another network is
-  asked to switch; nothing is paid from the wrong network.</p>
-  ${C.statusRegion("network", "The network has not been read.")}
-</section>
-<section${P("blockers")}>
-  <h2>When this page disables everything</h2>
-  <p>Each of these disables the payment and says so in one sentence rather than failing quietly:</p>
-  <ul>
-    <li>The network could not be read.</li>
-    <li>A saved setting disagrees with the network.</li>
-    <li>This amount cannot currently be converted safely.</li>
-    <li>No wallet, or a wallet on the wrong network.</li>
-    <li>The amount the business would receive is below what it was promised.</li>
-  </ul>
-  <ul id="active-blockers" class="status" role="status" aria-live="polite" hidden></ul>
-</section>
-<section${P("pay")}>
-  <h2>Pay</h2>
-  <p><button type="button" class="cta" id="pay" disabled aria-describedby="pay-why">Pay</button></p>
-  <p class="sub" id="pay-why">Disabled until this payment is loaded, a wallet is connected on the
-  right network, and every check above has passed.</p>
-  <p${P("expired")}>An expired payment cannot be paid. The page says so and offers a new one.</p>
-  <p${P("settled")}>A paid payment cannot be paid twice. The page offers a way to start another.</p>
-  ${C.statusRegion("payment-status", "Waiting for the customer.")}
-  <p><button type="button" class="cta cta-quiet" id="verify-again" hidden aria-describedby="verify-again-why">Check again</button></p>
-  <p class="sub" id="verify-again-why">Re-checks this payment without sending anything.</p>
-  <div id="evidence-output" hidden>
-    <h3>Payment verification</h3>
-    <p id="evidence-decision" class="sub"></p>
-    <p><a href="../receipt/" id="receipt-link">Open the receipt</a></p>
-  </div>
-</section>
-${C.advancedVerification("adv")}
+  </details>
+  ${C.advancedVerification("adv")}
+</div>
 <script type="module" src="../assets/local-pay.js"></script>`,
   },
 ];
