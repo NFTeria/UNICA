@@ -244,3 +244,5 @@ integrations/chainlink-cre-robinhood/**/node_modules/
 integrations/chainlink-cre-robinhood/**/.cre_build_tmp.*
 integrations/chainlink-cre-robinhood/**/dist/
 integrations/chainlink-cre-robinhood/.simulator/
+out-*/
+cache-*/
