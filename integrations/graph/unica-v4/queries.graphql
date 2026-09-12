@@ -1,0 +1,75 @@
+# integrations/graph/unica-v4/queries.graphql
+#
+# `ReceiptByOrderId`, copied VERBATIM (query text and its own comments, unchanged) from
+# docs/unica-v5/graph/QUERIES.graphql section 1 ("Receipt by order id"), retrieved 2026-09-11.
+# Every other query in that document (merchant/payer history, reconciliation, etc.) is out of
+# scope for this directory — see README.md for why only this one shape is reproduced here, and
+# tools/unica-evidence/index.mjs's `receiptByOrderId` for the local, non-Graph-Node function that
+# answers the same shape from a direct RPC log projection instead of a deployed subgraph.
+#
+# NOT DEPLOYED. This is a query written against docs/unica-v5/graph/SETTLEMENT-SCHEMA.md's own
+# field names, checked here only for internal consistency against schema.graphql
+# (schema.test.mjs) — never executed against a running endpoint by anything in this repository.
+
+# =============================================================================================
+# 1. Receipt by order id
+# =============================================================================================
+# The canonical success record (SETTLEMENT-SCHEMA.md §4.15, §5, §8). `Settlement.id` IS `orderId`,
+# so this is a direct lookup, not a filter. A `Settlement` exists only when a registry-authenticated
+# HookReceipt and ExecutorReceipt were both indexed, paired inside one transaction (§5, §7, §8).
+#
+# PROVES: that pair was indexed. PROVES NOTHING ON ITS OWN if it returns null: the order may not
+# exist, may still be Open/expired-unpaid (query `order(id: $orderId)` instead, below), may be on a
+# different chain or deployment, or may simply not be indexed yet (SETTLEMENT-SCHEMA.md §1).
+query ReceiptByOrderId($orderId: Bytes!) {
+  settlement(id: $orderId) {
+    id                       # == orderId
+    market {
+      id                      # marketId
+      status                  # last-indexed only, never authoritative — SETTLEMENT-SCHEMA.md §4.4
+      demonstrationOnly
+    }
+    order {
+      recipient               # the merchant, OrderCreated field 2 — EVENT-SCHEMA §6.1
+      boundPayer               # the only address allowed to pay this order — EVENT-SCHEMA §6.1 field 4
+      amountIn
+      minOut
+      deadline
+    }
+    merchant { id }
+    payer { id }
+    currencyIn
+    currencyOut
+    amountIn
+    amountOut
+    amountDelivered           # required equal to amountOut on-chain (DeliveryNotExact) — SPEC-CONTRACTS.md §9.1 step 5
+    hookFeePips               # always 0 in this release — UNICA takes no fee, EVENT-SCHEMA §5
+    lpFeePips
+    protocolFeePips
+    swapFeePips
+    referencePrice            # 0 when demonstrationOnly is true — no oracle bound
+    referenceDecimals         # 0 when demonstrationOnly is true
+    referenceUpdatedAt        # 0 when demonstrationOnly is true
+    demonstrationOnly
+    hookReceipt { id transactionHash logIndex blockNumber }
+    executorReceipt { id transactionHash logIndex }
+    # Settlement is keyed by orderId, not by a log, so these three are not covered by SETTLEMENT-SCHEMA.md
+    # §4.0's default "every log-keyed entity" metadata rule — they are covered by that section's stated
+    # Settlement exception instead: both paired source events are guaranteed inside one transaction
+    # (EVENT-SCHEMA §8), so the transaction's own block/hash are well-defined and stored explicitly on
+    # Settlement (§4.0, §4.15). logIndex is deliberately not one of them — see hookReceipt/executorReceipt
+    # above for the two (necessarily different) log indices this Settlement pairs.
+    blockNumber
+    blockTimestamp
+    transactionHash
+  }
+  # An order with no Settlement yet — still Open, expired-unpaid, or on a market never reached ACTIVE:
+  order(id: $orderId) {
+    recipient
+    boundPayer
+    amountIn
+    minOut
+    deadline                  # "expired" is NEVER stored (EVENT-SCHEMA §10.2) — compare against your own clock
+    settled                   # true only once a Settled event named this orderId
+  }
+}

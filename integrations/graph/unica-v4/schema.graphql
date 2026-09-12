@@ -1,0 +1,173 @@
+# integrations/graph/unica-v4/schema.graphql
+#
+# The subset of docs/unica-v5/graph/SETTLEMENT-SCHEMA.md §4's PROPOSED subgraph schema needed to
+# answer queries.graphql's `ReceiptByOrderId` — ten of that document's own ~27 entities (§4.27's
+# own count), PLUS `Merchant`/`Payer` (§4.12/§4.13) and `DeploymentManifest` (§4.25), which three
+# of the ten reference directly and a schema cannot leave a non-null field's type undefined.
+#
+# NOT DEPLOYED. NOT INDEXING ANY CHAIN. See README.md in this directory for what this file is for
+# (checking queries.graphql stays internally consistent, schema.test.mjs) and what it is not (a
+# Graph Node manifest, a subgraph.yaml, anything with a `dataSources` entry).
+#
+# TRIMMED, NOT REDESIGNED. Every field kept here is copied verbatim, name and type, from
+# SETTLEMENT-SCHEMA.md §4. Fields that would have pointed at an entity outside this thirteen-type
+# subset (`Asset`, `PayoutAsset`, `Hook`, `Executor`, `OraclePolicy`, `CapChange`, `MarketPause`,
+# `MarketUnpause`, `MarketRetirement`, `LiquiditySeed`, `Pool`, and the `@derivedFrom` back-refs
+# they would need) are dropped rather than faked — pulling any one of them in would require the
+# rest of SETTLEMENT-SCHEMA.md's ~27-entity graph, which is out of scope for one query. Where a
+# dropped field's raw value is still meaningful on its own (an address, a status code), the
+# surviving sibling field already carries it in scalar form (e.g. `Market.hook: Bytes!` here, where
+# the full document has `Market.hook: Hook!`); nothing is invented that is not in the source.
+
+scalar Bytes
+scalar BigInt
+
+# ---- §4.1 ProtocolRelease — PROPOSED, trimmed to what Registry needs to point back to -------------
+type ProtocolRelease @entity(immutable: false) {
+  id: Bytes!
+  poolManager: Bytes!
+  hookCreationCodeHash: Bytes!
+  registryAddress: Bytes!
+  releaseTag: String
+}
+
+# ---- §4.2 Registry — SPECIFIED-NOT-BUILT (SC §6; EVENT-SCHEMA §4) ---------------------------------
+type Registry @entity(immutable: false) {
+  id: Bytes!
+  network: String!
+  protocolRelease: ProtocolRelease!
+  factory: Bytes!
+  requireOracle: Boolean!
+  admin: Bytes!
+  pendingAdmin: Bytes
+  pauser: Bytes
+}
+
+# ---- §4.5 MarketVersion — PROPOSED ------------------------------------------------------------------
+type MarketVersion @entity(immutable: false) {
+  id: Bytes!
+  latestVersion: BigInt!
+  liveMarketId: Bytes
+}
+
+# ---- §4.4 Market — SPECIFIED-NOT-BUILT, trimmed: asset/payoutAsset/hook/executor kept as raw
+# addresses (Bytes!) rather than the full Asset!/PayoutAsset!/Hook!/Executor! entities (out of
+# scope here) --------------------------------------------------------------------------------------
+type Market @entity(immutable: false) {
+  id: Bytes!                        # marketId
+  network: String!
+  registry: Registry!
+  version: BigInt!
+  asset: Bytes!                     # trimmed from Asset!
+  payoutAsset: Bytes!                # trimmed from PayoutAsset!
+  hook: Bytes!                       # trimmed from Hook!
+  executor: Bytes!                   # trimmed from Executor!
+  poolId: Bytes!
+  status: Int!                       # 0 None .. 6 RETIRED — LAST-INDEXED ONLY, never authoritative
+  demonstrationOnly: Boolean!
+  marketVersion: MarketVersion!
+}
+
+# ---- §4.12 Merchant — PROPOSED rollup, never an authorization record ------------------------------
+type Merchant @entity(immutable: true) {
+  id: Bytes!                        # the recipient address; there is no on-chain merchant record
+}
+
+# ---- §4.13 Payer — PROPOSED rollup, symmetric to Merchant -----------------------------------------
+type Payer @entity(immutable: true) {
+  id: Bytes!
+}
+
+# ---- §4.14 Order — SPECIFIED-NOT-BUILT, trimmed: no `executor: Executor!` relation here ------------
+type Order @entity(immutable: false) {
+  id: Bytes!                        # orderId
+  merchant: Merchant!
+  payer: Payer!
+  recipient: Bytes!
+  boundPayer: Bytes!
+  amountIn: BigInt!
+  minOut: BigInt!
+  deadline: BigInt!                 # "expired" is never stored — compare against your own clock
+  settled: Boolean!
+  settlement: Settlement
+}
+
+# ---- §4.16 HookReceipt — SPECIFIED-NOT-BUILT, trimmed to the fields ReceiptByOrderId reads --------
+type HookReceipt @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex)
+  orderId: Bytes!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.17 ExecutorReceipt — SPECIFIED-NOT-BUILT, trimmed the same way -----------------------------
+type ExecutorReceipt @entity(immutable: true) {
+  id: Bytes!
+  orderId: Bytes!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- §4.15 Settlement — the canonical success record (§5, §8) -------------------------------------
+type Settlement @entity(immutable: true) {
+  id: Bytes!                        # orderId — one Settlement per order, ever
+  order: Order!
+  market: Market!
+  hookReceipt: HookReceipt!
+  executorReceipt: ExecutorReceipt!
+  merchant: Merchant!
+  payer: Payer!
+  currencyIn: Bytes!
+  currencyOut: Bytes!
+  amountIn: BigInt!
+  amountOut: BigInt!
+  amountDelivered: BigInt!
+  hookFeePips: Int!
+  lpFeePips: Int!
+  protocolFeePips: Int!
+  swapFeePips: Int!
+  referencePrice: BigInt!
+  referenceDecimals: Int!
+  referenceUpdatedAt: BigInt!
+  demonstrationOnly: Boolean!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# ---- §4.25 DeploymentManifest — PROPOSED, kept minimally so EvidenceStatus can point at it ---------
+type DeploymentManifest @entity(immutable: false) {
+  id: Bytes!                        # network ++ registry address
+  registry: Registry!
+  startBlock: BigInt!
+  releaseTag: String!
+}
+
+# ---- §4.26 EvidenceStatus — PROPOSED ----------------------------------------------------------------
+type EvidenceStatus @entity(immutable: false) {
+  id: Bytes!                        # matches DeploymentManifest — singleton per deployment
+  deploymentManifest: DeploymentManifest!
+  anomalyCount: BigInt!
+  lastAnomalyAt: BigInt
+  lastAnomalyKind: String
+  anomalies: [Anomaly!]!
+}
+
+# ---- Anomaly — EVENT-SCHEMA §10.2's own entity, imported per §4.26 --------------------------------
+type Anomaly @entity(immutable: true) {
+  id: Bytes!                        # transactionHash.concatI32(logIndex)
+  evidenceStatus: EvidenceStatus!
+  kind: String!
+  detail: String!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
+# ---- the two lookups queries.graphql's ReceiptByOrderId actually calls --------------------------
+type Query {
+  settlement(id: Bytes!): Settlement
+  order(id: Bytes!): Order
+}
