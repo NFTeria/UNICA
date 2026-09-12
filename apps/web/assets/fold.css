@@ -57,14 +57,21 @@ pre,
 }
 
 /* ── 2. forty-four pixels, where a finger is the pointer ─────────────────────────────────────
-   assets/unica.css already gives the primary controls a 44px minimum. Three smaller ones remain,
-   because on a mouse they are correct at 32: the chip's inline button, a disclosure summary, and
-   the chip's network select. On a coarse pointer they are not, so they grow — and only there, so
-   the desk layout does not inflate. */
+   assets/unica.css already gives the primary controls a 44px minimum. Four smaller ones remain,
+   because on a mouse they are correct at 32 to 36: the chip's inline button, its network select, a
+   disclosure summary, and the colour-scheme select in assets/screens/theme.css. On a coarse pointer
+   none of them is, so they grow — and only there, so the desk layout does not inflate.
+
+   The theme control is reached with the same specificity theme.css uses and wins on order, because
+   this file is loaded after it. That is the only reason this rule works, so if the shell ever moves
+   fold.css above screens/, this line goes quiet and the control silently drops back to 36px. */
 @media (pointer: coarse) {
   .wchip .cta,
   .wchip select,
   .fold summary {
+    min-height: 44px;
+  }
+  .theme-pick > select {
     min-height: 44px;
   }
   .sidenav a,
