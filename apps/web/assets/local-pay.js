@@ -1,42 +1,58 @@
 /**
- * The customer's checkout (/pay/), wired to a companion demo server (script/anvil/serve.sh) that
- * fronts a loopback Anvil chain. If that server is not answering, this file does nothing further:
- * the page stays the static document it already is, which is still a correct description of a
- * checkout rather than a broken one.
+ * The customer's checkout (/pay/), wired to the companion server (script/anvil/serve.sh) that
+ * fronts a loopback chain. If that server is not answering, this file does nothing further: the
+ * page stays the static document it already is, which is still a correct description of a checkout
+ * rather than a broken one.
  *
- * WHAT A CUSTOMER READS HERE. The business and its pay name, the amount due, the most they can be
- * charged, what the business is guaranteed to receive, whether a conversion is involved, the fees,
- * the network, the expiry, and which assets can be paid with at this moment. Everything else is
- * behind a disclosure.
+ * THREE LINKS, ONE CARD. `?order=` is a payment a register created, `?product=` is one thing out of
+ * a business's catalogue, and `?business=` is the whole shop. `assets/storefront.js` turns each of
+ * them into the same shape, and this file renders that shape and wires the one button.
  *
- * NOTHING HERE IS BAKED IN. The RPC endpoint, chain id, deployment manifest and demo record all
- * come from one fetch of the companion server's `/local/config.json`, never a literal address
- * written in this file. `apps/web/build.mjs`'s FORBIDDEN_IN_OUTPUT scan enforces exactly this for every file this
- * build emits, assets included.
+ * WHAT A CUSTOMER READS HERE. Who they are paying, what for, the total, the asset they spend and
+ * the asset the business receives, and one line about the rate. Everything else is behind a
+ * disclosure, and every figure is at its own asset's decimals.
+ *
+ * NOTHING HERE IS BAKED IN. The RPC endpoint, chain id, deployment manifest and the payment itself
+ * all come from one fetch of `/local/config.json` and, for a catalogue, `/local/catalog`; never a
+ * literal address written in this file. `apps/web/build.mjs`'s FORBIDDEN_IN_OUTPUT scan enforces
+ * exactly this for every file this build emits, assets included.
  *
  * SENDING GOES THROUGH apps/web/assets/wallet.js. A browser wallet, when one is installed, signs in
- * its own extension; on the local testnet with no wallet, the chain's own already-unlocked
- * account executes `eth_sendTransaction({from})` with no key anywhere. This file never sees either.
+ * its own extension; on the local testnet with no wallet, the chain's own already-unlocked account
+ * executes `eth_sendTransaction({from})` with no key anywhere. This file never sees either.
  *
  * THE PAID RULE IS NOT REIMPLEMENTED HERE. `paymentStatus`, `canAuthorizePayment` and
  * `canInitiateSale` are imported from `tools/unica-pos-cli/render.mjs`, the one place UNICA states
  * "PAID only when evidence.decision === 'VERIFIED'" (docs/unica-v4/EVENT-SCHEMA.md F8). This file
- * only turns that status into the words a customer reads: "Paid (checked)" appears when, and only
- * when, that function answers PAID. The selector this file needs for `approve`/`pay` calldata reuses
- * the same keccak-256 implementation the ENSv2 layer already carries at `web/ensv2/keccak.mjs`.
- * Both are fetched, at runtime, from the two exact repository paths a plain relative import already
- * names below; `script/anvil/serve.sh` serves those two files verbatim so the identical import
- * specifier resolves the same way under `node --test` and in a browser.
+ * only turns that status into the words a customer reads. The selector this file needs for
+ * `approve`/`pay` calldata reuses the same keccak-256 implementation the ENSv2 layer already
+ * carries at `web/ensv2/keccak.mjs`. Both are fetched, at runtime, from the two exact repository
+ * paths a plain relative import already names below; `script/anvil/serve.sh` serves those two files
+ * verbatim so the identical import specifier resolves the same way under `node --test` and in a
+ * browser.
  *
- * WORDS ON SCREEN. A customer reads "business", "pay name", "register", "sale", "amount you pay",
- * "they receive", "Local testnet". Contract names, calldata and hex stay out of the page
- * except inside a "Details" disclosure.
+ * WORDS ON SCREEN. A customer reads "business", "pay name", "register", "you pay", "they receive"
+ * and the network's name. Contract names, calldata and long identifiers stay out of the page except
+ * inside a disclosure somebody has to open.
  */
 import { canAuthorizePayment, canInitiateSale, paymentStatus } from "../../../tools/unica-pos-cli/render.mjs";
 import { keccak256, toHex } from "../../../web/ensv2/keccak.mjs";
-import { PRACTICE_MODE_LABEL, connectWallet, discoverProviders, networkName, waitForReceipt } from "./wallet.js";
-import { fillAdvanced, loadConfig, loadEvidence, say as setText, show as unhideId } from "./local.js";
-import { ASSET_STATUS, assetLabel, assetMenu, chooseSettlementRoute, formatAmountFor, routeLabel, validateEnvironment } from "./product.js";
+import { PRACTICE_MODE_LABEL, connectWallet, discoverProviders, networkName, rpcRequest, waitForReceipt } from "./wallet.js";
+import { fillAdvanced, loadConfig, loadEvidence, say as setText } from "./local.js";
+import { chooseSettlementRoute, routeLabel, validateEnvironment } from "./product.js";
+import { decodeString, decodeUint, encodeCall } from "./abi.js";
+import { parseTokenUri } from "./local-join.js";
+import { businessAccent, businessStyle } from "./brand.js";
+import {
+  businessIdentity,
+  orderCard,
+  paidThroughText,
+  productCard,
+  readPayTarget,
+  shopCard,
+  shortAddress,
+  verdict,
+} from "./storefront.js";
 
 // ---- labels ---------------------------------------------------------------------------------------
 
@@ -247,224 +263,432 @@ export function renderTermsText(record) {
 
 // ---- DOM wiring; never runs under `node --test`; document is undefined there --------------------
 
+export const CATALOG_URL = "/local/catalog";
+
+/** One product, or one seller's list. Answers null rather than throwing when nothing is serving it. */
+export async function loadCatalog(query, fetchImpl = globalThis.fetch) {
+  try {
+    const res = await fetchImpl(`${CATALOG_URL}?${query}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** The verdict for one transaction out of what a business was paid. Never derived from a hash alone. */
+export function verdictForTransaction(answer, hash) {
+  const list = Array.isArray(answer?.payments) ? answer.payments : [];
+  const hit = list.find((p) => String(p.transactionHash ?? "").toLowerCase() === String(hash ?? "").toLowerCase()) ?? null;
+  return verdict(hit?.decision ?? null);
+}
+
 if (typeof document !== "undefined" && document.getElementById("checkout")) {
-  main().catch((e) => {
-    const wallet = document.getElementById("wallet");
-    if (wallet) wallet.textContent = `The companion could not be reached: ${e.message}`;
-  });
+  main().catch((e) => setText("co-status", `This payment could not be read: ${e.message}`));
+}
+
+const scheme = () => (globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light");
+
+function setHidden(id, hidden) {
+  const el = document.getElementById(id);
+  if (el) el.hidden = hidden;
+}
+
+/**
+ * The one integration mark this view is allowed to wear. Every other one is hidden, so a screen can
+ * never end up showing two attributions at once however its data arrived.
+ */
+function showIntegration(which) {
+  for (const [key, id] of [["ens", "co-ens"], ["uniswap", "co-uniswap"], ["chainlink", "co-chainlink"]]) {
+    setHidden(id, key !== which);
+  }
+}
+
+/** The badge the business's identity token draws, when this deployment carries one. */
+async function readBadgeImage(config, badge) {
+  try {
+    const data = encodeCall("tokenURI(uint256)", [badge.tokenId]);
+    const answer = await rpcRequest(config.rpc, "eth_call", [{ to: badge.address, data }, "latest"]);
+    return parseTokenUri(decodeString(answer));
+  } catch {
+    return null;
+  }
+}
+
+/** Who is being paid: the name, the pay name, and the badge or the business's own accent square. */
+async function renderIdentity(config) {
+  const identity = businessIdentity(config);
+  setText("co-business", identity.display);
+  setText("co-payname", identity.payName ?? "No pay name");
+  const square = document.getElementById("co-badge");
+  const accent = businessAccent(identity.node, scheme());
+  if (square && accent) square.setAttribute("style", businessStyle(accent));
+  if (square && identity.badge) {
+    const art = await readBadgeImage(config, identity.badge);
+    if (art?.image) {
+      const img = document.createElement("img");
+      img.src = art.image;
+      img.alt = "";
+      square.replaceChildren(img);
+    }
+  }
+  return identity;
+}
+
+/** The lines, the total and the two sides of the payment. The same shape for all three links. */
+function renderCard(card) {
+  setText("co-line-what", card.line.what ?? "—");
+  setText("co-line-much", card.line.amount ?? "—");
+  setText("co-total", card.total ?? "—");
+  setText("co-pay-asset", card.pay.text ?? "—");
+  setText("co-receive-asset", card.receive.text ?? "—");
+  showIntegration(card.integration);
 }
 
 async function main() {
   const config = await loadConfig();
-  // No companion server: the page stays exactly the static document it already is, which is a
-  // correct description of a checkout rather than a broken one.
+  // Nothing answering: the page stays the static document it already is, which is a correct
+  // description of a checkout rather than a broken one.
   if (!config) return;
-  const record = config.record;
 
   const environment = validateEnvironment(config.manifest ?? config);
   const banner = document.getElementById("env-banner");
   if (banner) {
-    banner.textContent = environment.banner
-      ? `${environment.banner} · ${environment.networkName}`
-      : `${environment.networkName}`;
+    banner.textContent = environment.banner ? `${environment.banner} · ${environment.networkName}` : environment.networkName;
   }
-  renderPayableAssets(config);
-  fillAdvanced(config, {
-    order: record?.order?.id ?? null,
-    tx: record?.settlement?.transactionHash ?? null,
-    reasons: record?.evidence?.reasonCodes ?? null,
-  });
+  setText("order-network", networkName(config.chainId));
+  await renderIdentity(config);
 
-  say("terms", record
-    ? "Sale read from the network."
-    : "The local practice server is running, but no sale has been recorded yet. Run: make anvil-demo");
-  if (record) {
-    show("order-terms");
-    set("order-merchant-name", businessNameFrom(record.merchant?.name));
-    set("order-merchant-payname", record.merchant?.name ?? "(unknown)");
-    set("order-terminal", registerNameFrom(record.terminal?.name));
-    set("order-merchant-address", record.merchant?.address ?? "(unknown)");
-    const m = record.merchant ?? {};
-    set("order-identity-art", m.identityToken || m.rendererVersion
-      ? `${m.identityToken ?? "?"} (a badge is not proof of who owns the address)`
-      : "(none recorded)");
-    set("order-id", record.order?.id ?? "(unknown)");
-    set("pay-business", businessNameFrom(record.merchant?.name));
-    set("pay-verified-name", record.merchant?.name ? `Paying ${record.merchant.name}` : "This business has no pay name.");
-    const due = formatAmountFor(record.order?.inputAmount, record.order?.inputAsset, config);
-    const floor = formatAmountFor(record.order?.minimumOutput, record.order?.outputAsset, config);
-    set("pay-amount-due", due);
-    set("order-input", due);
-    set("order-max", `${due} — this is the exact amount, and it cannot rise`);
-    set("order-output", `at least ${floor}`);
-    set("order-route", conversionLine(record, config));
-    const receiptLink = document.getElementById("receipt-link");
-    if (receiptLink && record.order?.id) receiptLink.href = `../receipt/?order=${record.order.id}`;
-    set("order-network", networkName(record.chainId ?? config.chainId));
-    set("order-fees", formatFeesLine(record.evidence?.receipt));
-    const expiryEl = document.getElementById("order-expiry");
-    if (expiryEl) {
-      const tick = () => { expiryEl.textContent = formatCountdown(record.order?.expiry); };
-      tick();
-      setInterval(tick, 1000);
-    }
+  const target = readPayTarget(location.search);
+  if (target.malformed) {
+    setText("co-status", "That link does not name a payment, so nothing was looked up.");
+    return;
   }
+  if (target.kind === "business") return renderShop(config, target.business);
+  if (target.kind === "product") return renderProduct(config, target.product);
+  return renderOrder(config, target.order ?? config.record?.order?.id ?? null);
+}
 
-  const connectBtn = document.getElementById("connect");
-  const payBtn = document.getElementById("pay");
-  const verifyAgainBtn = document.getElementById("verify-again");
-  if (connectBtn) connectBtn.disabled = false;
+// ---- a shop ---------------------------------------------------------------------------------------
+
+/**
+ * Everything one business is selling. Each product is its own card with its own way in, so the shop
+ * link and a single product link lead to the same screen from either direction.
+ */
+async function renderShop(config, seller) {
+  for (const id of ["co-lines", "co-total", "co-after"]) setHidden(id, true);
+  const flow = document.querySelector(".co-flow");
+  if (flow) flow.hidden = true;
+  const note = document.querySelector(".co-note");
+  if (note) note.hidden = true;
+  const payBtn = document.getElementById("co-pay");
+  if (payBtn) payBtn.hidden = true;
+  setText("co-why", "");
+
+  const catalog = await loadCatalog(`seller=${encodeURIComponent(seller)}`);
+  if (!catalog) {
+    setText("co-status", "This shop could not be read.");
+    return;
+  }
+  const shop = shopCard(catalog, config);
+  showIntegration(shop.integration);
+  const list = document.getElementById("co-shop");
+  if (!list) return;
+  list.replaceChildren();
+  for (const product of shop.products) {
+    const li = document.createElement("li");
+    li.className = "shop-item";
+    const name = document.createElement("span");
+    name.className = "shop-name";
+    name.textContent = product.name ?? "Unnamed";
+    const price = document.createElement("span");
+    price.className = "shop-price";
+    price.textContent = product.total ?? "—";
+    const kind = document.createElement("span");
+    kind.className = "shop-kind";
+    kind.textContent = product.kindText;
+    const buy = document.createElement("a");
+    buy.className = "cta";
+    buy.href = `./?product=${product.id}`;
+    buy.textContent = "Buy";
+    li.append(name, price, kind, buy);
+    list.appendChild(li);
+  }
+  list.hidden = false;
+  setText("co-status", shop.products.length === 0 ? "Nothing is on sale here right now." : `${shop.products.length} on sale.`);
+}
+
+// ---- one catalogue product --------------------------------------------------------------------------
+
+async function renderProduct(config, productId) {
+  setHidden("co-shop", true);
+  const answer = await loadCatalog(`product=${encodeURIComponent(productId)}`);
+  const product = answer?.product ?? null;
+  if (!product) {
+    setText("co-status", "This product could not be read.");
+    setText("co-why", "Nothing has been read for this link.");
+    return;
+  }
+  const card = productCard(product, config);
+  renderCard(card);
+  setText("co-price-note", card.kindText);
+  setText("order-input", card.pay.text ?? "—");
+  setText("order-max", card.total ?? "—");
+  setText("order-output", card.receive.text ?? "—");
+  setText("order-route", "No conversion needed");
+  setText("order-id", card.id);
+  setText("order-merchant-name", card.identity.display);
+  setText("order-merchant-payname", card.identity.payName ?? "—");
+  setText("order-merchant-address", card.payout ?? card.seller ?? "—");
+
+  const catalogAddress = config.contracts?.productCatalog ?? config.manifest?.productCatalog?.address ?? null;
+  const payBtn = document.getElementById("co-pay");
+  if (!card.active || card.sold) {
+    setText("co-why", card.sold ? "This one has already been bought." : "This is not on sale right now.");
+    setText("co-status", card.sold ? "Sold." : "Not on sale.");
+    return;
+  }
+  if (!catalogAddress) {
+    setText("co-why", "This network cannot take a catalogue payment yet.");
+    return;
+  }
+  if (payBtn) {
+    payBtn.disabled = false;
+    setText("co-why", "Your wallet approves the amount, then the purchase.");
+    payBtn.addEventListener("click", () =>
+      buyProduct({ config, card, product, catalogAddress }).catch((e) => setText("co-status", `Could not pay: ${e.message}`)),
+    );
+  }
+}
+
+async function buyProduct({ config, card, product, catalogAddress }) {
+  const payBtn = document.getElementById("co-pay");
+  if (payBtn) payBtn.disabled = true;
+  const session = await connect(config, card.onlyBuyer);
+  if (!session) {
+    if (payBtn) payBtn.disabled = false;
+    return;
+  }
+  setText("co-status", statusText("SUBMITTED"));
+  const price = BigInt(product.price);
+  const allowance = await readAllowance(config, product.asset, session.address, catalogAddress);
+  if (allowance < price) {
+    await session.send({ to: product.asset, data: encodeApproveCalldata(catalogAddress, product.price) });
+  }
+  const hash = await session.send({ to: catalogAddress, data: encodeCall("buy(uint256)", [card.id]) });
+  setText("co-status", statusText("PENDING"));
+  const receipt = await waitForReceipt(session, hash);
+  if (!receipt) {
+    setText("co-status", statusText("UNKNOWN"));
+    return;
+  }
+  if (Number(receipt.status) === 0) {
+    setText("co-status", statusText("FAILED"));
+    return;
+  }
+  await settleProductVerdict({ config, card, session, hash });
+}
+
+/** A sale is Paid only when the business's own payments say VERIFIED, never because a hash exists. */
+async function settleProductVerdict({ config, card, session, hash }) {
+  const recipient = card.payout ?? card.seller ?? card.identity.address;
+  const spoken = verdictForTransaction(await loadPayments(recipient), hash);
+  setText("co-status", spoken.word === "Paid" ? statusText("PAID") : statusText("UNKNOWN"));
+  const link = document.getElementById("co-receipt-link");
+  if (link) link.setAttribute("href", `../receipt/?chain=${config.chainId}&tx=${hash}`);
+  setHidden("co-after", false);
+  if (card.productKind === "recurring") {
+    const text = paidThroughText(await readPaidThrough(config, card.id, session.address));
+    if (text) setText("co-price-note", text);
+  }
+}
+
+async function loadPayments(wallet, fetchImpl = globalThis.fetch) {
+  try {
+    const res = await fetchImpl(`/local/payments?wallet=${encodeURIComponent(wallet)}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function readAllowance(config, asset, owner, spender) {
+  try {
+    const data = encodeCall("allowance(address,address)", [owner, spender]);
+    return BigInt(decodeUint(await rpcRequest(config.rpc, "eth_call", [{ to: asset, data }, "latest"])));
+  } catch {
+    return 0n;
+  }
+}
+
+async function readPaidThrough(config, productId, buyer) {
+  const catalogAddress = config.contracts?.productCatalog ?? config.manifest?.productCatalog?.address ?? null;
+  if (!catalogAddress) return null;
+  try {
+    const data = encodeCall("paidThrough(uint256,address)", [productId, buyer]);
+    return Number(decodeUint(await rpcRequest(config.rpc, "eth_call", [{ to: catalogAddress, data }, "latest"])));
+  } catch {
+    return null;
+  }
+}
+
+// ---- one order from a register ----------------------------------------------------------------------
+
+async function renderOrder(config, orderId) {
+  setHidden("co-shop", true);
+  const record = config.record ?? null;
+  const card = orderCard(config);
+  if (!card || !orderId || String(card.id ?? "").toLowerCase() !== String(orderId).toLowerCase()) {
+    setText("co-status", "This payment could not be found.");
+    setText("co-why", "Nothing has been read for this link.");
+    return;
+  }
+  renderCard(card);
+  setText(
+    "co-price-note",
+    card.priceChecked ? "The price was set by a checked rate." : card.converts ? "The rate is fixed on this payment." : "No conversion needed.",
+  );
+  fillAdvanced(config, { order: card.id, tx: card.settledTx, reasons: record?.evidence?.reasonCodes ?? null });
+
+  setText("order-merchant-name", card.identity.display);
+  setText("order-merchant-payname", card.identity.payName ?? "—");
+  setText("order-terminal", registerNameFrom(record?.terminal?.name));
+  setText("order-merchant-address", card.identity.address ?? "—");
+  setText("order-input", card.pay.text ?? "—");
+  setText("order-max", card.pay.text ? `${card.pay.text} — this is the exact amount, and it cannot rise` : "—");
+  setText("order-output", card.receive.text ? `at least ${card.receive.text}` : "—");
+  setText("order-route", conversionLine(record, config));
+  setText("order-fees", formatFeesLine(record?.evidence?.receipt));
+  setText("order-id", card.id ?? "—");
+  const expiry = document.getElementById("order-expiry");
+  if (expiry) {
+    const tick = () => {
+      expiry.textContent = formatCountdown(card.expiry);
+    };
+    tick();
+    setInterval(tick, 1000);
+  }
 
   let session = null;
-
-  const renderBlockers = () => {
+  const payBtn = document.getElementById("co-pay");
+  const refresh = () => {
     const now = Math.floor(Date.now() / 1000);
-    const { allowed, reasons } = computeBlockers({ config, record, connectedAddress: session?.address ?? null, walletChainId: session?.chainId ?? null, now });
+    const { allowed, reasons } = computeBlockers({
+      config,
+      record,
+      connectedAddress: session?.address ?? null,
+      walletChainId: session?.chainId ?? null,
+      now,
+    });
     const list = document.getElementById("active-blockers");
     if (list) {
-      list.innerHTML = "";
-      if (reasons.length === 0) {
-        list.hidden = true;
-      } else {
-        list.hidden = false;
-        for (const code of reasons) {
-          const li = document.createElement("li");
-          li.textContent = REASON_TEXT[code] ?? code;
-          list.appendChild(li);
-        }
+      list.replaceChildren();
+      for (const code of reasons) {
+        const li = document.createElement("li");
+        li.textContent = REASON_TEXT[code] ?? code;
+        list.appendChild(li);
       }
     }
-    if (payBtn) payBtn.disabled = !allowed || !session || Boolean(record?.settlement?.transactionHash);
-    return { allowed, reasons };
+    setHidden("blockers-none", reasons.length > 0);
+    const expired = reasons.includes("ORDER_EXPIRED");
+    setHidden("co-expired", !expired);
+    if (expired) setText("co-expired", REASON_TEXT.ORDER_EXPIRED);
+    const settled = Boolean(card.settledTx);
+    setHidden("co-settled", !settled);
+    if (settled) setText("co-settled", "This payment has already been made.");
+    if (payBtn) {
+      payBtn.disabled = !allowed || settled;
+      setText(
+        "co-why",
+        settled
+          ? "This payment has already been made."
+          : allowed
+            ? session
+              ? "Your wallet confirms the amount."
+              : "Your wallet opens when you press it."
+            : "One of the checks above has not passed.",
+      );
+    }
+    return allowed;
+  };
+  refresh();
+
+  const check = async () => {
+    const evidence = await loadEvidence(card.id);
+    fillAdvanced(config, { order: card.id, tx: card.settledTx, reasons: evidence?.reasonCodes ?? null });
+    const spoken = verdict(evidence?.decision ?? null);
+    setText("co-status", spoken.word === "Paid" ? statusText("PAID") : decisionText(evidence?.decision));
+    return spoken;
   };
 
-  if (connectBtn) {
-    connectBtn.addEventListener("click", async () => {
-      say("wallet", "Looking for a wallet in this browser...");
-      try {
-        const providers = await discoverProviders(window);
-        const asParam = new URLSearchParams(location.search).get("as");
-        const result = await connectWallet({ config, providers, localFrom: asParam || record?.order?.payer || null });
-        if (result.blocked) {
-          say("wallet", result.blocked);
-          say("network", "Not connected.");
-          return;
-        }
-        session = result.session;
-        say("wallet", `Connected: ${session.address}${result.note ? `. ${result.note}` : "."}`);
-        say("network", session.networkName);
-      } catch (e) {
-        say("wallet", `Could not connect: ${e.message}`);
-      }
-      renderBlockers();
-    });
+  if (card.settledTx) {
+    const link = document.getElementById("co-receipt-link");
+    if (link) link.setAttribute("href", `../receipt/?chain=${config.chainId}&tx=${card.settledTx}`);
+    setHidden("co-after", false);
+    check().catch(() => {});
   }
-
-  const showEvidence = (verdict) => {
-    show("evidence-output");
-    set("evidence-decision", decisionText(verdict?.decision));
-    fillAdvanced(config, {
-      order: record?.order?.id ?? null,
-      tx: record?.settlement?.transactionHash ?? null,
-      reasons: verdict?.reasonCodes ?? null,
-    });
-  };
-
-  const fetchEvidence = (orderId) => loadEvidence(orderId);
-
-  const checkAndRenderStatus = async (orderId, { txReceipt = null } = {}) => {
-    const verdict = await fetchEvidence(orderId);
-    showEvidence(verdict);
-    const status = paymentStatus({ txReceipt, evidence: verdict });
-    say("payment-status", statusText(status));
-    return status;
-  };
-
-  // Already paid by the demo script: never re-send, only ever re-check.
-  if (record?.settlement?.transactionHash && record?.order?.id) {
-    unhide(verifyAgainBtn);
-    checkAndRenderStatus(record.order.id, { txReceipt: { status: record.settlement.status } }).catch(() => {});
-  }
-
-  if (verifyAgainBtn) {
-    verifyAgainBtn.addEventListener("click", () => {
-      if (record?.order?.id) checkAndRenderStatus(record.order.id).catch((e) => say("payment-status", `Could not check again: ${e.message}`));
-    });
-  }
+  const recheck = document.getElementById("co-recheck");
+  if (recheck) recheck.addEventListener("click", () => check().catch((e) => setText("co-status", `Could not check again: ${e.message}`)));
 
   if (payBtn) {
     payBtn.addEventListener("click", async () => {
-      const { allowed } = renderBlockers();
-      if (!allowed || !session || !record?.order?.id) return;
+      if (!refresh()) return;
       payBtn.disabled = true;
       try {
-        say("payment-status", statusText("SUBMITTED"));
-        const executor = record.manifest?.contracts?.executor?.address;
-        const asset = record.order.inputAsset;
-        await session.send({ to: asset, data: encodeApproveCalldata(executor, record.order.inputAmount) });
-        const payHash = await session.send({ to: executor, data: encodePayCalldata(record.order.id) });
-        say("payment-status", statusText("PENDING"));
-
-        const receipt = await waitForReceipt(session, payHash);
+        if (!session) {
+          session = await connect(config, card.payer);
+          if (!session) {
+            refresh();
+            return;
+          }
+        }
+        if (!refresh()) return;
+        payBtn.disabled = true;
+        setText("co-status", statusText("SUBMITTED"));
+        const executor = config.contracts?.executor ?? record?.manifest?.contracts?.executor?.address;
+        await session.send({ to: record.order.inputAsset, data: encodeApproveCalldata(executor, record.order.inputAmount) });
+        const hash = await session.send({ to: executor, data: encodePayCalldata(card.id) });
+        setText("co-status", statusText("PENDING"));
+        const receipt = await waitForReceipt(session, hash);
         if (!receipt) {
-          say("payment-status", statusText("UNKNOWN"));
+          setText("co-status", statusText("UNKNOWN"));
           return;
         }
         if (Number(receipt.status) === 0) {
-          say("payment-status", statusText("FAILED"));
+          setText("co-status", statusText("FAILED"));
           return;
         }
-        await checkAndRenderStatus(record.order.id, { txReceipt: receipt });
-        unhide(verifyAgainBtn);
+        const link = document.getElementById("co-receipt-link");
+        if (link) link.setAttribute("href", `../receipt/?chain=${config.chainId}&tx=${hash}`);
+        setHidden("co-after", false);
+        await check();
       } catch (e) {
-        say("payment-status", `Could not pay: ${e.message}`);
+        setText("co-status", `Could not pay: ${e.message}`);
       } finally {
-        renderBlockers();
+        refresh();
       }
     });
   }
-
-  renderBlockers();
 }
 
-/**
- * The assets this checkout can accept at this moment. A customer holding one that is temporarily
- * unavailable should read that here, before connecting anything, rather than discover it from a
- * refusal.
- */
-function renderPayableAssets(config) {
-  const list = document.getElementById("pay-asset-list");
-  if (!list) return;
-  const menu = assetMenu(config);
-  list.innerHTML = "";
-  for (const asset of menu) {
-    const li = document.createElement("li");
-    const sym = document.createElement("span");
-    sym.className = "sym";
-    sym.textContent = assetLabel(asset);
-    const badge = document.createElement("span");
-    badge.className = "availability";
-    badge.dataset.status = asset.status;
-    badge.textContent = asset.text;
-    li.append(sym, badge);
-    list.appendChild(li);
+/** The one way in. The wallet's own approval flow is the sign-in; there is no second login here. */
+async function connect(config, preferred = null) {
+  setText("wallet", "Opening your wallet…");
+  try {
+    const providers = await discoverProviders(window);
+    const asParam = new URLSearchParams(location.search).get("as");
+    const result = await connectWallet({ config, providers, localFrom: asParam || preferred || null });
+    if (result.blocked) {
+      setText("wallet", result.blocked);
+      setText("network", "Not connected.");
+      return null;
+    }
+    setText("wallet", `Connected ${shortAddress(result.session.address)}.`);
+    setText("network", result.session.networkName);
+    return result.session;
+  } catch (e) {
+    setText("wallet", `Could not connect: ${e.message}`);
+    return null;
   }
-  const available = menu.filter((a) => a.status !== ASSET_STATUS.UNAVAILABLE).length;
-  setText("pay-assets-said", `${menu.length} payment asset${menu.length === 1 ? "" : "s"} read, ${available} available right now.`);
-  unhideId("pay-asset-list");
-}
-
-function say(id, text) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = text;
-}
-function set(id, text) {
-  say(id, text);
-}
-function show(id) {
-  const el = document.getElementById(id);
-  if (el) el.hidden = false;
-}
-function unhide(el) {
-  if (el) el.hidden = false;
 }
