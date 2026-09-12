@@ -12,7 +12,8 @@
 //
 // Offline. No network, no chain, no wallet.
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import {
+  orderCardFromRead, test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { readFileSync, mkdtempSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -560,4 +561,29 @@ test("the checkout's one action is a single button that says why it is disabled"
   const buttons = [...payDoc.matchAll(/<button[^>]*class="cta charge"[^>]*>/g)];
   assert.equal(buttons.length, 1);
   assert.match(payDoc, /<button type="button" class="cta charge" id="co-pay" disabled aria-describedby="co-why">Pay<\/button>/);
+});
+
+test("an order read by id becomes the same card, paid to the settler that holds it, for a same-asset and a converting sale", () => {
+  const config = { assets: [], manifest: { market: { oracle: { enabled: false } } }, contracts: { executor: "0x00000000000000000000000000000000000000e0" } };
+  const uusd = { address: "0x00000000000000000000000000000000000000a1", symbol: "uUSD", decimals: 6 };
+  const tast = { address: "0x00000000000000000000000000000000000000a2", symbol: "tAST", decimals: 18 };
+  const business = { label: "freshcuts", name: "freshcuts.unica.eth", owner: "0x70", payout: "0x3c", merchantNode: "0x" + "f2".repeat(32) };
+  const direct = orderCardFromRead(config, { orderId: "0x" + "ab".repeat(32), kind: "direct", settler: "0x00000000000000000000000000000000000000d1", order: { recipient: "0x3c", payer: "0x90", amountIn: "1250000", minOut: "1250000", deadline: "1789242653", status: 1 }, assetIn: uusd, assetOut: uusd, business });
+  assert.equal(direct.pay.text, "1.25 uUSD");
+  assert.equal(direct.converts, false);
+  assert.equal(direct.settler, "0x00000000000000000000000000000000000000d1");
+  assert.equal(direct.assetIn.address, uusd.address);
+  assert.equal(direct.amountIn, "1250000");
+  assert.equal(direct.identity.payName, "freshcuts.unica.eth");
+  assert.equal(direct.identity.display, "Freshcuts");
+  assert.equal(direct.expiry, 1789242653);
+  assert.equal(direct.settled, false);
+  assert.equal(direct.integration, "ens");
+  const market = orderCardFromRead(config, { orderId: "0x" + "cd".repeat(32), kind: "market", settler: "0x00000000000000000000000000000000000000e0", order: { recipient: "0x3c", payer: "0x90", amountIn: "1000000000000000000", minOut: "1980000", deadline: "1789242653", status: 3 }, assetIn: tast, assetOut: uusd, business: null });
+  assert.equal(market.converts, true);
+  assert.equal(market.integration, "uniswap");
+  assert.equal(market.receive.text, "1.98 uUSD");
+  assert.equal(market.settled, true);
+  assert.equal(orderCardFromRead(config, null), null);
+  assert.equal(orderCardFromRead(config, { orderId: "0x1", order: null }), null);
 });

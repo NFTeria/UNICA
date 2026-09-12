@@ -39,20 +39,12 @@ import { canAuthorizePayment, canInitiateSale, paymentStatus } from "../../../to
 import { keccak256, toHex } from "../../../web/ensv2/keccak.mjs";
 import { PRACTICE_MODE_LABEL, connectWallet, discoverProviders, networkName, rpcRequest, waitForReceipt } from "./wallet.js";
 import { fillAdvanced, loadConfig, loadEvidence, say as setText } from "./local.js";
+const ORDER_URL = "/local/order";
 import { chooseSettlementRoute, routeLabel, validateEnvironment } from "./product.js";
 import { decodeString, decodeUint, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
 import { businessAccent, businessStyle } from "./brand.js";
-import {
-  businessIdentity,
-  orderCard,
-  paidThroughText,
-  productCard,
-  readPayTarget,
-  shopCard,
-  shortAddress,
-  verdict,
-} from "./storefront.js";
+import { businessIdentity, orderCard, paidThroughText, productCard, readPayTarget, shopCard, shortAddress, verdict, orderCardFromRead } from "./storefront.js";
 
 // ---- labels ---------------------------------------------------------------------------------------
 
@@ -538,11 +530,24 @@ async function readPaidThrough(config, productId, buyer) {
 async function renderOrder(config, orderId) {
   setHidden("co-shop", true);
   const record = config.record ?? null;
-  const card = orderCard(config);
+  let card = orderCard(config);
   if (!card || !orderId || String(card.id ?? "").toLowerCase() !== String(orderId).toLowerCase()) {
-    setText("co-status", "This payment could not be found.");
-    setText("co-why", "Nothing has been read for this link.");
-    return;
+    // Not the record's order: ask the chain for this id, through the companion, and build the card
+    // from what it answers. A link is a claim; the chain is the answer.
+    card = null;
+    if (orderId) {
+      try {
+        const res = await fetch(`${ORDER_URL}?id=${encodeURIComponent(orderId)}`);
+        if (res.ok) card = orderCardFromRead(config, await res.json());
+      } catch {
+        card = null;
+      }
+    }
+    if (!card) {
+      setText("co-status", "This payment could not be found.");
+      setText("co-why", "Nothing has been read for this link.");
+      return;
+    }
   }
   renderCard(card);
   setText(
@@ -646,9 +651,14 @@ async function renderOrder(config, orderId) {
         if (!refresh()) return;
         payBtn.disabled = true;
         setText("co-status", statusText("SUBMITTED"));
-        const executor = config.contracts?.executor ?? record?.manifest?.contracts?.executor?.address;
-        await session.send({ to: record.order.inputAsset, data: encodeApproveCalldata(executor, record.order.inputAmount) });
-        const hash = await session.send({ to: executor, data: encodePayCalldata(card.id) });
+        // Pay the settler that holds this order, in the asset it is written in: the market executor
+        // for a converting sale, the direct settler for a same-asset one. Never a guessed contract.
+        const settler = card.settler ?? config.contracts?.executor ?? record?.manifest?.contracts?.executor?.address;
+        const assetIn = card.assetIn?.address ?? record?.order?.inputAsset;
+        const amountIn = card.amountIn ?? record?.order?.inputAmount;
+        if (!settler || !assetIn || amountIn === null || amountIn === undefined) throw new Error("This payment does not say where it is paid or in what.");
+        await session.send({ to: assetIn, data: encodeApproveCalldata(settler, amountIn) });
+        const hash = await session.send({ to: settler, data: encodePayCalldata(card.id) });
         setText("co-status", statusText("PENDING"));
         const receipt = await waitForReceipt(session, hash);
         if (!receipt) {

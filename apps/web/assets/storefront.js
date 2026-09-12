@@ -178,6 +178,49 @@ export function orderCard(config = {}) {
     payer: order.payer ?? null,
     expiry: order.expiry ?? null,
     settledTx: record?.settlement?.transactionHash ?? null,
+    settler: config.contracts?.executor ?? config.manifest?.contracts?.executor?.address ?? null,
+    assetIn: spend,
+    amountIn: order.inputAmount ?? null,
+  };
+}
+
+/**
+ * An order read by its id from the companion (GET /local/order?id=), as the same card. This is the
+ * everyday path: a payment link names an id, the id is asked of the chain, and the card is what the
+ * chain answered — the settler that holds it, the asset it is paid in, the business it pays.
+ */
+export function orderCardFromRead(config = {}, read = null) {
+  const o = read?.order ?? null;
+  if (!read || !o) return null;
+  const spend = read.assetIn ? { ...(assetOf(config, read.assetIn.address) ?? {}), ...read.assetIn } : null;
+  const receive = read.assetOut ? { ...(assetOf(config, read.assetOut.address) ?? {}), ...read.assetOut } : null;
+  const converts = read.kind === "market" && Boolean(spend?.address && receive?.address) && spend.address.toLowerCase() !== receive.address.toLowerCase();
+  const priceChecked = Boolean(config.manifest?.market?.oracle?.enabled) && converts;
+  const fallback = businessIdentity(config);
+  const b = read.business ?? null;
+  const label = b?.label ?? (b?.name ? String(b.name).split(".")[0] : null);
+  const identity = b
+    ? { payName: b.name ?? null, label, display: displayName(label), address: o.recipient ?? null, node: b.merchantNode ?? null, badge: fallback.badge }
+    : { ...fallback, address: o.recipient ?? fallback.address };
+  const settled = Number(o.status) === 3;
+  return {
+    kind: "order",
+    id: read.orderId ?? null,
+    identity,
+    line: { what: identity.display, amount: amountText(o.amountIn, spend) },
+    total: amountText(o.amountIn, spend),
+    pay: { asset: spend, text: amountText(o.amountIn, spend) },
+    receive: { asset: receive, text: amountText(o.minOut, receive) },
+    converts,
+    priceChecked,
+    integration: integrationForCheckout({ converts, priceChecked, payName: identity.payName }),
+    payer: o.payer ?? null,
+    expiry: o.deadline !== undefined && o.deadline !== null ? Number(o.deadline) : null,
+    settledTx: null,
+    settled,
+    settler: read.settler ?? null,
+    assetIn: spend,
+    amountIn: o.amountIn ?? null,
   };
 }
 
