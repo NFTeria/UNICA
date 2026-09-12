@@ -64,6 +64,8 @@ const HOST = process.env.UNICA_HOST;
 const PORT = Number(process.env.UNICA_PORT);
 const RPC_URL = process.env.UNICA_RPC_URL;
 const RPC_PROXY_PATH = "/local/rpc";
+const ORDERS_SELECTOR_HEX = "7bcb4a76"; // keccak256("orders(bytes32)") first four bytes, the same view on both settlers
+const ORDER_SETTLED = 3; // UnicaMarketTypes.OrderStatus.Settled, frozen numbering
 const LOCAL_CHAIN = 31337;
 // Public nodes cap how many blocks one eth_getLogs may span; the practice chain does not. A scan
 // therefore starts at the block the deployment was recorded from and walks forward in windows of
@@ -468,15 +470,28 @@ const server = createServer(async (req, res) => {
       }
       try {
         const manifest = readManifest();
+        // Which settler holds this order, and is it settled yet? An OPEN order is a fact of its own
+        // (UNKNOWN, ORDER_OPEN), never a refusal: the customer has simply not paid. Only a settled
+        // order goes through the receipt rules, direct or market by where it lives.
+        const settler = manifest?.contracts?.directSettlement?.address ?? null;
+        const executor = manifest?.contracts?.executor?.address ?? null;
+        const ordersData = "0x" + ORDERS_SELECTOR_HEX + order.slice(2).toLowerCase().padStart(64, "0");
+        const readOrder = async (at) => {
+          if (!at) return null;
+          try { return decodeDirectOrder(await rpc("eth_call", [{ to: at, data: ordersData }, "latest"])); } catch { return null; }
+        };
+        const direct = await readOrder(settler);
+        const market = direct && direct.status !== 0 ? null : await readOrder(executor);
+        const held = direct && direct.status !== 0 ? { kind: "direct", order: direct } : market && market.status !== 0 ? { kind: "market", order: market } : null;
+        if (held && held.order.status !== ORDER_SETTLED) {
+          return sendJson(res, 200, { decision: "UNKNOWN", reasonCodes: ["ORDER_OPEN"], kind: held.kind, order: { ...held.order, amountIn: String(held.order.amountIn), minOut: String(held.order.minOut), deadline: String(held.order.deadline) }, receipt: null });
+        }
         const projection = await projectAll(manifest);
-        const verdict = authenticateReceipt({
-          orderId: order,
-          logs: projection.logs,
-          manifest,
-          chainHead: projection.chainHead,
-          requiredConfirmations: 0,
-        });
-        return sendJson(res, 200, verdict);
+        const common = { orderId: order, logs: projection.logs, manifest, chainHead: projection.chainHead, requiredConfirmations: 0 };
+        const verdict = held?.kind === "direct"
+          ? authenticateDirectReceipt({ ...common, directOrder: held.order })
+          : authenticateReceipt(common);
+        return sendJson(res, 200, { ...verdict, kind: held?.kind ?? "market" });
       } catch (e) {
         return sendJson(res, 502, { decision: "UNKNOWN", reasonCodes: ["EVIDENCE_ENDPOINT_UNAVAILABLE"], receipt: null, error: redact(e?.message ?? e) });
       }
