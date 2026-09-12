@@ -1,0 +1,112 @@
+{
+  "environment": "PUBLIC_TESTNET_NO_VALUE",
+  "designation": "TEST_ONLY_NO_VALUE",
+  "chainId": 46630,
+  "commit": "82cbe02635dbd2ca6ceaaf76fb5f48b1629cbf8e",
+  "readAtBlock": 118243452,
+  "releaseTag": "unica-v5/robinhood-testnet-1",
+  "verification": {
+    "status": "not verified",
+    "note": "no read-only explorer result was supplied"
+  },
+  "contracts": {
+    "poolManager": {
+      "address": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "codeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626",
+      "codeSize": 24009
+    },
+    "assetToken": {
+      "address": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
+      "codeHash": "0x2f367e6a678e7b30ab613d5963e541e6f4d3ca586de76e2f441fbfeb1a27c440",
+      "codeSize": 283
+    },
+    "payoutToken": {
+      "address": "0xfb93352698150e720Bf0A321DEf3aC98D90B9874",
+      "codeHash": "0x3aa0dac9350e4bd4aeb309fb6c205e49bf561bcc227f5481bad783742b113e42",
+      "codeSize": 5656
+    },
+    "factory": {
+      "address": "0xfdD4468715F1d2e4242E8F58205E7699137e0Aa7",
+      "codeHash": "0xfdfa723222f76a14bd7f8b520881651c3db2d4072635e4882b0eb6c85c07c687",
+      "codeSize": 20116
+    },
+    "registry": {
+      "address": "0x9Cb93Ab47adB2fDac35baD6097a6cCF70A441D92",
+      "codeHash": "0x203a43f6af3c4b6605a1f40e2ec4aa44d5a866e7dd3b78aa370bce81332c6dec",
+      "codeSize": 22257
+    },
+    "hook": {
+      "address": "0x30396Bf4C1cEB4a513425d8c0BD6EFB1FABFA0C0",
+      "codeHash": "0xd8129b15810d8753821f6b3b493b2e3f5b35f4c5bf9d2dc76e16f827e0ec258f",
+      "codeSize": 18148
+    },
+    "executor": {
+      "address": "0xc84f4a8C4215Ad1162FFcCcC9DA3dA589D7DaF9a",
+      "codeHash": "0xfc45d22749e79a93739c3d3877f49bc3254bbdd27876189e1e51f69e4d8f19c5",
+      "codeSize": 17280
+    }
+  },
+  "market": {
+    "marketId": "0x4c968c48e90f58a8994e40590df132568f3a7ee5991fbcf84714fa4c4008639a",
+    "version": 1,
+    "status": 4,
+    "demonstrationOnly": true,
+    "poolKey": {
+      "currency0": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
+      "currency1": "0xfb93352698150e720Bf0A321DEf3aC98D90B9874",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "hooks": "0x30396Bf4C1cEB4a513425d8c0BD6EFB1FABFA0C0"
+    },
+    "poolId": "0xe4b513ba4a6d5f959d8338b774256779e185b99b7093561df524c959c56c7dd1",
+    "adapter": "0x0000000000000000000000000000000000000000",
+    "feedId": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "oracle": {
+      "maxAge": 0,
+      "maxDeviationBps": 0,
+      "enabled": false
+    },
+    "caps": {
+      "maxPerTxPayout": "10000000",
+      "maxPerDayPayout": "25000000",
+      "maxSeedPayout": "5000000"
+    },
+    "rateE18": "365225000000000000000",
+    "rateLabel": "a demonstration rate the admin sets, never a market price",
+    "initSqrtPriceX96": "1513811080734780267810963",
+    "initTick": -217320,
+    "seedDepth": "872611418535",
+    "assetDecimals": 18,
+    "payoutDecimals": 6,
+    "assetIsCurrency0": true
+  },
+  "accounts": {
+    "admin": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+    "pauser": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+    "deployer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73"
+  },
+  "knownTokens": [
+    {
+      "address": "0x1fbe1a0e43594b3455993b5de5fd0a7a266298d0",
+      "note": "named in the config as an asset a wallet on this chain may hold; symbol and decimals are read live by whoever displays it"
+    },
+    {
+      "address": "0x3b8262a63d25f0477c4dde23f83cfe22cb768c93",
+      "note": "named in the config as an asset a wallet on this chain may hold; symbol and decimals are read live by whoever displays it"
+    },
+    {
+      "address": "0x5884ad2f920c162cfbbacc88c9c51aa75ec09e02",
+      "note": "named in the config as an asset a wallet on this chain may hold; symbol and decimals are read live by whoever displays it"
+    },
+    {
+      "address": "0x71178bac73cbeb415514eb542a8995b82669778d",
+      "note": "named in the config as an asset a wallet on this chain may hold; symbol and decimals are read live by whoever displays it"
+    }
+  ],
+  "identity": {
+    "note": "no identity authority configured; terminal admission is not deployed on this chain"
+  },
+  "policy": {
+    "note": "no confidential-policy receiver configured on this chain"
+  }
+}
