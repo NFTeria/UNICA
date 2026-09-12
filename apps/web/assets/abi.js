@@ -59,13 +59,33 @@ export function paddedUtf8Hex(s) {
 
 const isDynamic = (type) => type === "string" || type === "bytes";
 
+const UNSIGNED = /^uint(\d+)$/;
+
+/**
+ * A narrower unsigned width occupies the same 32-byte word as `uint256`, so the encoding is one
+ * function — but the WIDTH IS CHECKED HERE rather than left to the chain. An order's amounts are
+ * `uint128` and its deadline is `uint64`; a value too wide for its declared width would otherwise
+ * be encoded intact and read by the contract as a different number, which on a payment is the
+ * difference between an amount and somebody else's amount.
+ */
+function wordFromSizedUint(type, bits, value) {
+  if (bits < 8 || bits > 256 || bits % 8 !== 0) throw new Error(`unsupported static type: ${type}`);
+  const v = typeof value === "bigint" ? value : BigInt(value);
+  if (v < 0n) throw new Error(`${type} is unsigned`);
+  if (v >= 1n << BigInt(bits)) throw new Error(`${type} cannot hold ${v}`);
+  return wordFromUint(v);
+}
+
 function encodeStatic(type, value) {
   switch (type) {
     case "address": return wordFromAddress(value);
-    case "uint256": return wordFromUint(value);
     case "bytes32": return wordFromBytes32(value);
     case "bool": return wordFromBool(value);
-    default: throw new Error(`unsupported static type: ${type}`);
+    default: {
+      const sized = UNSIGNED.exec(type);
+      if (sized) return wordFromSizedUint(type, Number(sized[1]), value);
+      throw new Error(`unsupported static type: ${type}`);
+    }
   }
 }
 
