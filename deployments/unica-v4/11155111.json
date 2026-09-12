@@ -2,8 +2,8 @@
   "environment": "PUBLIC_TESTNET_NO_VALUE",
   "designation": "TEST_ONLY_NO_VALUE",
   "chainId": 11155111,
-  "commit": "440e74d14cc28b29b3ba11040dbea009800f31a5",
-  "readAtBlock": 11691626,
+  "commit": "17d124911f400f673a2c843385d0ca0d4ad38c7f",
+  "readAtBlock": 11691646,
   "releaseTag": "unica-v4/sepolia-rehearsal-1",
   "explorer": {
     "kind": "blockscout",
@@ -82,6 +82,21 @@
       "address": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
       "codeHash": "0x6b78f4d89953a4fefb1573c422ecd1243b1272a25105b4bdd22e727f2fcf25a6",
       "codeSize": 77
+    },
+    "productCatalog": {
+      "address": "0xEf837110e2A60B4940E57570E5AD05f39d8C398A",
+      "codeHash": "0x9ecbeb0f3dc140f2cd73222406711a354fd120389b274aeeaaa6ace49a5cf208",
+      "codeSize": 10741
+    },
+    "directSettlement": {
+      "address": "0x14a95db5463d27a97DF464001ec65d5DADffC88e",
+      "codeHash": "0x03d2dbab73014f30200309a3ccf0ca9ea8a4288527092f2c885e4f9f68a5231d",
+      "codeSize": 8429
+    },
+    "directAdmission": {
+      "address": "0x67797F735f11D5DA4f1596bE6Dc5952DdA700539",
+      "codeHash": "0x1d1935fc8a37aa2e69d724d7779f561ee5c246dc77062b63459629142b427206",
+      "codeSize": 9551
     }
   },
   "market": {
