@@ -543,6 +543,7 @@ contract AttacksTest is Test {
                     terminal,
                     deployment,
                     address(executor),
+                    merchantPayout,
                     payer,
                     AMOUNT_IN,
                     MIN_OUT,
