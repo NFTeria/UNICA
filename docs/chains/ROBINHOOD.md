@@ -627,3 +627,16 @@ empty tier_.
 - **Nothing here is a deployment, a request, or a claim of compatibility.** UNICA is not deployed on
   this chain and is not being proposed for it. The public sentence remains: _Robinhood testnet is
   under compatibility investigation._
+
+## 2026-09-12 — the closing sentence above is SUPERSEDED
+
+The line "UNICA is not deployed on this chain and is not being proposed for it" was true when written and
+is SUPERSEDED on 2026-09-12: the owner directed a UNICA v5 market on this chain's Uniswap v4 PoolManager,
+staged in `config/unica-v4/46630.env` (preflight: go) and run one step at a time through
+`make v5-<step> NET=robinhood_testnet` (`docs/V5-LAUNCH-RUNBOOK.md`). The record of what was actually sent
+lives in `deployments/unica-v4/46630.json` once the owner's stages land; this page is not updated per stage.
+What the market is: a labelled demonstration market, because no Chainlink Data Feed exists on this chain,
+whose asset is a faucet testnet token that merely calls itself TSLA and whose payout is the repository's own
+minter-only test dollar (uTUSD, 6 decimals, no value; not USDC). The compatibility findings above stand
+unchanged; a deployed market on this chain proves that the PoolManager here accepts the hook and the pool,
+and nothing about liquidity, about the instrument, or about what Uniswap lists for this chain.

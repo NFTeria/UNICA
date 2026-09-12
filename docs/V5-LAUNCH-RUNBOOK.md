@@ -1,7 +1,7 @@
 # UNICA v5 launch runbook — operators only (TESTNET / NO VALUE; mainnet locked)
 
 Business owners start at `docs/BUSINESS-START-HERE.md` (`make business-demo`). This page is for the person
-who deploys. Every command below is dry-run by default; a LIVE stage needs the phrase on the command line and
+who deploys. The `make v5-<step> NET=<alias>` wrapper (`script/unica-v4/v5.sh`) runs each row below one step at a time. Every command below is dry-run by default; a LIVE stage needs the phrase on the command line and
 a forge keystore name in `DEPLOYER_ACCOUNT`; the password is typed by you in your terminal and never appears
 here. Nothing on this page reaches a mainnet: the wrapper refuses a mainnet id without the acknowledgement
 phrase, a contract admin, a pauser and the oracle requirement on.
@@ -11,6 +11,21 @@ cd ~/Desktop/unica && git checkout unicaV5-anvil && git pull -q && export PATH="
 export DEPLOYER_ACCOUNT=<your forge keystore name>      # cast wallet list
 export L=LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS
 ```
+
+## Status on 2026-09-12 (every row read back from the chain and recorded by the wrapper)
+
+| Network | Alias | Market | Factory | Registry | Hook | Executor | Market id | Source |
+|---|---|---|---|---|---|---|---|---|
+| Ethereum Sepolia (11155111) | `sepolia_testnet` | ACTIVE (status 4) | `0x49241d0f80728CDd0933a4131529b2e084D96192` | `0x8789366A3dDd465D3bf612c914E29419d0dDAa11` | `0x2570a593e0D24ede29eC926e0c5a88B427b9A0c0` | `0x36DD3d5d2dd0124331Cc3874A7bb07B3A6d48ede` | market id `0x99f138caff24fe5dbe437093bac3bf66b2605e7940887fa648e5409dddaefb93` | etherscan (Sepolia) |
+| Base Sepolia (84532) | `base_testnet` | ACTIVE (status 4) | `0x8437BcCd3Cd7c1BfbC4EC47d9766cAaEc12e5aa3` | `0xA0686c76446315182e1ac7cb3Fb844d812670C53` | `0x77D1f8d20e878305b509e44a266C0F69925ca0C0` | `0x89BBdF3075432542CFFd0154D707ACf9ba3a56F9` | market id `0xc620eff48202f9439a04206b2955c6abd26bfb66a5b73f1e0b7d41f4ad03e682` | etherscan (Base Sepolia) |
+| Arbitrum Sepolia (421614) | `arbitrum_testnet` | ACTIVE (status 4) | `0xA0C5cc4FC6A6446a6f532942ECb6eeeF91AE8901` | `0x3072ab51ae34f99A8b7368643c6baC7118E8a6f9` | `0x524B0B6AD8B93bC907077A474C28779d620d60c0` | `0x79552Ad852304D04b246a85168D562B8eE244879` | market id `0x347ef2afeff0218f9e4d23f205a3772f063f358e72db69225481753c329acbc7` | etherscan (Arbitrum Sepolia) |
+| Unichain Sepolia (1301) | `unichain_testnet` | ACTIVE (status 4) | `0xcD59d70551E438CC0ef859F86C8c12c5e6007728` | `0xC29b35ef2F85DEdE57452090bC7dC85743664296` | `0xA112930b4C2d8fce1192F2Bd60f7Cf9E7Ef0A0c0` | `0xD3730094f1D481F7501E75B3E6FCDa16fF0C9e67` | market id `0x865fe38970e04183c900768131ccb9ad451b042068695aeb8697478fea7c4ff2` | sourcify (Unichain Sepolia) |
+| Robinhood Chain testnet (46630) | `robinhood_testnet` | staged: preflight go, nothing sent | — | — | — | — | — | — |
+
+Ethereum Sepolia also carries the identity stack (authority `0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133`, admission
+`0x95ee6cCde9B03C8841972DB52b4cBe38e7d99399`, badge `0xaEB244C4FE0f995403eC230683d2DC84D41157CA`) and the live `freshcuts.unica.eth` records and lineage; the Vyper badge is
+verified by hand, not by the script. Every market is a labelled demonstration market until the owner validates the per-leg feed
+heartbeats (O2); the manifests carry `demonstrationOnly`. Nothing here is a mainnet.
 
 ## What every chain runs, in order
 
@@ -108,6 +123,27 @@ bash script/unica-v4/deploy-public.sh unichain_testnet readback
 env $L bash script/unica-v4/deploy-public.sh unichain_testnet activate
 bash script/unica-v4/deploy-public.sh unichain_testnet readback
 bash script/unica-v4/manifest.sh unichain_testnet config/unica-v4/1301.env
+```
+
+## Robinhood Chain testnet (46630) — alias `robinhood_testnet` — READY as a demonstration market (no oracle, no ENS)
+
+Config `config/unica-v4/46630.env`, every value read live on 2026-09-12: PoolManager `0x8366a39CC670B4001A1121B8F6A443A643e40951` (24,009 bytes),
+CREATE2 factory present, asset `0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E` (a faucet testnet token whose symbol reads TSLA, 18 decimals; not the
+instrument, no value), payout `0xfb93352698150e720Bf0A321DEf3aC98D90B9874` (uTUSD, the repository's own 6-decimal test dollar; its only minter is the
+deployer, so no faucet is involved; it is not USDC). The demonstration rate 365.225 test dollars per unit is the Chainlink TSLA / USD feed on OP Sepolia
+read on chain at 1789233564 (recorded with the feed address in the config); chain 46630 itself has no Chainlink Data Feed, so the market runs oracle-off
+and labelled. Deployer 0.059 test ETH at nonce 90, gas price 0.01 gwei measured, the whole sequence ≈ 27M gas ≈ 0.0003 ETH. Sourcify lists chain 46630
+as supported, so `verify` runs there without an explorer key. The deployer held 0.1 uTUSD at config time; stage C seeds 4.9, so `mint` (one transaction,
+100 test dollars to the deployer, refused on any other chain and refused unless the keystore's address is the token's minter) comes first. Preflight: go.
+
+```sh
+make v5-preflight NET=robinhood_testnet
+make v5-mint NET=robinhood_testnet        # 1 tx: 100 uTUSD to the deployer (minter-only)
+make v5-A NET=robinhood_testnet           # 1 tx: factory + registry (no identity on this chain)
+make v5-B NET=robinhood_testnet
+make v5-C NET=robinhood_testnet
+make v5-activate NET=robinhood_testnet
+make v5-manifest NET=robinhood_testnet && make v5-verify NET=robinhood_testnet && make v5-evidence NET=robinhood_testnet && make v5-commit NET=robinhood_testnet
 ```
 
 ## Owner gates that are not deployments
