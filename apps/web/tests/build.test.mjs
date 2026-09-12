@@ -135,7 +135,9 @@ chk("titles are unique across routes", titles.size === docs.length);
 chk("descriptions are unique across routes", descs.size === docs.length);
 const exp = docs.find(([r]) => r === "/experiments/robinhood/")[1];
 chk("the experiment route is labelled a testnet experiment", exp.includes('content="testnet experiment"'));
-chk("the experiment preview card is its own, not the generic one", exp.includes("og-experiment.svg"));
+// The card a scraper fetches is the PNG the build rasterises from og-experiment.svg — the drawing
+// is the source, the raster is what gets linked, and this row follows the one that is linked.
+chk("the experiment preview card is its own, not the generic one", exp.includes("og-experiment.png"));
 
 // ── base-path safety ──────────────────────────────────────────────────────────────────────────
 const absolute = docs.filter(([, d]) => /(?:href|src)="\/[^/]/.test(d)).map(([r]) => r);

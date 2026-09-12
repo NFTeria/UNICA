@@ -24,10 +24,46 @@
  * how to leave. Nothing that matters is behind an event handler — which is why the wallet chip's
  * served text is a true sentence about how signing in works, and not a button that does nothing.
  */
+import { readFileSync } from "node:fs";
 import { h, raw, esc } from "./html.mjs";
 import { SITE } from "./site.mjs";
 import { sidebarNav, walletChip } from "./components.mjs";
 import { MAINNET_ENVIRONMENT, NO_VALUE_BANNER } from "../assets/product.js";
+
+/**
+ * THE TWO theme-color VALUES ARE READ OUT OF THE STYLESHEET, NOT TYPED HERE. A browser paints its
+ * own chrome — the address bar, the status bar, the area behind a page that has not painted yet —
+ * with theme-color, so a hex that has drifted from --paper shows up as a seam around the document.
+ * Reading them means the seam cannot open: there is one definition of the ground per scheme and
+ * this is a second READER of it, never a second copy.
+ */
+const STYLESHEET = readFileSync(new URL("../assets/unica.css", import.meta.url), "utf8");
+
+function paperFor(scheme) {
+  const block =
+    scheme === "dark"
+      ? STYLESHEET.match(/:root\[data-theme="dark"\][^}]*\}/)?.[0]
+      : STYLESHEET.match(/:root\s*\{[^}]*\}/)?.[0];
+  const found = block?.match(/--paper:\s*(#[0-9a-fA-F]{3,8})/);
+  if (!found) throw new Error(`assets/unica.css declares no --paper for the ${scheme} scheme`);
+  return found[1];
+}
+
+const PAPER = { light: paperFor("light"), dark: paperFor("dark") };
+
+/**
+ * THE LINK PREVIEW IS A PNG, AND THE SIZE IS DECLARED. Every scraper worth naming reads PNG and
+ * several refuse SVG outright, so a route's `ogImage` names the SVG the image is DRAWN from and
+ * this is where the emitted raster is named: same stem, .png. apps/web/build.mjs writes one per
+ * og-*.svg at exactly these dimensions, and og:image:width/height repeat them so a card can be
+ * laid out before the bytes arrive rather than reflowing when they do.
+ */
+export const PREVIEW = Object.freeze({ width: 1200, height: 630 });
+
+/** The raster a route's declared preview drawing produces. One rule, so the two cannot diverge. */
+export function previewImageFor(ogImage) {
+  return String(ogImage).replace(/\.svg$/i, ".png");
+}
 
 /**
  * The colour-scheme control. Three states and no fourth: SYSTEM is the absence of a choice, which
@@ -205,6 +241,7 @@ export function document_(page) {
   // Relative on purpose: an absolute canonical names a path this artifact may not be served
   // at. "./" resolves against the document's own URL, which is right everywhere.
   const canonical = "./";
+  const previewImage = previewImageFor(page.ogImage);
   const shell =
     layout === "app" ? appBody(page, p) : layout === "checkout" ? checkoutBody(page, p) : marketingBody(page, p, navKey);
   return `<!doctype html>
@@ -216,11 +253,19 @@ export function document_(page) {
 <meta name="description" content="${esc(page.description)}">
 <link rel="canonical" href="${esc(canonical)}">
 <link rel="icon" type="image/svg+xml" href="${esc(p)}assets/mark.svg">
+<meta name="theme-color" content="${esc(PAPER.light)}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="${esc(PAPER.dark)}" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="${esc(SITE.name)}">
 <meta property="og:title" content="${esc(page.ogTitle)}">
 <meta property="og:description" content="${esc(page.ogDescription)}">
-<meta property="og:image" content="${esc(p + "assets/" + page.ogImage)}">
+<meta property="og:image" content="${esc(p + "assets/" + previewImage)}">
+<meta property="og:image:width" content="${esc(String(PREVIEW.width))}">
+<meta property="og:image:height" content="${esc(String(PREVIEW.height))}">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(page.ogTitle)}">
+<meta name="twitter:description" content="${esc(page.ogDescription)}">
+<meta name="twitter:image" content="${esc(p + "assets/" + previewImage)}">
 ${page.experimental ? '<meta name="unica:status" content="testnet experiment">' : ""}
 <link rel="stylesheet" href="${esc(p)}assets/unica.css">
 <link rel="stylesheet" href="${esc(p)}assets/screens/theme.css">
