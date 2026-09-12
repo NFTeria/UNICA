@@ -1,0 +1,148 @@
+/* The register, and only the register.
+ *
+ * Every colour here is one of the product's own tokens, so light and dark follow the same four
+ * fields the rest of the app follows. Two exceptions, both deliberate:
+ *
+ *   --business-accent      the business's own accent, set on #register by script from the hue of
+ *                          its badge, with its text colour COMPUTED against it in assets/brand.js.
+ *                          It falls back to the brand accent, so a business with no badge yet is
+ *                          not a screen with no primary action.
+ *   --pos-mark             one integration's own colour, set by script, used ONLY as a 3px rule
+ *                          beside a name that already says which integration it is. Never a
+ *                          background, never text, and never two of them in one view.
+ *
+ * The phone is the default: the keypad fills the width and every target is at least 44px. The
+ * desktop puts the keypad in a column of its own with the sale beside it, because a cashier's hand
+ * stays in one place all day and the sale should not move under it.
+ */
+
+.pos {
+  display: grid;
+  gap: var(--s5);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.pos-pad {
+  position: sticky;
+  top: 0;
+}
+
+.pos .amount-display {
+  font-size: 3rem;
+  margin-bottom: var(--s2);
+}
+
+.pos-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+}
+
+.pos .keypad {
+  gap: var(--s3);
+}
+
+.pos .keypad .key {
+  min-height: calc(var(--space) * 16);
+  font-size: 1.4rem;
+}
+
+/* the one integration this view may name: its own colour as a rule, its name as the meaning */
+.pos-mark {
+  display: inline-block;
+  border-left: 3px solid var(--pos-mark, var(--line));
+  padding-left: var(--s2);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* the shop's own list: big enough to hit without looking, quiet enough not to compete with the amount */
+.pos-picks,
+.pos-assets {
+  list-style: none;
+  margin: 0 0 var(--s4);
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.pos-pick,
+.pos-asset {
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s2) var(--s3);
+  min-height: calc(var(--space) * 11);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  cursor: pointer;
+}
+
+.pos-pick:hover,
+.pos-asset:hover {
+  background: var(--surface);
+}
+
+.pos-pick[aria-pressed="true"],
+.pos-asset[aria-pressed="true"] {
+  border-color: var(--business-accent, var(--accent));
+  box-shadow: inset 0 -3px 0 var(--business-accent, var(--accent));
+  font-weight: 500;
+}
+
+.pos-pick[disabled],
+.pos-asset[disabled] {
+  color: var(--muted);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.pos-pick-name {
+  font-weight: 500;
+}
+
+.pos-pick-price,
+.pos-asset-sym {
+  font-variant-numeric: tabular-nums;
+}
+
+/* the one button, in the business's own accent */
+.pos .charge {
+  background: var(--business-accent, var(--accent));
+  color: var(--business-accent-text, var(--on-accent));
+  min-height: calc(var(--space) * 14);
+}
+
+.pos .charge[disabled] {
+  background: var(--surface);
+  color: var(--muted);
+}
+
+/* the link beside the square: selectable, wrapping, never forcing the page sideways */
+.pos-link {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s2) var(--s3);
+}
+
+.pos-link:empty {
+  display: none;
+}
+
+@media (min-width: 52rem) {
+  .pos {
+    grid-template-columns: 26rem minmax(0, 1fr);
+  }
+}
