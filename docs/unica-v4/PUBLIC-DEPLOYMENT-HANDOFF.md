@@ -63,22 +63,27 @@ O3 Price the asset directly in the payout unit with ONE feed (e.g. ETH/USDC wher
 O4 Run the Sepolia rehearsal as a demonstration market now, oracle market after O1–O3 — YES (default) / NO
 ```
 
-## Sepolia run sheet — rehearsed on a fork of Sepolia at block 11686007, nothing sent
+## Sepolia run sheet — rehearsed on a fork of Sepolia at block 11686092, nothing sent
 
-`bash script/unica-v4/rehearse-sepolia.sh` ran all four stages and the readback as the deployer by
-impersonation against real Sepolia state (deployer balance 1.547 ETH, 31.55 test USDC, nonce 492). Measured:
+`bash script/unica-v4/rehearse-sepolia.sh` ran all four stages, the readback and the manifest as the
+deployer by impersonation against real Sepolia state (deployer balance 1.547 ETH, 31.55 test USDC,
+nonce 492), with the identity layer configured (`UNICA_ENSV2_RESOLVER`, the badge compiled by Vyper
+0.4.3, 17,494 bytes). Measured:
 
 | Stage | Transactions | Gas (estimate) | ETH at the fork's price | Result on the fork |
 |---|---|---|---|---|
-| A | factory (creates the registry) | 12,046,004 | ≈ 0.025 | factory `0x4924…6192`, registry `0x8789…AA11` at nonce 492 |
-| B | `createMarket` at mined salt `0x2137` | 11,483,087 | ≈ 0.022 | hook `0x2570…A0c0` (bits `0x20C0`), executor `0x36DD…8ede`, market `0x99f1…fb93` |
-| C | initialise, router, two approvals, seed 4.9 USDC over ticks 198060–205020, `markSeeded` | 3,524,821 | ≈ 0.006 | depth 333,131,895,132, status SEEDED |
-| activate | `setPauser`, `activate` | 110,752 | < 0.001 | status ACTIVE; `marketIdOfHook/Executor/Pool` all equal the market id |
+| A | factory (creates the registry), `EnsV2ResolverAuthority`, `TerminalAdmission`, identity token | 20,826,683 | ≈ 0.046 | factory `0x4924…6192`, registry `0x8789…AA11` at nonce 492; authority `0xB3aC…f133`, admission `0x95ee…9399`, badge `0xaEB2…57CA` at nonces 493–495 |
+| B | `createMarket` at mined salt `0x2137` | 11,483,087 | ≈ 0.024 | hook `0x2570…A0c0` (bits `0x20C0`), executor `0x36DD…8ede`, market `0x99f1…fb93` |
+| C | initialise, router, two approvals, seed 4.9 USDC over ticks 198060–205020, `markSeeded` | 3,524,821 | ≈ 0.007 | depth 333,131,895,132, status SEEDED |
+| activate | `setPauser`, allow the admission gate as order creator, `activate` | 177,525 | < 0.001 | status ACTIVE; `orderCreator` = the admission gate; `marketIdOfHook/Executor/Pool` all equal the market id |
 
 Addresses are predictions for nonce 492 and change if the deployer sends anything first; **re-run the
-dry run of each stage immediately before sending it**, as the wrapper does by default. Ten transactions
-in total. The market is a demonstration market (`requireOracle=false`, see the oracle-age finding above);
-its receipts carry `demonstrationOnly = true` and zero reference fields.
+dry run of each stage immediately before sending it**, as the wrapper does by default. Fourteen
+transactions in total, ≈ 0.078 ETH at the fork's gas price. The market is a demonstration market
+(`requireOracle=false`, see the oracle-age finding above); its receipts carry `demonstrationOnly = true`
+and zero reference fields. The manifest written from the fork lists eleven contracts (pool manager, the
+two tokens, factory, registry, hook, executor, admission, badge, authority, resolver) and an `identity`
+block naming the authority kind, the resolver and the deployment id.
 
 Owner's sequence, one command per stage, in a real terminal (the keystore password is prompted):
 
@@ -87,7 +92,10 @@ bash script/unica-v4/deploy-public.sh sepolia_testnet preflight
 LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet A
 ```
 Paste back the `STAGE_A` lines; copy `factory` and `registry` into `config/unica-v4/11155111.env` as
-`UNICA_FACTORY` / `UNICA_REGISTRY`; run `readback` is not yet possible (no market); continue:
+`UNICA_FACTORY` / `UNICA_REGISTRY`, and `identityAuthority` / `terminalAdmission` / `identityToken` as
+`UNICA_IDENTITY_AUTHORITY` / `UNICA_ADMISSION` / `UNICA_IDENTITY_TOKEN` (the manifest reads them; and once
+the authority is pinned, a later stage A never deploys a second one, so identity cannot fork on a
+re-run). `readback` is not yet possible (no market); continue:
 ```sh
 LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet B
 ```
@@ -138,17 +146,25 @@ These are the owner's decisions recorded in `docs/unica-v4/DECISIONS.md`; the re
   mainnet ids for every other script. The wrapper here does not source that guard; the day a mainnet is
   authorized, the README changes in the same commit.
 
-## Open before terminals go public (identity)
+## Terminals on the real ENSv2 Sepolia deployment
 
-`TerminalAdmission` reads seven views through `IIdentityAuthority`. The local fixture implements them
-directly; the public deployment needs an adapter over ENSv2's registry and permissioned resolver:
-`hasRoles`, `text` and `addr` map one to one onto the measured resolver ABI (`integrations/ensv2/permissioned.mjs`);
-`isNamespaceController` maps onto the admin bits the name's controller holds at the name-level resource;
-`parentOf` has no on-chain source in ENSv2 and must be proven by lineage registration
-(`keccak256(abi.encodePacked(parent, keccak256(label))) == child`, a pure fact anyone may register). That
-adapter is the next bounded task, fork-tested against the pinned Sepolia deployment before it is used. Until
-then a public market runs **without** the admission gate: the registry's own allowlist names the order
-creators, and settlement is unaffected (the gate was never a settlement dependency).
+`src/identity/EnsV2ResolverAuthority.sol` is the adapter `TerminalAdmission` reads through on a public chain:
+`hasRoles`, `text` and `addr` forward to the chain's permissioned resolver; the per-key text resource is
+`keccak256(abi.encode(node, keccak256(key)))`; `isNamespaceController` requires both admin bits at the node;
+`parentOf` comes from a lineage registry anyone may fill with the provable fact
+`keccak256(abi.encodePacked(parent, keccak256(label))) == child`; `ownerOf` is refused as not enumerable.
+**Measured on the live resolver of `unica.eth`** (`0x3D2d26801632e7b13B2fa75236a634e75684988c`, pinned fork at
+block 11685000, `test/fork/EnsV2AuthorityFork.t.sol`, 15 of 15 rows): `authorizeTextRoles` from the recorded
+owner sets SET_TEXT at the per-key resource and nowhere else, a second key stays clear, revocation clears it,
+a stranger is refused. Stage A deploys the adapter when `UNICA_ENSV2_RESOLVER` is configured, then the
+admission gate behind it and the badge, and `activate` allowlists the gate as the market's order creator.
+
+What the merchant's operator does on ENS before a terminal can admit (all through the owner's existing
+`script/ensv2/plan.mjs` handoff, never from here): set the merchant's `addr` record on `freshcuts.unica.eth`
+(today `addr(unica.eth)` itself is zero), publish `com.unica.terminal-status = active` on each terminal
+subname, grant each operator key SET_TEXT at that per-key resource, and register the lineage
+`eth → unica → freshcuts → terminals → chair-1` on the adapter (four `registerLineage` calls, provable by
+anyone). Revocation is `authorizeTextRoles(..., false)` plus the status text, exactly as rehearsed locally.
 
 ## What the local run has proven that carries over unchanged
 

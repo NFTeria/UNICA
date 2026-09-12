@@ -779,3 +779,10 @@ export async function verifyProfile(chain) {
   }
   return rows;
 }
+
+// ANSWERED 2026-09-12 (test/fork/EnsV2AuthorityFork.t.sol, pinned fork block 11685000, live bytecode of
+// unica.eth's own resolver 0x3D2d26801632e7b13B2fa75236a634e75684988c): the resolver DOES consult a per-text-key
+// resource. authorizeTextRoles(dns("unica.eth"), "com.unica.terminal-status", account, true) from the recorded
+// owner set SET_TEXT (bit 4) at keccak256(abi.encode(node, keccak256(key))) and nowhere else; the name-level and
+// ROOT resources stayed zero, a second key stayed clear, revocation cleared it, a stranger was refused
+// (EACCannotGrantRoles). The UNRESOLVED question above is closed by that suite; the entry is kept as history.
