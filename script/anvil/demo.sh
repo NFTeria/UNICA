@@ -25,16 +25,25 @@ export DEMO_TTL_SECONDS="${DEMO_TTL_SECONDS:-1800}"
 # One order nonce per run: the block height makes a re-run on the same chain a NEW order, never a replay.
 export DEMO_ORDER_SEQ="${DEMO_ORDER_SEQ:-$(cast block-number --rpc-url "$UNICA_LOCAL_RPC")}"
 RECORD="$REHEARSAL_DIR/demo-record.json"
+JOIN_RECORD="$REHEARSAL_DIR/join-record.json"
 FOUNDRY_BROADCAST="$REHEARSAL_DIR/broadcast"; export FOUNDRY_BROADCAST
 
-run_stage() { # $1 sig, $2 sender, $3 tag to extract
-  local log="$REHEARSAL_DIR/demo-$1.log"
-  forge script script/anvil/AnvilLocal.s.sol:AnvilLocal --sig "$1()" --rpc-url "$UNICA_LOCAL_RPC" \
-    --unlocked --sender "$2" --broadcast -vv >"$log" 2>&1 || { cat "$log"; die "stage $1 failed"; }
-  printf '{%s}' "$(grep -o "$3:.*" "$log" | sed "s/^$3://" | tr -d '\n' | sed 's/,$//')"
-}
+step "0. Fresh Cuts joined from its own wallet — the same self-serve door any business uses"
+test -f "$JOIN_RECORD" || die "no join record at $JOIN_RECORD; run: make anvil-deploy"
+JOIN=$(cat "$JOIN_RECORD")
+log "pay name         $(json_get "$JOIN" .payName)"
+log "owner wallet     $(json_get "$JOIN" .joinedBy)"
+log "first register   $(json_get "$JOIN" .firstTerminalLabel)   ($(json_get "$JOIN" .chair1Status))"
+log "business badge   #$(json_get "$JOIN" .tokenId) held by $(json_get "$JOIN" .badgeOwner)"
+log "payment address  $(json_get "$JOIN" .payoutAddress)"
+# `cast`/`eth_accounts` answers in lowercase and the script prints EIP-55 checksummed addresses:
+# the same wallet, spelled two ways. Fold both before comparing, or this guard fails on every run
+# and gets deleted rather than believed.
+JOINED_BY=$(json_get "$JOIN" .joinedBy | tr 'A-F' 'a-f')
+test "$JOINED_BY" = "$(printf '%s' "$ANVIL_MERCHANT_OWNER" | tr 'A-F' 'a-f')" \
+  || die "the join record names $JOINED_BY, which is not the business owner $ANVIL_MERCHANT_OWNER"
 
-step "1–4. identity exists (deploy); mint the identity badge; revoke the lost tablet; refresh the fixture feeds; deliver the LOCAL CRE REPORT FIXTURE"
+step "1–4. identity exists (from the join); read the business badge back; revoke the lost tablet; refresh the fixture feeds; deliver the LOCAL CRE REPORT FIXTURE"
 PREPARE=$(run_stage demoPrepare "$ANVIL_ADMIN" PREPARE)
 log "$PREPARE"
 TOKEN_ID=$(json_get "$PREPARE" .tokenId)

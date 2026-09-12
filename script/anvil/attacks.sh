@@ -56,6 +56,14 @@ LAYER="IDENTITY_NFT" expect_revert NFT_TRANSFER_ATTEMPT 'NonTransferable()' \
   "$UNICA_IDENTITY_TOKEN" 'transferFrom(address,address,uint256)' "$ANVIL_MERCHANT_OWNER" "$ANVIL_ATTACKER" 1 --from "$ANVIL_MERCHANT_OWNER"
 LAYER="IDENTITY_NFT" expect_revert NFT_APPROVAL_ATTEMPT 'NonTransferable()' \
   "$UNICA_IDENTITY_TOKEN" 'approve(address,uint256)' "$ANVIL_ATTACKER" 1 --from "$ANVIL_MERCHANT_OWNER"
+# The self-serve door is open to anyone, which is exactly why its three refusals matter: a name
+# already taken, a name that is not a name, and a wallet that already runs a business.
+LAYER="UNICA_ONCHAIN+ENSV2_ONCHAIN" expect_revert JOIN_LABEL_TAKEN 'LabelTaken(string)' \
+  "$UNICA_ONBOARDING" 'join(string,address,string)' 'freshcuts' "$ANVIL_ATTACKER" 'register-1' --from "$ANVIL_ATTACKER"
+LAYER="UNICA_ONCHAIN" expect_revert JOIN_BAD_LABEL 'LabelInvalid(string)' \
+  "$UNICA_ONBOARDING" 'join(string,address,string)' 'Fresh Cuts!' "$ANVIL_ATTACKER" 'register-1' --from "$ANVIL_ATTACKER"
+LAYER="UNICA_ONCHAIN" expect_revert JOIN_TWICE 'AlreadyJoined(address,bytes32)' \
+  "$UNICA_ONBOARDING" 'join(string,address,string)' 'freshcuts-two' "$ANVIL_MERCHANT_PAYOUT" 'register-1' --from "$ANVIL_MERCHANT_OWNER"
 
 step "C. evidence-layer decisions (GRAPH_EVIDENCE / CLIENT_VERIFICATION)"
 HEAD=$(cast block-number --rpc-url "$UNICA_LOCAL_RPC")

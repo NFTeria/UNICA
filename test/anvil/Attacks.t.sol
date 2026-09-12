@@ -82,11 +82,13 @@ contract AttacksTest is Test {
     UnicaPolicyReceiver internal policy;
     LocalKeystoneForwarderFixture internal forwarder;
     address internal identityToken;
+    address internal onboarding;
     address internal lookalikeHook;
     address internal lookalikeExecutor;
     bytes32 internal marketId;
     bytes32 internal ensDeploymentId;
     bytes32 internal merchantNode;
+    bytes32 internal terminalsNode;
     bytes32 internal chair1Node;
     bytes32 internal lostTabletNode;
     bytes32 internal demoOrderId;
@@ -122,11 +124,13 @@ contract AttacksTest is Test {
         policy = UnicaPolicyReceiver(vm.envAddress("UNICA_POLICY_RECEIVER"));
         forwarder = LocalKeystoneForwarderFixture(vm.envAddress("UNICA_FORWARDER"));
         identityToken = vm.envAddress("UNICA_IDENTITY_TOKEN");
+        onboarding = vm.envAddress("UNICA_ONBOARDING");
         lookalikeHook = vm.envAddress("UNICA_LOOKALIKE_HOOK");
         lookalikeExecutor = vm.envAddress("UNICA_LOOKALIKE_EXECUTOR");
         marketId = vm.envBytes32("UNICA_MARKET_ID");
         ensDeploymentId = vm.envBytes32("UNICA_ENS_DEPLOYMENT_ID");
         merchantNode = vm.envBytes32("UNICA_MERCHANT_NODE");
+        terminalsNode = vm.envBytes32("UNICA_TERMINALS_NODE");
         chair1Node = vm.envBytes32("UNICA_CHAIR1_NODE");
         lostTabletNode = vm.envBytes32("UNICA_LOST_TABLET_NODE");
         demoOrderId = vm.envBytes32("UNICA_DEMO_ORDER_ID");
@@ -224,6 +228,18 @@ contract AttacksTest is Test {
         vm.prank(wrongPayer);
         executor.pay(id);
         _refused("WRONG_PAYER", "WrongPayer", "UNICA_ONCHAIN");
+    }
+
+    /// @dev The self-serve door configured every node the business owns and then handed them over.
+    ///      If it kept any role on them, a bug in the door would be a bug in every business; so the
+    ///      row reads the live roles and reports the absence as the refusal it is.
+    function test_Join_ContractHoldsNoRoles() public view {
+        uint256 any = identity.ROLE_SET_ADDR() | identity.ROLE_SET_TEXT() | identity.ROLE_SET_SUBREGISTRY();
+        assertEq(identity.roles(uint256(merchantNode), onboarding), 0, "door holds roles at the merchant node");
+        assertEq(identity.roles(uint256(terminalsNode), onboarding), 0, "door holds roles at terminals");
+        assertEq(identity.roles(uint256(chair1Node), onboarding), 0, "door holds roles at chair-1");
+        assertFalse(identity.hasRoles(uint256(merchantNode), any, onboarding), "hasRoles says the door can act");
+        _refused("JOIN_CONTRACT_HOLDS_NO_ROLES", "NO_RESIDUAL_AUTHORITY", "ENSV2_ONCHAIN");
     }
 
     function test_Order_ReplayOfSettledOrder() public {
