@@ -429,3 +429,10 @@ select.field { appearance: none; background-image: none; }
 .rule-uniswap { border-bottom: 3px solid #FF007A; }
 .rule-ens { border-bottom: 3px solid #5298FF; }
 .rule-graph { border-bottom: 3px solid #6F4CFF; }
+
+/* phone: the primary navigation is one row that scrolls sideways, not three stacked rows */
+@media (max-width: 39.99rem) {
+  header.site ul.nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: var(--s1); }
+  header.site ul.nav::-webkit-scrollbar { display: none; }
+  header.site ul.nav a { white-space: nowrap; }
+}
