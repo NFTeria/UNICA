@@ -153,3 +153,30 @@ Upstream repositories inspected during this work — `circlefin/arc-nanopayments
 `solangegueiros/cf-liquidation-protection-challenge` — were read in a temporary workspace outside
 this repository. **Nothing from either was vendored or copied**; both are pinned by commit in the
 tool ledger, and `script/no-copied-source.sh` runs against the whole working tree on every gate.
+
+## Addition — 2026-09-12, the local Anvil vertical slice (UNICA v4)
+
+Directed by the owner in one interactive session. The assistant orchestrated the work and landed
+every commit; the files below were drafted by subagents of the same tool at the model tiers named,
+each writing fresh from the committed specifications (`docs/unica-v4/`, `docs/unica-v5/`) and
+never from another repository or from the frozen experimental generation. The owner made every
+ruling (`docs/unica-v4/DECISIONS.md`), set the scope, and runs every public-chain action outside
+the assistant. No commit carries an AI trailer; this table is the disclosure.
+
+| Path | Tool | Nature of assistance |
+|---|---|---|
+| `src/unica-v4/UnicaMarketTypes.sol`, `src/unica-v4/interfaces/`, `src/unica-v4/policy/IUnicaPolicyReceiver.sol` | Claude Code, `claude-fable-5-1` | the shared shapes and interfaces every layer codes against, written first |
+| `src/unica-v4/UnicaMarketRegistry.sol`, `UnicaMarketFactory.sol`, `UnicaMarketMath.sol`, `oracle/` | Claude Code, `claude-opus-5` subagent | the registry, factory, opening-price math and Chainlink feed adapter from SPEC-CONTRACTS §3–§7, §10 |
+| `src/unica-v4/UnicaMarketHook.sol`, `UnicaMarketExecutor.sol` | Claude Code, `claude-opus-5` subagent | the hook and the executor it creates, from SPEC-CONTRACTS §8, §9, §11 |
+| `src/unica-v4/policy/` (receiver, forwarder fixture, report fixture, types) | Claude Code, `claude-sonnet-5` subagent | the CRE-shaped admission receiver and the local fixtures, from `docs/unica-v5/chainlink/` |
+| `src/identity/` | Claude Code, `claude-sonnet-5` subagent | the local ENSv2-compatible fixture and the terminal-admission gate, from `docs/unica-v5/ens/` and the measured `integrations/ensv2/` shapes |
+| `vy/src/math/namecheck.vy`, `vy/src/art/svgrender.vy`, `vy/src/art/identity_token.vy`, `vy/tests/test_namecheck.py`, `test_svgrender.py`, `test_identity_token.py`, `test_art_boundary.py`, `vy/tests/authority_double.vy`, `vy/tests/vectors/` | Claude Code, `claude-sonnet-5` subagent | the normalizer, renderer and non-transferable identity token from rulings H1–H12 and N1–N9 and the EIP-721 text; golden vectors and suites |
+| `test/unica-v4/`, `test/identity/`, `test/policy/`, `test/anvil/` | Claude Code, both tiers | the test rows named in TEST-MATRIX and the sprint brief, each negative row with its control; the cross-layer attack suite |
+| `script/anvil/` | Claude Code, `claude-fable-5-1` | the local deployment script and the seven shell stages |
+| `tools/unica-evidence/`, `tools/unica-pos-cli/`, `integrations/graph/unica-v4/` | Claude Code, `claude-sonnet-5` subagent | the event projection with VERIFIED / REFUSED / UNKNOWN, the POS views, the schema and query fixtures |
+| `apps/web/assets/local-pay.js`, the `pay` route wiring, `script/anvil/serve.sh` | Claude Code, `claude-sonnet-5` subagent | the browser pay screen connected to the local chain |
+| `docs/unica-v4/ANVIL-DEMO.md`, `ENFORCEMENT-MATRIX.md`, `enforcement-matrix.json`, `SECURITY-REVIEW-V4.md` | Claude Code, `claude-fable-5-1` | the demonstration, the enforcement-layer matrix, the internal security review record |
+| `Makefile` (anvil targets), `.github/workflows/ci.yml` (anvil and vyper lanes), `package.json` (test script) | Claude Code, `claude-fable-5-1` | the command surface and its CI lanes |
+
+Still **not** AI-authored and unchanged: `vy/src/unica/` and `vypersetup/` (carried-in prior art,
+held under ruling V9), `vy/src/namemath.vy` and `vy/src/logobackground.vy` (legacy, ruling H10).
