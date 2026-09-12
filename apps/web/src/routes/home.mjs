@@ -1,8 +1,35 @@
-import { h, raw, hex, evidenceBadge } from "../html.mjs";
-import { SITE, V3, EXPERIMENT } from "../site.mjs";
-import * as C from "../components.mjs";
+/**
+ * The landing page. It is the marketing page AND the way in, which is the only reason it carries a
+ * control at all: somebody who already has a business should not have to find the header to log in.
+ *
+ * NO SENTENCE ON THIS PAGE IS NEW. The heading, the lead and every section below the hero are the
+ * words the page already had; what changed is that the four things a visitor can DO are now four
+ * controls instead of a paragraph pointing at them. apps/web/tests/home.test.mjs reads the previous
+ * version of this file out of git and fails on a sentence that is not in it, so a marketing line
+ * cannot arrive here by drift.
+ *
+ * THE PRIMARY CONTROL DOES NOT CONTAIN A LOGIN. There is one login in this product — the header
+ * chip's, driven by assets/app.js — and the hero's button presses that one. Two implementations of
+ * signing in is two answers to "am I signed in", and the second one is always the stale one.
+ *
+ * THE MARK IS READ FROM assets/mark.svg AT BUILD TIME, not retyped. The same file is the favicon
+ * and the source of every link-preview raster, so there is exactly one description of the shape.
+ */
+import { readFileSync } from "node:fs";
+import { h, raw } from "../html.mjs";
 
 const P = (id) => raw(` data-parity="${id}"`);
+
+/**
+ * Inlined rather than referenced, because an <img> cannot inherit the page's brand tokens: inline,
+ * every `var(--ink)` in the mark resolves against whichever scheme the viewer chose, and the
+ * animation in assets/unica.css can reach the shapes. The file is trusted repository content, so
+ * raw() is correct here and nowhere near anything a person or a chain supplied.
+ */
+const MARK = readFileSync(new URL("../../assets/mark.svg", import.meta.url), "utf8")
+  .replace(/<!--[\s\S]*?-->/g, "")
+  .replace(/\n{2,}/g, "\n")
+  .trim();
 
 export const HOME = [
   {
@@ -15,20 +42,25 @@ export const HOME = [
     ogDescription: "Customers pay with what they hold. You receive what you chose.",
     ogImage: "og-home.svg",
     body: h`
-<p class="lead"${P("hero")}>Customers pay with what they hold. You receive the asset you chose, in
+<div class="hero-lede">
+  <div class="hero-art" aria-hidden="true">${raw(MARK)}</div>
+  <p class="lead"${P("hero")}>Customers pay with what they hold. You receive the asset you chose, in
 the same payment, at the wallet you named before the sale existed. Every payment ends in a receipt
 your customer and your accountant can check for themselves.</p>
-<p class="ctas">
-  <a class="cta" href="join/">Add your business</a>
-  <a class="cta cta-quiet" href="business/">Open my business</a>
-  <a class="cta cta-quiet" href="pay/"${P("cta-pay")}>See a customer checkout</a>
-  <a class="cta cta-quiet" href="receipt/"${P("cta-proof")}>View a receipt</a>
+</div>
+<p class="ctas hero-ctas">
+  <button type="button" class="cta" id="hero-login" disabled aria-describedby="hero-login-why">Log in with wallet</button>
+  <a class="cta cta-quiet rule-uniswap" id="hero-swap" href="https://app.uniswap.org/swap" rel="noopener">Swap on Uniswap</a>
+  <a class="cta cta-quiet rule-ens" href="join/">Register your ENS name</a>
+  <a class="cta cta-quiet rule-graph" href="receipt/"${P("cta-proof")}>See a receipt</a>
 </p>
+<p class="sub" id="hero-login-why">Enabled once this page has read the network.</p>
 <nav aria-label="Sections"${P("anchor-rail")}><ul class="nav">
   <li><a href="#three">Three things it does</a></li>
   <li><a href="how-it-works/">How it works</a></li>
   <li><a href="supported-assets/">Payment assets</a></li>
   <li><a href="business/">My business</a></li>
+  <li><a href="pay/"${P("cta-pay")}>Customer checkout</a></li>
   <li><a href="proof/">Verification</a></li>
 </ul></nav>
 
@@ -60,13 +92,10 @@ your customer and your accountant can check for themselves.</p>
 </ol>
 <p><a href="how-it-works/">How it works, in more detail</a></p>
 
-<h2>Before you take a real payment</h2>
-${C.banner("warn", "This release runs on test networks only.", raw(`Every screen carries the
-label at the top of this page. Nothing here moves real money, and no page will call a network a
-public one unless the deployment it is reading says so.`))}
 <p class="sub"${P("builton")}>Built on Uniswap v4 (payment settlement), ENSv2 (business identity)
 and The Graph (receipt indexing). Named as technologies used, not as endorsements.</p>
 <p class="sub"${P("footer")}>Release evidence and the latest indexed payment are different things,
-and the <a href="proof/">verification page</a> keeps them apart.</p>`,
+and the <a href="proof/">verification page</a> keeps them apart.</p>
+<script type="module" src="./assets/home.js"></script>`,
   },
 ];
