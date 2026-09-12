@@ -19,7 +19,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -482,6 +482,282 @@ test("every breakpoint the brief names is accounted for in the widths table", ()
   for (const w of ["320", "360", "390", "430", "744", "820", "1024", "1280", "1440"]) {
     assert.ok(new RegExp(`^\\| ${w} \\|`, "m").test(screens), `${w} CSS px is not in the widths table`);
   }
+});
+
+// ── the counts in SCREENS.md are re-counted, not trusted ─────────────────────────────────────
+
+/**
+ * Every .html the build emitted, so a count is over the artifact and not over the source tree.
+ */
+function emittedDocuments(dir = OUT, acc = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) emittedDocuments(p, acc);
+    else if (entry.name.endsWith(".html")) acc.push(p);
+  }
+  return acc;
+}
+
+/**
+ * How many emitted documents carry at least one element with this CLASS TOKEN.
+ *
+ * By token, and the distinction is the whole point of the function: `pay/` carries
+ * `id="checkout"` and a `.co-card`, and neither is a `.checkout`. A substring search over the HTML
+ * would report 2 for a class that nothing in the product renders, which is exactly the wrong number
+ * that was in SCREENS.md before this test existed.
+ */
+function documentsRendering(cls, docs) {
+  let n = 0;
+  for (const p of docs) {
+    const html = readFileSync(p, "utf8");
+    for (const m of html.matchAll(/class="([^"]*)"/g)) {
+      if (m[1].split(/\s+/).includes(cls)) {
+        n++;
+        break;
+      }
+    }
+  }
+  return n;
+}
+
+/** The `| `.name` | 7 … |` rows of the block table, as [class, count] pairs. */
+function blockCountRows(md) {
+  return [...md.matchAll(/^\| `\.([a-z-]+)` \| \*{0,2}(\d+)\*{0,2}/gm)].map((m) => [m[1], Number(m[2])]);
+}
+
+test("control: the class-token count separates a class from an id and from a longer name", () => {
+  const docs = emittedDocuments();
+  // pay/ has id="checkout" and class="co-card". The contract's .checkout is rendered by nothing.
+  const pay = readFileSync(join(OUT, "pay", "index.html"), "utf8");
+  assert.ok(pay.includes('id="checkout"'), "the fixture for this control is gone: pay/ no longer has that id");
+  assert.ok(pay.includes('class="co-card"'), "the fixture for this control is gone: pay/ no longer has that class");
+  assert.equal(documentsRendering("checkout", docs), 0, "an id was counted as a class");
+  assert.ok(documentsRendering("co-card", docs) > 0, "the class the page really renders was not seen");
+  assert.ok(
+    documentsRendering("card", docs) < documentsRendering("co-card", docs) + documentsRendering("card", docs),
+    "`card` and `co-card` are being conflated",
+  );
+});
+
+test("every count in the SCREENS.md block table is the number the artifact actually shows", () => {
+  const docs = emittedDocuments();
+  const rows = blockCountRows(screens);
+  assert.ok(rows.length >= 10, `the block table in SCREENS.md was not found (${rows.length} rows parsed)`);
+  const wrong = [];
+  for (const [cls, claimed] of rows) {
+    const actual = documentsRendering(cls, docs);
+    if (actual !== claimed) wrong.push(`.${cls}: SCREENS.md says ${claimed}, the artifact shows ${actual}`);
+  }
+  assert.deepEqual(wrong, [], `SCREENS.md has gone stale:\n  ${wrong.join("\n  ")}`);
+  // A stated negative, so an empty result and a broken parser cannot look the same.
+  console.log(`SCREENS.md block table: ${rows.length} rows re-counted against ${docs.length} documents, 0 wrong`);
+});
+
+test("the contract's own names are rendered by nothing, and SCREENS.md says so", () => {
+  const docs = emittedDocuments();
+  for (const cls of ["checkout", "register", "empty"]) {
+    assert.equal(documentsRendering(cls, docs), 0, `.${cls} is on screen now — SCREENS.md's claim that it is not is stale`);
+  }
+  assert.match(screens, /No document\s*\nemits either class\.|No document emits either class\./);
+});
+
+// ── section 7 reaches past the route stylesheet, or it reaches nothing ────────────────────────
+
+test("the 28rem cap is on the card the product actually renders, at a specificity that survives", () => {
+  const rules = [...declarations(fold).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, sel, body]) => /\.co-card/.test(sel) && /max-width:\s*28rem/.test(body));
+  assert.equal(rules.length, 1, "the 28rem cap on .co-card is missing or declared more than once");
+  const [, selector, body] = rules[0];
+  assert.match(body, /margin-inline:\s*auto/, "the card is capped but not centred");
+  // (0,2,0) — the layout class prefix is what beats screens/checkout.css, which is linked later.
+  assert.match(selector, /\.lay-checkout\s+\.co-card/, "the cap is not prefixed, so the route stylesheet wins");
+});
+
+/**
+ * Flatten a stylesheet to [selector, property] facts, including rules nested inside @media, with
+ * the selector's specificity. Only class/id/element counting is needed here: nothing in these files
+ * uses a selector these three numbers cannot rank.
+ */
+/**
+ * The shorthands these four stylesheets actually use, expanded to the longhands they set.
+ *
+ * Not the full CSS shorthand set, and deliberately not: a table copied out of the specification
+ * would be mostly dead weight and would still need checking. It is here because the first version
+ * of this scanner compared property NAMES literally, so `background-color` in fold.css and
+ * `background` in screens/checkout.css looked like two unrelated properties — and a sabotage run
+ * that deleted the prefix from the glass rule went green. A shorthand is a collision.
+ */
+const SHORTHANDS = {
+  background: ["background-color", "background-image"],
+  border: ["border-color", "border-width", "border-style"],
+  "border-radius": [],
+  font: ["font-size", "font-weight", "font-family"],
+  gap: ["row-gap", "column-gap"],
+  padding: ["padding-top", "padding-right", "padding-bottom", "padding-left"],
+  margin: ["margin-top", "margin-right", "margin-bottom", "margin-left"],
+  inset: ["top", "right", "bottom", "left"],
+  "margin-inline": ["margin-left", "margin-right"],
+  transition: ["transition-property", "transition-duration"],
+};
+
+/** A property plus everything it also sets, so shorthand and longhand compare equal. */
+function propertyAndWhatItSets(prop) {
+  return [prop, ...(SHORTHANDS[prop] ?? [])];
+}
+
+function selectorFacts(css) {
+  const out = [];
+  for (const [, rawSelector, body] of declarations(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const props = [...body.matchAll(/(?:^|;)\s*([a-z-]+)\s*:/g)].flatMap((m) => propertyAndWhatItSets(m[1]));
+    if (!props.length) continue;
+    for (const one of rawSelector.split(",").map((x) => x.trim()).filter(Boolean)) {
+      if (one.startsWith("@")) continue;
+      const spec = [
+        (one.match(/#[\w-]+/g) ?? []).length,
+        (one.match(/\.[\w-]+|\[[^\]]+\]|:[a-z-]+\(?/g) ?? []).length,
+        (one.match(/(?:^|[\s>+~])[a-z]+/g) ?? []).length,
+      ];
+      const keyCompound = one.split(/[\s>+~]+/).filter(Boolean).pop() ?? one;
+      out.push({
+        selector: one,
+        props,
+        spec,
+        key: new Set((keyCompound.match(/\.[\w-]+/g) ?? []).map((c) => c.slice(1))),
+      });
+    }
+  }
+  return out;
+}
+
+const rank = (a) => a[0] * 10000 + a[1] * 100 + a[2];
+
+/**
+ * THE INVARIANT, stated as the cascade states it. fold.css is linked in <head>; a route's
+ * assets/screens/*.css is linked inside <main>, so it comes LATER. Later wins at equal specificity.
+ * Therefore any rule in fold.css that sets a property a route stylesheet also sets, on an element
+ * both can match, must be STRICTLY more specific — or it silently does nothing.
+ *
+ * This replaced a first version that sliced the file at section 7's comment heading and asked
+ * whether each selector carried a layout prefix. That version had two faults, and the sabotage run
+ * found the second: it named prose as selectors when the slice cut a comment in half, and when the
+ * prefix was removed from the 28rem cap the slice's own anchor MOVED PAST the sabotaged rule, so
+ * the check went green on exactly the damage it existed to catch. A check whose scope is defined by
+ * the text it is checking can be walked out of. This one has no anchor and no scope: it reads every
+ * rule in the file.
+ */
+function losesToRouteStylesheet(foldCss, routeSheets) {
+  const mine = selectorFacts(foldCss);
+  const theirs = routeSheets.flatMap((sheet) => selectorFacts(sheet));
+  const beaten = [];
+  for (const m of mine) {
+    for (const t of theirs) {
+      // The KEY compound — the rightmost one — is what decides which ELEMENT a rule lands on.
+      // Comparing any shared class instead reported `.lay-app .pos { gap }` as beaten by
+      // `.pos .keypad { gap }`, which is wrong: those style the container and the grid inside it.
+      const shared = [...m.key].filter((c) => t.key.has(c));
+      if (!shared.length) continue;
+      const clash = [...new Set(m.props.filter((prop) => t.props.includes(prop)))];
+      if (!clash.length) continue;
+      if (rank(m.spec) > rank(t.spec)) continue;
+      beaten.push(`${m.selector} { ${clash.join(", ")} } is beaten by ${t.selector} (later in the document)`);
+    }
+  }
+  return [...new Set(beaten)];
+}
+
+/**
+ * The overrides that are MEANT to be beaten, each with the reason. Everything else is a bug.
+ *
+ * This is a list and not a loosened check on purpose: weakening the scanner to make these go quiet
+ * would also silence the next real one. A rule that belongs here is a rule where the later file is
+ * doing the same job, deliberately, and doing it at least as well. The test below it asserts each
+ * excuse is still needed, so the list cannot outlive its reasons — it has already caught one:
+ * `.theme-pick` was excused here until that test pointed out the scanner never flagged it.
+ *
+ * WHERE THIS SCANNER IS BLIND, stated rather than left to be discovered. It compares the classes of
+ * the KEY compound, so a selector whose key compound is a bare element — `.theme-pick > select`,
+ * which theme.css and fold.css both declare at identical specificity — is invisible to it. That
+ * exact pair is the one deliberate order-dependent override in this file, and it has its own named
+ * test above asserting the link order it depends on. Two blind spots remain unguarded and are worth
+ * knowing about: a route stylesheet that arrives later with a NEW element-keyed collision, and any
+ * clash decided by !important, which nothing in these files uses.
+ */
+const INTENDED_OVERRIDES = [
+  // checkout.css sets the same `min-width: 0` on the same element. Identical value, no behaviour to
+  // lose; fold.css keeps it so section 1 is complete on its own.
+  ".co-line-what",
+  // pos.css sizes the till's keypad LARGER than fold.css's floor at every width — 12px gap and 64px
+  // keys against 8px and 60px — so the route stylesheet winning is the better outcome, not a
+  // regression. fold.css's values stay as the floor for the `.keypad` of DESIGN.md, which no
+  // document renders outside the till yet (see the block table in docs/unica-v4/SCREENS.md).
+  ".keypad",
+];
+
+test("no fold.css rule is silently beaten by a route stylesheet loaded after it", () => {
+  const routes = ["checkout.css", "pos.css", "theme.css"].map((f) =>
+    readFileSync(join(OUT, "assets", "screens", f), "utf8"),
+  );
+  const beaten = losesToRouteStylesheet(fold, routes);
+  const unexplained = beaten.filter((b) => !INTENDED_OVERRIDES.some((allowed) => b.startsWith(allowed)));
+  assert.deepEqual(unexplained, [], `these rules do nothing on the page:\n  ${unexplained.join("\n  ")}`);
+  // A stated negative: an empty list and a scanner that found nothing must not look the same.
+  console.log(
+    `cascade: ${selectorFacts(fold).length} fold.css selectors vs 3 route stylesheets — ` +
+      `${beaten.length} beaten, ${INTENDED_OVERRIDES.length} kinds intended, ${unexplained.length} unexplained`,
+  );
+});
+
+test("the intended overrides are real: each one is actually beaten, so the list cannot rot", () => {
+  const routes = ["checkout.css", "pos.css", "theme.css"].map((f) =>
+    readFileSync(join(OUT, "assets", "screens", f), "utf8"),
+  );
+  const beaten = losesToRouteStylesheet(fold, routes);
+  for (const allowed of INTENDED_OVERRIDES) {
+    assert.ok(
+      beaten.some((b) => b.startsWith(allowed)),
+      `${allowed} is excused from the cascade check but is no longer beaten — delete the excuse`,
+    );
+  }
+});
+
+test("the till's keys are at least as big as fold.css asks, whichever file wins", () => {
+  // The reason `.keypad` is on the excuse list, checked rather than asserted in a comment.
+  const pos = readFileSync(join(OUT, "assets", "screens", "pos.css"), "utf8");
+  const posKey = block(pos, ".pos .keypad .key");
+  const mine = block(block(fold, "@media (max-width: 29.999rem)"), ".keypad .key");
+  const px = (css) => Number(css.match(/min-height:\s*calc\(var\(--space\) \* (\d+)\)/)[1]) * 4;
+  assert.ok(px(posKey) >= px(mine), `the till's keys are ${px(posKey)}px, below fold.css's ${px(mine)}px floor`);
+  assert.ok(px(posKey) >= 44, `the till's keys are ${px(posKey)}px, under the 44px target`);
+});
+
+test("control: the cascade check catches a rule that the later stylesheet outranks", () => {
+  // Equal specificity, same property, later file — the exact shape of the bug.
+  assert.deepEqual(
+    losesToRouteStylesheet(".co-card { max-width: 28rem; }", [".co-card { max-width: 34rem; }"]),
+    [".co-card { max-width } is beaten by .co-card (later in the document)"],
+  );
+  // One class more, so it wins — and a property nobody else sets is never at risk.
+  assert.deepEqual(
+    losesToRouteStylesheet(".lay-checkout .co-card { max-width: 28rem; }", [".co-card { max-width: 34rem; }"]),
+    [],
+  );
+  assert.deepEqual(losesToRouteStylesheet(".co-card { rotate: 1deg; }", [".co-card { max-width: 34rem; }"]), []);
+  // A shorthand in the later file collides with a longhand in the earlier one. This is the case the
+  // literal-name version of the scanner missed, proven here rather than assumed.
+  assert.deepEqual(
+    losesToRouteStylesheet(".co-card { background-color: red; }", [".co-card { background: blue; }"]),
+    [".co-card { background-color } is beaten by .co-card (later in the document)"],
+  );
+  // And the key compound, not any shared class, decides which element a rule lands on.
+  assert.deepEqual(losesToRouteStylesheet(".pos { gap: 1px; }", [".pos .keypad { gap: 2px; }"]), []);
+});
+
+test("fold.css is linked before every route stylesheet, which is why the prefixes are needed", () => {
+  const pay = readFileSync(join(OUT, "pay", "index.html"), "utf8");
+  assert.ok(
+    pay.indexOf("assets/fold.css") < pay.indexOf("assets/screens/checkout.css"),
+    "fold.css now loads after screens/checkout.css; section 7's specificity note is wrong",
+  );
 });
 
 /** The text of a rule or at-rule block, matched by brace depth so a nested block is included. */
