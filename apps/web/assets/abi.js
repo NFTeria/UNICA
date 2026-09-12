@@ -59,13 +59,45 @@ export function paddedUtf8Hex(s) {
 
 const isDynamic = (type) => type === "string" || type === "bytes";
 
+const UINT_N = /^uint(\d+)$/;
+const INT_N = /^int(\d+)$/;
+const BYTES_N = /^bytes(\d+)$/;
+
+/** A sized unsigned integer: one word, refused when the value does not fit its declared width. */
+function wordFromSizedUint(value, bits) {
+  const v = BigInt(value);
+  if (v < 0n || v >= 1n << BigInt(bits)) throw new Error(`value does not fit uint${bits}`);
+  return wordFromUint(v);
+}
+
+/** A sized signed integer: two's complement in one word, refused when out of range. */
+function wordFromSizedInt(value, bits) {
+  const v = BigInt(value);
+  const half = 1n << BigInt(bits - 1);
+  if (v < -half || v >= half) throw new Error(`value does not fit int${bits}`);
+  return wordFromUint(v < 0n ? (1n << 256n) + v : v);
+}
+
+/** bytesN: the N bytes left-aligned in the word, the rest zero. */
+function wordFromSizedBytes(value, n) {
+  const hex = String(value ?? "").replace(/^0x/, "").toLowerCase();
+  if (!/^[0-9a-f]*$/.test(hex) || hex.length !== n * 2) throw new Error(`bytes${n} needs exactly ${n} bytes`);
+  return hex.padEnd(64, "0");
+}
+
 function encodeStatic(type, value) {
   switch (type) {
     case "address": return wordFromAddress(value);
     case "uint256": return wordFromUint(value);
     case "bytes32": return wordFromBytes32(value);
     case "bool": return wordFromBool(value);
-    default: throw new Error(`unsupported static type: ${type}`);
+    default: {
+      let m;
+      if ((m = UINT_N.exec(type))) { const bits = Number(m[1]); if (bits % 8 === 0 && bits >= 8 && bits <= 256) return wordFromSizedUint(value, bits); }
+      if ((m = INT_N.exec(type))) { const bits = Number(m[1]); if (bits % 8 === 0 && bits >= 8 && bits <= 256) return wordFromSizedInt(value, bits); }
+      if ((m = BYTES_N.exec(type))) { const n = Number(m[1]); if (n >= 1 && n <= 32) return wordFromSizedBytes(value, n); }
+      throw new Error(`unsupported static type: ${type}`);
+    }
   }
 }
 
