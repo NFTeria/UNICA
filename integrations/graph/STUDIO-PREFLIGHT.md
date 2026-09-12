@@ -1,5 +1,10 @@
 # STUDIO PREFLIGHT — Subgraph Studio deployment, not yet taken
 
+> **STALE.** Every output quoted below is from the V1/V3 manifest this directory carried before it
+> moved to the v5 deployment, and its `V4SettlementHook` data source no longer exists. The deploy
+> commands it records are still the right ones and are restated, checked against this same pinned
+> CLI, in `README.md` — read that for the current manifest and this for the history.
+
 This file records what was checked before any Subgraph Studio deployment, and the
 exact commands the owner runs to take that step. Nothing here performs the deployment:
 `graph auth` and `graph deploy` both need a Studio account and a deploy key, which this
