@@ -12,8 +12,7 @@
 //
 // Offline. No network, no chain, no wallet.
 import assert from "node:assert/strict";
-import {
-  orderCardFromRead, test } from "node:test";
+import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { readFileSync, mkdtempSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -23,6 +22,7 @@ import { dirname, join } from "node:path";
 import {
   ADDRESS,
   businessIdentity,
+  orderCardFromRead,
   displayName,
   explorerTxLink,
   graphPanel,
