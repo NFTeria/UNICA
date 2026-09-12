@@ -214,3 +214,137 @@ test("a record is served only for the chain its manifest names; the practice-cha
   assert.equal(runtimeConfig(robinhood, { order: { id: "no chain id" } }, "/local/rpc").record, null);
   assert.equal(runtimeConfig(robinhood, null, "/local/rpc").record, null);
 });
+
+// ---- GET /local/catalog: the pure half ------------------------------------------------------------
+//
+// Sliced out of the SAME heredoc, between its own two markers, so these rows run the functions the
+// server runs rather than a copy of them.
+//
+// EVERY RETURN VECTOR BELOW WAS PRODUCED BY `cast abi-encode` 1.3.5 from the struct declared in
+// src/unica-v5/IProductCatalog.sol. That matters twice over. It is an INDEPENDENT encoder, so
+// these rows compare this repository's decoder with somebody else's encoder rather than with
+// itself; and it is reproducible, where a transcription of bytes a node once answered is not —
+// the first draft of this file carried a hand-copied capture with one wrong word in it, and the
+// decoder was blamed for the typist. The Haircut vector was then checked byte for byte against
+// what the practice chain's own catalogue actually answered to `products(1)`, so the shape here
+// is the shape the contract really returns.
+
+const catalogBegin = source.indexOf("// @catalog-begin");
+const catalogEnd = source.indexOf("// @catalog-end");
+assert.ok(catalogBegin > 0 && catalogEnd > catalogBegin, "serve.sh carries the @catalog markers");
+const catalog = new Function(
+  `${source.slice(catalogBegin, catalogEnd)}\nreturn { catalogQuery, decodeUintArray, decodeProduct, catalogIsUnknown, catalogProduct };`,
+)();
+
+const SELLER_ADDRESS = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8";
+const PAYOUT_ADDRESS = "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc";
+const PRICED_IN = "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0";
+const NOBODY_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+// products(1) on the practice chain: a one-off called Haircut, 25000000 base units.
+const HAIRCUT_RETURN_VECTOR =
+  "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000009fe46736679d2d9a65f0992f2272de9f3c7fa6e000000000000000000000000000000000000000000000000000000000017d784000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000000074861697263757400000000000000000000000000000000000000000000000000"; // cast abi-encode vector
+// products(2): a recurring one whose name needs two tail words, covering 2592000 seconds.
+const MEMBERSHIP_RETURN_VECTOR =
+  "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000009fe46736679d2d9a65f0992f2272de9f3c7fa6e000000000000000000000000000000000000000000000000000000000002625a000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000278d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000000124d6f6e74686c79206d656d626572736869700000000000000000000000000000"; // cast abi-encode vector
+// productsOf for a seller with nothing listed: an offset word and a length of zero, and no more.
+const EMPTY_LIST_RETURN_VECTOR =
+  "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"; // cast abi-encode vector
+// cast abi-encode "f(uint256[])" "[1,2,7]" — an independent vector for the non-empty case.
+const THREE_IDS_RETURN_VECTOR =
+  "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000007"; // cast abi-encode vector
+
+test("the endpoint answers one seller or one product, and refuses anything else by name", () => {
+  assert.deepEqual(catalog.catalogQuery({ seller: SELLER_ADDRESS }), { kind: "seller", seller: SELLER_ADDRESS });
+  assert.deepEqual(catalog.catalogQuery({ product: "4" }), { kind: "product", productId: "4" });
+  assert.deepEqual(catalog.catalogQuery({ product: "007" }), { kind: "product", productId: "7" });
+  const refused = [{}, { seller: "0x1" }, { seller: "not-an-address" }, { product: "0" }, { product: "-1" }, { product: "1.5" }, { product: "" }, { seller: SELLER_ADDRESS, product: "1" }];
+  for (const asked of refused) {
+    const answer = catalog.catalogQuery(asked);
+    assert.equal(answer.kind, "bad", `${JSON.stringify(asked)} should have been refused`);
+    assert.ok(answer.error.length > 10, "a refusal says what was wrong");
+  }
+  assert.equal(refused.length, 8); // a stated count: eight refusals asserted, none skipped
+});
+
+test("control: the refusal rule is one a real query can pass", () => {
+  assert.equal(catalog.catalogQuery({ seller: SELLER_ADDRESS.toUpperCase().replace("0X", "0x") }).kind, "seller");
+  assert.equal(catalog.catalogQuery({ product: "18446744073709551615" }).kind, "product");
+});
+
+test("a product decodes to exactly what the chain holds, name and all", () => {
+  assert.deepEqual(catalog.decodeProduct(HAIRCUT_RETURN_VECTOR), {
+    seller: SELLER_ADDRESS,
+    payout: PAYOUT_ADDRESS,
+    asset: PRICED_IN,
+    price: "25000000",
+    kind: "one-off",
+    period: 0,
+    onlyBuyer: NOBODY_ADDRESS,
+    active: true,
+    sold: false,
+    name: "Haircut",
+  });
+});
+
+test("a name longer than one word decodes whole, and a period is read as itself", () => {
+  const p = catalog.decodeProduct(MEMBERSHIP_RETURN_VECTOR);
+  assert.equal(p.name, "Monthly membership"); // eighteen bytes: two tail words, not one
+  assert.equal(p.kind, "recurring");
+  assert.equal(p.period, 2592000);
+  assert.equal(p.price, "2500000");
+});
+
+test("control: the decoder does not simply agree with whatever it is given", () => {
+  assert.notEqual(catalog.decodeProduct(HAIRCUT_RETURN_VECTOR).name, catalog.decodeProduct(MEMBERSHIP_RETURN_VECTOR).name);
+  assert.equal(catalog.decodeProduct("0x"), null);
+  assert.equal(catalog.decodeProduct(null), null);
+});
+
+test("a product nobody listed is recognised as unknown, never served as a real one", () => {
+  // cast abi-encode of the same struct with every field at its default: what `products()` answers
+  // for an id nobody has listed, since `_products` is a mapping and reading a gap never refuses.
+  const ZERO_STRUCT_RETURN_VECTOR =
+    "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000000"; // cast abi-encode vector
+  assert.equal(catalog.catalogIsUnknown(catalog.decodeProduct(ZERO_STRUCT_RETURN_VECTOR)), true);
+  assert.equal(catalog.decodeProduct(ZERO_STRUCT_RETURN_VECTOR).name, ""); // a gap has no name, and does not throw
+  assert.equal(catalog.catalogIsUnknown(catalog.decodeProduct(HAIRCUT_RETURN_VECTOR)), false);
+  assert.equal(catalog.catalogIsUnknown(null), true);
+});
+
+test("a seller's list of numbers decodes, empty and not", () => {
+  assert.deepEqual(catalog.decodeUintArray(EMPTY_LIST_RETURN_VECTOR), []);
+  assert.deepEqual(catalog.decodeUintArray(THREE_IDS_RETURN_VECTOR), ["1", "2", "7"]);
+  assert.deepEqual(catalog.decodeUintArray("0x"), []);
+});
+
+test("the served product carries the asset's own label, and never invents one", () => {
+  const decoded = catalog.decodeProduct(HAIRCUT_RETURN_VECTOR);
+  assert.deepEqual(catalog.catalogProduct("1", decoded, { symbol: "uUSD", decimals: 6 }), {
+    id: "1",
+    name: "Haircut",
+    asset: PRICED_IN,
+    symbol: "uUSD",
+    decimals: 6,
+    price: "25000000",
+    kind: "one-off",
+    period: 0,
+    payout: PAYOUT_ADDRESS,
+    onlyBuyer: null,
+    active: true,
+    sold: false,
+    seller: SELLER_ADDRESS,
+  });
+  const unlabelled = catalog.catalogProduct("1", decoded, {});
+  assert.equal(unlabelled.symbol, null);
+  // never a guessed 18, which on a six-decimal asset is wrong by a factor of a million
+  assert.equal(unlabelled.decimals, null);
+});
+
+test("no named buyer is served as null, not as an address of twenty zero bytes", () => {
+  const anyone = catalog.catalogProduct("1", catalog.decodeProduct(HAIRCUT_RETURN_VECTOR), {});
+  assert.equal(anyone.onlyBuyer, null);
+  // control: a real named buyer survives
+  const reserved = catalog.catalogProduct("1", { ...catalog.decodeProduct(HAIRCUT_RETURN_VECTOR), onlyBuyer: PAYOUT_ADDRESS }, {});
+  assert.equal(reserved.onlyBuyer, PAYOUT_ADDRESS);
+});
