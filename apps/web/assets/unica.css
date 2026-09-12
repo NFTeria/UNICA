@@ -407,3 +407,24 @@ select.field { appearance: none; background-image: none; }
    above already answers for every animation in this stylesheet, and a second, weaker copy of a rule
    that already holds is the kind of duplicate that survives the day the original is edited. */
 
+/* ── the hero ─────────────────────────────────────────────────────────────────────────────────
+   The heading is the shell's; everything under it is the home route's. The mark sits beside the
+   lead rather than above the heading, so the first thing read is still a sentence.
+
+   THE THREE QUIET BUTTONS CARRY AN INTEGRATION'S OWN COLOUR AS A 3px RULE, AND NOTHING ELSE.
+   The hexes are Uniswap's, ENS's and The Graph's exactly as assets/brand.js records them, and
+   apps/web/tests/home.test.mjs reads them back out of this file and fails on a digit's drift.
+   A rule is attribution, not an affordance: the button's boundary is its 1px --line border and
+   its label is --ink on --paper, both of which carry their own contrast in both schemes. That
+   matters because ENS blue measures 2.78:1 on the light paper — below the 3:1 floor a control's
+   own boundary must clear, and the reason none of these colours is ever a border, a background
+   or a letterform. */
+.hero-lede { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s3) var(--s5);
+  margin-bottom: var(--s5); }
+.hero-art { flex: 0 0 auto; width: calc(var(--space) * 18); }
+.hero-lede .lead { flex: 1 1 24rem; font-size: 1.2rem; max-width: 60ch; margin: 0; }
+.hero-ctas { align-items: stretch; margin-bottom: var(--s2); }
+.hero-ctas .cta { display: inline-flex; align-items: center; }
+.rule-uniswap { border-bottom: 3px solid #FF007A; }
+.rule-ens { border-bottom: 3px solid #5298FF; }
+.rule-graph { border-bottom: 3px solid #6F4CFF; }
