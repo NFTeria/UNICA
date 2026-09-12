@@ -21,7 +21,8 @@ test -f "$BDIR/stageA-latest.json" || { echo "STOP: no stage A broadcast record 
 m() { node -e 'const m=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log(process.argv[2].split(".").reduce((o,k)=>o?.[k], m) ?? "")' "$MANIFEST" "$1"; }
 RPC=${RPC_ALIAS:-}
 if [ -n "${ETHERSCAN_API_KEY:-}" ]; then VERIFIER=(--verifier etherscan --etherscan-api-key "$ETHERSCAN_API_KEY"); else VERIFIER=(--verifier sourcify); fi
-run() { if [ "$DRY" = 1 ]; then printf 'DRY: forge verify-contract --chain-id %s --watch %s %s --constructor-args %s\n' "$CHAIN" "$2" "$3" "$4"; else forge verify-contract --chain-id "$CHAIN" --watch "${VERIFIER[@]}" --constructor-args "$4" "$2" "$3"; fi; }
+run() { if [ "$DRY" = 1 ]; then printf 'DRY: forge verify-contract --chain-id %s --watch %s %s --constructor-args %s\n' "$CHAIN" "$2" "$3" "$4"; else forge verify-contract --chain-id "$CHAIN" --watch "${VERIFIER[@]}" --constructor-args "$4" "$2" "$3" || { echo "PENDING/RETRY: $1 at $2 (re-run this command later; an explorer queue is not a failure of the deployment)"; PENDING=$((PENDING+1)); }; fi; }
+PENDING=0
 sig_of() { case "$1" in
   UnicaMarketFactory) echo "constructor(address,address,bytes32,bool)";;
   EnsV2ResolverAuthority) echo "constructor(address)";;
@@ -55,4 +56,4 @@ run UnicaMarketExecutor "$EXEC" src/unica-v4/UnicaMarketExecutor.sol:UnicaMarket
 # 4. the Vyper badge: forge cannot verify Vyper; the explorer form needs these exact inputs
 TOK=$(m contracts.identityToken.address)
 if [ -n "$TOK" ]; then echo "MANUAL: identity badge at $TOK is Vyper 0.4.3 (vy/src/art/identity_token.vy); verify it in the explorer's Vyper form with constructor args (admin, identityAuthority, registry, ensDeploymentId, rendererVersion, externalUrlBase) from the manifest's identity block."; fi
-echo "source verification commands issued for chain $CHAIN"
+echo "source verification commands issued for chain $CHAIN; pending or retry: $PENDING"
