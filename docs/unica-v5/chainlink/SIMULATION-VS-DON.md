@@ -23,6 +23,7 @@ list (C1-C12, D1-D7) by reference; only sources specific to this document get a 
 | E7 | `docs.chain.link/cre/concepts/confidential-workflows.md` | Chainlink Labs | OFFICIAL | 2026-09-11 | Cited only to keep this document's simulation-vs-production ladder separate from Confidential Workflows' own, different distinction (enclave attestation vs DON consensus), which `docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md` and `integrations/chainlink-cre-robinhood/README.md` already own; this document does not repeat their claims |
 | E8 | `integrations/chainlink-cre-robinhood/README.md` (this repository, committed) | UNICA / repository | TEAM GUIDANCE | 2026-09-11 | The exact, already-honest starting point §3 below restates: "All three are offline: no CRE CLI, no account, no key, no RPC" |
 | E9 | `docs/unica-v4/evidence/CHAINLINK-AVAILABILITY.md` §4a (this repository, committed) | UNICA / repository | TEAM GUIDANCE | 2026-09-11 | The two forwarder addresses on Robinhood Chain Testnet (46630), and the tension already on record between E4's "local simulation" wording and the Forwarder Directory's "Production Forwarders" listing for the same chain — restated in §6, not re-derived |
+| E10 | `docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md` §2-§3 (this repository, committed) | UNICA / repository | TEAM GUIDANCE | 2026-09-11 | Three recorded `cre workflow simulate` runs, under CRE CLI v1.32.0, against `integrations/chainlink-cre-guardian/`, none with `--broadcast`; run 3 printing "Handler requested TEE Execution" before failing on an unrelated input error — the guardian subject's own Rung 1 evidence, a different subject from the one E8 describes and not covered by E8's own sentence |
 
 Methodology note: E1-E7 were retrieved through an automated fetch-and-summarize pass, the same
 method and the same caveat `REPORT-SCHEMA.md` §1 states — quoted fragments are the pass's own
@@ -103,32 +104,49 @@ checks (`RECEIVER.md` §5-§7). No receiver contract exists anywhere in this rep
 
 ## 3. What this repository has actually done — stated plainly, against all six rungs
 
-**Rung 0, below all six, is where the CRE-facing work in this repository sits today.**
-`integrations/chainlink-cre-robinhood/` — the only CRE-adjacent code in this repository — runs
-hand-written Node.js test scripts (`tests/policy.test.mjs`, `tests/confidentiality.test.mjs`)
-reimplementing its own policy and confidentiality logic, checked against itself, entirely outside
-Chainlink's own tooling. E8 states this precisely, and this document repeats it rather than
-softening it: "All three are offline: no CRE CLI, no account, no key, no RPC." **The CRE CLI's own
-local simulator (Rung 1) has not been run by this repository, on this workflow or any other.** What
-exists is one level further removed than Rung 1: a repository-local reimplementation of the logic a
-workflow would contain, never compiled to WASM, never handed to `cre workflow simulate`, and never
-checked against Chainlink's own execution semantics (single-node consensus-free execution, real
-external calls, E1) at all.
+**Rung 0 is where the Robinhood-subject work in this repository sits today; the guardian subject has
+separately reached Rung 1.** The two subjects are named apart in this section deliberately —
+collapsing them into one repository-wide verdict is exactly the rounding-up this document exists to
+prevent.
+
+`integrations/chainlink-cre-robinhood/` runs hand-written Node.js test scripts
+(`tests/policy.test.mjs`, `tests/confidentiality.test.mjs`) reimplementing its own policy and
+confidentiality logic, checked against itself, entirely outside Chainlink's own tooling. E8 states
+this precisely, for this subject alone: "All three are offline: no CRE CLI, no account, no key, no
+RPC." **The CRE CLI's own local simulator (Rung 1) has not been run by this repository on this
+subject.** What exists for it is one level further removed than Rung 1: a repository-local
+reimplementation of the logic a workflow would contain, never compiled to WASM, never handed to
+`cre workflow simulate`, and never checked against Chainlink's own execution semantics (single-node
+consensus-free execution, real external calls, E1) at all. E8's sentence is about this subject's
+three offline test commands specifically; it says nothing about any other subject in this
+repository, and this document does not generalize it to one.
+
+`integrations/chainlink-cre-guardian/` is a different subject and has reached one rung further:
+three recorded `cre workflow simulate` runs under CRE CLI v1.32.0, none with `--broadcast`, against
+this tree — the second reaching a `wasm trap: unreachable` engine failure traced to an outdated
+`bun` version, the third completing past that failure and printing the simulator's own "Handler
+requested TEE Execution" banner before ending on an unrelated malformed-input error (E10). No
+`--broadcast` flag was passed on any of the three runs, so no forwarder of any kind was called —
+this is Rung 1 exactly, by §2's own definition above: local, single-node, no consensus, no
+broadcast. It is reached for the guardian subject only, not for the Robinhood one, and not any rung
+above 1 for either subject: none of the three runs exercised `--broadcast`, the
+`MockKeystoneForwarder` (D3), or a production forwarder's signature check.
 
 | Rung | Description | Status for this repository |
 |---|---|---|
-| 0 | Hand-written offline Node.js tests of workflow-shaped logic | **Done** — the only rung this repository has reached, in `integrations/chainlink-cre-robinhood/` and its kept sibling tree for a different subject (`integrations/chainlink-cre-guardian/`) |
-| 1 | `cre workflow simulate`, no broadcast | Not done. No CRE CLI session has been run |
-| 2 | `cre workflow simulate --broadcast` | Not done |
+| 0 | Hand-written offline Node.js tests of workflow-shaped logic | **Done for the settlement-quote-policy subject** — `integrations/chainlink-cre-robinhood/` — the only rung that subject has reached |
+| 1 | `cre workflow simulate`, no broadcast | **Done for the guardian subject** (`integrations/chainlink-cre-guardian/`), three runs under CRE CLI v1.32.0, run 3 reaching "Handler requested TEE Execution" (E10) — not done for the Robinhood subject; no CRE CLI session has ever been run against it |
+| 2 | `cre workflow simulate --broadcast` | Not done, either subject |
 | 3 | A receiver tested against `MockKeystoneForwarder` | Not done — no receiver contract exists (`RECEIVER.md` §8) |
 | 4 | A receiver tested against a production `KeystoneForwarder`'s real signature check | Not done |
 | 5 | A workflow deployed to a hosted DON | Not done; deploy approval is not obtained (Q95, `SPEC-ORACLE-AND-CHAINS.md` §1) |
 | 6 | A receiver accepting a DON-delivered report on chain | Not done; not reachable without 4 and 5 |
 
 **No claim in this document, `REPORT-SCHEMA.md`, or `RECEIVER.md` should be read as evidence that
-any rung above 0 has been exercised.** Where those documents describe mechanics of Rungs 1-6, the
-description is drawn from Chainlink's own published source and documentation (C1-C12, D1-D7, E1-E9),
-never from this repository's own execution of them.
+any rung above 0 has been exercised for the Robinhood subject, or above 1 for the guardian subject.**
+Where those documents describe mechanics of Rungs 1-6, the description is drawn from Chainlink's own
+published source and documentation (C1-C12, D1-D7, E1-E10), never from either subject's own
+execution of them beyond what this section states.
 
 ## 4. Pin table — versions, addresses, and what remains unpinned
 
@@ -158,7 +176,7 @@ on-chain read of the address at `0x0b93082D9b3C7C97fAcd250082899BAcf3af3885` on 
 returning `typeAndVersion()` = `"MockKeystoneForwarder 1.0.0"` — no `-dev` suffix. The production
 forwarder's string matches its pinned source exactly (`"KeystoneForwarder 1.0.0"`, both places); only
 the mock's string differs. This means one of: the bytecode actually deployed at that address predates
-or postdates commit `92897847847` and carries a different literal string than that commit's source;
+or postdates commit `92897847daa3ba26ac2796ef284f57e6f3d1ca2a` and carries a different literal string than that commit's source;
 or the live-read value was transcribed without the suffix. Neither this document nor the evidence
 file it draws from re-derived the deployed bytecode's exact source to settle which. **UNKNOWN**,
 flagged rather than resolved, and a concrete instance of §8 item 14 of `CHAINLINK-AVAILABILITY.md`'s
@@ -192,9 +210,11 @@ Production address for any organization remains exactly as unconfirmed as `CHAIN
 - That `cre workflow simulate --broadcast` against a "Simulation Testnet"-classified chain proves
   anything about a production `KeystoneForwarder`'s behavior on the same chain — Rung 2 and Rung 4
   are mechanically different code paths (D1 vs D3), and passing one says nothing about the other.
-- That a workflow's local test suite (Rung 0, what this repository actually has) constitutes running
-  Chainlink's own simulator (Rung 1) — it does not; it is a separate, repository-authored
-  reimplementation, checked only against itself.
+- That the Robinhood subject's local test suite (Rung 0, what that subject actually has) constitutes
+  running Chainlink's own simulator (Rung 1) for that subject — it does not; it is a separate,
+  repository-authored reimplementation, checked only against itself. This is a claim about the
+  Robinhood subject specifically; the guardian subject's own three simulator runs (§3, E10) are not
+  this class of substitution and are not what this bullet forbids.
 - That the `MockKeystoneForwarder`/`KeystoneForwarder` version-string discrepancy (§5) is resolved.
   It is not; it is flagged.
 - That the Forwarder-Directory/release-notes tension for chain 46630 (§6) is resolved beyond the
@@ -231,5 +251,6 @@ Production address for any organization remains exactly as unconfirmed as `CHAIN
 - docs/unica-v4/evidence/CHAINLINK-AVAILABILITY.md (this repository)
 - docs/unica-v4/SPEC-ORACLE-AND-CHAINS.md (this repository)
 - integrations/chainlink-cre-robinhood/README.md (this repository)
+- docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md (this repository)
 - docs/unica-v5/chainlink/REPORT-SCHEMA.md (this stream, companion document)
 - docs/unica-v5/chainlink/RECEIVER.md (this stream, companion document)

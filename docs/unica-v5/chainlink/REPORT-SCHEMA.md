@@ -127,7 +127,7 @@ implementation fills them from real chain state and real workflow input only.
 | 5 | `marketId` | `bytes32` | the market this order would be created against | checked against `registry.getMarket(marketId)` by the receiver (`RECEIVER.md` §5); this document does not recompute `marketId`'s own commitment formula, only consumes the value (`SPEC-ORACLE-AND-CHAINS.md` §4.1, `EVENT-SCHEMA.md` §4.1) |
 | 6 | `marketVersion` | `uint32` | the market's `version` field at report-generation time | a market can be RETIRED and relisted at a new version (`SPEC-ORACLE-AND-CHAINS.md` §3); an admission computed against version 1 must not admit an order against version 2's re-listed market |
 | 7 | `merchant` | `address` | the intended order recipient | the exact field Advisory 001 found **outside** the payer's signed witness (C6) — named recipient substitution is the whole failure mode this document exists to close |
-| 8 | `payer` | `address` | the bound payer, or the zero address if the admission does not bind one | UNICA v4 is payer-bound-only in the general case (`Q111`, `Q128`, cited via `SPEC-ORACLE-AND-CHAINS.md` §16); an admission that names no payer must say so explicitly (zero address), never by omitting the field |
+| 8 | `payer` | `address` | the bound payer, or the zero address if the admission does not bind one | UNICA v4 is payer-bound-only in the general case (`Q111`, `Q128`, cited via `SPEC-ORACLE-AND-CHAINS.md` §16); an admission that names no payer must say so explicitly (zero address), never by omitting the field. `RECEIVER.md` §6 item 3 fixes the consumption rule this structural choice depends on: an order's `boundPayer` is compared against this field by literal equality only, so a zero-address `payer` matches no real v4 order (none is ever zero-bound) and is never read as a wildcard authorizing any caller |
 | 9 | `inputAsset` | `address` | the asset token the order would pull | one of the two currencies Advisory 001 found substitutable via the untouched merchant half of a forged quote |
 | 10 | `outputAsset` | `address` | the payout token the order would deliver | same rationale as #9 |
 | 11 | `exactInput` | `bool` | `true`: `inputAmount` is the exact pull, matching v4's `OrderCreated.amountIn` semantics (`EVENT-SCHEMA.md` §6.1). `false`: `inputAmount` is a payer-authorized ceiling | makes explicit which regime applies; a ceiling-only regime is exactly Advisory 001's `maxIn` shape, safe here only because `merchant` (#7) is bound in the same digest, unlike the advisory's witness |
@@ -243,7 +243,9 @@ before any defect is found rather than after.
 1. **Owner:** whether `payer` (field 8) may ever legitimately be the zero address in production, or
    whether every admitted order must name a specific payer, consistent with `SPEC-ORACLE-AND-CHAINS.md`
    §16's "payer-bound only" note - this document allows the zero-address case structurally but does
-   not decide whether it should ever be used.
+   not decide whether it should ever be used. Independent of that decision, `RECEIVER.md` §6 item 3
+   already fixes the consumption rule so a zero `payer` can never be substituted for a real one: the
+   comparison is always literal, never a match for any caller.
 2. **Owner, with the ENS stream:** the concrete type and derivation of `ensDeploymentId` (§4 row 19).
 3. **Owner:** whether `workflowVersion` reuses Chainlink's own content-addressed hash or a separate
    UNICA counter (§4 row 24, §7).

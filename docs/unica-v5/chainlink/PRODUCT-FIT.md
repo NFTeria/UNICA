@@ -133,9 +133,18 @@ evaluated here has this property.
 `maxDeviationBps`/`maxQuoteAgeSeconds`/floor/venue policy is exactly a "sensitive input... or
 intermediate value" processed "inside the enclave," and the track accepts demonstration "via simulation
 ... or live CRE network deployment." Reaching that bar needs the decision logic that already exists
-wrapped in a real `handlerInTee` entry point and run through the CRE CLI's simulate command — the exact
-toolchain path (bun ≥ 1.2.21, a scoped `tsconfig.json`) is already proven to work for the separate
-liquidation-protection subject (`docs/feedback/chainlink.md`, 2026-09-08 entry) and documented as a
+wrapped in a real `handlerInTee` entry point and run through the CRE CLI's simulate command. VERIFIED:
+the toolchain path actually run and proven for the separate liquidation-protection subject is **bun
+1.4.2** with a scoped `tsconfig.json` — exactly two data points exist, bun 1.2.5 reproduced a `wasm
+trap: unreachable` failure and bun 1.4.2 cleared it, nothing else was ever run
+(`docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md` §2; `docs/feedback/chainlink.md`, 2026-09-08 entry).
+The SDK's own `package.json` separately declares `"engines": { "bun": ">=1.2.21" }`
+(`integrations/chainlink-cre-guardian/workflow/package.json`), but that is the SDK's stated floor, not
+a version the CRE CLI enforces and not a version ever run — 1.2.21 through 1.4.1 is untested, and this
+stream's own recording checklist already flags anything below 1.4.2 as the trap
+(`docs/submission-media/video/timeline.md`: "1.2.5 — TOO OLD. This shot fails."). **Bun 1.4.2 is the
+proven version; bun ≥ 1.2.21 is only the unverified declared floor**, and an implementer stopping at
+1.2.21 would run straight into the failure already on record. This path is also documented as a
 one-command run once an account is logged in (`docs/v2/CRE-CONFIDENTIAL-WORKFLOW.md`). No claim is made
 here that this has been done for the settlement-policy subject; it has not.
 
@@ -476,6 +485,8 @@ Stated honestly; none of these is resolved by anything read for this file.
 | `docs/v2/CRE-CONFIDENTIAL-WORKFLOW.md` (repository) | 2026-09-11 | this repository | TEAM GUIDANCE | guardian-subject TEE run, toolchain fix, enrollment/Deploy-Access distinction |
 | `docs/v2/SECURITY-ADVISORY-001.md` (repository) | 2026-09-11 | this repository | TEAM GUIDANCE | the binding-vs-advisory framing used against every product |
 | `docs/feedback/chainlink.md` (repository) | 2026-09-05, 2026-09-08, 2026-09-11 entries | this repository | TEAM GUIDANCE | prior scoping decision, liquidation-protection challenge findings, bun-version defect |
+| `integrations/chainlink-cre-guardian/workflow/package.json` (repository) | 2026-09-11 | this repository | TEAM GUIDANCE | product A's demo-value paragraph — the SDK's declared, CLI-unenforced `engines.bun >= 1.2.21` floor |
+| `docs/submission-media/video/timeline.md` (repository) | 2026-09-11 | this repository | TEAM GUIDANCE | product A's demo-value paragraph — recording checklist flags bun below 1.4.2 as the trap |
 | `integrations/chainlink-cre-robinhood/README.md`, `policy.mjs`, `schemas/workflow-result.public.json` (repository) | 2026-09-11 | this repository | TEAM GUIDANCE | product A's existing decision logic and design rule |
 | `docs/unica-v5/graph/DEMO-PLAN.md` (repository) | 2026-09-11 | sibling stream, cited not edited | TEAM GUIDANCE | product D's deferred-not-committed cross-chain candidate |
 | `docs/unica-v5/ens/SCALABILITY.md`, `NAMESPACE.md`, `RECEIPT-NAMING.md`, `IDENTITY-NFT.md` (repository) | 2026-09-11 | sibling stream, cited not edited | TEAM GUIDANCE | products D and E's "no committed mechanism found" findings |

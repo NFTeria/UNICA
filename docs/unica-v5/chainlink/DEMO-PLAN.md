@@ -34,7 +34,7 @@ follows from the judgment.
 | A different subject (treasury reserve policy) actually run through the real CRE CLI, with a TEE handler reached and secrets loaded inside it | RUN — simulator only, never a live DON | `integrations/chainlink-cre-guardian/`, SIM §2–§3, `docs/feedback/chainlink.md` |
 | Repository scan refusing seven confidentiality and claim defects, 12 checks including controls | BUILT, passing | `script/check-cre-confidentiality.sh`, SIM §5 |
 | `cre account access` (generic hosted-DON deploy access) submitted, awaiting review | SUBMITTED, not granted | `docs/feedback/chainlink.md` |
-| Confidential Workflows enrollment (a separate, invite-only private-beta form) | NOT SUBMITTED | §4.8, §7 below |
+| Confidential Workflows enrollment (a separate, invite-only private-beta form) | NOT SUBMITTED | `MENTOR-QUESTIONS.md` Q7, §7 below |
 | UNICA v4 registry/factory/hook/executor and its three Chainlink oracle adapters | SPECIFIED, **not built** | `docs/unica-v4/SPEC-CONTRACTS.md`, SO throughout |
 | ChainlinkFeedAdapter demonstrated against real Chainlink contracts | Fork-only (Arbitrum One, OF1–OF8), not deployed | SO §7, §15 |
 | ChainlinkCREAdapter | SPECIFIED, simulation-only, not deployable (CRE hosted writes to any chain UNCONFIRMED; deploy approval not enabled) | SO §9, CA §4 |
@@ -42,12 +42,13 @@ follows from the judgment.
 
 ## 3. Prize tracks, read fresh today
 
-Fetched 2026-09-11 from the general prizes page and the dedicated Chainlink subpage; both are
-quoted, and the one place they disagree is flagged rather than silently resolved.
+Fetched 2026-09-11 from the general prizes page and the dedicated Chainlink subpage, and re-fetched
+a second time the same day to resolve an earlier misreading of this section (below); both pages are
+quoted, and they agree on every figure in the table below — there is no conflict between them.
 
 | Track | Prize (as read) | Pool restriction | Core requirement (quoted) | Demo format (quoted) |
 |---|---|---|---|---|
-| Best Confidential Workflow | **$2,000, up to 2 teams at $1,000 each** (general prizes page) vs. **$3,000, up to 2 teams at $1,000 each** (dedicated Chainlink page) — **CONFLICT, both pages retrieved 2026-09-11**, neither superseded here | **None stated** — no "Continuity Track only" language on either page | "Build a CRE Workflow that uses the Confidential Workflows to execute a meaningful part of the application," must "register and use a confidential TEE handler," must "process at least one sensitive input" | "Demonstrate a successful execution through either: A Confidential Workflow simulation using the CRE CLI or a live deployment on the CRE network" |
+| Best Confidential Workflow | **$2,000 total, up to 2 teams at $1,000 each** — stated identically on the general prizes page and the dedicated Chainlink page. A separate **$3,000** figure also appears on the dedicated page: it is that page's own stated total Chainlink sponsorship across all three tracks ($2,000 + $500 + $500), not a competing amount for this one track. An earlier version of this table read the $3,000 pool total as a second, conflicting figure for this track specifically; `PRIZE-FIT.md` §2 (this stream's companion file, two independent fetches) already carried the corrected reading, and this row now matches it | **None stated** — no "Continuity Track only" language on either page | "Build a CRE Workflow that uses the Confidential Workflows to execute a meaningful part of the application," must "register and use a confidential TEE handler," must "process at least one sensitive input" | "Demonstrate a successful execution through either: A Confidential Workflow simulation using the CRE CLI or a live deployment on the CRE network" |
 | Best Chainlink-Powered Upgrade | $500 | **"This prize is only available to Continuity Track participants"** — closes it to this repository's From Scratch entry | "Integrate at least one Chainlink service directly within smart contract logic or onchain workflows... must contribute to a state change on a blockchain" | not applicable — pool-closed |
 | Automated Liquidation Protection Challenge | $500 | Join via a fixed smart-contract challenge before the submission deadline; **"not constrained to either pool"** | Protect a virtual ETH-collateral/debt position with a Confidential Workflow during simulated market movements | via the challenge's own contract, not this design |
 
@@ -142,31 +143,6 @@ granted — neither is true today (§2). Beat 3 needs no such thing: it runs ent
 CLI's local simulator, which the track's own accepted demo format allows outright (§3). This gap
 between beat 3 and beats 6–7 is the entire honest judgment of §6.
 
-## 5. Adversarial cases
-
-Each row names the layer that actually refuses it, the mechanism, and the exact reason code where
-one is already specified; a case with no existing on-chain mechanism is marked PROPOSED and states
-what would have to be built. "Missing finality" and the receiver-success case are consumer-side
-risks, not contract reverts, and are marked as such rather than forced into the revert shape.
-
-| # | Case | Layer | Mechanism | Exact refusal / reason code | Status |
-|---|---|---|---|---|---|
-| 1 | Wrong payer | UNICA_ONCHAIN | `pay(orderId)` checks `msg.sender == order.payer` | `WrongPayer(id, payer, caller)` | SPECIFIED (SC §9.1, T-SET-2) |
-| 2 | Changed merchant | Admission layer (backend) | Recomputed recipient (fresh ENS read) must match the invoice's public commitment before `createOrder`; after creation, `recipient` is write-once (SC §9.1) and the payer's review screen re-reads it from chain, never from cache (T-SET-5 surface rule) | PROPOSED reason: `InvoiceCommitmentMismatch` (no on-chain mechanism; an admission-layer refusal) | PROPOSED |
-| 3 | Changed amount | Admission layer, then UNICA_ONCHAIN | Same commitment check pre-creation; `amountIn`/`minOut` write-once after (SC §9.1) | `InvoiceCommitmentMismatch` (pre-creation, PROPOSED); `OutputBelowMinimum`/`RecipientShort` if it reaches settlement anyway (SC §9.3, T-SET-6) | PROPOSED + SPECIFIED |
-| 4 | Changed asset | UNICA_ONCHAIN / oracle route | `IUnicaOracleRoute(adapter).feedIdFor` must match `policy.feedId`, checked by STATICCALL before every price read (S8, SO §3) | `OracleFeedMismatch(marketId, expected, actual)` | SPECIFIED (T-OR-3) |
-| 5 | Wrong chain | Receiver contract (CRE adapter) | `onReport` checks the report's own `chainId == block.chainid` | `ReportChainMismatch` | SPECIFIED, simulation-only (SO §9) |
-| 6 | Wrong receiver | Receiver contract | `onReport` checks `receiver == address(this)` | `ReportReceiverMismatch` | SPECIFIED, simulation-only (SO §9) |
-| 7 | Wrong workflow | Receiver contract | Workflow id and owner from the forwarder's metadata checked against pinned immutables | `WorkflowMismatch`, `WorkflowOwnerMismatch` | SPECIFIED, simulation-only (SO §9) |
-| 8 | Replayed report | Receiver contract | Strictly-increasing observation/report timestamp | `ReportNotNewer` | SPECIFIED (SO §8, §9, T-OR-10) |
-| 9 | Expired report | Receiver contract (Streams route) | `expiresAt >= block.timestamp` | `ReportExpired` | SPECIFIED (SO §8, T-OR-10) |
-| 10 | Revoked terminal | ENS (discovery) + BACKEND_POLICY | A revoked `com.unica.terminal-status` record does **not**, by itself, stop order creation — the backend/device role-table disable is what actually does, and a terminal's on-chain order-creator allowlist entry is a second, independent gate | No single reason code — this is a two-layer property, not one revert (`POS-TERMINALS.md` §4.7, §5; `NotOrderCreator` at SC §9.1 if the on-chain allowlist entry was also removed) | SPECIFIED (on-chain half) + DESIGNED (ENS half) |
-| 11 | Stale oracle | UNICA_ONCHAIN | `block.timestamp - t <= policy.maxAge` | `OracleStale(marketId, age, maxAge)` | SPECIFIED (SO §4.1 step 7, T-OR-1) |
-| 12 | Paused market | UNICA_ONCHAIN | `createOrder`/`pay` require ACTIVE | `MarketNotActive` | SPECIFIED (SC §5, T-LC-1) |
-| 13 | Counterfeit receipt | Indexer / any consumer | Emitter authentication: accept `SettlementReceipt` only from `getMarket(id).hook`, `Settled` only from `.executor` | No contract-level error — a consumer-side refusal rule (T-ID-2, SC §3) | SPECIFIED |
-| 14 | Missing finality | Indexer / interface | A receipt or a forwarder's report is not treated as authoritative before the chain's own finality point; an indexer's lag is shown, never hidden | No contract-level error — a consumer-side rule (`docs/unica-v4/EVENT-SCHEMA.md` §2; `docs/unica-v5/graph/SETTLEMENT-SCHEMA.md` §4.0's finality-status convention, sibling stream, cited not edited) | PROPOSED for this design; the convention it reuses is already stated elsewhere |
-| 15 | A write marked successful whose receiver rejected it | Receiver contract / forwarder | §4.7 below | `ReportProcessed(receiver, workflowExecutionId, reportId, success=false)` — a **separate** event field from the forwarder's own transaction status | VERIFIED mechanism (§4.7); no UNICA contract exists yet to exhibit it |
-
 ### 4.4 A note on case 2–4: this design adds no signature, so it adds no Advisory-001 surface
 
 Cases 2 through 4 are closed **before** an order exists (an admission-layer recomputation) or by
@@ -224,6 +200,31 @@ point of delivery — its remaining gap, closed here, is that a **watcher** or *
 the chain from outside must check the per-report success field too, not only "a transaction to the
 forwarder happened."
 
+## 5. Adversarial cases
+
+Each row names the layer that actually refuses it, the mechanism, and the exact reason code where
+one is already specified; a case with no existing on-chain mechanism is marked PROPOSED and states
+what would have to be built. "Missing finality" and the receiver-success case are consumer-side
+risks, not contract reverts, and are marked as such rather than forced into the revert shape.
+
+| # | Case | Layer | Mechanism | Exact refusal / reason code | Status |
+|---|---|---|---|---|---|
+| 1 | Wrong payer | UNICA_ONCHAIN | `pay(orderId)` checks `msg.sender == order.payer` | `WrongPayer(id, payer, caller)` | SPECIFIED (SC §9.1, T-SET-2) |
+| 2 | Changed merchant | Admission layer (backend) | Recomputed recipient (fresh ENS read) must match the invoice's public commitment before `createOrder`; after creation, `recipient` is write-once (SC §9.1) and the payer's review screen re-reads it from chain, never from cache (T-SET-5 surface rule) | PROPOSED reason: `InvoiceCommitmentMismatch` (no on-chain mechanism; an admission-layer refusal) | PROPOSED |
+| 3 | Changed amount | Admission layer, then UNICA_ONCHAIN | Same commitment check pre-creation; `amountIn`/`minOut` write-once after (SC §9.1) | `InvoiceCommitmentMismatch` (pre-creation, PROPOSED); `OutputBelowMinimum`/`RecipientShort` if it reaches settlement anyway (SC §9.3, T-SET-6) | PROPOSED + SPECIFIED |
+| 4 | Changed asset | UNICA_ONCHAIN / oracle route | `IUnicaOracleRoute(adapter).feedIdFor` must match `policy.feedId`, checked by STATICCALL before every price read (S8, SO §3) | `OracleFeedMismatch(marketId, expected, actual)` | SPECIFIED (T-OR-3) |
+| 5 | Wrong chain | Receiver contract (CRE adapter) | `onReport` checks the report's own `chainId == block.chainid` | `ReportChainMismatch` | SPECIFIED, simulation-only (SO §9) |
+| 6 | Wrong receiver | Receiver contract | `onReport` checks `receiver == address(this)` | `ReportReceiverMismatch` | SPECIFIED, simulation-only (SO §9) |
+| 7 | Wrong workflow | Receiver contract | Workflow id and owner from the forwarder's metadata checked against pinned immutables | `WorkflowMismatch`, `WorkflowOwnerMismatch` | SPECIFIED, simulation-only (SO §9) |
+| 8 | Replayed report | Receiver contract | Strictly-increasing observation/report timestamp | `ReportNotNewer` | SPECIFIED (SO §8, §9, T-OR-10) |
+| 9 | Expired report | Receiver contract (Streams route) | `expiresAt >= block.timestamp` | `ReportExpired` | SPECIFIED (SO §8, T-OR-10) |
+| 10 | Revoked terminal | ENS (discovery) + BACKEND_POLICY | A revoked `com.unica.terminal-status` record does **not**, by itself, stop order creation — the backend/device role-table disable is what actually does, and a terminal's on-chain order-creator allowlist entry is a second, independent gate | No single reason code — this is a two-layer property, not one revert (`POS-TERMINALS.md` §4.7, §5; `NotOrderCreator` at SC §9.1 if the on-chain allowlist entry was also removed) | SPECIFIED (on-chain half) + DESIGNED (ENS half) |
+| 11 | Stale oracle | UNICA_ONCHAIN | `block.timestamp - t <= policy.maxAge` | `OracleStale(marketId, age, maxAge)` | SPECIFIED (SO §4.1 step 7, T-OR-1) |
+| 12 | Paused market | UNICA_ONCHAIN | `createOrder`/`pay` require ACTIVE | `MarketNotActive` | SPECIFIED (SC §5, T-LC-1) |
+| 13 | Counterfeit receipt | Indexer / any consumer | Emitter authentication: accept `SettlementReceipt` only from `getMarket(id).hook`, `Settled` only from `.executor` | No contract-level error — a consumer-side refusal rule (T-ID-2, SC §3) | SPECIFIED |
+| 14 | Missing finality | Indexer / interface | A receipt or a forwarder's report is not treated as authoritative before the chain's own finality point; an indexer's lag is shown, never hidden | No contract-level error — a consumer-side rule (`docs/unica-v4/EVENT-SCHEMA.md` §2; `docs/unica-v5/graph/SETTLEMENT-SCHEMA.md` §4.0's finality-status convention, sibling stream, cited not edited) | PROPOSED for this design; the convention it reuses is already stated elsewhere |
+| 15 | A write marked successful whose receiver rejected it | Receiver contract / forwarder | §4.7 above | `ReportProcessed(receiver, workflowExecutionId, reportId, success=false)` — a **separate** event field from the forwarder's own transaction status | VERIFIED mechanism (§4.7); no UNICA contract exists yet to exhibit it |
+
 ## 6. Honest judgment: the full design versus a smaller alternative
 
 **The full design above cannot be built this event.** Beats 6 and 7 need UNICA v4 contracts that
@@ -240,7 +241,7 @@ proved runs (`handlerInTee`, the `secret-names.yaml` mapping already written, `b
 §2) — and run it through `cre workflow simulate`. That satisfies every line of Track 1's own
 accepted demo format (§3, column 5: "a Confidential Workflow simulation using the CRE CLI") without
 touching a single v4 contract, without CRE deploy access of any kind (confirmed not required for
-local simulation, MENTOR-QUESTIONS.md §4.8/Q7), and without any ENS or Uniswap dependency at all.
+local simulation, `MENTOR-QUESTIONS.md` Q7), and without any ENS or Uniswap dependency at all.
 
 **Recommendation: ship the smaller alternative.** Beats 1–5 of the full design (ENS discovery,
 the confidential invoice request, the policy computation, the admission-layer commitment check,
@@ -274,7 +275,7 @@ does not.
 | Source | URL | Retrieved | Author/org | Kind | Used for |
 |---|---|---|---|---|---|
 | ETHOnline 2026 prizes page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 | ETHGlobal | OFFICIAL | §3 — pool definitions, general prize amount |
-| ETHOnline 2026 Chainlink prize subpage | https://ethglobal.com/events/ethonline2026/prizes/chainlink | 2026-09-11 | ETHGlobal | OFFICIAL | §3 — per-track requirement text, the prize-amount conflict |
+| ETHOnline 2026 Chainlink prize subpage | https://ethglobal.com/events/ethonline2026/prizes/chainlink | 2026-09-11, re-fetched same day | ETHGlobal | OFFICIAL | §3 — per-track requirement text, and the page's own total-pool figure that an earlier reading of this section had misattributed to Track A alone |
 | CRE — Confidential Workflows concepts | https://docs.chain.link/cre/concepts/confidential-workflows | 2026-09-11 | Chainlink | OFFICIAL | §4.2, §4.6 — enclave boundary, what leaves it |
 | CRE — deploying workflows | https://docs.chain.link/cre/guides/operations/deploying-workflows | 2026-09-11 | Chainlink | OFFICIAL | §2, §6 — deploy-access approval mechanics |
 | CRE — requesting Confidential Workflows access | https://docs.chain.link/cre/account/confidential-workflows-access | 2026-09-11 | Chainlink | OFFICIAL | §2, §6 — the separate private-beta form; local simulation needs no approval |
@@ -291,8 +292,14 @@ does not.
 
 ## 9. Unknowns
 
-1. Whether "Best Confidential Workflow" is $2,000 or $3,000 in total — the general prizes page and
-   the dedicated Chainlink subpage disagree, both retrieved 2026-09-11 (§3). Not resolved here.
+1. **RESOLVED, not an open unknown — kept at this position rather than deleted.** An earlier version
+   of this item asked whether "Best Confidential Workflow" is $2,000 or $3,000 in total, describing
+   the general prizes page and the dedicated Chainlink subpage as disagreeing. They do not: both
+   state $2,000 total for this track, and $3,000 is the dedicated page's own stated total Chainlink
+   pool across all three tracks (§3, corrected). This item is corrected in place, not removed and
+   renumbered, because `docs/unica-v5/ens/OPEN-QUESTIONS.md` and `docs/unica-v5/graph/OPEN-QUESTIONS.md`
+   each cite one of this list's later items by number (item 2 and item 6 respectively) and this
+   document does not shift a sibling stream's citation out from under it.
 2. Whether the absence of a stated pool restriction on that track means it is open to this
    repository's From Scratch entry, as a matter of ETHGlobal's own judging practice rather than of
    page text alone — MENTOR-QUESTIONS.md Q1. Needs written confirmation.

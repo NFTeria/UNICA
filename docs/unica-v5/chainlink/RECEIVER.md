@@ -13,7 +13,7 @@ sources specific to this document get a new letter below.
 
 | # | Source | Author/org | Kind | Retrieved | Used for |
 |---|---|---|---|---|---|
-| D1 | `github.com/smartcontractkit/chainlink-evm` `contracts/cre/src/v1/KeystoneForwarder.sol`, commit `92897847847` — `route()`, lines 129-167 of the fetched file, read verbatim | Chainlink Labs / smartcontractkit | OFFICIAL | 2026-09-11 | The exact mechanics of the claim this document verifies: `report()` never reverts on a receiver failure; the low-level `call()`'s boolean result is stored as `Transmission.success` and echoed in `ReportProcessed`, and that boolean means only "the call did not revert," nothing about what the receiver did internally |
+| D1 | `github.com/smartcontractkit/chainlink-evm` `contracts/cre/src/v1/KeystoneForwarder.sol`, commit `92897847daa3ba26ac2796ef284f57e6f3d1ca2a` — `route()`, lines 129-167 of the fetched file, read verbatim | Chainlink Labs / smartcontractkit | OFFICIAL | 2026-09-11 | The exact mechanics of the claim this document verifies: `report()` never reverts on a receiver failure; the low-level `call()`'s boolean result is stored as `Transmission.success` and echoed in `ReportProcessed`, and that boolean means only "the call did not revert," nothing about what the receiver did internally |
 | D2 | same repo, `contracts/cre/src/v1/interfaces/IRouter.sol`, same commit, read verbatim | Chainlink Labs / smartcontractkit | OFFICIAL | 2026-09-11 | `TransmissionState` enum (`NOT_ATTEMPTED, SUCCEEDED, INVALID_RECEIVER, FAILED`), the `AlreadyAttempted` and `UnauthorizedForwarder` errors, `getTransmissionInfo` |
 | D3 | same repo, `contracts/cre/src/dev/MockKeystoneForwarder.sol`, same commit, read verbatim | Chainlink Labs / smartcontractkit | OFFICIAL | 2026-09-11 | Confirms the mock reproduces the identical `route()`/`ReportProcessed` isolation semantics as production, differing only in skipping the signature and config checks entirely — so this document's receiver-side design rules apply unchanged whether the counterparty is real or mocked |
 | D4 | `cast sig "onReport(bytes,bytes)"` (Foundry, local) and an independent `keccak256` computation over the same string (Python, local), both run in this session | this document (derivation) / Foundry, PaulRBerg et al. | COMMUNITY (tool), applied to an OFFICIAL signature (C2) | 2026-09-11 | `0x805f2132`, agreeing by two independent methods; per Solidity's own interface-id rule (XOR of selectors declared directly in the interface, none inherited), and `IReceiver` (C2) declares exactly one function, this is `type(IReceiver).interfaceId` |
@@ -30,10 +30,10 @@ it becomes a constraint on what this contract is allowed to contain:
 - **No token transfer.** This contract holds no `transferFrom`, no `approve`, no `call` to any
   token or the executor that moves value. Its only effect is writing an admission record this
   document defines in §6.
-- **No override of any hook or executor check.** `createOrder` (or a wrapper around it, §6) reads
-  this contract's admission record as one *additional* precondition; every existing check in
-  `SPEC-CONTRACTS.md` (D6) still runs, unchanged, on every call, whether or not admission is
-  configured for a market.
+- **No override of any hook or executor check.** A wrapper around `createOrder` — never
+  `createOrder` itself (§6) — reads this contract's admission record as one *additional*
+  precondition; every existing check in `SPEC-CONTRACTS.md` (D6) still runs, unchanged, on every
+  call, whether or not admission is configured for a market.
 - **Optional per market.** A market that never calls into this contract behaves exactly as
   `SPEC-CONTRACTS.md` already specifies; this contract's admission record is consulted only by a
   market that has opted in, never globally.
@@ -155,29 +155,56 @@ early `return` anywhere in this list — every rejection is a revert.
     `REPORT-SCHEMA.md` §5 defines (never trust a supplied digest, since none is supplied — field 26
     is derived, not decoded, per that document's §4 note). Write an admission record keyed by
     `AdmissionReport.orderNonce`: `{merchant, payer, inputAsset, outputAsset, exactInput,
-    inputAmount, minOutput, marketId, admissionDigest, grantedAt: block.timestamp}`. Emit an event
-    carrying the same fields and `admissionDigest`. This is the only state change `onReport` makes;
-    no further step exists after it.
+    inputAmount, minOutput, marketId, quoteExpiry, policyExpiry, admissionDigest, grantedAt:
+    block.timestamp}`. `quoteExpiry` and `policyExpiry` are carried into the stored record, not
+    discarded once step 12's check has run: §6 re-checks both again at the moment an order is
+    actually created, which is a later and separate moment from report delivery, and the record has
+    to hold the bound for that second check to read. Emit an event carrying the same fields and
+    `admissionDigest`. This is the only state change `onReport` makes; no further step exists after
+    it.
 
 **No step above is a `return`.** Every numbered failure is a `revert`. §7 explains why.
 
 ## 6. How order creation consumes an admission record
 
-Not this contract's own function, but the contract this document's admission record exists to gate.
-A market that opts into admission wires its `createOrder` path (or a wrapper the factory deploys
-alongside it) to require, before calling the existing `createOrder`:
+Not this contract's own function, and never a modification of `createOrder` itself. This section
+specifies an external wrapper contract that a market's factory deploys alongside a market opting
+into admission — no change to `UnicaMarketHook`, `UnicaMarketExecutor`, `UnicaMarketFactory`, or any
+other v4 contract's own source, ever. This is the same boundary `CONFIDENTIAL-COMMERCE.md` §3 states
+for the design this receiver serves: "an on-chain gate that makes `createOrder` itself check a CRE
+report... is a distinct, larger design this document does not attempt." A market that opts into
+admission directs callers to this wrapper instead of calling `createOrder` directly; the wrapper
+requires, before forwarding the call to the existing, unmodified `createOrder`:
 
 1. An admission record exists for the caller-supplied `orderNonce` (else refuse — the order is
    simply never created, no different in kind from any other precondition `SPEC-CONTRACTS.md`
    already imposes on `createOrder`).
-2. The order's own `recipient`, `boundPayer`, `amountIn`/`minOut` match the admission record's
-   `merchant`, `payer`, `inputAmount`/`minOutput` **exactly** (or, for `exactInput == false`, the
-   order's `amountIn` is at most the admission's `inputAmount` ceiling) — else refuse. This is where
-   "exact order binding" in the brief is actually enforced: the admission record cannot bind an
-   order that does not yet exist at `onReport` time (§2's "no override" rule means `onReport` never
-   creates an order itself), so the binding is a **cross-check at order-creation time** against the
-   record `onReport` already wrote, not a check inside `onReport`.
-3. Every existing `SPEC-CONTRACTS.md` check on `createOrder` still runs, unchanged.
+2. **Freshness at the moment of creation, re-checked, not assumed from delivery time.**
+   `block.timestamp <= record.quoteExpiry` and `block.timestamp <= record.policyExpiry` (else
+   refuse, `AdmissionExpired`) — read from the two fields §5 step 15 now carries into the stored
+   record. `onReport` step 12 already checked both once, against the timestamp the report was
+   *delivered*; `createOrder` can be called at any later time the market's own allowlist and
+   lifecycle otherwise permit, so an admission computed against a short-lived quote would stay
+   consumable indefinitely once merely delivered unless this second, independent check re-applies
+   both bounds at the moment that actually matters — order creation, not report delivery
+   (`REPORT-SCHEMA.md` §4 rows 15-16).
+3. The order's own `recipient`, `boundPayer`, `amountIn`/`minOut` match the admission record's
+   `merchant`, `payer`, `inputAmount`/`minOutput` **exactly**, by literal equality — never a wildcard
+   — (or, for `exactInput == false`, the order's `amountIn` is at most the admission's `inputAmount`
+   ceiling) — else refuse. This is where "exact order binding" in the brief is actually enforced: the
+   admission record cannot bind an order that does not yet exist at `onReport` time (§2's "no
+   override" rule means `onReport` never creates an order itself), so the binding is a **cross-check
+   at order-creation time** against the record `onReport` already wrote, not a check inside
+   `onReport`. **The zero address is never read as "any payer."** UNICA v4 is payer-bound only, so no
+   order this wrapper is ever asked to forward has a zero `boundPayer` (`Q111`, `Q128`, cited via
+   `SPEC-ORACLE-AND-CHAINS.md` §16); consequently an admission record whose `payer` field
+   (`REPORT-SCHEMA.md` §4 row 8) is the zero address matches no real order under this literal
+   comparison — it is consumption-dead, never a substitutable stand-in for an unbound payer. This
+   wrapper must never implement a special case that reads a zero `payer` as "match any caller": that
+   is exactly the shape `SECURITY-ADVISORY-001.md` found — an authorization that leaves one party's
+   half of the deal free for whoever submits it.
+4. Every existing `SPEC-CONTRACTS.md` check on `createOrder` still runs, unchanged, inside the
+   `createOrder` call the wrapper forwards to.
 
 This two-step shape (an admission record now, a matching order later) is why `orderNonce` (a
 workflow-chosen value, `REPORT-SCHEMA.md` §4 row 14) and `orderId` (a hash `SPEC-CONTRACTS.md`/

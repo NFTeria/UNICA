@@ -111,17 +111,23 @@ No change is found between the two readings six days apart. This closes the trac
 repository's From Scratch entry (`docs/PROVENANCE-LEDGER.md`; the owner's 2026-09-11 confirmation
 that this is the From Scratch track) regardless of anything else in this document.
 
-## Q6. Is there any published amount for "Best Confidential Workflow" that both pages agree on?
+## Q6. Is there a published amount for "Best Confidential Workflow" that both pages agree on?
 
-**Not settled — a genuine conflict between two official pages, both retrieved the same day.**
+**Yes. Both pages state $2,000 total, up to 2 teams at $1,000 each — no conflict. An earlier
+reading of this question mistook the dedicated page's own three-track pool total for a second,
+competing figure specific to this track; that reading is withdrawn here.**
 
 VERIFIED, general ETHOnline 2026 prizes page (<https://ethglobal.com/events/ethonline2026/prizes>,
 retrieved 2026-09-11): "$2,000 (up to 2 teams receive $1,000 each)." VERIFIED, the dedicated
-Chainlink subpage (same retrieval date): "$3,000... Up to 2 teams will receive $1,000." Both pages
-agree that at most two teams split the prize at $1,000 each; they disagree on the stated total
-($2,000 vs. $3,000), which is either a rounding/labeling inconsistency between the two pages or a
-stale figure on one of them. This document does not guess which is correct. **Needs written
-confirmation**, and until then neither figure is repeated elsewhere in this stream as settled.
+Chainlink subpage (<https://ethglobal.com/events/ethonline2026/prizes/chainlink>, re-fetched
+2026-09-11 to resolve this question): the Best Confidential Workflow section itself states "$2,000"
+with "Up to 2 teams will receive $1,000" — identical to the general page. A separate "$3,000" figure
+does appear on the dedicated page, but as that page's own stated total Chainlink sponsorship summed
+across all three tracks ($2,000 + $500 + $500), not inside the Best Confidential Workflow section
+and not a competing amount for it. `PRIZE-FIT.md` §2 (this stream's companion file, two independent
+fetches, agreeing) already carried this same reading. **No written confirmation is needed for the
+amount itself**; both pages already agree, and this figure is safe to repeat elsewhere in this
+stream as settled.
 
 ## Q7. Does deploying UNICA's own receiver contract or running a workflow's confidential portion require the separate Confidential Workflows private-beta enrollment, beyond the generic `cre account access` this repository has already submitted?
 
@@ -180,8 +186,8 @@ resolves it differently. **Needs written confirmation.**
 
 | Source | URL | Retrieved | Author/org | Kind | Used for |
 |---|---|---|---|---|---|
-| ETHOnline 2026 prizes page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 | ETHGlobal | OFFICIAL | Q6 — general prize-page amount |
-| ETHOnline 2026 Chainlink prize subpage | https://ethglobal.com/events/ethonline2026/prizes/chainlink | 2026-09-11 | ETHGlobal | OFFICIAL | Q1, Q2, Q3, Q5, Q6, Q9 — per-track requirement and restriction text |
+| ETHOnline 2026 prizes page | https://ethglobal.com/events/ethonline2026/prizes | 2026-09-11 | ETHGlobal | OFFICIAL | Q6 — general prize-page amount, agreeing with the dedicated subpage |
+| ETHOnline 2026 Chainlink prize subpage | https://ethglobal.com/events/ethonline2026/prizes/chainlink | 2026-09-11, re-fetched same day for Q6 | ETHGlobal | OFFICIAL | Q1, Q2, Q3, Q5, Q6, Q9 — per-track requirement and restriction text; Q6 — the page's own total-pool figure, distinct from the per-track amount |
 | CRE — Confidential Workflows concepts | https://docs.chain.link/cre/concepts/confidential-workflows | 2026-09-11 | Chainlink | OFFICIAL | Q2, Q8 — what is protected, the boundary-crossing rule |
 | CRE — deploying workflows | https://docs.chain.link/cre/guides/operations/deploying-workflows | 2026-09-11 | Chainlink | OFFICIAL | Q7 — generic deploy-access approval mechanics |
 | CRE — requesting Confidential Workflows access | https://docs.chain.link/cre/account/confidential-workflows-access | 2026-09-11 | Chainlink | OFFICIAL | Q7 — the separate private-beta form; local simulation needs no approval |
@@ -203,15 +209,20 @@ resolves it differently. **Needs written confirmation.**
    distinguish them, but no confirmation was found either.
 3. Whether the workflow's role in the *application* (as opposed to the demo *format*) is expected
    to include an on-chain write for this track (Q3) — genuinely open on the page's own text.
-4. The correct total prize amount for Best Confidential Workflow — $2,000 or $3,000, both stated on
-   different official pages retrieved the same day (Q6).
-5. What Chainlink's documentation says, if anything published elsewhere, about failure or
+4. What Chainlink's documentation says, if anything published elsewhere, about failure or
    unavailability behavior of the Confidential Workflows infrastructure itself, as distinct from an
    ordinary handler-level revert (Q8) — not found on the one page most directly on point.
-6. Whether joining the Automated Liquidation Protection Challenge and separately submitting a
+5. Whether joining the Automated Liquidation Protection Challenge and separately submitting a
    different Confidential Workflow build from the same repository would be read as one project or
    two competing ones (Q9) — the same class of question already open for a different track pair in
    `docs/unica-v5/graph/MENTOR-QUESTIONS.md`.
-7. Whether `docs/SPONSOR-ELIGIBILITY.md`'s 2026-09-09 decision not to select Chainlink should be
+6. Whether `docs/SPONSOR-ELIGIBILITY.md`'s 2026-09-09 decision not to select Chainlink should be
    revisited given Q1's finding about the track's own accepted demo format — an owner decision;
    this document surfaces the tension and does not resolve it.
+
+(The total prize amount for Best Confidential Workflow, previously listed here as an unresolved
+conflict between $2,000 and $3,000, is removed from this list: Q6 above now shows both pages agree
+on $2,000, with $3,000 a page-total figure across all three tracks, not a competing per-track
+amount. No external file cites this list's items by number across the removal point, so the
+remaining items are renumbered rather than corrected in place — unlike `DEMO-PLAN.md` §9, whose
+item 1 two sibling-stream files cite by number and which is therefore corrected in place instead.)
