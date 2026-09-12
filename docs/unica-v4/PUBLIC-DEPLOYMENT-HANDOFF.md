@@ -101,6 +101,14 @@ Compare the readback with the table (status 3, `slot0Tick == initTick`, the thre
 LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet activate
 bash script/unica-v4/deploy-public.sh sepolia_testnet readback
 ```
+Then write the manifest from the chain and commit it as evidence:
+```sh
+bash script/unica-v4/manifest.sh sepolia_testnet config/unica-v4/11155111.env
+```
+It reads every code hash, the pool key, the market record and the three reverse lookups live, refuses a
+disagreement, and writes `deployments/unica-v4/11155111.json` in the shape `tools/unica-evidence` reads, so
+the first Sepolia settlement is authenticated exactly as the local ones were.
+
 Safety: every LIVE command is refused if the alias answers another chain id, and each stage re-reads the
 registry's status, so a re-run after success is refused rather than repeated. A front-run cannot occupy a
 CREATE2 hook address without the factory's own code; the factory and registry addresses depend only on the

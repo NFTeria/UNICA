@@ -59,5 +59,10 @@ echo "== readback"
 FOUNDRY_BROADCAST="$OUT/broadcast" forge script script/unica-v4/DeployPublic.s.sol:DeployPublic --sig "readback()" \
   --rpc-url "$LOCAL" --sender "$DEPLOYER" -vv 2>&1 | grep -o 'READBACK:.*' | sed 's/^READBACK://' | sed 's/,$//' | sed 's/^/  /'
 
+echo "== manifest, written from the fork's state the way it will be from Sepolia's"
+{ cat "$CONFIG"; echo "UNICA_FACTORY=$UNICA_FACTORY"; echo "UNICA_REGISTRY=$UNICA_REGISTRY"; echo "UNICA_MARKET_ID=$UNICA_MARKET_ID"; } >"$OUT/config-after-stages.env"
+bash script/unica-v4/manifest.sh "$LOCAL" "$OUT/config-after-stages.env" "$OUT/11155111.rehearsal.json"
+node -e 'const m=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log("  contracts:", Object.keys(m.contracts).join(", ")); console.log("  market:", m.market.marketId, "status", m.market.status, "demonstrationOnly", m.market.demonstrationOnly)' "$OUT/11155111.rehearsal.json"
+
 echo "== nonce delta on the fork: $(( $(cast nonce "$DEPLOYER" --rpc-url "$LOCAL") - $(cast nonce "$DEPLOYER" --rpc-url "$LOCAL" --block "$BLOCK") )) transactions from the deployer"
 echo "rehearsal complete; the fork is discarded. Nothing reached Sepolia."
