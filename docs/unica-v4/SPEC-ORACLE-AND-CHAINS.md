@@ -78,8 +78,18 @@ interface IUnicaOracleRoute {
 - **`view` is load-bearing.** The hook calls the adapter inside `afterSwap` by STATICCALL, so
   nothing between the pool's `slot0` read and the hook's can change a fee (DR Lens A #14). A
   state-changing step (Streams `verify`) happens in a separate call before settlement (§8).
-- **One instance per route, no admin.** Constructor immutables only: no owner, setter, pause or
-  upgrade. A new route is a new adapter; on a live market that means RETIRE and a new version (§3).
+- **One instance per route, and no admin unless the deployment names a quote-freshness
+  operator.** Constructor immutables only: no owner, pause or upgrade, and exactly one setter,
+  added by the per-leg freshness ruling of 2026-09-12
+  (`docs/unica-v4/ORACLE-FRESHNESS-O2.md`). That setter, `tightenQuoteMaxAge`, belongs to the
+  account named as `quoteFreshnessOperator` at construction, moves the QUOTE leg's staleness bound
+  DOWNWARD only, and can never make a reading pass that the immutable `QUOTE_MAX_AGE` did not
+  already allow. The operator is folded into `feedIdFor`, so an adapter with one is a different
+  route from an otherwise identical adapter without one. Naming ZERO — the default in
+  `script/unica-v4/DeployPublic.s.sol` — leaves the instance with no admin at all. It exists
+  because the market's `policy.maxAge` reaches only the ASSET leg, so without it the quote leg has
+  no on-chain response to a stablecoin incident. A new route is a new adapter; on a live market
+  that means RETIRE and a new version (§3).
   This release ships single-route adapters only: a multi-route adapter would need the market's
   `feedId` passed into every `latestPrice` call, and the ledger-fixed interface above has no such
   parameter (ledger S8).
@@ -393,7 +403,7 @@ Chainlink's own Data Streams feed identifier, distinct from the registry's `poli
    (`ReportExpired`), since no Verifier enforces expiry (CA §3d).
 5. `observationsTimestamp <= block.timestamp` (`ReportFromFuture(t, now)`), so one future-dated
    report (a source or clock fault) cannot make every later report "not newer" and hold the market
-   at STALE_ORACLE until RETIRE, since the adapter has no admin; then strictly greater than the
+   at STALE_ORACLE until RETIRE, since the Streams adapter has no admin at all; then strictly greater than the
    stored one (`ReportNotNewer`), which blocks replay and out-of-order delivery. A positive price,
    the timestamps, expiry and status are stored.
 

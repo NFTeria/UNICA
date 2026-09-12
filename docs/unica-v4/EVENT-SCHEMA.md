@@ -301,7 +301,8 @@ enforced on-chain by `pay` and asserted again by the readback.
 Neither interface document specifies an adapter event. Every adapter implements
 `IUnicaPriceOracle.latestPrice(asset, quote)` and the adapter-level `IUnicaOracleRoute`
 (`feedIdFor(asset, quote)`, `adapterKind()`); this release ships single-route adapters only, one
-instance per route, constructor immutables, no admin (S8).
+instance per route, constructor immutables, no admin beyond the optional downward-only
+quote-freshness operator the O2 ruling added (S8; `docs/unica-v4/ORACLE-FRESHNESS-O2.md`).
 
 | Adapter | Emits | Why |
 | --- | --- | --- |

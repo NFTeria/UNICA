@@ -96,7 +96,7 @@ source prefixes), 16 (receipt documentation home) and 17 (determinism pin).
 | Value exactly on the band | accepted: `minAllowed ≤ o ≤ maxAllowed` |
 | Condition view | `oracleCondition() returns (OracleCondition, bytes4 reason, uint256, uint8, uint256)` |
 | Feed adapter errors | `SequencerStatusUnknown`, `PairNotSupported`, the `Feed*` set, `VerifierFeeManagerSet`, `NoVerifiedReport`, `ReportNotYetValid` |
-| Feed adapter shape | one instance per route, constructor immutables, no admin |
+| Feed adapter shape | one instance per route, constructor immutables, no admin beyond the optional downward-only quote-freshness operator (O2) |
 | Receipt oracle fields | `referencePrice`, `referenceDecimals`, `referenceUpdatedAt` (`uint64`), `demonstrationOnly`; no feed-id field |
 
 Both agree on everything the fixed interface decisions state: `latestPrice(asset, quote)` returning `(price,

@@ -107,7 +107,7 @@ and is wrapped by the PoolManager as `WrappedError`, never caught as `OracleUnav
 `refOutFloor`/`refOutCeil` formula with inclusive bounds, `ExecutionBelowOracleBand`/`ExecutionAboveOracleBand`,
 a value exactly on either bound passing (row 9); `oracleCondition()` on the hook, `condition()` dropped (row 10);
 `referencePrice`, `referenceDecimals`, `referenceUpdatedAt` (`uint64`), `demonstrationOnly`, no `oracleFeedId`
-field (row 11); single-route adapters only — one instance per route, constructor immutables, no admin, a
+field (row 11); single-route adapters only — one instance per route, constructor immutables, no admin beyond the optional downward-only quote-freshness operator (O2), a
 `"CHAINLINK_FEED"`-tagged route id (row 12, S8); the Streams/CRE error names `VerifierFeeManagerSet`,
 `NoVerifiedReport`, `ReportNotYetValid` (row 13); `ARBITRUM_MAINNET_RPC_URL` everywhere, matching `foundry.toml`,
 `ARBITRUM_ONE_RPC_URL` dropped (row 14); and TEST-MATRIX's own row-id scheme kept as the only one — oracle fork
@@ -177,7 +177,7 @@ SC §12's estimates. The size gate (TS5b) lands with CT2, so every later commit 
 | ID | Task | Needs | Inputs → outputs | Acceptance test | STOP |
 |---|---|---|---|---|---|
 | OA1 | `MockOracleAdapter`, tests only | CT1 | SO §10 → `test/unica-v4/mocks/MockOracleAdapter.sol` | TS5d: no file under `src/`, `script/unica-v4/` or `deployments/unica-v4/` names it | none |
-| OA2 | `ChainlinkFeedAdapter`, single-route only (S8): one instance per route, constructor immutables, no admin | CT1, SR1 | SC §10, SO §7 as reconciled (SR1 rows 1, 2, 12) → `src/unica-v4/oracle/` | unit rows with a stand-in aggregator and sequencer feed under `test/unica-v4/`: every constructor refusal, every `latestPrice` refusal, sequencer down, unknown and grace period; `feedIdFor` returns the immutable `keccak256(abi.encode("CHAINLINK_FEED", ASSET_FEED, QUOTE_FEED))` and reverts `PairNotSupported` for any other pair; no `Route[]` constructor; runtime under 12,000 (SC §12 estimate, re-measured) | STOP-SIZE, STOP-COPY |
+| OA2 | `ChainlinkFeedAdapter`, single-route only (S8): one instance per route, constructor immutables, no admin beyond the optional downward-only quote-freshness operator (O2) | CT1, SR1 | SC §10, SO §7 as reconciled (SR1 rows 1, 2, 12) → `src/unica-v4/oracle/` | unit rows with a stand-in aggregator and sequencer feed under `test/unica-v4/`: every constructor refusal, every `latestPrice` refusal, sequencer down, unknown and grace period; `feedIdFor` returns the immutable `keccak256(abi.encode("CHAINLINK_FEED", ASSET_FEED, QUOTE_FEED))` and reverts `PairNotSupported` for any other pair; no `Route[]` constructor; runtime under 12,000 (SC §12 estimate, re-measured) | STOP-SIZE, STOP-COPY |
 | OA3 | `ChainlinkStreamsAdapter`, disabled, push-then-read: `submitReport` verifies and stores, `latestPrice` reads the stored report | CT1 | SO §8 as reconciled (SR1 row 13) → `src/unica-v4/oracle/` | SO O21–O23 with a test verifier: replay, not newer, expiry, status mask, `VerifierFeeManagerSet`; no chain file enables it | STOP-PAID (a real report needs a subscription); STOP-SIZE, STOP-COPY |
 | OA4 | `ChainlinkCREAdapter`, simulation-only, push-then-read: `onReport` verifies and stores, `latestPrice` reads the stored report | CT1 | SO §9 as reconciled (SR1 row 13) → `src/unica-v4/oracle/` | SO O24–O25 with a test forwarder: wrong forwarder, the simulation forwarder refused at construction, workflow mismatch, not newer | STOP-PAID; STOP-SIZE, STOP-COPY |
 

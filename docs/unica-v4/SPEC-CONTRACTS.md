@@ -487,7 +487,8 @@ interface IUnicaPriceOracle {
 }
 ```
 
-Shared adapter rules (CHAINLINK-AVAILABILITY §8): `view`, so the hook's call is a STATICCALL; no admin, no setters,
+Shared adapter rules (CHAINLINK-AVAILABILITY §8): `view`, so the hook's call is a STATICCALL; no admin and no setters,
+save the one downward-only quote-freshness lever the O2 ruling added to `ChainlinkFeedAdapter` (`docs/unica-v4/ORACLE-FRESHNESS-O2.md`), which is inert unless a deployment names an operator;
 routes fixed in the constructor from `config/chains/<chainId>.json`, so a market's (adapter, feedId) commitment cannot
 drift; `updatedAt` is the source's timestamp, never arrival or block time; an unpriceable pair is a typed revert
 (`PairNotSupported`), never a zero or a placeholder; every feed's `decimals()` is read live. `maxAge` and deviation
