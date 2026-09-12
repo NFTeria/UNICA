@@ -17,6 +17,9 @@ export const POS = [
     body: h`
 <section class="card"${P("create-order")} id="register">
   <h2>Amount</h2>
+  <p><label for="customer-wallet">Customer wallet</label><br>
+  <input id="customer-wallet" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x…" size="46"><br>
+  <span class="sub">The wallet that will pay this sale.</span></p>
   <p><label for="amount">Amount to charge</label><br>
   <input id="amount" class="field" type="text" inputmode="decimal" autocomplete="off" placeholder="12.50" aria-describedby="amount-hint"></p>
   <p class="sub" id="amount-hint">Digits and one decimal point. This is what the customer owes.</p>

@@ -146,10 +146,12 @@ async function main() {
     say("create-why", "Disabled: the payout wallet has not been read.");
     return;
   }
-  const customerWallet = new URLSearchParams(location.search).get("customer")
-    ?? config.record?.order?.payer
-    ?? config.manifest?.accounts?.payer
-    ?? null;
+  // The customer's wallet is typed or pasted at the register (or carried by ?customer= on a link
+  // the register itself made). It is never taken from a stored record or a manifest.
+  const typed = document.getElementById("customer-wallet")?.value?.trim() ?? "";
+  const customerWallet = /^0x[0-9a-fA-F]{40}$/.test(typed)
+    ? typed
+    : (new URLSearchParams(location.search).get("customer") ?? null);
   if (!customerWallet) {
     say("create-status", "This register does not know which customer wallet this payment is for, so it will not create one.");
     say("create-why", "Disabled: no customer wallet is named for this payment.");
