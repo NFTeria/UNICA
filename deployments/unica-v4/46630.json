@@ -2,8 +2,9 @@
   "environment": "PUBLIC_TESTNET_NO_VALUE",
   "designation": "TEST_ONLY_NO_VALUE",
   "chainId": 46630,
-  "commit": "e7264f546e5eb374ffe8887c79288d8b938ef8ed",
-  "readAtBlock": 118246596,
+  "commit": "8a50c8bf09cec2323b03bc89a06a7bf4edc9e908",
+  "readAtBlock": 118365273,
+  "releaseTag": "unica-v5/robinhood-testnet-1",
   "explorer": {
     "kind": "blockscout",
     "api": "https://explorer.testnet.chain.robinhood.com/api",
@@ -11,7 +12,6 @@
     "note": "public, keyless; a source of logs and links, never a judge"
   },
   "deployedAtBlock": 118242754,
-  "releaseTag": "unica-v5/robinhood-testnet-1",
   "verification": {
     "status": "verified",
     "verifier": "blockscout (Robinhood Chain testnet explorer)",
@@ -59,6 +59,11 @@
       "address": "0xc84f4a8C4215Ad1162FFcCcC9DA3dA589D7DaF9a",
       "codeHash": "0xfc45d22749e79a93739c3d3877f49bc3254bbdd27876189e1e51f69e4d8f19c5",
       "codeSize": 17280
+    },
+    "productCatalog": {
+      "address": "0xdA3E3B25C09E4C8BBc184e0D4bfC2246DD898229",
+      "codeHash": "0xaa48d6c8c6fdb0777004ff4e29895f2da875dbc2edd035d47164823265fab8fc",
+      "codeSize": 10741
     }
   },
   "market": {
