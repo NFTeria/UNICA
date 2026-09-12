@@ -27,6 +27,32 @@ import {UnicaPolicyTypes} from "../../src/unica-v4/policy/UnicaPolicyTypes.sol";
 import {LocalEnsV2Fixture} from "../../src/identity/LocalEnsV2Fixture.sol";
 import {TerminalAdmission} from "../../src/identity/TerminalAdmission.sol";
 import {FixtureAggregator} from "../unica-v4/fixtures/FixtureAggregator.sol";
+import {IProductCatalog} from "../../src/unica-v5/IProductCatalog.sol";
+
+/// @dev A token that hands the shop less than the buyer paid, armed per row, for the catalogue's
+///      exact-delivery rule. Deployed fresh on the fork so the control and the attack differ by one
+///      switch and by nothing else.
+contract SkimmingLocalAsset is MockERC20 {
+    uint256 public feeBps;
+
+    constructor(string memory n, string memory s, uint8 d) MockERC20(n, s, d) {}
+
+    function arm(uint256 bps) external {
+        feeBps = bps;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        uint256 allowed = allowance[from][msg.sender];
+        if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
+        uint256 fee = (amount * feeBps) / 10_000;
+        balanceOf[from] -= amount;
+        unchecked {
+            balanceOf[to] += amount - fee;
+            balanceOf[address(0xdead)] += fee;
+        }
+        return true;
+    }
+}
 
 /// @dev A price adapter whose route id is not the one the market committed to. Etched over the
 ///      real adapter's address on the fork to prove the per-swap route check (S8).
@@ -83,6 +109,8 @@ contract AttacksTest is Test {
     LocalKeystoneForwarderFixture internal forwarder;
     address internal identityToken;
     address internal onboarding;
+    IProductCatalog internal catalog;
+    address internal lookalikeCatalog;
     address internal lookalikeHook;
     address internal lookalikeExecutor;
     bytes32 internal marketId;
@@ -103,6 +131,8 @@ contract AttacksTest is Test {
     address internal attacker;
     address internal workflowOwner;
 
+    /// @dev 25.00 of the local test dollar, six decimals. No value; not any real dollar token.
+    uint256 internal constant PRODUCT_PRICE = 25_000_000;
     uint128 internal constant AMOUNT_IN = 1e18;
     uint128 internal constant MIN_OUT = 1_950_000;
     uint256 internal salt;
@@ -139,6 +169,8 @@ contract AttacksTest is Test {
         forwarder = LocalKeystoneForwarderFixture(vm.envAddress("UNICA_FORWARDER"));
         identityToken = vm.envAddress("UNICA_IDENTITY_TOKEN");
         onboarding = vm.envAddress("UNICA_ONBOARDING");
+        catalog = IProductCatalog(vm.envAddress("UNICA_PRODUCT_CATALOG"));
+        lookalikeCatalog = vm.envAddress("UNICA_LOOKALIKE_CATALOG");
         lookalikeHook = vm.envAddress("UNICA_LOOKALIKE_HOOK");
         lookalikeExecutor = vm.envAddress("UNICA_LOOKALIKE_EXECUTOR");
         marketId = vm.envBytes32("UNICA_MARKET_ID");
@@ -704,6 +736,193 @@ contract AttacksTest is Test {
         _refused(
             "COUNTERFEIT_IDENTITY_NFT", "IDENTITY_CONTRACT_MISMATCH (client provenance check)", "CLIENT_VERIFICATION"
         );
+    }
+
+    // ---- PRODUCT CATALOGUE ---------------------------------------------------------------------
+    //
+    // The shop's own list of what it sells, live on this chain. Every row below lists a fresh
+    // product on the REAL catalogue the deployment names, so the refusal proved is the deployed
+    // contract's and not a fixture's. The control is the first row: a listed product is bought and
+    // the money arrives in full.
+
+    function _listOnCatalog(uint256 price, IProductCatalog.Kind kind, uint64 period, address onlyBuyer)
+        internal
+        returns (uint256 id)
+    {
+        vm.prank(merchantOwner);
+        id = catalog.list("Haircut", address(payout), price, kind, period, merchantPayout, onlyBuyer);
+    }
+
+    function _approveCatalog(address who, address token, uint256 amount) internal {
+        vm.prank(who);
+        MockERC20(token).approve(address(catalog), amount);
+    }
+
+    function test_Product_Control_ListedAndBought() public {
+        uint256 id = _listOnCatalog(PRODUCT_PRICE, IProductCatalog.Kind.PERMANENT, 0, address(0));
+        _approveCatalog(payer, address(payout), PRODUCT_PRICE);
+        uint256 before = payout.balanceOf(merchantPayout);
+        vm.prank(payer);
+        catalog.buy(id);
+        assertEq(payout.balanceOf(merchantPayout) - before, PRODUCT_PRICE, "the shop is paid exactly the price");
+        console.log(
+            'ATTACK:{"case":"CONTROL_PRODUCT_BOUGHT","decision":"SOLD","reasonCodes":[],"layer":"UNICA_ONCHAIN"}'
+        );
+    }
+
+    function test_Product_InactiveIsNotForSale() public {
+        uint256 id = _listOnCatalog(PRODUCT_PRICE, IProductCatalog.Kind.PERMANENT, 0, address(0));
+        _approveCatalog(payer, address(payout), PRODUCT_PRICE);
+        vm.prank(merchantOwner);
+        catalog.setActive(id, false);
+
+        uint256 before = payout.balanceOf(merchantPayout);
+        vm.expectRevert(abi.encodeWithSelector(IProductCatalog.ProductInactive.selector, id));
+        vm.prank(payer);
+        catalog.buy(id);
+        assertEq(payout.balanceOf(merchantPayout), before, "nothing moved");
+        _refused("PRODUCT_INACTIVE", "ProductInactive", "UNICA_ONCHAIN");
+
+        // control: the shop puts it back on sale and the same customer buys it
+        vm.prank(merchantOwner);
+        catalog.setActive(id, true);
+        vm.prank(payer);
+        catalog.buy(id);
+        assertEq(payout.balanceOf(merchantPayout) - before, PRODUCT_PRICE);
+    }
+
+    function test_Product_OneOffSellsOnce() public {
+        uint256 id = _listOnCatalog(PRODUCT_PRICE, IProductCatalog.Kind.ONE_OFF, 0, address(0));
+        _approveCatalog(payer, address(payout), PRODUCT_PRICE * 2);
+        vm.prank(payer);
+        catalog.buy(id);
+        uint256 after1 = payout.balanceOf(merchantPayout);
+
+        vm.expectRevert(abi.encodeWithSelector(IProductCatalog.AlreadySold.selector, id));
+        vm.prank(payer);
+        catalog.buy(id);
+        assertEq(payout.balanceOf(merchantPayout), after1, "paid once, not twice");
+        _refused("PRODUCT_ONE_OFF_TWICE", "AlreadySold", "UNICA_ONCHAIN");
+    }
+
+    function test_Product_BoundBuyerCannotBeTakenByAnotherWallet() public {
+        uint256 id = _listOnCatalog(PRODUCT_PRICE, IProductCatalog.Kind.ONE_OFF, 0, payer);
+        _approveCatalog(wrongPayer, address(payout), PRODUCT_PRICE);
+        _approveCatalog(payer, address(payout), PRODUCT_PRICE);
+
+        uint256 before = payout.balanceOf(merchantPayout);
+        vm.expectRevert(abi.encodeWithSelector(IProductCatalog.WrongBuyer.selector, id, payer, wrongPayer));
+        vm.prank(wrongPayer);
+        catalog.buy(id);
+        assertEq(payout.balanceOf(merchantPayout), before, "nothing moved");
+        _refused("PRODUCT_WRONG_BUYER", "WrongBuyer", "UNICA_ONCHAIN");
+
+        // control: the wallet it was written for buys the very same product
+        vm.prank(payer);
+        catalog.buy(id);
+        assertEq(payout.balanceOf(merchantPayout) - before, PRODUCT_PRICE);
+    }
+
+    function test_Product_FeeOnTransferTokenIsRefused() public {
+        SkimmingLocalAsset token = new SkimmingLocalAsset("Skim", "SKIM", 6);
+        token.mint(payer, PRODUCT_PRICE * 4);
+        vm.prank(payer);
+        token.approve(address(catalog), type(uint256).max);
+        vm.prank(merchantOwner);
+        uint256 id = catalog.list(
+            "Haircut", address(token), PRODUCT_PRICE, IProductCatalog.Kind.PERMANENT, 0, merchantPayout, address(0)
+        );
+
+        // control first, with the skim off: the shop is paid in full.
+        vm.prank(payer);
+        catalog.buy(id);
+        assertEq(token.balanceOf(merchantPayout), PRODUCT_PRICE, "control: the whole price arrives");
+
+        // the one switch: a 1% fee taken out of the very same transfer.
+        token.arm(100);
+        uint256 delivered = PRODUCT_PRICE - (PRODUCT_PRICE * 100) / 10_000;
+        uint256 shopBefore = token.balanceOf(merchantPayout);
+        uint256 buyerBefore = token.balanceOf(payer);
+        vm.expectRevert(abi.encodeWithSelector(IProductCatalog.DeliveryNotExact.selector, PRODUCT_PRICE, delivered));
+        vm.prank(payer);
+        catalog.buy(id);
+        assertEq(token.balanceOf(merchantPayout), shopBefore, "nothing is delivered");
+        assertEq(token.balanceOf(payer), buyerBefore, "and nothing is taken");
+        _refused("PRODUCT_FEE_ON_TRANSFER", "DeliveryNotExact", "UNICA_ONCHAIN");
+    }
+
+    function test_Product_DeactivateByAnybodyButTheSeller() public {
+        uint256 id = _listOnCatalog(PRODUCT_PRICE, IProductCatalog.Kind.PERMANENT, 0, address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(IProductCatalog.NotSeller.selector, id, merchantOwner, attacker));
+        vm.prank(attacker);
+        catalog.setActive(id, false);
+        // not the market admin either: this contract has no admin, and the registry's does not reach it
+        vm.expectRevert(abi.encodeWithSelector(IProductCatalog.NotSeller.selector, id, merchantOwner, admin));
+        vm.prank(admin);
+        catalog.setActive(id, false);
+        assertTrue(catalog.products(id).active, "still on sale");
+        _refused("PRODUCT_DEACTIVATE_NOT_SELLER", "NotSeller", "UNICA_ONCHAIN");
+
+        // control: the shop that listed it can, and the product stops being for sale
+        vm.prank(merchantOwner);
+        catalog.setActive(id, false);
+        assertFalse(catalog.products(id).active);
+    }
+
+    /// @dev The on-chain half of the counterfeit shopfront. The attacker's own catalogue, deployed
+    ///      by the deploy stage, sells a product with the same name at the same price and points the
+    ///      money at the real shop's wallet. This row measures what a shopper could tell from the
+    ///      chain alone: nothing but the address. The REFUSAL is the evidence reader's, and it is
+    ///      asserted end to end in script/anvil/demo.sh step 16 and in
+    ///      tools/unica-evidence/test/authenticate-product.test.mjs — not claimed here.
+    function test_Product_LookalikeCatalogueDiffersOnlyByItsAddress() public {
+        uint256 id = _listOnCatalog(PRODUCT_PRICE, IProductCatalog.Kind.PERMANENT, 0, address(0));
+        _approveCatalog(payer, address(payout), PRODUCT_PRICE);
+
+        vm.prank(attacker);
+        uint256 fakeId = IProductCatalog(lookalikeCatalog)
+            .list(
+                "Haircut", address(payout), PRODUCT_PRICE, IProductCatalog.Kind.PERMANENT, 0, merchantPayout, address(0)
+            );
+        vm.prank(payer);
+        payout.approve(lookalikeCatalog, PRODUCT_PRICE);
+
+        vm.recordLogs();
+        vm.prank(payer);
+        catalog.buy(id);
+        vm.prank(payer);
+        IProductCatalog(lookalikeCatalog).buy(fakeId);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        Vm.Log memory real = _soldLog(logs, address(catalog));
+        Vm.Log memory fake = _soldLog(logs, lookalikeCatalog);
+        assertEq(real.topics[0], fake.topics[0], "the same event signature");
+        assertEq(real.topics[2], fake.topics[2], "the same buyer");
+        // payout, asset, amount, kind and paidThrough: the five words a shopper's receipt shows.
+        for (uint256 w = 0; w < 5; w++) {
+            assertEq(_dataWord(real.data, w), _dataWord(fake.data, w), "a field a shopper can see differs");
+        }
+        assertTrue(real.emitter != fake.emitter, "the address is what tells them apart");
+        assertTrue(lookalikeCatalog != address(catalog), "and the deployment names only one of them");
+        console.log(
+            'ATTACK:{"case":"PRODUCT_LOOKALIKE_CATALOG","decision":"INDISTINGUISHABLE_ON_CHAIN","reasonCodes":["EMITTER_IS_THE_ONLY_DIFFERENCE"],"layer":"UNICA_ONCHAIN"}'
+        );
+    }
+
+    function _soldLog(Vm.Log[] memory logs, address emitter) internal pure returns (Vm.Log memory) {
+        bytes32 topic0 = keccak256("ProductSold(uint256,address,address,address,address,uint256,uint8,uint64,bytes32)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].emitter == emitter && logs[i].topics.length > 0 && logs[i].topics[0] == topic0) return logs[i];
+        }
+        revert("no sale log from that address");
+    }
+
+    function _dataWord(bytes memory data, uint256 index) internal pure returns (bytes32 out) {
+        uint256 at = 32 + index * 32;
+        assembly ("memory-safe") {
+            out := mload(add(data, at))
+        }
     }
 
     // ---- CHAINLINK POLICY ------------------------------------------------------------------------

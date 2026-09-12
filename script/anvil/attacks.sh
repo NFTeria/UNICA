@@ -24,6 +24,8 @@ ORDER_ID=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.ar
 ORDER_NONCE=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).order.nonce)' "$RECORD")
 LOOK_ORDER=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).lookalike.orderId)' "$RECORD")
 DIRECT_ORDER=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).directPayment.orderId)' "$RECORD")
+PRODUCT_SALE=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).products.sale.id)' "$RECORD")
+LOOK_SALE=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).lookalikeCatalogSale.saleId)' "$RECORD")
 
 step "A. on-chain refusals, from a fork of the live local state (test/anvil/Attacks.t.sol)"
 ATTACK_LOG="$REHEARSAL_DIR/attacks-forge.log"
@@ -110,6 +112,15 @@ expect_decision EVIDENCE_ENDPOINT_UNAVAILABLE UNKNOWN --order "$ORDER_ID" --rpc 
 # An order id with no receipt anywhere is not "unknown": the source answered and holds no settlement.
 expect_decision UNPAID_ORDER_NO_RECEIPT REFUSED --order "$(cast keccak never-created)" --rpc "$UNICA_LOCAL_RPC" --confirmations 0
 expect_decision LEGITIMATE_CONTROL VERIFIED --order "$ORDER_ID" --rpc "$UNICA_LOCAL_RPC" --confirmations 0
+# The counterfeit SHOPFRONT. The attacker's own catalogue sold a product with the same name at the
+# same price and sent the money to the real shop's wallet, so the sale is real, the money moved, and
+# the shop's own list of payments shows it. Only the address it came from is wrong, and that is the
+# whole of what the reader has to go on.
+expect_decision PRODUCT_LOOKALIKE_CATALOG REFUSED --sale "$LOOK_SALE" --rpc "$UNICA_LOCAL_RPC" --confirmations 0
+# A sale id nobody ever made is not "unknown": the source answered and holds no such sale.
+expect_decision PRODUCT_SALE_NEVER_MADE REFUSED --sale "$(cast keccak never-sold)" --rpc "$UNICA_LOCAL_RPC" --confirmations 0
+# The control the two rows above need: the sale the shop's own list really did make is VERIFIED.
+expect_decision PRODUCT_SALE_CONTROL VERIFIED --sale "$PRODUCT_SALE" --rpc "$UNICA_LOCAL_RPC" --confirmations 0
 
 step "D. POS / wallet display states (unit rows: submitted is not PAID, reverted is FAILED, unknown is UNKNOWN, wrong network, wrong payer, expired, revoked terminal, label visible)"
 POS_TEST_LOG="$REHEARSAL_DIR/attacks-pos.log"
