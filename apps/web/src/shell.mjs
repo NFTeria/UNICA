@@ -215,6 +215,7 @@ export function document_(page) {
 <title>${esc(page.title)}</title>
 <meta name="description" content="${esc(page.description)}">
 <link rel="canonical" href="${esc(canonical)}">
+<link rel="icon" type="image/svg+xml" href="${esc(p)}assets/mark.svg">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${esc(page.ogTitle)}">
 <meta property="og:description" content="${esc(page.ogDescription)}">
