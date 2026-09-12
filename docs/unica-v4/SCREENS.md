@@ -166,21 +166,26 @@ facts.
 ## How the shell includes it
 
 `fold.css` and `fold.js` are emitted into `out/assets/` by the build, because `apps/web/build.mjs`
-copies the whole `assets/` directory. Emitting them is not the same as loading them: the two tags go
-in `apps/web/src/shell.mjs`, which is owned by whoever owns the shell, and **the order is not
-negotiable** — `fold.css` after `unica.css`, or every override in it loses to the file it is meant to
-override.
+copies the whole `assets/` directory. Emitting them is not the same as loading them: the two tags are
+placed by `apps/web/src/shell.mjs`, and **the order is not negotiable** — `fold.css` after
+`unica.css` and after `assets/screens/`, or its overrides lose to the files they are meant to
+override. As emitted today, on every one of the twenty-two documents:
 
 ```html
-<link rel="stylesheet" href="${p}assets/unica.css">
-<link rel="stylesheet" href="${p}assets/fold.css">
-...
-<script type="module" src="${p}assets/fold.js"></script>
+<link rel="stylesheet" href="./assets/unica.css">
+<link rel="stylesheet" href="./assets/screens/theme.css">
+<link rel="stylesheet" href="./assets/fold.css">
 ```
 
-`apps/web/tests/fold.test.mjs` asserts that ordering for every document that carries the link, and
-states how many of the emitted documents currently do, so "not wired yet" and "wired wrongly" cannot
-look the same in a summary.
+One rule depends on that order and would fail silently without it. `screens/theme.css` gives the
+colour-scheme select a 36px minimum height, which is right for a mouse and wrong for a finger;
+`fold.css` raises it to 44px under `@media (pointer: coarse)` with **exactly the same specificity**,
+so it wins on link order alone. `apps/web/tests/fold.test.mjs` asserts both halves of that — the
+36px rule is still there to override, and `fold.css` is still loaded after it — because a target
+that quietly shrinks back to 36px is not a failure anybody would see.
+
+A route's own stylesheet is included from its body and therefore loads *after* `fold.css`, which is
+deliberate: a screen may override the global layer, and the global layer may not override a screen.
 
 ---
 
@@ -203,21 +208,30 @@ produced these files, so nothing below the line of "the stylesheet says so" was 
   emulator with a display, and both are outside what produced this file. They are listed here so
   the gap is visible rather than assumed closed.
 
-### Half of what these rules style is not on a screen yet
+### Some of what these rules style is not on a screen yet
 
-Counted across the twenty-two documents the build emits, at the commit this file lands on:
+Counted across the twenty-two documents the build emits, at the commit this file lands on. **This is
+a snapshot and it moves**: other screens are being built in parallel, and two of these counts went up
+between the first draft of this file and the commit it landed on.
 
-| Block the rules target | Documents that render it today |
+| Block the rules target | Documents that render it |
 |---|---|
+| `.theme-pick`, `.wchip` | 22 — every page |
 | `.appframe`, `.sidebar` | 7 |
-| `.card` | 6 |
-| `.hex` | rendered; 11 instances on `pay/` alone |
-| `.checkout` | **0** |
-| `.register`, `.keypad` | **0** — `pay/` and `business/` carry `.registers`, the list, not the register |
+| `.hex` | 7 |
+| `.card` | 5 |
+| `.checkout` | 2 |
+| `.keypad` | 1 |
+| `.register` | **0** — `business/` carries `.registers`, the list, not the register |
 | `.empty` | **0** |
 
-So the checkout-card cap and the keypad rules are written **against `apps/web/DESIGN.md`**, which is
-the contract those screens will be built to, and not against anything a person can look at yet. They
-are correct with respect to the design system and unproven with respect to the product, and those
-are different claims. The blocks that ARE on screen — the app frame, the sidebar, cards, and the long
-references in `.hex` — are the ones the responsive rules actually reach today.
+So the `.register` rules are written **against `apps/web/DESIGN.md`**, which is the contract that
+screen will be built to, and not against anything a person can look at yet. Correct with respect to
+the design system and unproven with respect to the product are different claims, and this table is
+where the difference is recorded rather than glossed.
+
+The two screens that have landed since — the checkout at `assets/screens/checkout.css` and the
+register at `assets/screens/pos.css` — style their own `.co` and `.pos` blocks rather than the
+design-system ones, and both are loaded **after** `fold.css`, so a route-specific rule of theirs beats
+a global rule here at equal specificity. That is the right way round, and it is the reason the rules
+in this file stay layout-shaped and stop short of dictating a screen's own composition.
