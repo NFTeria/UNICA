@@ -14,8 +14,17 @@
  * link, or a localhost/private/source-tree path in the output all abort the build. A generator that
  * emits a broken artifact and exits zero is worse than no generator.
  */
-import { mkdirSync, rmSync, writeFileSync, readFileSync, readdirSync, statSync, existsSync, cpSync } from "node:fs";
-import { join, dirname, relative, posix } from "node:path";
+import {
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  existsSync,
+  cpSync,
+} from "node:fs";
+import { join, dirname, relative, resolve, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { ROUTES, NOT_FOUND } from "./src/routes.mjs";
@@ -23,7 +32,16 @@ import { BUILT_FOR_MAINNET, document_ } from "./src/shell.mjs";
 import { NO_VALUE_BANNER } from "./assets/product.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT = join(HERE, "out");
+/**
+ * Where the artifact is written. `apps/web/out` unless UNICA_BUILD_OUT names somewhere else.
+ *
+ * WHY THE OVERRIDE EXISTS. `node --test apps/web/tests/*.test.mjs` runs the test files in PARALLEL,
+ * and more than one of them needs a freshly built artifact to make claims about. Two builds into one
+ * directory is a race — the first line of this generator deletes the directory the other is reading —
+ * and a gate that fails one run in five teaches everybody to re-run it until it is green, which is
+ * worse than no gate. A test that builds gives itself a directory of its own instead.
+ */
+const OUT = process.env.UNICA_BUILD_OUT ? resolve(process.env.UNICA_BUILD_OUT) : join(HERE, "out");
 const ASSETS = join(HERE, "assets");
 
 const REQUIRED_META = ["title", "description", "ogTitle", "ogDescription", "ogImage", "h1"];
