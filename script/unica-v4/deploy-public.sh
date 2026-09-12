@@ -31,7 +31,9 @@ echo "chain id $chain   head $head"
 
 CONFIG=${CONFIG:-config/unica-v4/$chain.env}
 test -f "$CONFIG" || fail "no configuration at $CONFIG (copy config/unica-v4/example.env and fill every value)"
-grep -qiE 'https?://|_KEY=|PRIVATE' "$CONFIG" && fail "the configuration carries a URL or a key-shaped value; it must carry neither"
+# The one URL a configuration may carry is the badge's verification page; everything else that looks
+# like an endpoint or a key is refused, because an RPC URL carries its credential in the path.
+grep -vE '^UNICA_EXTERNAL_URL_BASE=' "$CONFIG" | grep -qiE 'https?://|(API|PRIVATE|SECRET)_?KEY|MNEMONIC|SEED_PHRASE' && fail "the configuration carries a URL or a key-shaped value; it must carry neither"
 set -a; . "$CONFIG"; set +a
 test "${UNICA_CHAIN_ID:-}" = "$chain" || fail "the configuration says chain ${UNICA_CHAIN_ID:-?}, the endpoint says $chain"
 test -n "${DEPLOYER:-}" || fail "DEPLOYER (the public address that will sign) is not set in $CONFIG"

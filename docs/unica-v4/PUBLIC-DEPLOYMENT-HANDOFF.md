@@ -43,6 +43,26 @@ additionally needs `UNICA_MAINNET_ACK=I_UNDERSTAND_THIS_IS_MAINNET` typed on the
 as `UNICA_ADMIN` (a Safe, rulings Q64 and U6), a `UNICA_PAUSER` (Q70) and `UNICA_REQUIRE_ORACLE=true`; the
 wrapper checks these and the forge script checks them again.
 
+## Measured on Sepolia, 2026-09-12: the feeds are slower than ruling S4 allows
+
+Read through the `sepolia_testnet` alias at unix time 1789179975: ETH / USD last updated 855 seconds
+earlier, USDC / USD about ten hours earlier. `ChainlinkFeedAdapter` composes the cross price on the older
+of the two timestamps, and the registry's on-chain ceiling is `MAX_ORACLE_AGE = 300` seconds (S4). An
+oracle-enabled WETH/USDC market on these feeds would refuse almost every settlement with `OracleStale`. That
+is the design working as ruled, and it is the first thing a real deployment meets: stablecoin/USD feeds
+update on a 24-hour heartbeat on every chain, so any USDC-quoted route is stale under a 300-second cap unless
+the stable leg is treated differently. This is the "semantic limit" `SPEC-CONTRACTS.md` §2 records as open
+(Q25). Until the owner rules, the Sepolia rehearsal runs as a demonstration market (`UNICA_REQUIRE_ORACLE=false`,
+permitted on a testnet, refused on a mainnet by both the wrapper and the script), and its receipts say so.
+
+```text
+UNICA v4 — ORACLE AGE RULING (reply inline)
+O1 Keep MAX_ORACLE_AGE = 300 s and accept that USDC-quoted markets settle only within 5 minutes of a USDC/USD update — YES / NO
+O2 Add a per-leg maxAge to the policy (asset leg ≤ 300 s, stable quote leg ≤ 86,400 s), a spec amendment and a new release — YES / NO
+O3 Price the asset directly in the payout unit with ONE feed (e.g. ETH/USDC where it exists) and drop the cross — YES / NO
+O4 Run the Sepolia rehearsal as a demonstration market now, oracle market after O1–O3 — YES (default) / NO
+```
+
 ## Sepolia first
 
 Sepolia has the official PoolManager (`0xE03A1074c86CFeDd5C142C4F04F1a1536e203543`, already pinned for
