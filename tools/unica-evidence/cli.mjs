@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 // node tools/unica-evidence/cli.mjs --order 0x.. [--manifest path] [--rpc url] [--confirmations n]
 //   [--fixture path] [--kind direct|market]
+// node tools/unica-evidence/cli.mjs --sale 0x..  (the same flags; a product-catalogue sale id)
 //
 // Prints the JSON authentication verdict for one order id, market or direct settlement alike, with
 // its own `kind: "direct" | "market"` field naming which chain this order id was actually found on.
+// `--sale` asks the third question instead: was this ONE SALE from the shop's own list made by the
+// catalogue this deployment names. A sale id is not an order id and the two are never mixed, so it
+// is a separate flag rather than another thing `--order` might turn out to mean.
 // Never reaches a non-localhost RPC by default: with no --rpc flag this reads UNICA_LOCAL_RPC
 // (default http://127.0.0.1:8545), and with --fixture it makes no network call at all.
 //
@@ -19,6 +23,7 @@ import {resolve} from "node:path";
 import {identifyLog, decodeLog} from "./codec.mjs";
 import {
   authenticateDirectReceipt,
+  authenticateProductSale,
   authenticateReceipt,
   defaultLocalRpcUrl,
   fetchDirectOrder,
@@ -58,6 +63,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--order") out.order = argv[++i];
+    else if (a === "--sale") out.sale = argv[++i];
     else if (a === "--manifest") out.manifest = argv[++i];
     else if (a === "--rpc") out.rpc = argv[++i];
     else if (a === "--confirmations") out.confirmations = Number(argv[++i]);
@@ -68,7 +74,9 @@ function parseArgs(argv) {
     else if (a === "--kind") out.kind = argv[++i];
     else throw new Error(`unrecognised argument: ${a}`);
   }
-  if (!out.order) throw new Error("--order 0x.. is required");
+  if (out.order && out.sale) throw new Error("--order and --sale name different things; pass one");
+  if (!out.order && !out.sale) throw new Error("--order 0x.. or --sale 0x.. is required");
+  if (out.sale && out.kind !== undefined) throw new Error("--kind belongs to --order; a --sale is always a product sale");
   if (out.kind !== undefined && out.kind !== "direct" && out.kind !== "market") {
     throw new Error(`--kind must be "direct" or "market", got ${JSON.stringify(out.kind)}`);
   }
@@ -122,6 +130,20 @@ async function main() {
     }
     logs = projection.logs;
     chainHead = projection.chainHead;
+  }
+
+  if (args.sale) {
+    const saleVerdict = authenticateProductSale({
+      saleId: args.sale,
+      logs,
+      manifest,
+      chainHead,
+      requiredConfirmations: args.confirmations,
+      indexHead: args.indexHead,
+    });
+    process.stdout.write(JSON.stringify(saleVerdict, null, 2) + "\n");
+    process.exitCode = saleVerdict.decision === "VERIFIED" ? 0 : saleVerdict.decision === "REFUSED" ? 1 : 2;
+    return;
   }
 
   const kind = args.kind ?? detectKind(args.order, logs) ?? "market";
