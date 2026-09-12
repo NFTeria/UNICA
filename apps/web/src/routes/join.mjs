@@ -19,7 +19,7 @@ export const JOIN = [
   <p class="lead">Answer seven questions and press one button. Your wallet asks you to confirm once.
   When it is done you have a pay name, a wallet that gets paid, a first register and a business
   badge.</p>
-  ${C.banner("info", "Testnet. No real money..", raw(`Nothing on <span id="join-network">this network</span> has value. The steps are the real steps; the money is not real.`))}
+  ${C.banner("info", "Testnet. No real money.", raw(`Nothing on <span id="join-network">this network</span> has value.`))}
   <ol class="steps" id="form">
     <li>
       <h2>Connect your wallet</h2>
