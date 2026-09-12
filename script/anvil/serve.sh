@@ -53,7 +53,7 @@ import { readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 
-import { authenticateDirectReceipt, authenticateReceipt, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
+import { authenticateDirectReceipt, authenticateProductSale, authenticateReceipt, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
 import { ExplorerLogs } from "./tools/unica-evidence/explorer.mjs";
 
 const ROOT = process.cwd();
@@ -194,9 +194,10 @@ function readRecord() {
 //      "6 decimals" for a token it never asked would show a customer the wrong amount. An asset
 //      whose label could not be read is listed with a null symbol, and every screen treats that
 //      as temporarily unavailable.
-//   2. `directSettlement` is null until that contract is part of the deployment. Null is a real
-//      answer that the screens turn into "temporarily unavailable" for a same-asset payment; a
-//      guessed address would be a promise the checkout could not keep.
+//   2. `directSettlement` and `productCatalog` are null until those contracts are part of the
+//      deployment. Null is a real answer that the screens turn into "temporarily unavailable" for
+//      a same-asset payment, and into "this deployment has no list of things to sell yet" for the
+//      catalogue; a guessed address would be a promise the checkout could not keep.
 //   3. `marketPair.active` is true only at market status 4, ACTIVE, in the frozen status
 //      numbering (src/unica-v4/UnicaMarketTypes.sol). A proposed, seeded, paused or retired
 //      market cannot convert anything, so it must not be offered as if it could.
@@ -292,6 +293,7 @@ function runtimeConfig(manifest, record, rpc, tokenLabels = {}) {
     marketPair: marketPairFrom(manifest),
     contracts: {
       directSettlement: contracts.directSettlement?.address ?? null,
+      productCatalog: contracts.productCatalog?.address ?? null,
       executor: contracts.executor?.address ?? null,
       hook: contracts.hook?.address ?? null,
       registry: contracts.registry?.address ?? null,
@@ -499,6 +501,12 @@ const server = createServer(async (req, res) => {
               try { directOrder = await fetchDirectOrder({ rpc: RPC_URL, settler, orderId: r.orderId }); } catch { directOrder = null; }
             }
             verdict = authenticateDirectReceipt({ ...common, directOrder });
+          } else if (r.kind === "product") {
+            // A catalogue sale is judged by its sale id, which `receiptsForRecipient` puts in the
+            // same `orderId` field every other row uses, so the row's own kind chooses the reader
+            // and nothing here has to know how a sale id is built.
+            const { orderId, ...rest } = common;
+            verdict = authenticateProductSale({ saleId: orderId, ...rest });
           } else {
             verdict = authenticateReceipt(common);
           }
