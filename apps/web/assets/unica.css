@@ -72,5 +72,14 @@ th[scope="row"] { font-weight: 500; white-space: nowrap; padding-right: 16px; }
 .evidence-json { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem;
   white-space: pre-wrap; overflow-wrap: break-word; background: var(--surface);
   border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.field { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--muted);
+  border-radius: var(--radius); padding: 10px 12px; min-height: 44px; width: 100%; max-width: 28rem; }
+.field[disabled] { background: var(--surface); color: var(--muted); border-style: dashed; }
+label { font-weight: 500; }
+.badge-image { width: 200px; height: 200px; max-width: 100%; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface); }
+.registers { list-style: none; padding: 0; margin: 8px 0; }
+.registers li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0;
+  border-bottom: 1px solid var(--line); }
 @media (min-width: 40rem) { .modes { grid-template-columns: 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

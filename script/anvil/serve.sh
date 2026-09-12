@@ -92,6 +92,30 @@ function readRecord() {
   return existsSync(RECORD_PATH) ? readJsonSync(RECORD_PATH) : null;
 }
 
+// @runtimeConfig-begin
+// The object GET /local/config.json answers with. Pure: manifest and record in, plain object out,
+// so apps/web/tests/serve-config.test.mjs can run this exact function without binding a socket.
+// The join screen needs the onboarding contract, the identity authority, the badge contract and
+// the parent every business joins under; each is null when the manifest does not carry it, and the
+// screen says the local setup has no onboarding contract yet rather than guessing.
+function runtimeConfig(manifest, record, rpc) {
+  const contracts = manifest?.contracts ?? {};
+  const identity = manifest?.identity ?? {};
+  return {
+    rpc,
+    chainId: manifest?.chainId ?? null,
+    manifest,
+    record,
+    merchantOnboarding: contracts.merchantOnboarding?.address ?? null,
+    identity: contracts.identityFixture?.address ?? null,
+    identityToken: contracts.identityToken?.address ?? null,
+    parentNode: identity.parentNode ?? null,
+    parentName: identity.parentName ?? null,
+    terminalStatusKey: identity.terminalStatusKey ?? null,
+  };
+}
+// @runtimeConfig-end
+
 function sendJson(res, status, obj) {
   const body = JSON.stringify(obj, null, 2);
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -138,9 +162,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (url.pathname === "/local/config.json") {
-      const manifest = readManifest();
-      const record = readRecord();
-      return sendJson(res, 200, { rpc: RPC_URL, chainId: manifest.chainId, manifest, record });
+      return sendJson(res, 200, runtimeConfig(readManifest(), readRecord(), RPC_URL));
     }
 
     if (url.pathname === "/local/record") {
@@ -183,6 +205,9 @@ server.listen(PORT, HOST, () => {
   const base = `http://${HOST}:${PORT}`;
   console.log(`UNICA local demo server listening on ${base}/`);
   console.log(`Pay screen:            ${base}/pay/`);
+  console.log(`Join screen:           ${base}/join/`);
+  const onboarding = runtimeConfig(readManifest(), null, RPC_URL).merchantOnboarding;
+  if (!onboarding) console.log("  (the manifest names no merchantOnboarding contract; the join screen will say so)");
   const record = readRecord();
   if (record?.order?.id) {
     console.log(`Pay screen (this order): ${base}/pay/?order=${record.order.id}`);
