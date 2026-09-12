@@ -1,0 +1,6 @@
+/* PLACEHOLDER, OWNED BY ANOTHER SCREEN. The shell references this file unconditionally so the
+   reference is already in place when the disclosure ("fold") work lands; replace it wholesale.
+
+   It declares nothing on purpose. An artifact built before that work exists is therefore
+   byte-for-byte the artifact built without the reference, and the build's link check — which
+   fails on a stylesheet that resolves to no file — still has something real to resolve. */
