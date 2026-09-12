@@ -23,11 +23,6 @@
   align-items: start;
 }
 
-.pos-pad {
-  position: sticky;
-  top: 0;
-}
-
 .pos .amount-display {
   font-size: 3rem;
   margin-bottom: var(--s2);
@@ -45,9 +40,13 @@
   gap: var(--s3);
 }
 
+/* A key is hit all day without being looked at, so its edge is the product's INPUT edge (--muted,
+   which .field already uses) rather than the quiet --line that separates rows of text. Measured:
+   --line reaches 1.34:1 against the ground and --muted 5.72:1, and a control's boundary needs 3:1. */
 .pos .keypad .key {
   min-height: calc(var(--space) * 16);
   font-size: 1.4rem;
+  border-color: var(--muted);
 }
 
 /* the one integration this view may name: its own colour as a rule, its name as the meaning */
@@ -144,5 +143,11 @@
 @media (min-width: 52rem) {
   .pos {
     grid-template-columns: 26rem minmax(0, 1fr);
+  }
+  /* Only once the sale is BESIDE the keypad: on a phone they are one column, and a keypad pinned
+     over the sale below it would hide the thing the cashier scrolled down to read. */
+  .pos-pad {
+    position: sticky;
+    top: var(--s4);
   }
 }
