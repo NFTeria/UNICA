@@ -32,6 +32,10 @@ export function networkName(chainId) {
   const id = Number(chainId);
   if (id === LOCAL_CHAIN_ID) return "Local practice network";
   if (id === SEPOLIA_CHAIN_ID) return "Sepolia test network";
+  if (id === 84532) return "Base Sepolia test network";
+  if (id === 421614) return "Arbitrum Sepolia test network";
+  if (id === 1301) return "Unichain Sepolia test network";
+  if (id === 46630) return "Robinhood Chain test network";
   if (Number.isFinite(id)) return `Network ${id}`;
   return "Unknown network";
 }

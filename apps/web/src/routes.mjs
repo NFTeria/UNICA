@@ -280,7 +280,12 @@ ${C.statusRegion("assets-said", "Payment assets have not been read yet.")}
 <p>Every asset this app knows on this network, with the amount your payout wallet holds right now,
 read from the network when this page opens. Read a different wallet instead by connecting it. An
 asset this app does not know is not shown, and no amount is ever guessed.</p>
-<p><button type="button" id="holdings-connect">Read my connected wallet</button></p>
+<p>
+  <label for="holdings-address">Or read any wallet address</label>
+  <input id="holdings-address" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x…" size="46">
+  <button type="button" id="holdings-read">Read this wallet</button>
+  <button type="button" id="holdings-connect">Read my connected wallet</button>
+</p>
 <ul id="holdings-list" class="assets"></ul>
 ${C.statusRegion("holdings-said", "Holdings have not been read yet.")}
 

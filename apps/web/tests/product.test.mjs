@@ -12,6 +12,7 @@ import { test } from "node:test";
 
 import {
   holdingsRows,
+  isAddress,
   ASSET_STATUS,
   ASSET_STATUS_TEXT,
   LANGUAGE,
@@ -322,4 +323,12 @@ test("holdings rows: unread is never zero, unlabelled never shows an amount, and
   assert.equal(rows[3].text, "0 PLTR");
   assert.equal(rows[3].why, "Nothing held right now.");
   assert.deepEqual(holdingsRows({}, {}), []);
+});
+
+test("a wallet address is 0x plus forty hex digits and nothing else", () => {
+  assert.equal(isAddress("0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73"), true);
+  assert.equal(isAddress("  0xa121e1ef31bbf0826aa67dc01e7977e80af58d73 "), true);
+  assert.equal(isAddress("0xA121e1eF31BbF0826aa67dc01e7977e80Af58D7"), false);
+  assert.equal(isAddress("freshcuts.unica.eth"), false);
+  assert.equal(isAddress(null), false);
 });

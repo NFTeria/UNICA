@@ -27,7 +27,7 @@ import {
 import { fillAdvanced, loadConfig, say, shortId } from "./local.js";
 import { listRegisters, registerStatusText, revokeRegisterOnChain } from "./local-join.js";
 import { connectWallet, discoverProviders, rpcRequest } from "./wallet.js";
-import { holdingsRows } from "./product.js";
+import { holdingsRows, isAddress } from "./product.js";
 import { encodeCall } from "./abi.js";
 
 // ---- a read-only view of the chain, with no wallet and no ability to send -----------------------
@@ -104,8 +104,13 @@ async function main() {
     : "No pay name has been resolved on this setup yet.");
 
   renderAssets(config);
-  await renderHoldings(config, readOnlySession(config), record?.merchant?.address ?? null);
+  const asked = new URLSearchParams(window.location.search).get("wallet");
+  const holdingsOwner = isAddress(asked) ? asked.trim() : (record?.merchant?.address ?? null);
+  const addressBox = document.getElementById("holdings-address");
+  if (addressBox && holdingsOwner) addressBox.value = holdingsOwner;
+  await renderHoldings(config, readOnlySession(config), holdingsOwner);
   wireHoldingsConnect(config);
+  wireHoldingsRead(config);
   renderToday(config, record);
   fillAdvanced(config, {
     order: record?.order?.id ?? null,
@@ -160,6 +165,29 @@ async function renderHoldings(config, session, owner) {
   }
   const read = rows.filter((r) => r.amount !== null).length;
   say("holdings-said", `${rows.length} asset${rows.length === 1 ? "" : "s"} this app knows on this network, ${read} read for ${shortId(owner)}. An asset this app does not know is not shown.`);
+}
+
+// Any address a person types is read the same way, through the companion's read-only path. It is
+// never sent anywhere and never resolved from a name here; the pay-name path has its own screen.
+function wireHoldingsRead(config) {
+  const button = document.getElementById("holdings-read");
+  const box = document.getElementById("holdings-address");
+  if (!button || !box) return;
+  const go = async () => {
+    const typed = String(box.value ?? "").trim();
+    if (!isAddress(typed)) {
+      say("holdings-said", "That is not a wallet address: it needs 0x followed by forty letters or digits.");
+      return;
+    }
+    button.disabled = true;
+    try {
+      await renderHoldings(config, readOnlySession(config), typed);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  button.addEventListener("click", go);
+  box.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go(); } });
 }
 
 function wireHoldingsConnect(config) {

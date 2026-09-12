@@ -489,3 +489,8 @@ export function holdingsRows(config = {}, balances = {}) {
     return { ...h, amount: amount.toString(), text: formatAsset(amount, h), why };
   });
 }
+
+/** A wallet address as a person pastes it: 0x and forty hex digits, nothing else. Never resolved, never guessed. */
+export function isAddress(s) {
+  return /^0x[0-9a-fA-F]{40}$/.test(String(s ?? "").trim());
+}

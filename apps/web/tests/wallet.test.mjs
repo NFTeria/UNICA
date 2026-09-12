@@ -122,7 +122,7 @@ test("networkName reads as a business owner would", () => {
   assert.equal(networkName(fromHexChainId("0x7a69")), "Local practice network");
   assert.equal(networkName(undefined), "Unknown network");
   assert.equal(networkName("not a chain"), "Unknown network");
-  assert.equal(networkName(46630), "Network 46630");
+  assert.equal(networkName(424242), "Network 424242"); // a chain this product does not run on reads by number
 });
 test("every network this site runs on is a practice network; mainnet is not", () => {
   assert.equal(isPracticeNetwork(LOCAL_CHAIN_ID), true);
@@ -296,4 +296,14 @@ test("wallet.js contains no code that names a private key or a recovery phrase",
 });
 test("control: the key-material rule would catch a violation", () => {
   assert.match("const k = req.body.privateKey;", /privateKey|private_key|mnemonic|seedPhrase|seed_phrase/i);
+});
+
+test("every network this product runs on is named for a person, and an unknown one says its number", () => {
+  assert.equal(networkName(31337), "Local practice network");
+  assert.equal(networkName(11155111), "Sepolia test network");
+  assert.equal(networkName(84532), "Base Sepolia test network");
+  assert.equal(networkName(421614), "Arbitrum Sepolia test network");
+  assert.equal(networkName(1301), "Unichain Sepolia test network");
+  assert.equal(networkName(46630), "Robinhood Chain test network");
+  assert.equal(networkName(99999), "Network 99999");
 });
