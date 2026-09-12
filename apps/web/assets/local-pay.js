@@ -549,6 +549,14 @@ async function renderOrder(config, orderId) {
       return;
     }
   }
+  // The chain's clock, read once: every deadline on this screen is judged and counted down by it.
+  let chainSkew = 0;
+  try {
+    const head = await rpcRequest(config.rpc, "eth_getBlockByNumber", ["latest", false]);
+    if (head?.timestamp) chainSkew = Number(BigInt(head.timestamp)) - Math.floor(Date.now() / 1000);
+  } catch {
+    chainSkew = 0;
+  }
   renderCard(card);
   setText(
     "co-price-note",
@@ -582,13 +590,6 @@ async function renderOrder(config, orderId) {
   // order's deadline lives on the chain, not in this browser.
   const fromRecord = Boolean(record?.order?.id) && String(record.order.id).toLowerCase() === String(card.id ?? "").toLowerCase();
   const judged = fromRecord ? record : { order: { id: card.id, expiry: card.expiry, payer: card.payer }, terminal: null };
-  let chainSkew = 0;
-  try {
-    const head = await rpcRequest(config.rpc, "eth_getBlockByNumber", ["latest", false]);
-    if (head?.timestamp) chainSkew = Number(BigInt(head.timestamp)) - Math.floor(Date.now() / 1000);
-  } catch {
-    chainSkew = 0;
-  }
   const refresh = () => {
     const now = Math.floor(Date.now() / 1000) + chainSkew;
     const { allowed, reasons } = computeBlockers({
