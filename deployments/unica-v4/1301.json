@@ -2,12 +2,20 @@
   "environment": "PUBLIC_TESTNET_NO_VALUE",
   "designation": "TEST_ONLY_NO_VALUE",
   "chainId": 1301,
-  "commit": "a1939ce527f50b403aa6e32464920994119db573",
-  "readAtBlock": 62381038,
+  "commit": "2bc7cbcbb33f611c116cdcd8ac357fa8ed55f87c",
+  "readAtBlock": 62381562,
   "releaseTag": "unica-v5/unichain-sepolia-1",
   "verification": {
-    "status": "not verified",
-    "note": "no read-only explorer result was supplied"
+    "status": "verified",
+    "verifier": "sourcify (Unichain Sepolia)",
+    "checkedAt": "2026-09-12",
+    "tool": "script/unica-v4/verify-source.sh",
+    "contracts": {
+      "factory": "verified",
+      "registry": "verified",
+      "hook": "verified",
+      "executor": "verified"
+    }
   },
   "contracts": {
     "poolManager": {
