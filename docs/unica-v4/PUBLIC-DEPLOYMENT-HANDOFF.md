@@ -63,6 +63,18 @@ O3 Price the asset directly in the payout unit with ONE feed (e.g. ETH/USDC wher
 O4 Run the Sepolia rehearsal as a demonstration market now, oracle market after O1–O3 — YES (default) / NO
 ```
 
+**Owner rulings, 2026-09-12 (recorded verbatim in substance):** O1 NO. O2 YES: maxAge is stored and enforced per
+feed leg; 300 s and 86,400 s are not automatically approved values, each must be checked against the selected
+feed's documented heartbeat, deviation behaviour, denomination and failure mode; cross-rate pricing fails if
+either leg is stale or invalid (a v5 release of the oracle policy, not a change to the frozen v4 hook). O3 NO.
+O4 YES: the Sepolia market stays a clearly labelled demonstration market meanwhile. Mainnet: Safe admin, pauser,
+chain id, audit owner, mainnet ENS name all UNRESOLVED and the Coinbase Wallet extension test NOT YET; no mainnet
+deployment is prepared or executed until they are. Liquidity: ordinary businesses never create, fund, configure,
+rebalance or manage pools; same-asset payments settle directly without a pool; cross-asset payments use only
+approved liquidity funded by an identified liquidity provider; if the guaranteed minimum cannot be delivered
+safely the result is NO_SAFE_ROUTE and nothing executes; no real-value pool until capital owner, loss bearer,
+exposure caps, monitoring owner and pause authority are documented.
+
 ## Sepolia run sheet — rehearsed on a fork of Sepolia at block 11686092, nothing sent
 
 `bash script/unica-v4/rehearse-sepolia.sh` ran all four stages, the readback and the manifest as the
