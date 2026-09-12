@@ -42,6 +42,27 @@ this repository.
 > Some Vyper contracts are carried-in prior art rather than work authored here, and
 > [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md) says which.
 
+## UNICA v5 — live on five public test networks (2026-09-13) (every value read from the recorded configs and manifests)
+
+| Network | Market | Market id | Identity (ENSv2) | Shop |
+|---|---|---|---|---|
+| Ethereum Sepolia (11155111) | ACTIVE, verified | market id `0x99f138caff24fe5dbe437093bac3bf66b2605e7940887fa648e5409dddaefb93` | yes | catalogue `0xEf837110e2A60B4940E57570E5AD05f39d8C398A`, settler `0x14a95db5463d27a97DF464001ec65d5DADffC88e` |
+| Base Sepolia (84532) | ACTIVE, verified | market id `0xc620eff48202f9439a04206b2955c6abd26bfb66a5b73f1e0b7d41f4ad03e682` | no | not deployed |
+| Arbitrum Sepolia (421614) | ACTIVE, verified | market id `0x347ef2afeff0218f9e4d23f205a3772f063f358e72db69225481753c329acbc7` | no | not deployed |
+| Unichain Sepolia (1301) | ACTIVE, verified | market id `0x865fe38970e04183c900768131ccb9ad451b042068695aeb8697478fea7c4ff2` | no | not deployed |
+| Robinhood Chain testnet (46630) | ACTIVE, verified | market id `0x4c968c48e90f58a8994e40590df132568f3a7ee5991fbcf84714fa4c4008639a` | no | not deployed |
+
+The product: a business logs in with its wallet (EIP-6963: Coinbase Wallet, MetaMask, any injected wallet), sees its business,
+lists what it sells (one-off, recurring, permanent) into an on-chain catalogue, hands out a link and a QR per product and a shop page at
+its own name (`/shop/?name=<label>`), charges a walk-in customer from the register, and every payment ends in a receipt that reads
+"Paid" only after the evidence rules verified it on chain. Same-asset sales settle directly; a different asset converts on Uniswap v4
+through the registered hook. On Ethereum Sepolia the business `freshcuts.unica.eth` is live under ENSv2 (records, registers, lineage)
+and the shop contracts are deployed and source-verified. Run it against any network above with `make business-live NET=<alias>`.
+
+Honest limits: self-serve sign-up of a new name runs on the practice chain only (the Sepolia identity adapter is read-only over the
+real ENSv2 resolver; a new business's records are written by the unica.eth owner); the receipt's index panel says "Not indexed yet"
+until the subgraph is deployed to Studio; every market is a labelled demonstration market until the per-feed heartbeats are validated.
+
 ## Sponsors — start here
 
 One row per ecosystem: what we built on your tool, the single command that proves it, and the
