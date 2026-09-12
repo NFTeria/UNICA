@@ -249,7 +249,7 @@ jobs:
           python3 -m pip install --user --disable-pip-version-check 'vyper==0.4.3'
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Record the toolchain
-        run: forge --version && anvil --version && node --version && "$HOME/.local/bin/vyper" --version
+        run: forge --version && anvil --version && node --version && vyper --version
       - name: The whole slice from a clean chain
         run: make anvil-test
       - name: Keep the run evidence
@@ -277,6 +277,6 @@ jobs:
           python3 -m pip install --user --disable-pip-version-check 'vyper==0.4.3' 'moccasin==0.4.4'
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Record the toolchain
-        run: "$HOME/.local/bin/vyper" --version && "$HOME/.local/bin/mox" --version
+        run: vyper --version && mox --version
       - name: mox test
-        run: cd vy && "$HOME/.local/bin/mox" test
+        run: cd vy && mox test
