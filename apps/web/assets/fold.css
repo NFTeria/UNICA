@@ -425,11 +425,23 @@ pre,
 
    SPECIFICITY HERE IS LOAD-BEARING, AND IT IS NOT TASTE. assets/fold.css is linked in <head>;
    a route's own assets/screens/*.css is linked inside <main>, which is LATER IN DOCUMENT ORDER. At
-   equal specificity the route stylesheet therefore wins, and it already declares `.co { max-width:
-   34rem }` and `.co-card { background: var(--paper) }` at (0,1,0). Every selector below is prefixed
-   with its layout class to reach (0,2,0) so the cascade resolves the way this file's comments claim
-   it does. Remove a prefix and the rule silently stops applying — silently, because nothing turns
-   red: the page just keeps the other file's value. */
+   equal specificity the route stylesheet therefore wins. So every selector below is prefixed with
+   its layout class to reach (0,2,0), and the prefix is doing two different jobs:
+
+     REQUIRED TODAY, for the glass. screens/checkout.css declares `.co-card { background: ... }` at
+     (0,1,0), and `background` is a shorthand that sets `background-color`. Unprefixed, the folded
+     panel's translucency is overwritten and the whole see-through treatment silently does nothing
+     on the only checkout that exists. This was verified by removing the prefix and watching the
+     test go red, not by reading the cascade and believing it.
+
+     DEFENSIVE, for the 28rem cap. screens/checkout.css caps `.co`, not `.co-card`, so at present
+     an unprefixed cap would apply. The prefix costs nothing and stops that from depending on the
+     other file never adding a width — which is exactly the sort of thing it would be entitled to
+     add, since `.co-card` is its block.
+
+   Either way, removing a prefix fails SILENTLY: nothing turns red, the page just keeps the other
+   file's value. apps/web/tests/fold.test.mjs compares every rule in this file against all three
+   route stylesheets, expanding shorthands, and fails on any rule that would be beaten. */
 
 /* The cap the owner asked for, on the card that is actually on screen. The COLUMN around it may
    stay wider — assets/screens/checkout.css puts `.co` at 34rem and that is its business — but the
