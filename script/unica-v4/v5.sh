@@ -3,7 +3,7 @@
 # TESTNET / NO VALUE. Every LIVE step calls script/unica-v4/deploy-public.sh, which broadcasts only
 # with LIVE_BROADCAST on its command line and a forge keystore named in DEPLOYER_ACCOUNT; the
 # password is prompted by cast/forge in the terminal and never passes through this file.
-# Steps: preflight | mint | A | readback | B | C | activate | manifest | verify | evidence | commit | ens-records | ens-lineage
+# Steps: preflight | mint | A | readback | B | C | D | activate | manifest | verify | evidence | commit | ens-records | ens-lineage
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PATH="$HOME/.foundry/bin:$HOME/.local/bin:$PATH"
@@ -27,6 +27,7 @@ case "$STEP" in
   readback) bash script/unica-v4/deploy-public.sh "$NET" readback ;;
   B) live B; for v in UNICA_HOOK UNICA_EXECUTOR; do code "$(cfg $v)"; done; status_is 1 ;;
   C) live C; status_is 3 ;;
+  D) live D; for x in UNICA_PRODUCT_CATALOG UNICA_DIRECT_SETTLEMENT UNICA_DIRECT_ADMISSION; do a=$(cfg $x); if [ -n "$a" ] && [ "$a" != "0x0000000000000000000000000000000000000000" ]; then code "$a"; fi; done; echo "stage D recorded in $CFG" ;;
   activate) live activate; status_is 4 ;;
   manifest) status_is 4; bash script/unica-v4/manifest.sh "$NET" "$CFG" "$MAN" ;;
   verify) test -f "$MAN" || fail "no manifest; run: make v5-manifest NET=$NET"; RPC_ALIAS="$NET" bash script/unica-v4/verify-source.sh "$C" ;;

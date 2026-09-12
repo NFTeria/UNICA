@@ -62,11 +62,15 @@ sig_of() { case "$1" in
   EnsV2ResolverAuthority) echo "constructor(address)";;
   TerminalAdmission) echo "constructor(address,address,bytes32,address,string)";;
   ChainlinkFeedAdapter) echo "constructor(address,uint48,address,uint48,address,address,address,uint256,address)";;
+  ProductCatalog) echo "constructor()";;
+  DirectSettlement) echo "constructor(address,address)";;
   *) echo "";; esac; }
 path_of() { case "$1" in
   UnicaMarketFactory) echo "src/unica-v4/UnicaMarketFactory.sol:UnicaMarketFactory";;
   EnsV2ResolverAuthority) echo "src/identity/EnsV2ResolverAuthority.sol:EnsV2ResolverAuthority";;
   TerminalAdmission) echo "src/identity/TerminalAdmission.sol:TerminalAdmission";;
+  ProductCatalog) echo "src/unica-v5/ProductCatalog.sol:ProductCatalog";;
+  DirectSettlement) echo "src/unica-v5/DirectSettlement.sol:DirectSettlement";;
   ChainlinkFeedAdapter) echo "src/unica-v4/oracle/ChainlinkFeedAdapter.sol:ChainlinkFeedAdapter";;
   esac; }
 echo "== source verification for chain $CHAIN (manifest $MANIFEST; verifier ${VERIFIER[1]})"

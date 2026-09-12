@@ -21,7 +21,7 @@ export PATH="$HOME/.foundry/bin:$PATH"
 ALIAS=${1:-}; STAGE=${2:-}; CONFIG=${3:-}
 fail() { echo "STOP: $1"; exit 1; }
 test -n "$ALIAS" || fail "name the foundry.toml rpc alias as the first argument"
-case "$STAGE" in preflight|A|B|C|activate|readback) ;; *) fail "stage must be one of preflight | A | B | C | activate | readback" ;; esac
+case "$STAGE" in preflight|A|B|C|D|activate|readback) ;; *) fail "stage must be one of preflight | A | B | C | D | activate | readback" ;; esac
 
 echo "== measuring the chain behind alias '$ALIAS'"
 chain=$(cast chain-id --rpc-url "$ALIAS" 2>/dev/null || true)
@@ -81,7 +81,7 @@ fi
 
 case "$STAGE" in
   preflight) SIG="preflight()" ;; A) SIG="stageA()" ;; B) SIG="stageB()" ;; C) SIG="stageC()" ;;
-  activate) SIG="activate()" ;; readback) SIG="readback()" ;;
+  D) SIG="stageD()" ;; activate) SIG="activate()" ;; readback) SIG="readback()" ;;
 esac
 
 if [ "${LIVE_BROADCAST:-}" = "I_UNDERSTAND_THIS_SENDS_TRANSACTIONS" ] && [ "$STAGE" != "preflight" ] && [ "$STAGE" != "readback" ]; then
@@ -100,6 +100,8 @@ if [ "${LIVE_BROADCAST:-}" = "I_UNDERSTAND_THIS_SENDS_TRANSACTIONS" ] && [ "$STA
        echo "next: LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=$DEPLOYER_ACCOUNT $0 $ALIAS B" ;;
     B) record_outputs STAGE_B "$LIVE_LOG" marketId=UNICA_MARKET_ID hook=UNICA_HOOK executor=UNICA_EXECUTOR
        echo "next: LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=$DEPLOYER_ACCOUNT $0 $ALIAS C" ;;
+    D) record_outputs STAGE_D "$LIVE_LOG" productCatalog=UNICA_PRODUCT_CATALOG directSettlement=UNICA_DIRECT_SETTLEMENT directAdmission=UNICA_DIRECT_ADMISSION
+       echo "next: bash script/unica-v4/manifest.sh $ALIAS config/unica-v4/$chain.env   (the shop is recorded; regenerate the manifest)" ;;
     C) echo "next: $0 $ALIAS readback   (compare status 3, slot0Tick == initTick, the three reverse maps), then"
        echo "      LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=$DEPLOYER_ACCOUNT $0 $ALIAS activate" ;;
     activate) echo "next: $0 $ALIAS readback, then bash script/unica-v4/manifest.sh $ALIAS $CONFIG" ;;

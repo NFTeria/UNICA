@@ -25,6 +25,8 @@ import {ChainlinkFeedAdapter} from "../../src/unica-v4/oracle/ChainlinkFeedAdapt
 import {AggregatorV3Interface} from "../../src/unica-v4/oracle/AggregatorV3Interface.sol";
 import {UnicaPolicyReceiver} from "../../src/unica-v4/policy/UnicaPolicyReceiver.sol";
 import {TerminalAdmission} from "../../src/identity/TerminalAdmission.sol";
+import {ProductCatalog} from "../../src/unica-v5/ProductCatalog.sol";
+import {DirectSettlement} from "../../src/unica-v5/DirectSettlement.sol";
 import {EnsV2ResolverAuthority} from "../../src/identity/EnsV2ResolverAuthority.sol";
 
 /// @notice The one read this script makes of a forwarder before trusting it with a receiver.
@@ -556,6 +558,54 @@ contract DeployPublic is Script {
     // =========================================================================================
     // readback: what the chain says, for the owner to compare with the plan
     // =========================================================================================
+
+    /// @notice Stage D — the shop. A catalogue every business on this chain lists into, and, on a
+    ///         chain that carries the identity stack, the same-asset settler with an admission of its
+    ///         own: the ENS check with no confidential-policy receiver, exactly as the practice
+    ///         deployment wires it. Three contracts, three wiring calls, one owner-signed run.
+    ///         Refused when a catalogue is already recorded for this chain, so a second run cannot
+    ///         leave two shops behind. The registry's live admin signs, because the settler's
+    ///         creator list and the admission's settler list both answer to it.
+    function stageD() external {
+        _load();
+        if (vm.envOr("UNICA_PRODUCT_CATALOG", address(0)) != address(0)) {
+            revert MissingConfig("stage D already recorded: UNICA_PRODUCT_CATALOG is set");
+        }
+        address registry = vm.envAddress("UNICA_REGISTRY");
+        if (registry.code.length == 0) revert NoCode("registry", registry);
+        address admission = vm.envOr("UNICA_ADMISSION", address(0));
+        if (IUnicaMarketRegistry(registry).admin() != c.deployer) {
+            revert MissingConfig("stage D must be signed by the registry admin");
+        }
+
+        vm.startBroadcast(c.deployer);
+        ProductCatalog catalog = new ProductCatalog();
+        address direct;
+        address directAdmission;
+        if (c.identityAuthority != address(0) && admission != address(0)) {
+            DirectSettlement settler = new DirectSettlement(c.payout, registry);
+            TerminalAdmission gate = new TerminalAdmission(
+                c.identityAuthority, registry, c.ensDeploymentId, address(0), c.terminalStatusKey
+            );
+            TerminalAdmission(admission).setDirectSettler(address(settler), true);
+            gate.setDirectSettler(address(settler), true);
+            settler.setOrderCreator(address(gate), true);
+            direct = address(settler);
+            directAdmission = address(gate);
+        }
+        vm.stopBroadcast();
+
+        _emit("STAGE_D", "productCatalog", vm.toString(address(catalog)));
+        _emit("STAGE_D", "directSettlement", vm.toString(direct));
+        _emit("STAGE_D", "directAdmission", vm.toString(directAdmission));
+        _emit(
+            "STAGE_D",
+            "note",
+            direct == address(0)
+                ? "catalogue only: this chain carries no identity stack, so no same-asset settler"
+                : "catalogue, same-asset settler and its admission"
+        );
+    }
 
     function readback() external {
         _load();
