@@ -15,6 +15,10 @@ import { connectWallet, discoverProviders, fromHexChainId, makeSession, rpcReque
 import { payNameFor, readBusinessJoined, readMerchantOf } from "./local-join.js";
 
 export const REMEMBERED_KEY = "unica.wallet";
+/** Set by Log out, cleared by the next prompted login. A wallet keeps answering eth_accounts for a
+ *  site it approved, so forgetting the address alone logs nobody out: the next load would reconnect
+ *  silently. Log out is therefore a marker the browser keeps until the person logs in by choice. */
+export const LOGGED_OUT_KEY = "unica.wallet.out";
 export const LOCAL_CHAIN_ID = 31337;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const ZERO32 = /^0x0{64}$/;
@@ -36,7 +40,17 @@ export function rememberWallet(address, storage = defaultStorage()) {
   if (!ADDRESS.test(String(address ?? ""))) return false;
   try {
     storage?.setItem(REMEMBERED_KEY, String(address));
+    storage?.removeItem(LOGGED_OUT_KEY); // a login by choice lifts a log-out
     return Boolean(storage);
+  } catch {
+    return false;
+  }
+}
+
+/** True between Log out and the next prompted login; false when storage cannot be read. */
+export function loggedOut(storage = defaultStorage()) {
+  try {
+    return storage?.getItem(LOGGED_OUT_KEY) === "1";
   } catch {
     return false;
   }
@@ -55,6 +69,7 @@ export function rememberedWallet(storage = defaultStorage()) {
 export function forgetWallet(storage = defaultStorage()) {
   try {
     storage?.removeItem(REMEMBERED_KEY);
+    storage?.setItem(LOGGED_OUT_KEY, "1");
   } catch {
     // nothing to forget, or nowhere it could have been kept
   }
@@ -79,6 +94,7 @@ export async function practiceAccounts(config, fetchImpl = globalThis.fetch) {
  * reconnected the same way. Returns { session, wallet } or null; it never throws.
  */
 export async function silentReconnect(config, { win = globalThis.window, storage = defaultStorage(), fetchImpl = globalThis.fetch, providers = null } = {}) {
+  if (loggedOut(storage)) return null; // the person pressed Log out; no wallet is asked until they log in again
   const wanted = rememberedWallet(storage);
   let list = providers;
   if (!list) {

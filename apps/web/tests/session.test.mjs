@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  LOGGED_OUT_KEY,
   REMEMBERED_KEY,
   forgetWallet,
+  loggedOut,
   loginWithWallet,
   practiceAccounts,
   readBusiness,
@@ -82,12 +84,37 @@ test("on the local testnet a remembered testnet account reconnects through the c
   assert.deepEqual(await practiceAccounts({ chainId: 11155111, rpc: "/local/rpc" }, fetchImpl), [], "only the local testnet has unlocked accounts");
 });
 
+test("log out sticks: a wallet that still answers eth_accounts is not asked again until the person logs in by choice", async () => {
+  const config = { chainId: 11155111 };
+  const s = fakeStorage();
+  rememberWallet(A, s);
+  const before = await silentReconnect(config, { storage: s, providers: [provider([A], "0xaa36a7")] });
+  assert.equal(before?.session?.address, A, "control: before log out the approved wallet reconnects");
+  forgetWallet(s);
+  assert.equal(loggedOut(s), true);
+  assert.equal(s.getItem(LOGGED_OUT_KEY), "1");
+  assert.equal(rememberedWallet(s), null);
+  const after = await silentReconnect(config, { storage: s, providers: [provider([A], "0xaa36a7")] });
+  assert.equal(after, null, "after log out the same wallet, still approved, must not be reconnected");
+  // A prompted login lifts it: the next load reconnects again.
+  rememberWallet(A, s);
+  assert.equal(loggedOut(s), false);
+  const again = await silentReconnect(config, { storage: s, providers: [provider([A], "0xaa36a7")] });
+  assert.equal(again?.session?.address, A);
+  // Storage that cannot be read never blocks a reconnect and never throws.
+  assert.equal(loggedOut(throwingStorage), false);
+  forgetWallet(throwingStorage);
+  const blind = await silentReconnect(config, { storage: throwingStorage, providers: [provider([A], "0xaa36a7")] });
+  assert.equal(blind?.session?.address, A);
+});
+
 test("a prompted login remembers the address it connected", async () => {
   const config = { chainId: 31337, rpc: "http://127.0.0.1:8545" };
   const s = fakeStorage();
   const result = await loginWithWallet(config, { storage: s, providers: [], fetchImpl: rpcFetch({ eth_accounts: [A, B] }), localFrom: B });
   assert.equal(result.session.address, B);
   assert.equal(rememberedWallet(s), B);
+  assert.equal(loggedOut(s), false, "a login by choice lifts a log-out");
 });
 
 test("where to go next follows the chain, not the browser", async () => {
