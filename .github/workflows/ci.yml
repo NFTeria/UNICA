@@ -228,3 +228,55 @@ jobs:
       # regex drifted, and four pushes went red on a rule the local run did not have.)
       - name: No secrets or private material in the tree
         run: bash script/scan.sh
+
+  # The complete local vertical slice on a throwaway Anvil chain: deploy, seed, the barbershop
+  # payment, the attack matrix, from a clean chain to a stopped node. LOCAL_ANVIL_NO_VALUE: the
+  # scripts refuse any chain id but 31337 and every RPC URL is loopback, so this lane contacts no
+  # external network. Vyper is pinned to the exact version the rulings name (H8); the identity
+  # token is compiled here and deployed by the forge script.
+  anvil:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+      - name: Install the pinned Vyper
+        run: |
+          python3 -m pip install --user --disable-pip-version-check 'vyper==0.4.3'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Record the toolchain
+        run: forge --version && anvil --version && node --version && "$HOME/.local/bin/vyper" --version
+      - name: The whole slice from a clean chain
+        run: make anvil-test
+      - name: Keep the run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anvil-run-evidence
+          path: |
+            .rehearsal/anvil/run-evidence.json
+            .rehearsal/anvil/demo-record.json
+            .rehearsal/anvil/demo-pos.txt
+            deployments/31337.local.json
+          if-no-files-found: ignore
+
+  # The Vyper art layer under vy/ (renderer, identity token, golden vectors) on Moccasin's
+  # in-process EVM. Its own lane, pinned to the versions the rulings name, so the contract gate
+  # stays runnable by somebody who has not installed Python at all and a Vyper failure never
+  # reads as a Solidity one.
+  vyper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned Vyper and Moccasin
+        run: |
+          python3 -m pip install --user --disable-pip-version-check 'vyper==0.4.3' 'moccasin==0.4.4'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Record the toolchain
+        run: "$HOME/.local/bin/vyper" --version && "$HOME/.local/bin/mox" --version
+      - name: mox test
+        run: cd vy && "$HOME/.local/bin/mox" test
