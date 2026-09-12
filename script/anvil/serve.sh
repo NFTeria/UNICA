@@ -65,6 +65,7 @@ startCompanion({
   recordPath: process.env.UNICA_RECORD_PATH,
   rpcUrl: process.env.UNICA_RPC_URL,
   subgraphUrl: process.env.UNICA_SUBGRAPH_URL || null,
+  explorerKey: process.env.ETHERSCAN_API_KEY || null, // a keyed log source when .env carries one; never printed
   host: process.env.UNICA_HOST,
   port: Number(process.env.UNICA_PORT),
   logWindow: Number(process.env.UNICA_LOG_WINDOW ?? 2000),

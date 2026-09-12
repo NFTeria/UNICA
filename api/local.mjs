@@ -35,6 +35,7 @@ const BUNDLE_ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const MANIFEST_PATH = process.env.UNICA_MANIFEST_PATH || "deployments/unica-v4/11155111.json";
 const RPC_URL = process.env.UNICA_RPC_URL || "";
 const SUBGRAPH_URL = process.env.UNICA_SUBGRAPH_URL || null;
+const EXPLORER_KEY = process.env.ETHERSCAN_API_KEY || null; // a keyed log source; the key stays in this process
 
 // One root, chosen once, by asking whether the manifest is actually there. The bundle layout is the
 // answer everywhere it holds; the working directory is the fallback for a host that lays a function
@@ -57,6 +58,7 @@ const companion =
         recordPath: null, // a public network has no practice-run record, and null is what /local/record says
         rpcUrl: RPC_URL,
         subgraphUrl: SUBGRAPH_URL,
+        explorerKey: EXPLORER_KEY,
       })
     : null;
 

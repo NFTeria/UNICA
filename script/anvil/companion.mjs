@@ -37,7 +37,45 @@ const PROJECTION_TTL_MS = 15_000;
 
 /** Never let an upstream message carry a URL to the browser: the node's address is not the page's business. */
 function redact(text) {
-  return String(text ?? "").replace(/https?:\/\/[^\s"'<>)]+/g, "<node>");
+  return String(text ?? "").replace(/https?:\/\/[^\s"'<>)]+/g, "<node>").replace(/apikey=[^&\s"'<>)]+/gi, "apikey=<key>");
+}
+
+/** Etherscan's V2 endpoint: one base for every chain it covers, the chain named in the query. */
+const ETHERSCAN_V2_API = "https://api.etherscan.io/v2/api";
+
+/**
+ * Logs from the first source that answers, node reads from the first source only. A public host's
+ * shared egress is throttled by a keyless explorer sooner than a laptop's is, so a keyed source goes
+ * first when a key is configured and the keyless explorer stays as the fallback; a source that
+ * refuses (wrong chain, bad key, throttled past its retries) hands the same filter to the next one.
+ */
+class LogsWithFallback {
+  constructor(clients) {
+    this.clients = clients;
+  }
+  async logs(filter) {
+    let last = null;
+    for (const client of this.clients) {
+      try {
+        return await client.logs(filter);
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last ?? new Error("no explorer source");
+  }
+  blockNumber() {
+    return this.clients[0].blockNumber();
+  }
+  receipt(hash) {
+    return this.clients[0].receipt(hash);
+  }
+  call(tx, tag) {
+    return this.clients[0].call(tx, tag);
+  }
+  send(method, params = []) {
+    return this.clients[0].send(method, params);
+  }
 }
 
 const BUSINESS_JOINED_TOPIC0 = "0x" + keccak256Hex("BusinessJoined(bytes32,address,string,address,bytes32,bytes32,uint256)");
@@ -434,11 +472,13 @@ export function createCompanion({
   recordPath = null,
   rpcUrl,
   subgraphUrl = null,
+  explorerKey = null,
   host = "127.0.0.1",
   port = 0,
   logWindow = 2000,
 }) {
   const ROOT = resolve(root);
+  const EXPLORER_KEY = explorerKey ? String(explorerKey) : null; // never written to any response
   const OUT_DIR = outDir === null || outDir === undefined ? null : resolve(ROOT, outDir);
   const MANIFEST_PATH = resolve(ROOT, manifestPath);
   const RECORD_PATH = recordPath === null || recordPath === undefined ? null : resolve(ROOT, recordPath);
@@ -455,6 +495,16 @@ export function createCompanion({
   const LOG_WINDOW = Number(logWindow);
   let projectionMemo = { head: null, at: 0, value: null };
 
+  /** The log sources for a public chain, keyed Etherscan first when a key is configured, the manifest's keyless explorer after it; null on the practice chain or with no source. */
+  function explorerFor(manifest) {
+    if (Number(manifest?.chainId) === LOCAL_CHAIN) return null;
+    const chainId = Number(manifest?.chainId);
+    const clients = [];
+    if (EXPLORER_KEY && Number.isFinite(chainId) && chainId > 0) clients.push(new ExplorerLogs({ api: ETHERSCAN_V2_API, rpc: RPC_URL, query: { chainid: String(chainId), apikey: EXPLORER_KEY } }));
+    if (manifest?.explorer?.kind === "blockscout" && manifest.explorer.api) clients.push(new ExplorerLogs({ api: manifest.explorer.api, rpc: RPC_URL }));
+    return clients.length ? new LogsWithFallback(clients) : null;
+  }
+
   async function projectAll(manifest) {
     const headHex = await rpc("eth_blockNumber", []);
     const head = Number(BigInt(headHex));
@@ -465,9 +515,8 @@ export function createCompanion({
     // A public chain whose manifest names a Blockscout API gets its logs from the explorer in one
     // range; the node still answers block numbers, receipts and calls. Without an explorer the walk
     // below runs in windows, which a free-tier node may still refuse: the error then says so.
-    const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
-    if (explorerApi) {
-      const client = new ExplorerLogs({ api: explorerApi, rpc: RPC_URL });
+    const client = explorerFor(manifest);
+    if (client) {
       const one = await projectEvidence({ rpc: client, manifest, fromBlock: start, toBlock: head });
       projectionMemo = { head, at: now, value: one };
       return one;
@@ -502,9 +551,9 @@ export function createCompanion({
     const key = String(authority).toLowerCase();
     if (lineageMemo.value && lineageMemo.key === key && Date.now() - lineageMemo.at < PROJECTION_TTL_MS) return lineageMemo.value;
     const local = Number(manifest?.chainId) === LOCAL_CHAIN;
-    const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
+    const explorer = explorerFor(manifest);
     const filter = { address: authority, topics: [LINEAGE_TOPIC0], fromBlock: local ? "0x0" : "0x" + Number(manifest?.deployedAtBlock ?? 0).toString(16), toBlock: "latest" };
-    const logs = explorerApi ? await new ExplorerLogs({ api: explorerApi, rpc: RPC_URL }).logs(filter) : await rpc("eth_getLogs", [filter]);
+    const logs = explorer ? await explorer.logs(filter) : await rpc("eth_getLogs", [filter]);
     lineageMemo = { at: Date.now(), key, value: logs ?? [] };
     return logs ?? [];
   }
@@ -516,9 +565,9 @@ export function createCompanion({
     if (!onboarding || !payout) return null;
     try {
       const local = Number(manifest?.chainId) === LOCAL_CHAIN;
-      const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
+      const explorer = explorerFor(manifest);
       const filter = { address: onboarding, topics: [BUSINESS_JOINED_TOPIC0], fromBlock: local ? "0x0" : "0x" + Number(manifest?.deployedAtBlock ?? 0).toString(16), toBlock: "latest" };
-      const logs = explorerApi ? await new ExplorerLogs({ api: explorerApi, rpc: RPC_URL }).logs(filter) : await rpc("eth_getLogs", [filter]);
+      const logs = explorer ? await explorer.logs(filter) : await rpc("eth_getLogs", [filter]);
       for (const log of (logs ?? []).slice().reverse()) {
         const words = String(log.data ?? "0x").slice(2).match(/.{64}/g) ?? [];
         if (words.length < 5) continue;

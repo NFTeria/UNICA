@@ -16,6 +16,16 @@ printf 'deployments/unica-v4/11155111.json' | vercel env add UNICA_MANIFEST_PATH
 vercel --prod
 ```
 
+`ETHERSCAN_API_KEY` is strongly advised on a public host. The business lookups and the receipt
+evidence read logs from an explorer; the keyless Blockscout API throttles a shared hosting egress
+long before it throttles a laptop, and a throttled lookup is a business page that cannot see its
+own name. With the key set, the host reads logs from Etherscan's V2 API first and keeps Blockscout
+as the fallback. The key is used only inside the function and never appears in a response:
+
+```sh
+vercel env add ETHERSCAN_API_KEY production       # paste the key at the prompt — never into a file
+```
+
 `UNICA_SUBGRAPH_URL` is optional. Add it only if the screens should read a published index:
 
 ```sh

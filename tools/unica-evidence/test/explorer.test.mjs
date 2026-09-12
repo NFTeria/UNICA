@@ -57,3 +57,41 @@ test("the client pages until a short page or a repeated page, dedupes, and leave
   const failing = new ExplorerLogs({api: "https://x/api", rpc: node, fetchImpl: async () => ({ok: false, status: 503})});
   await assert.rejects(() => failing.logs({}), /HTTP 503/);
 });
+
+test("a throttled or failing explorer is retried with backoff, every other status fails at once, and the key never reaches the error", async () => {
+  const page = (rows) => ({ok: true, status: 200, json: async () => ({status: "1", message: "OK", result: rows})});
+  const row = {address: "0xA", topics: ["0x1"], data: "0x", blockNumber: "0x1", logIndex: "0x0", transactionHash: "0xT", transactionIndex: "0x0"};
+  const node = {blockNumber: async () => "0x10", receipt: async () => null, call: async () => "0x", send: async () => null};
+  const slept = [];
+  const sleepImpl = async (ms) => slept.push(ms);
+  let answers = [{ok: false, status: 429, headers: {get: () => null}}, {ok: false, status: 503, headers: {get: () => "2"}}, page([row])];
+  const urls = [];
+  const client = new ExplorerLogs({api: "https://x/api", rpc: node, fetchImpl: async (url) => (urls.push(url), answers.shift()), query: {chainid: "11155111", apikey: "PLANTED-KEY"}, sleepImpl});
+  assert.equal((await client.logs({address: "0xA"})).length, 1, "the third answer is the page");
+  assert.deepEqual(slept, [1000, 2000], "backoff after the 429, Retry-After after the 503");
+  assert.match(urls[0], /chainid=11155111/);
+  assert.match(urls[0], /apikey=PLANTED-KEY/);
+  // Four throttles in a row exhaust three retries and fail with the status, never the URL.
+  answers = Array.from({length: 4}, () => ({ok: false, status: 429, headers: {get: () => null}}));
+  slept.length = 0;
+  await assert.rejects(() => client.logs({}), (e) => /HTTP 429/.test(e.message) && !/PLANTED-KEY/.test(e.message));
+  assert.deepEqual(slept, [1000, 2000, 4000]);
+  // Control: a 404 is not a throttle and is not retried.
+  answers = [{ok: false, status: 404, headers: {get: () => null}}, page([row])];
+  slept.length = 0;
+  await assert.rejects(() => client.logs({}), /HTTP 404/);
+  assert.deepEqual(slept, []);
+});
+
+test("status 0 is an empty range only when the explorer says no records; a refusal in the same shape is an error", async () => {
+  const node = {blockNumber: async () => "0x10", receipt: async () => null, call: async () => "0x", send: async () => null};
+  const answer = (message, result = message) => async () => ({ok: true, status: 200, json: async () => ({status: "0", message, result})});
+  const empty = new ExplorerLogs({api: "https://x/api", rpc: node, fetchImpl: answer("No records found", [])});
+  assert.deepEqual(await empty.logs({}), []);
+  const emptyToo = new ExplorerLogs({api: "https://x/api", rpc: node, fetchImpl: answer("No logs found")});
+  assert.deepEqual(await emptyToo.logs({}), []);
+  const refused = new ExplorerLogs({api: "https://x/api", rpc: node, fetchImpl: answer("NOTOK", "Missing/Invalid API Key")});
+  await assert.rejects(() => refused.logs({}), /NOTOK|Invalid API Key/);
+  const wrongChain = new ExplorerLogs({api: "https://x/api", rpc: node, fetchImpl: answer("NOTOK", "Invalid chainid")});
+  await assert.rejects(() => wrongChain.logs({}), /NOTOK/);
+});
