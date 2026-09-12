@@ -20,7 +20,7 @@ export L=LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS
 | Base Sepolia (84532) | `base_testnet` | ACTIVE (status 4) | `0x8437BcCd3Cd7c1BfbC4EC47d9766cAaEc12e5aa3` | `0xA0686c76446315182e1ac7cb3Fb844d812670C53` | `0x77D1f8d20e878305b509e44a266C0F69925ca0C0` | `0x89BBdF3075432542CFFd0154D707ACf9ba3a56F9` | market id `0xc620eff48202f9439a04206b2955c6abd26bfb66a5b73f1e0b7d41f4ad03e682` | etherscan (Base Sepolia) |
 | Arbitrum Sepolia (421614) | `arbitrum_testnet` | ACTIVE (status 4) | `0xA0C5cc4FC6A6446a6f532942ECb6eeeF91AE8901` | `0x3072ab51ae34f99A8b7368643c6baC7118E8a6f9` | `0x524B0B6AD8B93bC907077A474C28779d620d60c0` | `0x79552Ad852304D04b246a85168D562B8eE244879` | market id `0x347ef2afeff0218f9e4d23f205a3772f063f358e72db69225481753c329acbc7` | etherscan (Arbitrum Sepolia) |
 | Unichain Sepolia (1301) | `unichain_testnet` | ACTIVE (status 4) | `0xcD59d70551E438CC0ef859F86C8c12c5e6007728` | `0xC29b35ef2F85DEdE57452090bC7dC85743664296` | `0xA112930b4C2d8fce1192F2Bd60f7Cf9E7Ef0A0c0` | `0xD3730094f1D481F7501E75B3E6FCDa16fF0C9e67` | market id `0x865fe38970e04183c900768131ccb9ad451b042068695aeb8697478fea7c4ff2` | sourcify (Unichain Sepolia) |
-| Robinhood Chain testnet (46630) | `robinhood_testnet` | staged: preflight go, nothing sent | — | — | — | — | — | — |
+| Robinhood Chain testnet (46630) | `robinhood_testnet` | ACTIVE (status 4) | `0xfdD4468715F1d2e4242E8F58205E7699137e0Aa7` | `0x9Cb93Ab47adB2fDac35baD6097a6cCF70A441D92` | `0x30396Bf4C1cEB4a513425d8c0BD6EFB1FABFA0C0` | `0xc84f4a8C4215Ad1162FFcCcC9DA3dA589D7DaF9a` | market id `0x4c968c48e90f58a8994e40590df132568f3a7ee5991fbcf84714fa4c4008639a` | blockscout (Robinhood Chain testnet explorer) |
 
 Ethereum Sepolia also carries the identity stack (authority `0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133`, admission
 `0x95ee6cCde9B03C8841972DB52b4cBe38e7d99399`, badge `0xaEB244C4FE0f995403eC230683d2DC84D41157CA`) and the live `freshcuts.unica.eth` records and lineage; the Vyper badge is
@@ -125,15 +125,15 @@ bash script/unica-v4/deploy-public.sh unichain_testnet readback
 bash script/unica-v4/manifest.sh unichain_testnet config/unica-v4/1301.env
 ```
 
-## Robinhood Chain testnet (46630) — alias `robinhood_testnet` — READY as a demonstration market (no oracle, no ENS)
+## Robinhood Chain testnet (46630) — alias `robinhood_testnet` — LIVE as a demonstration market (no oracle, no ENS); verified on the chain's Blockscout explorer
 
 Config `config/unica-v4/46630.env`, every value read live on 2026-09-12: PoolManager `0x8366a39CC670B4001A1121B8F6A443A643e40951` (24,009 bytes),
 CREATE2 factory present, asset `0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E` (a faucet testnet token whose symbol reads TSLA, 18 decimals; not the
 instrument, no value), payout `0xfb93352698150e720Bf0A321DEf3aC98D90B9874` (uTUSD, the repository's own 6-decimal test dollar; its only minter is the
 deployer, so no faucet is involved; it is not USDC). The demonstration rate 365.225 test dollars per unit is the Chainlink TSLA / USD feed on OP Sepolia
 read on chain at 1789233564 (recorded with the feed address in the config); chain 46630 itself has no Chainlink Data Feed, so the market runs oracle-off
-and labelled. Deployer 0.059 test ETH at nonce 90, gas price 0.01 gwei measured, the whole sequence ≈ 27M gas ≈ 0.0003 ETH. Sourcify lists chain 46630
-as supported, so `verify` runs there without an explorer key. The deployer held 0.1 uTUSD at config time; stage C seeds 4.9, so `mint` (one transaction,
+and labelled. Deployer 0.059 test ETH at nonce 90, gas price 0.01 gwei measured, the whole sequence ≈ 27M gas ≈ 0.0003 ETH. Sourcify lists chain 46630 as supported but its node could not fetch the bytecode, so `verify` talks to the chain's public
+Blockscout explorer directly (no key involved); all four contracts are verified there. The deployer held 0.1 uTUSD at config time; stage C seeds 4.9, so `mint` (one transaction,
 100 test dollars to the deployer, refused on any other chain and refused unless the keystore's address is the token's minter) comes first. Preflight: go.
 
 ```sh
