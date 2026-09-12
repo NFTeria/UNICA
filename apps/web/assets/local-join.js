@@ -256,13 +256,32 @@ export async function readBadge(session, badgeAddress, tokenId) {
 }
 
 /** Every register under `terminalsNode`, with its status text and the accounts allowed to run it. */
-export async function listRegisters(session, identity, terminalsNode, statusKey) {
-  const logs = await session.request("eth_getLogs", [{
-    fromBlock: "0x0",
-    toBlock: "latest",
-    address: identity,
-    topics: [topicOf(SUBNAME_REGISTERED_SIGNATURE), terminalsNode],
-  }]);
+export async function listRegisters(session, identity, terminalsNode, statusKey, fetchImpl = globalThis.fetch) {
+  let logs = [];
+  try {
+    logs = await session.request("eth_getLogs", [{
+      fromBlock: "0x0",
+      toBlock: "latest",
+      address: identity,
+      topics: [topicOf(SUBNAME_REGISTERED_SIGNATURE), terminalsNode],
+    }]);
+  } catch {
+    logs = []; // a public node may refuse an unbounded scan; the companion below has its own way
+  }
+  if (!Array.isArray(logs) || logs.length === 0) {
+    // No local fixture wrote these registers: ask the companion, which reads the name authority's
+    // lineage and each register's published status through the explorer.
+    try {
+      const res = await fetchImpl(`/local/registers?terminals=${encodeURIComponent(String(terminalsNode))}`);
+      const body = res && res.ok ? await res.json() : null;
+      if (Array.isArray(body?.registers)) {
+        return body.registers.map((r) => ({ node: r.node, label: r.label, status: String(r.status ?? ""), operators: Array.isArray(r.operators) ? r.operators : [] }));
+      }
+    } catch {
+      // nothing answered: fall through with no registers
+    }
+    return [];
+  }
   const registers = [];
   for (const entry of (logs ?? []).map(decodeSubnameRegisteredLog).filter(Boolean)) {
     const status = decodeString(await session.call({ to: identity, data: encodeCall("text(bytes32,string)", [entry.node, statusKey]) }));

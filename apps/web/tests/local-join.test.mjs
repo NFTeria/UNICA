@@ -362,3 +362,15 @@ test("listRegisters reads each register's status and its current operators", asy
   const registers = await listRegisters(s, ZERO, TERMINALS_NODE, KEY);
   assert.deepEqual(registers, [{ node: CHAIR1_NODE, label: "chair-1", status: "active", operators: [OWNER] }]);
 });
+
+
+test("when no fixture ever wrote the registers, listRegisters asks the companion and returns what the chain says", async () => {
+  const session = { request: async () => [], call: async () => "0x" };
+  const terminals = "0x" + "ae".repeat(32);
+  const fetchImpl = async (url) => { assert.match(String(url), /\/local\/registers\?terminals=0x/); return { ok: true, json: async () => ({ registers: [{ node: "0x" + "78".repeat(32), label: "chair-1", status: "active" }, { node: "0x" + "01".repeat(32), label: "lost-tablet", status: "revoked" }] }) }; };
+  const rows = await listRegisters(session, "0x" + "b3".repeat(20), terminals, "com.unica.terminal-status", fetchImpl);
+  assert.deepEqual(rows.map((r) => [r.label, r.status, r.operators.length]), [["chair-1", "active", 0], ["lost-tablet", "revoked", 0]]);
+  const refused = { request: async () => { throw new Error("range too large"); }, call: async () => "0x" };
+  const none = await listRegisters(refused, "0x" + "b3".repeat(20), terminals, "com.unica.terminal-status", async () => ({ ok: false }));
+  assert.deepEqual(none, []);
+});

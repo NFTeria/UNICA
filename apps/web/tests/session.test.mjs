@@ -102,3 +102,21 @@ test("where to go next follows the chain, not the browser", async () => {
   const firstTime = await readBusiness({ address: A, call: async () => zero }, { merchantOnboarding: B });
   assert.deepEqual(firstTime, { available: true, joined: false });
 });
+
+
+test("on a network with a name authority but no sign-up, a wallet's business comes from the companion's chain-derived answer", async () => {
+  const config = { merchantOnboarding: null, identity: B, parentName: "unica.eth" };
+  const answer = { controller: true, businesses: [{ label: "freshcuts", name: "freshcuts.unica.eth", merchantNode: "0x" + "f2".repeat(32), terminalsNode: "0x" + "ae".repeat(32), payout: A, seller: A, registers: [{ node: "0x" + "78".repeat(32), label: "chair-1", status: "active", operators: [] }] }] };
+  const fetchImpl = async (url) => { assert.match(String(url), /\/local\/businesses\?wallet=0x/); return { ok: true, json: async () => answer }; };
+  const b = await readBusiness({ address: A }, config, fetchImpl);
+  assert.equal(b.joined, true);
+  assert.equal(b.name, "freshcuts.unica.eth");
+  assert.equal(b.payout, A);
+  assert.equal(b.registers[0].label, "chair-1");
+  assert.equal(whereTo(b), "business");
+  const none = await readBusiness({ address: A }, config, async () => ({ ok: true, json: async () => ({ businesses: [] }) }));
+  assert.equal(none.joined, false);
+  assert.match(none.reason, /No business is registered to this wallet/);
+  const down = await readBusiness({ address: A }, config, async () => { throw new Error("no companion"); });
+  assert.equal(down.available, false);
+});

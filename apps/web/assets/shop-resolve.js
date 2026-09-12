@@ -28,12 +28,25 @@ export function shopLabel(input, parentName = null) {
  *   { by: "name", seller, payout, label, name, merchantNode, badgeTokenId }  when a name resolved
  *   null                                                               when nothing on the chain answers to it
  */
-export async function resolveShop(session, config, nameOrAddress) {
+export async function resolveShop(session, config, nameOrAddress, fetchImpl = globalThis.fetch) {
   const raw = String(nameOrAddress ?? "").trim();
   if (ADDRESS.test(raw)) return { by: "address", seller: raw };
   const onboarding = config?.merchantOnboarding ?? null;
   const label = shopLabel(raw, config?.parentName ?? null);
-  if (!onboarding || !label) return null;
+  if (!label) return null;
+  if (!onboarding) {
+    // No sign-up contract here: the companion answers from the name authority's lineage and records.
+    if (!config?.identity) return null;
+    try {
+      const res = await fetchImpl(`/local/businesses?label=${encodeURIComponent(label)}`);
+      const body = res && res.ok ? await res.json() : null;
+      const hit = Array.isArray(body?.businesses) ? body.businesses[0] : null;
+      if (!hit || !hit.seller) return null;
+      return { by: "name", seller: hit.seller, payout: hit.payout ?? hit.seller, label, name: hit.name ?? payNameFor(label, config?.parentName ?? null), merchantNode: hit.merchantNode ?? null, badgeTokenId: null };
+    } catch {
+      return null;
+    }
+  }
   const node = decodeBytes32(await session.call({ to: onboarding, data: encodeCall("nodeOf(string)", [label]) }));
   if (!node || isZeroBytes32(node)) return null;
   const logs = await session.request("eth_getLogs", [{ fromBlock: "0x0", toBlock: "latest", address: onboarding, topics: [topicOf(BUSINESS_JOINED_SIGNATURE), node] }]);

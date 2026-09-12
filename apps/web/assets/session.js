@@ -138,9 +138,36 @@ export async function loginWithWallet(config, { win = globalThis.window, storage
  *   { available: true,  joined: true, name, label, payout, merchantNode, terminalsNode, firstTerminalNode, badgeTokenId }
  * Read live every time; nothing is cached, so a business added from another device shows up on reload.
  */
-export async function readBusiness(session, config) {
+export async function readBusiness(session, config, fetchImpl = globalThis.fetch) {
   const onboarding = config?.merchantOnboarding ?? null;
   if (!onboarding) {
+    // A network with a name authority but no self-serve sign-up: the companion reads the authority's
+    // own lineage and resolver records and answers which business pays out to this wallet.
+    if (config?.identity && config?.parentName && session?.address) {
+      try {
+        const res = await fetchImpl(`/local/businesses?wallet=${encodeURIComponent(session.address)}`);
+        const body = res && res.ok ? await res.json() : null;
+        const first = Array.isArray(body?.businesses) ? body.businesses[0] : null;
+        if (first) {
+          return {
+            available: true,
+            joined: true,
+            merchantNode: first.merchantNode,
+            label: first.label,
+            name: first.name,
+            payout: first.payout ?? null,
+            terminalsNode: first.terminalsNode ?? null,
+            firstTerminalNode: first.registers?.[0]?.node ?? null,
+            badgeTokenId: null,
+            registers: first.registers ?? [],
+            controller: Boolean(body?.controller),
+          };
+        }
+      } catch {
+        // the companion did not answer: fall through to the honest negative
+      }
+      return { available: false, joined: false, reason: "No business is registered to this wallet on this network yet." };
+    }
     return { available: false, joined: false, reason: "Business sign-up is not available on this network in this release: pay names are set up on Ethereum Sepolia. This wallet can still be read here." };
   }
   const node = await readMerchantOf(session, onboarding, session.address);

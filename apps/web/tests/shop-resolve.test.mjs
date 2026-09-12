@@ -47,3 +47,15 @@ test("an address is accepted as is, an unknown name is null, and a network witho
   assert.equal(await resolveShop(session(NODE, []), config, "freshcuts"), null, "a node with no record is not a shop");
   assert.equal(await resolveShop(session(NODE, [joinedLog()]), { merchantOnboarding: null }, "freshcuts"), null);
 });
+
+
+test("without a sign-up contract a name resolves through the companion's lineage answer, and an unknown name stays null", async () => {
+  const config = { merchantOnboarding: null, identity: ONBOARDING, parentName: "unica.eth" };
+  const fetchImpl = async (url) => ({ ok: true, json: async () => (String(url).includes("label=freshcuts") ? { businesses: [{ label: "freshcuts", name: "freshcuts.unica.eth", seller: OWNER, payout: OWNER, merchantNode: NODE }] } : { businesses: [] }) });
+  const r = await resolveShop({}, config, "FreshCuts.unica.eth", fetchImpl);
+  assert.equal(r.by, "name");
+  assert.equal(r.seller, OWNER);
+  assert.equal(r.merchantNode, NODE);
+  assert.equal(await resolveShop({}, config, "nobody", fetchImpl), null);
+  assert.equal(await resolveShop({}, { merchantOnboarding: null, identity: null }, "freshcuts", fetchImpl), null, "no authority, no answer");
+});
