@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * The generator. Node standard library only — no dependency, no network, no secret, no server.
+ * The generator. Node standard library only for the build itself — no network, no secret, no server.
+ * One declared dependency, the QR encoder (qrcode-generator, MIT), is copied from node_modules into
+ * assets/vendor/ so the screens can draw a payment link as a code; the build refuses to run without it.
  *
  * WHY A REPOSITORY-OWNED GENERATOR. What this artifact must be is narrow and unusual: one real
  * HTML document per route so a reload works; relative links so it survives a project base path;
@@ -12,16 +14,7 @@
  * link, or a localhost/private/source-tree path in the output all abort the build. A generator that
  * emits a broken artifact and exits zero is worse than no generator.
  */
-import {
-  mkdirSync,
-  rmSync,
-  writeFileSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  existsSync,
-  cpSync,
-} from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, readFileSync, readdirSync, statSync, existsSync, cpSync } from "node:fs";
 import { join, dirname, relative, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -97,6 +90,13 @@ emitted.push("404.html");
 
 if (existsSync(ASSETS)) {
   cpSync(ASSETS, join(OUT, "assets"), { recursive: true });
+  // The QR encoder: a declared dependency, never retyped. Its notice travels with it.
+  const qrDir = join(HERE, "..", "..", "node_modules", "qrcode-generator");
+  if (!existsSync(join(qrDir, "dist", "qrcode.mjs"))) fail("the QR encoder is not installed: run npm ci at the repository root");
+  mkdirSync(join(OUT, "assets", "vendor", "qrcode-generator"), { recursive: true });
+  cpSync(join(qrDir, "dist", "qrcode.mjs"), join(OUT, "assets", "vendor", "qrcode-generator", "qrcode.mjs"));
+  cpSync(join(qrDir, "README.md"), join(OUT, "assets", "vendor", "qrcode-generator", "NOTICE.md"));
+  cpSync(join(qrDir, "package.json"), join(OUT, "assets", "vendor", "qrcode-generator", "package.json"));
   for (const a of walk(join(OUT, "assets"))) emitted.push(posix.join("assets", a));
 }
 

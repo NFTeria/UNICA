@@ -180,3 +180,9 @@ the assistant. No commit carries an AI trailer; this table is the disclosure.
 
 Still **not** AI-authored and unchanged: `vy/src/unica/` and `vypersetup/` (carried-in prior art,
 held under ruling V9), `vy/src/namemath.vy` and `vy/src/logobackground.vy` (legacy, ruling H10).
+
+## Third-party dependency in the web build (declared, never retyped)
+
+| Package | Licence | How it reaches the site | Why |
+|---|---|---|---|
+| `qrcode-generator` 2.0.4 | MIT | `npm ci` installs it; `apps/web/build.mjs` copies its ES module and notice into `apps/web/out/assets/vendor/`, which is not tracked | a payment link and a business page are shown as a QR code; writing a QR encoder from the standard by hand would be slower and less trustworthy than declaring one |
