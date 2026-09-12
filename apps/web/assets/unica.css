@@ -384,3 +384,26 @@ select.field { appearance: none; background-image: none; }
   --exp: #b0a0e0;
 }
 
+/* ── the mark, and the only animation in this stylesheet ──────────────────────────────────────
+   assets/mark.svg is filled shapes with no motion of its own; the motion is here, so the favicon
+   and the link-preview images made from the same file stay still while the hero's copy turns.
+
+   Calm means slow: one turn a minute, and a breath that never fully fades. Nothing flashes, and
+   nothing moves more than a hair per frame. Under prefers-reduced-motion the mark is simply a
+   mark — the shapes are the identity, the motion was never carrying meaning. */
+@keyframes unica-mark-turn {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes unica-mark-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+.unica-mark { display: block; width: 100%; height: auto; }
+.unica-mark .mark-core { transform-box: fill-box; transform-origin: 50% 50%;
+  animation: unica-mark-turn 60s linear infinite; }
+.unica-mark .mark-ring { animation: unica-mark-breathe 12s ease-in-out infinite; }
+/* Nothing is repeated here for prefers-reduced-motion: the `* { animation: none !important }` rule
+   above already answers for every animation in this stylesheet, and a second, weaker copy of a rule
+   that already holds is the kind of duplicate that survives the day the original is edited. */
+

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" class="unica-mark" role="img" aria-label="UNICA">
+<title>UNICA</title>
+<!--
+  ONE MARK, THREE PLACES. It is the favicon, it is drawn in the hero, and apps/web/build.mjs
+  rasterises it into every link-preview image. So it is filled shapes only — no stroke, no text,
+  no gradient — which is exactly the vocabulary a small rasteriser can render faithfully and a
+  16px tab icon can still resolve.
+
+  THE COLOURS COME FROM THE PAGE WHEN THERE IS A PAGE. Each fill is `var(--token, fallback)`:
+  inlined into a document it takes the live brand token, so it follows the light/dark choice and
+  the [data-theme] override without a second definition. Fetched on its own as a favicon there is
+  no --ink to find and the fallback is used, which is why the fallbacks are the light scheme's
+  values verbatim.
+
+  `svg:root` matches ONLY when this file is the document — never when it is inlined, where :root
+  is the <html> element. That is what lets the standalone favicon answer the dark scheme without
+  the inlined copy ever overriding the page's own tokens.
+
+  The animation is not here. It is three keyframes in assets/unica.css, applied to the classes
+  below, so the hero's copy moves and the favicon and the preview image stay still.
+-->
+<style>
+@media (prefers-color-scheme: dark) {
+  svg:root { --ink: #eef1ef; --accent: #35b888; --paper: #101215; }
+}
+</style>
+<polygon class="mark-ring" points="32,2 62,32 32,62 2,32" fill="var(--ink, #14161a)"/>
+<polygon class="mark-core" points="32,12 52,32 32,52 12,32" fill="var(--accent, #0b6e4f)"/>
+<circle class="mark-eye" cx="32" cy="32" r="7" fill="var(--paper, #fbfbfa)"/>
+</svg>
