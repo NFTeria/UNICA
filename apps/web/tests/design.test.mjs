@@ -188,7 +188,7 @@ test("the three layouts are emitted, each with the furniture that defines it", (
 
   const pay = doc("/pay/");
   assert.match(pay, /data-layout="checkout"/);
-  assert.match(pay, /<p class="bizid"/);
+  assert.ok(!/<p class="bizid"/.test(pay), "the line above the checkout heading duplicated the identity block and was removed");
   assert.doesNotMatch(pay, /class="sidebar"/);
 });
 

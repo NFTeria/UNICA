@@ -223,7 +223,6 @@ function checkoutBody(page, p) {
   ${chip(p)}
 </header>
 <main id="main" tabindex="-1">
-<p class="bizid" id="checkout-identity">The business you are paying is named on the payment below.</p>
 <h1>${esc(page.h1)}</h1>
 ${page.body}
 </main>
