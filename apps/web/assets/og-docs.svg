@@ -1,7 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="UNICA — Documentation and proof">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="UNICA">
+<!--
+  A LINK-PREVIEW RECIPE, NOT A PICTURE OF THE CARD. apps/web/build.mjs reads the shapes below,
+  composites assets/mark.svg into the centre and writes the PNG a scraper actually fetches, so this
+  file declares the ground and the band and nothing more.
+
+  THERE IS NO TEXT HERE, AND THAT IS DELIBERATE. This project ships no font — the stylesheet is
+  forbidden from fetching one — so a rasteriser has nothing to set a headline in. A card's words are
+  og:title and og:description, which is where every scraper reads them from anyway. A card that drew
+  its own headline would draw it in whatever the machine building the site happened to have.
+
+  THE BAND IS THE ONLY THING THAT VARIES between cards, and it varies by FAMILY rather than by
+  route: the reference pages: how it works, the networks, the security notes.
+-->
 <rect width="1200" height="630" fill="#fbfbfa"/>
 <rect x="0" y="0" width="1200" height="12" fill="#14161a"/>
-<text x="80" y="300" font-family="Helvetica,Arial,sans-serif" font-size="86" font-weight="700" fill="#14161a">UNICA</text>
-<text x="80" y="380" font-family="Helvetica,Arial,sans-serif" font-size="40" fill="#5b6169">Documentation and proof</text>
-<text x="80" y="560" font-family="Helvetica,Arial,sans-serif" font-size="26" fill="#5b6169">Testnet only. Not a mainnet service.</text>
 </svg>
