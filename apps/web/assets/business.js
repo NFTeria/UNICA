@@ -128,9 +128,12 @@ async function main() {
 // by default and for a connected wallet on request. A read that fails leaves that asset "not read
 // yet" rather than showing zero, and the sentence under the list says how many assets were asked
 // and that unknown assets are not shown. Nothing here sends anything.
+let holdingsRun = 0;
 async function renderHoldings(config, session, owner) {
   const list = document.getElementById("holdings-list");
   if (!list) return;
+  const run = ++holdingsRun; // a slower earlier read must not overwrite a newer one
+  const stale = () => run !== holdingsRun;
   const holdings = Array.isArray(config.holdings) ? config.holdings : [];
   if (!owner) {
     say("holdings-said", "No wallet to read yet: this business has no payout wallet on record. Connect a wallet to read that one.");
@@ -145,7 +148,9 @@ async function renderHoldings(config, session, owner) {
     } catch {
       // left unread: the row says "Not read yet" instead of a guessed zero
     }
+    if (stale()) return;
   }
+  if (stale()) return;
   const rows = holdingsRows(config, balances);
   list.innerHTML = "";
   for (const r of rows) {
@@ -203,6 +208,8 @@ function wireHoldingsConnect(config) {
         say("holdings-said", result.blocked);
         return;
       }
+      const box = document.getElementById("holdings-address");
+      if (box) box.value = result.session.address;
       await renderHoldings(config, result.session, result.session.address);
     } catch (e) {
       say("holdings-said", `Could not read that wallet: ${e.message}`);
