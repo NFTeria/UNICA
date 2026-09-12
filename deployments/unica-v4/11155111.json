@@ -2,8 +2,8 @@
   "environment": "PUBLIC_TESTNET_NO_VALUE",
   "designation": "TEST_ONLY_NO_VALUE",
   "chainId": 11155111,
-  "commit": "17d124911f400f673a2c843385d0ca0d4ad38c7f",
-  "readAtBlock": 11691646,
+  "commit": "92201fa0343c0491cd4d181f430220066760be46",
+  "readAtBlock": 11691665,
   "releaseTag": "unica-v4/sepolia-rehearsal-1",
   "explorer": {
     "kind": "blockscout",
@@ -14,7 +14,7 @@
   "deployedAtBlock": 11690161,
   "verification": {
     "status": "verified",
-    "verifier": "etherscan (Sepolia)",
+    "verifier": "etherscan (Sepolia); stage D contracts on sourcify",
     "checkedAt": "2026-09-12",
     "tool": "script/unica-v4/verify-source.sh",
     "contracts": {
@@ -24,7 +24,10 @@
       "executor": "verified",
       "identityAuthority": "verified",
       "terminalAdmission": "verified",
-      "identityToken": "NOT VERIFIED: Vyper 0.4.3; the explorer's Vyper form is a manual owner step"
+      "identityToken": "NOT VERIFIED: Vyper 0.4.3; the explorer's Vyper form is a manual owner step",
+      "productCatalog": "verified",
+      "directSettlement": "verified",
+      "directAdmission": "verified"
     }
   },
   "contracts": {

@@ -40,7 +40,7 @@ trap 'rm -f "$LOG" "$LOG.creates"' EXIT
 # Etherscan V2 covers many chains and not all of ours; when forge answers "No known Etherscan API URL" for this
 # chain the run switches to Sourcify for the rest of it and retries the same contract, because a shell that
 # happens to carry an explorer key must not turn a supported chain into four false "pending" rows.
-verify_once() { forge verify-contract --chain-id "$CHAIN" --watch "${VERIFIER[@]}" --constructor-args "$4" "$2" "$3" 2>&1 | tee "$LOG"; return "${PIPESTATUS[0]}"; }
+verify_once() { forge verify-contract --chain-id "$CHAIN" --watch "${VERIFIER[@]}" $( [ -n "$4" ] && printf -- "--constructor-args %s" "$4" ) "$2" "$3" 2>&1 | tee "$LOG"; return "${PIPESTATUS[0]}"; }
 run() {
   if [ "$DRY" = 1 ]; then
     # the real command, with an explorer key shown as <redacted>: a dry run is only worth reading if it IS the command
@@ -82,7 +82,7 @@ while read -r name addr args; do
   sig=$(sig_of "$name"); [ -n "$sig" ] || { echo "skip $name at $addr (not a forge-verifiable Solidity contract here)"; continue; }
   # one recorded argument per line, kept whole: a string argument may carry spaces and must reach cast as one word
   ARGV=(); while IFS= read -r line; do ARGV+=("$line"); done < <(node -e 'for (const a of JSON.parse(process.argv[1])) console.log(a)' "$args")
-  encoded=$(cast abi-encode "$sig" "${ARGV[@]}") || { echo "PENDING/RETRY: $name at $addr (constructor arguments could not be encoded)"; PENDING=$((PENDING+1)); continue; }
+  if [ "$sig" = "constructor()" ]; then encoded=""; else encoded=$(cast abi-encode "$sig" "${ARGV[@]}") || { echo "PENDING/RETRY: $name at $addr (constructor arguments could not be encoded)"; PENDING=$((PENDING+1)); continue; }; fi
   run "$name" "$addr" "$(path_of "$name")" "$encoded"
 done < "$LOG.creates"
 rm -f "$LOG.creates"

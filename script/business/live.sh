@@ -23,7 +23,7 @@ if lsof -ti tcp:"$PORT" >/dev/null 2>&1; then lsof -ti tcp:"$PORT" | xargs kill 
 mkdir -p .rehearsal
 . script/business/lib.sh
 LIVE_LOG=".rehearsal/business-live-$C.log"
-detach env MANIFEST_PATH="$MAN" UNICA_LOCAL_RPC="$URL" UNICA_SERVE_PORT="$PORT" bash -c 'exec bash script/anvil/serve.sh >"$0" 2>&1' "$LIVE_LOG"
+detach env MANIFEST_PATH="$MAN" UNICA_LOCAL_RPC="$URL" UNICA_SERVE_PORT="$PORT" UNICA_SUBGRAPH_URL="${UNICA_SUBGRAPH_URL:-}" bash -c 'exec bash script/anvil/serve.sh >"$0" 2>&1' "$LIVE_LOG"
 for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; if curl -fsS "http://127.0.0.1:$PORT/local/config.json" >/dev/null 2>&1; then break; fi; done
 curl -fsS "http://127.0.0.1:$PORT/local/config.json" >/dev/null 2>&1 || { echo "STOP: the companion did not answer on $PORT; see .rehearsal/business-live-$C.log"; exit 1; }
 echo "UNICA on $NET (chain $C), testnet only, served at http://127.0.0.1:$PORT/"

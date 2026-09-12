@@ -405,6 +405,7 @@ function runtimeConfig(manifest, record, rpc, tokenLabels = {}) {
       registry: contracts.registry?.address ?? null,
       oracleAdapter: contracts.oracleAdapter?.address ?? null,
     },
+    graph: { url: process.env.UNICA_SUBGRAPH_URL || null },
     merchantOnboarding: contracts.merchantOnboarding?.address ?? null,
     identity: contracts.identityFixture?.address ?? identity.authority ?? null,
     identityToken: contracts.identityToken?.address ?? null,
