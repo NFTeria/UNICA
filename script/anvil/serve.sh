@@ -420,7 +420,7 @@ function sendJson(res, status, obj) {
 
 async function sendFile(res, path, status = 200) {
   const body = await readFile(path);
-  res.writeHead(status, { "content-type": MIME[extname(path)] ?? "application/octet-stream", "cache-control": "no-store" });
+  res.writeHead(status, { "content-type": MIME[extname(path)] ?? "application/octet-stream", "cache-control": "no-store", "cache-control": "no-cache" });
   res.end(body);
 }
 
