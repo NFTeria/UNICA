@@ -1,12 +1,13 @@
-// Encode/decode the twelve fixed UNICA v4 event signatures (plus the two identity/policy events
-// and the shared PoolManager `Swap`) this evidence layer authenticates against — nothing more.
+// Encode/decode the fixed set of event signatures this evidence layer authenticates against, and
+// nothing more: the UNICA v4 market events, the two identity/policy events, the shared PoolManager
+// `Swap`, and the UNICA v5 same-asset settlement and product-catalogue events.
 //
 // WHY A GENERIC WORD CODEC. Every field in every event this file knows about is a single 32-byte
 // ABI word (address, boolN/uintN/intN, bytes32, or a short fixed bytesN) — none of them carry a
 // dynamic `bytes`/`string` member. That means one {encode, decode} pair per Solidity type, driven
-// by a declarative event table, covers all thirteen signatures without hand-writing offsets for
+// by a declarative event table, covers every signature in the table without hand-writing offsets for
 // each one — the same trade `tools/unica-verify/receipt.mjs` made for the single V2 receipt shape,
-// generalized here because this layer has thirteen shapes to decode, not one.
+// generalized here because this layer has sixteen shapes to decode, not one.
 //
 // REUSED, NOT REIMPLEMENTED. `keccak256`/`toHex` come from `web/ensv2/keccak.mjs`; the word-level
 // codecs (`wordAddress`, `wordUint`, `wordInt`, `readAddress`, `readUint`, `readInt`, `readBytes32`,
@@ -247,6 +248,28 @@ export const EVENT_DEFS = [
       {name: "settledAt", type: "uint64"},
     ],
   ),
+  // UNICA v5 product catalogue (src/unica-v5/IProductCatalog.sol). A business lists what it sells
+  // and a customer pays for it in one transaction; this is the sale. `kind` is a plain `uint8`
+  // (0 ONE_OFF, 1 RECURRING, 2 PERMANENT) rather than the Solidity enum, so a reader needs no
+  // knowledge of that file to decode it, and `paidThrough` is the date a subscriber's cover now
+  // runs to, zero for the two kinds that cover no stretch of time. `ProductListed` is deliberately
+  // NOT here: it carries a dynamic `string name`, which this word-level codec does not decode, and
+  // nothing in the authentication chain reads it — a sale is authenticated from the sale.
+  defineEvent(
+    "ProductSold",
+    "ProductSold(uint256,address,address,address,address,uint256,uint8,uint64,bytes32)",
+    [
+      {name: "productId", type: "uint256", indexed: true},
+      {name: "buyer", type: "address", indexed: true},
+      {name: "seller", type: "address", indexed: true},
+      {name: "payout", type: "address"},
+      {name: "asset", type: "address"},
+      {name: "amount", type: "uint256"},
+      {name: "kind", type: "uint8"},
+      {name: "paidThrough", type: "uint64"},
+      {name: "saleId", type: "bytes32"},
+    ],
+  ),
   // IDirectSettlement.sol's own `OrderCreated` — a DIFFERENT signature than the market executor's
   // `OrderCreated` above (no separate `creator` topic, no `minOut`: a direct settlement always pays
   // exactly what it asks for). Named `DirectOrderCreated` here only so this file's two `OrderCreated`
@@ -355,6 +378,14 @@ export function recomputeSettlementId({chainId, settler, asset}) {
   padded.set(label, 0);
   const tail = concat(wordUint(label.length), padded);
   return toHex(keccak256(concat(head, tail)));
+}
+
+/// `CATALOG_ID = keccak256(abi.encode(block.chainid, address(this)))`, ProductCatalog.sol's own
+/// constructor — recomputed here, never read off a log or believed from a manifest field alone,
+/// the same rule `recomputeMarketId` and `recomputeSettlementId` follow. Both members are static
+/// words, so unlike `recomputeSettlementId` there is no dynamic head/tail to lay out.
+export function recomputeCatalogId({chainId, catalog}) {
+  return toHex(keccak256(concat(wordUint(chainId), wordAddress(catalog))));
 }
 
 /// `marketId = keccak256(abi.encode(chainId, registry, asset, payout, version, adapter, feedId))`,

@@ -42,3 +42,47 @@ test("no wallet, a malformed wallet, or no logs list nothing rather than everyth
   assert.deepEqual(receiptsForRecipient({logs: [], recipient: ME}), []);
   assert.deepEqual(receiptsForRecipient({}), []);
 });
+
+// A catalogue sale names the wallet it paid `payout`, not `recipient`, and carries no time of its
+// own. It has to appear in the same list as the other two, with kind "product", or a business that
+// sells from a list cannot see what that list was paid.
+const product = (n, payout, block, idx, kind = 2, paidThrough = 0n) => ({
+  ...encodeLog("ProductSold", {
+    productId: BigInt(n),
+    buyer: OTHER,
+    seller: OTHER,
+    payout,
+    asset: OTHER,
+    amount: 25000000n,
+    kind,
+    paidThrough,
+    saleId: ORDER(500 + n),
+  }),
+  address: OTHER, blockNumber: H(block), logIndex: H(idx), transactionHash: ORDER(300 + n),
+});
+
+test("a catalogue sale paid into this wallet is listed with kind product, keyed by its sale id", () => {
+  const rows = receiptsForRecipient({logs: [product(1, ME, 20, 0), product(2, OTHER, 21, 0)], recipient: ME});
+  assert.equal(rows.length, 1, "the sale paid into another wallet is not this wallet's payment");
+  assert.equal(rows[0].kind, "product");
+  assert.equal(rows[0].orderId, ORDER(501), "the sale id goes in the field every row is judged by");
+  assert.equal(rows[0].productId, "1");
+  assert.equal(rows[0].recipient, ME);
+  assert.equal(rows[0].payer, OTHER, "the buyer");
+  assert.equal(rows[0].amount, "25000000");
+  assert.equal(rows[0].productKind, "permanent");
+  assert.equal(rows[0].paidThrough, null, "a permanent product covers no stretch of time");
+  assert.equal(rows[0].settledAt, null, "ProductSold carries no time of its own; the block does");
+});
+
+test("all three payment shapes for one wallet come back in one list, newest first", () => {
+  const logs = [direct(1, ME, 10, 0), product(2, ME, 14, 1, 1, 1700000000n), market(3, ME, 12, 0)];
+  const rows = receiptsForRecipient({logs, recipient: ME});
+  assert.deepEqual(rows.map((r) => [r.kind, r.blockNumber]), [
+    ["product", 14],
+    ["market", 12],
+    ["direct", 10],
+  ]);
+  assert.equal(rows[0].productKind, "recurring");
+  assert.equal(rows[0].paidThrough, 1700000000);
+});
