@@ -54,6 +54,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 
 import { authenticateDirectReceipt, authenticateProductSale, authenticateReceipt, decodeDirectOrder, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
+import { identifyLog } from "./tools/unica-evidence/codec.mjs";
 import { ExplorerLogs } from "./tools/unica-evidence/explorer.mjs";
 import { selectorOf } from "./tools/unica-sign/abi.mjs";
 import { keccak256, toHex } from "./web/ensv2/keccak.mjs";
@@ -515,15 +516,31 @@ const server = createServer(async (req, res) => {
         const direct = await readOrder(settler);
         const market = direct && direct.status !== 0 ? null : await readOrder(executor);
         const held = direct && direct.status !== 0 ? { kind: "direct", order: direct } : market && market.status !== 0 ? { kind: "market", order: market } : null;
-        if (held && held.order.status !== ORDER_SETTLED) {
-          return sendJson(res, 200, { decision: "UNKNOWN", reasonCodes: ["ORDER_OPEN"], kind: held.kind, order: { ...held.order, amountIn: String(held.order.amountIn), minOut: String(held.order.minOut), deadline: String(held.order.deadline) }, receipt: null });
-        }
+        // Settled means a receipt exists for this id on the chain, judged by the receipt rules; a
+        // status field alone is not the evidence. No receipt and an order that exists is OPEN; no
+        // receipt and no order anywhere is NOT FOUND, which is unknown, not refused.
         const projection = await projectAll(manifest);
+        const wanted = order.toLowerCase();
+        const receiptLog = (projection.logs ?? []).find((l) => {
+          const t = l?.topics ?? [];
+          if (String(t[1] ?? "").toLowerCase() !== wanted) return false;
+          const name = identifyLog(l);
+          return name === "DirectReceipt" || name === "SettlementReceipt";
+        });
+        if (!receiptLog) {
+          if (held) {
+            return sendJson(res, 200, { decision: "UNKNOWN", reasonCodes: ["ORDER_OPEN"], kind: held.kind, order: { ...held.order, amountIn: String(held.order.amountIn), minOut: String(held.order.minOut), deadline: String(held.order.deadline) }, receipt: null });
+          }
+          return sendJson(res, 200, { decision: "UNKNOWN", reasonCodes: ["ORDER_NOT_FOUND"], kind: null, order: null, receipt: null });
+        }
+        const kind = identifyLog(receiptLog) === "DirectReceipt" ? "direct" : "market";
         const common = { orderId: order, logs: projection.logs, manifest, chainHead: projection.chainHead, requiredConfirmations: 0 };
-        const verdict = held?.kind === "direct"
-          ? authenticateDirectReceipt({ ...common, directOrder: held.order })
-          : authenticateReceipt(common);
-        return sendJson(res, 200, { ...verdict, kind: held?.kind ?? "market" });
+        let directOrder = held?.kind === "direct" ? held.order : null;
+        if (kind === "direct" && !directOrder && settler) {
+          try { directOrder = await fetchDirectOrder({ rpc: RPC_URL, settler, orderId: order }); } catch { directOrder = null; }
+        }
+        const verdict = kind === "direct" ? authenticateDirectReceipt({ ...common, directOrder }) : authenticateReceipt(common);
+        return sendJson(res, 200, { ...verdict, kind });
       } catch (e) {
         return sendJson(res, 502, { decision: "UNKNOWN", reasonCodes: ["EVIDENCE_ENDPOINT_UNAVAILABLE"], receipt: null, error: redact(e?.message ?? e) });
       }
