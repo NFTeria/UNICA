@@ -358,13 +358,19 @@ contract DeployPublic is Script {
             rateE18: c.rateE18,
             fee: c.fee,
             tickSpacing: c.tickSpacing,
-            policy: UnicaMarketTypes.OraclePolicy({
-                adapter: adapter,
-                feedId: adapter == address(0) ? bytes32(0) : IUnicaOracleRoute(adapter).feedIdFor(c.asset, c.payout),
-                maxAge: c.maxAge,
-                maxDeviationBps: c.maxDeviationBps,
-                enabled: adapter != address(0)
-            }),
+            // A demonstration market (no adapter) must carry an all-zero policy, or the registry
+            // refuses it as OraclePolicyMalformed (SC §6 rule b); an oracle market carries the route.
+            policy: adapter == address(0)
+                ? UnicaMarketTypes.OraclePolicy({
+                    adapter: address(0), feedId: 0, maxAge: 0, maxDeviationBps: 0, enabled: false
+                })
+                : UnicaMarketTypes.OraclePolicy({
+                    adapter: adapter,
+                    feedId: IUnicaOracleRoute(adapter).feedIdFor(c.asset, c.payout),
+                    maxAge: c.maxAge,
+                    maxDeviationBps: c.maxDeviationBps,
+                    enabled: true
+                }),
             caps: UnicaMarketTypes.Caps({
                 maxPerTxPayout: c.maxPerTx, maxPerDayPayout: c.maxPerDay, maxSeedPayout: c.maxSeed
             })
