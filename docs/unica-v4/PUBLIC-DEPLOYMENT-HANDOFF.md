@@ -63,6 +63,51 @@ O3 Price the asset directly in the payout unit with ONE feed (e.g. ETH/USDC wher
 O4 Run the Sepolia rehearsal as a demonstration market now, oracle market after O1–O3 — YES (default) / NO
 ```
 
+## Sepolia run sheet — rehearsed on a fork of Sepolia at block 11686007, nothing sent
+
+`bash script/unica-v4/rehearse-sepolia.sh` ran all four stages and the readback as the deployer by
+impersonation against real Sepolia state (deployer balance 1.547 ETH, 31.55 test USDC, nonce 492). Measured:
+
+| Stage | Transactions | Gas (estimate) | ETH at the fork's price | Result on the fork |
+|---|---|---|---|---|
+| A | factory (creates the registry) | 12,046,004 | ≈ 0.025 | factory `0x4924…6192`, registry `0x8789…AA11` at nonce 492 |
+| B | `createMarket` at mined salt `0x2137` | 11,483,087 | ≈ 0.022 | hook `0x2570…A0c0` (bits `0x20C0`), executor `0x36DD…8ede`, market `0x99f1…fb93` |
+| C | initialise, router, two approvals, seed 4.9 USDC over ticks 198060–205020, `markSeeded` | 3,524,821 | ≈ 0.006 | depth 333,131,895,132, status SEEDED |
+| activate | `setPauser`, `activate` | 110,752 | < 0.001 | status ACTIVE; `marketIdOfHook/Executor/Pool` all equal the market id |
+
+Addresses are predictions for nonce 492 and change if the deployer sends anything first; **re-run the
+dry run of each stage immediately before sending it**, as the wrapper does by default. Ten transactions
+in total. The market is a demonstration market (`requireOracle=false`, see the oracle-age finding above);
+its receipts carry `demonstrationOnly = true` and zero reference fields.
+
+Owner's sequence, one command per stage, in a real terminal (the keystore password is prompted):
+
+```sh
+bash script/unica-v4/deploy-public.sh sepolia_testnet preflight
+LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet A
+```
+Paste back the `STAGE_A` lines; copy `factory` and `registry` into `config/unica-v4/11155111.env` as
+`UNICA_FACTORY` / `UNICA_REGISTRY`; run `readback` is not yet possible (no market); continue:
+```sh
+LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet B
+```
+Paste back `STAGE_B`; copy `marketId` into the config as `UNICA_MARKET_ID`; then:
+```sh
+LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet C
+bash script/unica-v4/deploy-public.sh sepolia_testnet readback
+```
+Compare the readback with the table (status 3, `slot0Tick == initTick`, the three reverse maps), then:
+```sh
+LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet activate
+bash script/unica-v4/deploy-public.sh sepolia_testnet readback
+```
+Safety: every LIVE command is refused if the alias answers another chain id, and each stage re-reads the
+registry's status, so a re-run after success is refused rather than repeated. A front-run cannot occupy a
+CREATE2 hook address without the factory's own code; the factory and registry addresses depend only on the
+deployer's nonce. After `activate`, commit `broadcast/DeployPublic.s.sol/11155111/` and the readback as
+evidence, verify the four sources on the explorer (hook arguments 288 bytes, executor 224), and run
+`tools/unica-evidence` against the first settlement.
+
 ## Sepolia first
 
 Sepolia has the official PoolManager (`0xE03A1074c86CFeDd5C142C4F04F1a1536e203543`, already pinned for
