@@ -34,6 +34,7 @@ import {
   validateEnvironment,
   withinPaymentLimit,
 } from "./product.js";
+import { readBusiness, silentReconnect } from "./session.js";
 import { connectWallet, discoverProviders, waitForReceipt } from "./wallet.js";
 
 /** How long a customer has to pay before the sale stops being payable, in seconds. */
@@ -140,29 +141,51 @@ async function main() {
     return;
   }
 
-  const recipient = config.record?.merchant?.address ?? null;
+  // Who gets paid: the signed-in business's payout wallet, read from the chain; the stored record
+  // is only a fallback for a page opened with nobody signed in.
+  let recipient = null;
+  try {
+    const found = await silentReconnect(config);
+    if (found) {
+      const business = await readBusiness(found.session, config);
+      if (business?.joined && business.payout) recipient = business.payout;
+    }
+  } catch {
+    recipient = null;
+  }
+  recipient = recipient ?? config.record?.merchant?.address ?? null;
   if (!recipient) {
     say("create-status", "This register does not know which wallet gets paid yet, so it will not create a payment.");
     say("create-why", "Disabled: the payout wallet has not been read.");
     return;
   }
   // The customer's wallet is typed or pasted at the register (or carried by ?customer= on a link
-  // the register itself made). It is never taken from a stored record or a manifest.
-  const typed = document.getElementById("customer-wallet")?.value?.trim() ?? "";
-  const customerWallet = /^0x[0-9a-fA-F]{40}$/.test(typed)
-    ? typed
-    : (new URLSearchParams(location.search).get("customer") ?? null);
-  if (!customerWallet) {
-    say("create-status", "This register does not know which customer wallet this payment is for, so it will not create one.");
-    say("create-why", "Disabled: no customer wallet is named for this payment.");
-    return;
-  }
-
-  if (createBtn) createBtn.disabled = false;
-  say("create-why", `Creates a payment for customer wallet ${customerWallet}. ${routeLabel(route)}.`);
-  say("create-status", `Ready. ${routeLabel(route)}: ${route.why}`);
+  // the register itself made). It is never taken from a stored record or a manifest, and it is
+  // read when the button is pressed, so typing it after the page loaded is enough.
+  const walletBox = document.getElementById("customer-wallet");
+  const fromLink = new URLSearchParams(location.search).get("customer");
+  if (walletBox && fromLink && /^0x[0-9a-fA-F]{40}$/.test(fromLink)) walletBox.value = fromLink;
+  const customerWalletNow = () => {
+    const typed = walletBox?.value?.trim() ?? "";
+    return /^0x[0-9a-fA-F]{40}$/.test(typed) ? typed : null;
+  };
+  const refreshReadiness = () => {
+    const wallet = customerWalletNow();
+    if (createBtn) createBtn.disabled = !wallet;
+    if (wallet) {
+      say("create-why", `${routeLabel(route)}.`);
+      say("create-status", `Ready for ${wallet.slice(0, 6)}…${wallet.slice(-4)}.`);
+    } else {
+      say("create-why", "Disabled until the customer's wallet is entered.");
+      say("create-status", "Enter the wallet that will pay this sale.");
+    }
+  };
+  walletBox?.addEventListener("input", refreshReadiness);
+  refreshReadiness();
 
   createBtn?.addEventListener("click", async () => {
+    const customerWallet = customerWalletNow();
+    if (!customerWallet) return refreshReadiness();
     createBtn.disabled = true;
     try {
       await createPayment({ config, route, customerAsset, payoutAsset, recipient, customerWallet });
