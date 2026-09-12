@@ -345,10 +345,28 @@ test("a wallet that already approved this site is recognised without a prompt", 
     business: async () => ({ available: true, joined: true, name: "freshcuts.unica.eth" }),
   });
   byId.delete("topbar-business");
-  assert.match(chip.textContent, /0x001122…2233/);
   assert.match(chip.textContent, /Local testnet/);
   assert.match(chip.textContent, /Log out/);
   assert.equal(topbar.textContent, "freshcuts.unica.eth");
+  const who = chip.find((n) => n.attributes.title === SESSION.address);
+  assert.ok(who, "the address must stay in the chip, in its title");
+  assert.equal(who.textContent, "freshcuts.unica.eth", "once the chain has answered, the chip says the business's name");
+  assert.doesNotMatch(chip.textContent, /0x001122…2233/);
+});
+
+test("a wallet that owns no business stays an address in the chip, and so does one the chain could not answer for", async () => {
+  for (const business of [async () => ({ available: true, joined: false }), async () => { throw new Error("companion away"); }]) {
+    const chip = newChip();
+    await driveChip(chip, {
+      load: async () => ({ chainId: 11155111 }),
+      reconnect: async () => ({ session: { ...SESSION, chainId: 11155111 } }),
+      login: never,
+      accounts: never,
+      business,
+    });
+    assert.match(chip.textContent, /0x001122…2233/);
+    assert.doesNotMatch(chip.textContent, /freshcuts/);
+  }
 });
 
 test("on the testnet the accounts that network unlocks are offered before logging in", async () => {

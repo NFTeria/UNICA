@@ -114,19 +114,22 @@ async function driveChip(chip, { load = loadConfig, reconnect = silentReconnect,
       forgetWallet();
       location.reload();
     });
-    fill(chip, [
-      el("span", "wchip-addr", shortAddress(session.address)),
-      el("span", "wchip-line", networkName(session.chainId)),
-      out,
-    ]);
+    const who = el("span", "wchip-addr", shortAddress(session.address));
+    who.setAttribute("title", session.address);
+    fill(chip, [who, el("span", "wchip-line", networkName(session.chainId)), out]);
+    return who;
   };
 
+  // The chain, not the wallet, says whose business this is: once it has answered, the chip says the
+  // business's name and keeps the address where a hover can read it. A wallet that owns no business
+  // stays an address, which is the honest reading.
   const known = await reconnect(config);
   if (known?.session) {
-    signedIn(known.session);
+    const who = signedIn(known.session);
+    const answer = await business(known.session, config).catch(() => null);
+    if (answer?.joined && answer.name) who.textContent = answer.name;
     const name = document.getElementById("topbar-business");
     if (name) {
-      const answer = await business(known.session, config).catch(() => null);
       if (answer?.joined && answer.name) name.textContent = answer.name;
       else if (answer && answer.available === false) name.textContent = "No business on this network";
       else if (answer) name.textContent = "No business set up yet";
@@ -167,8 +170,9 @@ async function driveChip(chip, { load = loadConfig, reconnect = silentReconnect,
       line(chip, result?.blocked ?? "No wallet answered, so nobody is signed in.");
       return;
     }
-    signedIn(result.session);
+    const who = signedIn(result.session);
     const answer = await business(result.session, config).catch(() => null);
+    if (answer?.joined && answer.name) who.textContent = answer.name;
     if (!answer) {
       const said = el("span", "wchip-line", "You are signed in. Your business could not be read just now.");
       chip.append(said);
