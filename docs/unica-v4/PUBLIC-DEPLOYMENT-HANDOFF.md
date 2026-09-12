@@ -94,15 +94,15 @@ Owner's sequence, one command per stage, in a real terminal (the keystore passwo
 bash script/unica-v4/deploy-public.sh sepolia_testnet preflight
 LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet A
 ```
-Paste back the `STAGE_A` lines; copy `factory` and `registry` into `config/unica-v4/11155111.env` as
-`UNICA_FACTORY` / `UNICA_REGISTRY`, and `identityAuthority` / `terminalAdmission` / `identityToken` as
-`UNICA_IDENTITY_AUTHORITY` / `UNICA_ADMISSION` / `UNICA_IDENTITY_TOKEN` (the manifest reads them; and once
-the authority is pinned, a later stage A never deploys a second one, so identity cannot fork on a
-re-run). `readback` is not yet possible (no market); continue:
+The wrapper records the stage's own outputs into `config/unica-v4/11155111.env` (`UNICA_FACTORY`,
+`UNICA_REGISTRY`, `UNICA_IDENTITY_AUTHORITY`, `UNICA_ADMISSION`, `UNICA_IDENTITY_TOKEN`) from the tee-d log,
+refusing to overwrite a different value already there; once the authority is pinned a later stage A never
+deploys a second one, so identity cannot fork on a re-run. Commit that configuration change as evidence.
+`readback` is not yet possible (no market); continue:
 ```sh
 LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet B
 ```
-Paste back `STAGE_B`; copy `marketId` into the config as `UNICA_MARKET_ID`; then:
+The wrapper records `UNICA_MARKET_ID`, `UNICA_HOOK` and `UNICA_EXECUTOR` the same way; then:
 ```sh
 LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT=<keystore> bash script/unica-v4/deploy-public.sh sepolia_testnet C
 bash script/unica-v4/deploy-public.sh sepolia_testnet readback
