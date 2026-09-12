@@ -81,6 +81,8 @@ esac
 
 if [ "${LIVE_BROADCAST:-}" = "I_UNDERSTAND_THIS_SENDS_TRANSACTIONS" ] && [ "$STAGE" != "preflight" ] && [ "$STAGE" != "readback" ]; then
   test -n "${DEPLOYER_ACCOUNT:-}" || fail "LIVE needs DEPLOYER_ACCOUNT (a forge keystore account name)"
+  # a name copied from `cast wallet list` carries a display "0x" the keystore file does not; accept both spellings
+  if [ ! -f "$HOME/.foundry/keystores/$DEPLOYER_ACCOUNT" ] && [ -f "$HOME/.foundry/keystores/${DEPLOYER_ACCOUNT#0x}" ]; then DEPLOYER_ACCOUNT="${DEPLOYER_ACCOUNT#0x}"; fi
   sender=$DEPLOYER; [ "$STAGE" = "activate" ] && sender=$UNICA_ADMIN
   echo "== LIVE stage $STAGE on chain $chain as $sender (keystore '$DEPLOYER_ACCOUNT'; password prompt follows)"
   mkdir -p .rehearsal/deploy-public
