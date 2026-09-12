@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# STALE — its queries name `schemaVersion`, `poolId` and the other V1 fields, which this
+# directory's schema no longer has. A record of that work, not a check of this manifest. See
+# README.md.
 # verify-hosted.sh — read-only verification of a hosted Subgraph Studio deployment of
 # integrations/graph/ against the one live UNICA settlement and against the chain's
 # own receipt counter. No credentials live in this file: the query URL is the first

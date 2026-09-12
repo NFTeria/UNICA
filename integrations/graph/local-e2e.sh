@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# STALE — written against the V1/V3 manifest and its `schemaVersion` schema, both of which this
+# directory dropped when it moved to the v5 deployment. A record of that work, not instructions for
+# this manifest. See README.md.
 # local-e2e.sh — settlement input → official Uniswap-compatible execution path → V4SettlementHook
 # → one receipt → graph-node handler → a queryable Settlement entity, entirely local. Then a
 # refused payment, and the entity count does not move. No credentials, no Studio, no broadcast:
