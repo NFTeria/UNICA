@@ -73,3 +73,32 @@ query ReceiptByOrderId($orderId: Bytes!) {
     settled                   # true only once a Settled event named this orderId
   }
 }
+
+# =============================================================================================
+# 2. Direct receipt by order id
+# =============================================================================================
+# The same-asset settlement counterpart to query 1, above, for src/unica-v5/IDirectSettlement.sol's
+# `DirectReceipt` event. `DirectReceipt.id` IS `orderId`, so this is also a direct lookup. Not part
+# of docs/unica-v5/graph/QUERIES.graphql (that document predates the direct-settlement path) —
+# written here from schema.graphql's own `DirectReceipt` entity, for the same reason
+# `tools/unica-evidence`'s `authenticateDirectReceipt` exists: a direct settlement has no market, no
+# pool and no separate executor, so there is nothing for the market-shaped query above to answer.
+#
+# PROVES: a DirectReceipt for this orderId was indexed. PROVES NOTHING ON ITS OWN if it returns
+# null: the order may not exist, may still be Open/unpaid, may be on a different chain or
+# deployment, or may simply not be indexed yet.
+query DirectReceiptByOrderId($orderId: Bytes!) {
+  directReceipt(id: $orderId) {
+    id                        # == orderId
+    settler                   # the DirectSettlement contract this receipt must have come from
+    merchant { id }
+    payer { id }
+    asset
+    amount
+    terminalNode               # which register raised the sale
+    settledAt
+    blockNumber
+    transactionHash
+    logIndex
+  }
+}

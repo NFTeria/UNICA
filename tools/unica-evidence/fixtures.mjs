@@ -4,7 +4,7 @@
 //
 // Not itself a test file (no `.test.mjs` suffix), so `node --test` does not try to run it directly.
 
-import {recomputeMarketId} from "./codec.mjs";
+import {recomputeMarketId, recomputeSettlementId} from "./codec.mjs";
 
 export const addr = (n) => "0x" + n.toString(16).padStart(40, "0");
 export const bytes32 = (n) => "0x" + n.toString(16).padStart(64, "0");
@@ -22,6 +22,11 @@ export const TERMINAL_ADMISSION = addr(0x30);
 export const POLICY_RECEIVER = addr(0x31);
 export const POOL_MANAGER = addr(0x40);
 export const FACTORY = addr(0x41);
+export const DIRECT_SETTLEMENT = addr(0x90);
+export const LOOKALIKE_DIRECT_SETTLEMENT = addr(0xbad3);
+export const DIRECT_ASSET = addr(0x91);
+export const DIRECT_RECIPIENT = addr(0x92);
+export const DIRECT_PAYER = addr(0x93);
 
 export const POOL_ID = bytes32(0x2000);
 export const ORDER_ID = bytes32(0x3000);
@@ -42,6 +47,15 @@ export const MARKET_ID = recomputeMarketId({
   version: MARKET_VERSION,
   adapter: ZERO_ADDR,
   feedId: FEED_ID,
+});
+
+// Recomputed the same way DirectSettlement.sol's own constructor computes it — see the note on
+// `MARKET_ID` above: fixtures commit to the real formula, not to a chosen constant, so a codec bug
+// in `recomputeSettlementId` would break these fixtures' own construction, not just be missed by it.
+export const DIRECT_SETTLEMENT_ID = recomputeSettlementId({
+  chainId: CHAIN_ID,
+  settler: DIRECT_SETTLEMENT,
+  asset: DIRECT_ASSET,
 });
 
 export function makeManifest(overrides = {}) {
@@ -68,7 +82,23 @@ export function makeManifest(overrides = {}) {
       forwarderFixture: {address: ZERO_ADDR, codeHash: bytes32(0)},
       lookalikeHook: {address: LOOKALIKE_HOOK, codeHash: bytes32(0xb3)},
       lookalikeExecutor: {address: LOOKALIKE_EXECUTOR, codeHash: bytes32(0xb4)},
+      directSettlement: {
+        address: DIRECT_SETTLEMENT,
+        codeHash: bytes32(0xb5),
+        settlementId: DIRECT_SETTLEMENT_ID,
+        asset: DIRECT_ASSET,
+      },
+      lookalikeDirectSettlement: {address: LOOKALIKE_DIRECT_SETTLEMENT, codeHash: bytes32(0xb6)},
     },
+    // Symbol/decimals labels for the assets this manifest names, keyed by role — the shape
+    // apps/web's own manifest reading expects (role, symbol, decimals, address), trimmed to the one
+    // extra asset this fixture set introduces: the direct-settlement asset, which pays and receives
+    // the SAME token, unlike a market's asset/payout pair.
+    assets: [
+      {role: "asset", symbol: "tAST", decimals: 18, address: ASSET},
+      {role: "payout", symbol: "uUSD", decimals: 18, address: PAYOUT},
+      {role: "direct", symbol: "tAST", decimals: 18, address: DIRECT_ASSET},
+    ],
     market: {
       marketId: MARKET_ID,
       version: 1,

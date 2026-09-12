@@ -16,8 +16,10 @@
 // hand-built fixture logs and no network at all. See integrations/graph/unica-v4/README.md for how
 // this differs from an actual deployed subgraph.
 
+import {toHex} from "../../web/ensv2/keccak.mjs";
 import {ReadOnlyRpc} from "../unica-verify/rpc.mjs";
-import {TOPIC0, decodeLog, identifyLog, recomputeMarketId} from "./codec.mjs";
+import {bytesFromHex, readAddress, readUint, selectorOf, wordBytes32} from "../unica-sign/abi.mjs";
+import {TOPIC0, decodeLog, identifyLog, recomputeMarketId, recomputeSettlementId} from "./codec.mjs";
 
 // ---- small shared helpers -------------------------------------------------------------------------
 
@@ -81,6 +83,7 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
     addressOf(contracts.executor),
     addressOf(contracts.terminalAdmission),
     addressOf(contracts.policyReceiver),
+    addressOf(contracts.directSettlement),
   ].filter(Boolean);
 
   const from = toBlockTag(fromBlock ?? 0);
@@ -88,8 +91,11 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
 
   const logBatches = await Promise.all([
     ...namedAddresses.map((address) => client.logs({address, fromBlock: from, toBlock: to})),
-    // Address-unfiltered: any emitter of the receipt-shaped topic, registered or not.
+    // Address-unfiltered: any emitter of either receipt-shaped topic, registered or not — a
+    // look-alike direct settler is exactly as fetchable, and exactly as checkable, as a look-alike
+    // hook (EVENT-SCHEMA.md §2's rule cuts both ways for both settlement kinds).
     client.logs({topics: [TOPIC0.SettlementReceipt], fromBlock: from, toBlock: to}),
+    client.logs({topics: [TOPIC0.DirectReceipt], fromBlock: from, toBlock: to}),
   ]);
 
   const seen = new Set();
@@ -112,7 +118,11 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
   // discipline `tools/unica-verify` already uses: an emitted log is a claim, and the transaction
   // receipt is fetched independently rather than trusted from the log alone.
   const settlementTxHashes = [
-    ...new Set(logs.filter((l) => identifyLog(l) === "SettlementReceipt").map((l) => lc(l.transactionHash))),
+    ...new Set(
+      logs
+        .filter((l) => identifyLog(l) === "SettlementReceipt" || identifyLog(l) === "DirectReceipt")
+        .map((l) => lc(l.transactionHash)),
+    ),
   ];
   const receiptEntries = await Promise.all(
     settlementTxHashes.map(async (txHash) => [txHash, await client.receipt(txHash)]),
@@ -125,9 +135,49 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
   return {logs, receipts, chainHead, fromBlock: from, toBlock: to};
 }
 
+const ORDERS_SELECTOR = selectorOf("orders(bytes32)");
+
+/// A single `eth_call` to the settler's own `orders(orderId)` view (IDirectSettlement.sol) — the
+/// one piece of `authenticateDirectReceipt`'s evidence that is not a log, because a direct
+/// settlement has no separate executor contract to corroborate the receipt the way `Settled` does
+/// for a market order (link 6 of SETTLEMENT-SCHEMA.md §5 has no analogue here). The return is the
+/// fixed seven-word `UnicaMarketTypes.Order` tuple (SC §5): recipient, creator, payer, amountIn,
+/// minOut, deadline, status — all static, so it decodes the same way `codec.mjs` decodes any other
+/// fixed-word ABI shape. Returns `null` on anything that is not exactly 7 words of data, rather
+/// than guessing at a short or malformed answer.
+export async function fetchDirectOrder({rpc, settler, orderId} = {}) {
+  const client = asRpcClient(rpc);
+  const calldata = ORDERS_SELECTOR + toHex(wordBytes32(orderId)).slice(2);
+  const raw = await client.call(settler, calldata);
+  return decodeDirectOrder(raw);
+}
+
+/// Pure decoder for the `orders(bytes32)` return payload, split out from `fetchDirectOrder` so a
+/// test can hand it a hand-built hex string with no RPC call at all.
+export function decodeDirectOrder(raw) {
+  if (typeof raw !== "string" || !/^0x[0-9a-fA-F]*$/.test(raw)) return null;
+  let data;
+  try {
+    data = bytesFromHex(raw);
+  } catch {
+    return null;
+  }
+  if (data.length !== 7 * 32) return null;
+  return {
+    recipient: readAddress(data, 0),
+    creator: readAddress(data, 32),
+    payer: readAddress(data, 64),
+    amountIn: readUint(data, 96),
+    minOut: readUint(data, 128),
+    deadline: readUint(data, 160),
+    status: Number(readUint(data, 192)),
+  };
+}
+
 // ---- Layer 2: the deterministic validator ----------------------------------------------------------
 
 const STATUS = {NONE: 0, PROPOSED: 1, INITIALIZED: 2, SEEDED: 3, ACTIVE: 4, PAUSED: 5, RETIRED: 6};
+const ORDER_STATUS_SETTLED = 3; // UnicaMarketTypes.OrderStatus.Settled (SC §9) — frozen numbering
 
 /// The ten-link chain of docs/unica-v5/graph/SETTLEMENT-SCHEMA.md §5, run against already-decoded
 /// evidence. Never issues an RPC call; never reduces its answer to a boolean.
@@ -385,6 +435,183 @@ function receiptView(entry, settledEntry) {
     demonstrationOnly: r.demonstrationOnly,
     hook: entry.address,
     executor: settledEntry ? settledEntry.address : null,
+    blockNumber: entry.raw.blockNumber,
+    transactionHash: entry.raw.transactionHash,
+    logIndex: entry.raw.logIndex,
+  };
+}
+
+// ---- Layer 2, direct settlement: the same-asset chain (IDirectSettlement.sol) ---------------------
+
+/// The direct-settlement counterpart to `authenticateReceipt`, for a `DirectReceipt` rather than a
+/// `SettlementReceipt`. There is no registry, no separate hook/executor pair and no pool for this
+/// path (SC "WHY IT IS ITS OWN CONTRACT"), so the ten-link chain collapses to what actually applies:
+///
+///   1. the settler must be named, off-chain, exactly once (manifest.contracts.directSettlement)
+///   2. the log's emitter must equal that address — a look-alike settler emitting the right shape
+///      from the wrong address is REFUSED UNREGISTERED_EMITTER, never silently accepted
+///   3. the settler's own `SETTLEMENT_ID` is recomputed from (chainId, settler, log.asset) and
+///      compared against what the manifest names — the same "recompute; never read and agree" rule
+///      `recomputeMarketId` enforces for a market receipt
+///   4. the settler's own stored order (fetched by `fetchDirectOrder`, an `orders(orderId)` view
+///      call — never trusted from the log alone) must match the receipt on payer, recipient and
+///      amount, and must itself already read Settled — this is this path's replacement for the
+///      market chain's separate `Settled` log, because a direct settlement has only one contract
+///      and therefore only one on-chain witness to cross-check the receipt against
+///   5. finality, checked last, exactly as `authenticateReceipt` checks it
+///
+/// `directOrder` is the already-fetched, already-decoded result of `fetchDirectOrder` (or a hand
+/// built fixture in tests) — this function never issues an RPC call itself, matching
+/// `authenticateReceipt`. A caller that has not fetched it yet gets UNKNOWN, never a guess.
+export function authenticateDirectReceipt({
+  orderId,
+  logs = [],
+  manifest,
+  chainHead,
+  requiredConfirmations = 0,
+  indexHead,
+  transactionHash = null,
+  transactionReceipts = [],
+  directOrder = null,
+} = {}) {
+  const reasonCodes = [];
+  const result = {
+    decision: "REFUSED",
+    reasonCodes,
+    kind: "direct",
+    settlementAuthenticated: false,
+    emitterMatched: false,
+    settlementIdMatched: false,
+    orderMatched: false,
+    receipt: null,
+    finality: null,
+  };
+  const refuse = (...codes) => {
+    reasonCodes.push(...codes);
+    result.decision = "REFUSED";
+    return result;
+  };
+  const unknown = (...codes) => {
+    reasonCodes.push(...codes);
+    result.decision = "UNKNOWN";
+    return result;
+  };
+
+  if (!orderId) return unknown("EVIDENCE_ENDPOINT_UNAVAILABLE");
+
+  // ---- link 1: the settler must be named, off-chain, exactly once --------------------------------
+  const settlerAddr = lc(addressOf(manifest?.contracts?.directSettlement));
+  if (!settlerAddr) return unknown("DIRECT_SETTLEMENT_NOT_CONFIGURED");
+  result.settlementAuthenticated = true;
+
+  if (chainHead === undefined || chainHead === null || Number.isNaN(Number(chainHead))) {
+    return unknown("EVIDENCE_ENDPOINT_UNAVAILABLE");
+  }
+  const head = toBig(chainHead);
+
+  if (transactionHash) {
+    const known = transactionReceipts.find((r) => sameHex(r.transactionHash, transactionHash));
+    if (known && toBig(known.status) === 0n) return refuse("TRANSACTION_REVERTED");
+  }
+
+  const decoded = [];
+  for (const raw of logs) {
+    const name = identifyLog(raw);
+    if (!name) continue;
+    try {
+      decoded.push({name, address: lc(raw.address), raw, log: decodeLog(name, raw)});
+    } catch {
+      // not evidence — see the identical comment in authenticateReceipt
+    }
+  }
+  const byName = (name) => decoded.filter((d) => d.name === name);
+
+  const receiptCandidates = byName("DirectReceipt").filter((d) => sameHex(d.log.orderId, orderId));
+  if (receiptCandidates.length === 0) return refuse("MISSING_DIRECT_RECEIPT");
+
+  const earliestCandidateBlock = receiptCandidates.reduce(
+    (min, d) => (min === null ? toBig(d.raw.blockNumber) : minBig(min, toBig(d.raw.blockNumber))),
+    null,
+  );
+  if (indexHead !== undefined && indexHead !== null && toBig(indexHead) < earliestCandidateBlock) {
+    return unknown("INDEX_BEHIND_REQUIRED_BLOCK");
+  }
+
+  if (receiptCandidates.length > 1) {
+    const sorted = [...receiptCandidates].sort(
+      (a, b) =>
+        Number(toBig(a.raw.blockNumber) - toBig(b.raw.blockNumber)) || Number(toBig(a.raw.logIndex) - toBig(b.raw.logIndex)),
+    );
+    result.receipt = directReceiptView(sorted[0]);
+    return refuse("DUPLICATE_ORDER_ID");
+  }
+  const receiptEntry = receiptCandidates[0];
+
+  // ---- link 2: the log's emitter must equal the manifest's named settler -------------------------
+  if (!sameAddr(receiptEntry.address, settlerAddr)) {
+    return refuse("UNREGISTERED_EMITTER");
+  }
+  result.emitterMatched = true;
+
+  // ---- link 3: recompute SETTLEMENT_ID from (chainId, settler, log.asset), compare ---------------
+  const configuredSettlementId = manifest?.contracts?.directSettlement?.settlementId ?? null;
+  if (configuredSettlementId) {
+    const recomputed = recomputeSettlementId({chainId: manifest.chainId, settler: settlerAddr, asset: receiptEntry.log.asset});
+    if (!sameHex(recomputed, configuredSettlementId)) {
+      return refuse("SETTLEMENT_ID_MISMATCH");
+    }
+  }
+  result.settlementIdMatched = true;
+
+  // ---- link 4: the settler's own stored order must match the receipt, and must read Settled ------
+  if (!directOrder) return unknown("DIRECT_ORDER_UNAVAILABLE");
+  if (!sameAddr(directOrder.recipient, receiptEntry.log.recipient)) {
+    return refuse("ORDER_RECIPIENT_MISMATCH");
+  }
+  if (!sameAddr(directOrder.payer, receiptEntry.log.payer)) {
+    return refuse("ORDER_PAYER_MISMATCH");
+  }
+  if (toBig(directOrder.amountIn) !== toBig(receiptEntry.log.amount)) {
+    return refuse("AMOUNT_MISMATCH");
+  }
+  if (Number(directOrder.status) !== ORDER_STATUS_SETTLED) {
+    return refuse("ORDER_NOT_SETTLED");
+  }
+  result.orderMatched = true;
+
+  // ---- link 5: finality, checked last, exactly as authenticateReceipt checks it ------------------
+  const receiptBlock = toBig(receiptEntry.raw.blockNumber);
+  const confirmations = Number(head - receiptBlock);
+  result.finality = {
+    chainHead: Number(head),
+    receiptBlockNumber: Number(receiptBlock),
+    confirmations,
+    requiredConfirmations,
+    final: confirmations >= requiredConfirmations,
+  };
+  result.receipt = directReceiptView(receiptEntry);
+  if (confirmations < requiredConfirmations) {
+    reasonCodes.push("AWAITING_FINALITY");
+    result.decision = "UNKNOWN";
+    return result;
+  }
+
+  result.decision = "VERIFIED";
+  return result;
+}
+
+function directReceiptView(entry) {
+  const r = entry.log;
+  return {
+    kind: "direct",
+    orderId: r.orderId,
+    recipient: r.recipient,
+    payer: r.payer,
+    asset: r.asset,
+    amount: r.amount.toString(),
+    terminalNode: r.terminalNode,
+    settledAt: r.settledAt.toString(),
+    settler: entry.address,
     blockNumber: entry.raw.blockNumber,
     transactionHash: entry.raw.transactionHash,
     logIndex: entry.raw.logIndex,

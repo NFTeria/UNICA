@@ -228,6 +228,38 @@ export const EVENT_DEFS = [
     {name: "tick", type: "int24"},
     {name: "fee", type: "uint24"},
   ]),
+  // UNICA v5 same-asset settlement (src/unica-v5/IDirectSettlement.sol). No pool, no hook, no
+  // executor: the settler that emits this is both, so the ten-link market chain has no analogue
+  // for links 3/6/7 here (there is no registry, no separate executor, no pool). What survives is
+  // the same shape of question — "did the contract this manifest names actually emit this, for
+  // this order, with fields that match its own stored order record" — answered by
+  // `authenticateDirectReceipt` in index.mjs instead of `authenticateReceipt`.
+  defineEvent(
+    "DirectReceipt",
+    "DirectReceipt(bytes32,address,address,address,uint256,bytes32,uint64)",
+    [
+      {name: "orderId", type: "bytes32", indexed: true},
+      {name: "recipient", type: "address", indexed: true},
+      {name: "payer", type: "address", indexed: true},
+      {name: "asset", type: "address"},
+      {name: "amount", type: "uint256"},
+      {name: "terminalNode", type: "bytes32"},
+      {name: "settledAt", type: "uint64"},
+    ],
+  ),
+  // IDirectSettlement.sol's own `OrderCreated` — a DIFFERENT signature than the market executor's
+  // `OrderCreated` above (no separate `creator` topic, no `minOut`: a direct settlement always pays
+  // exactly what it asks for). Named `DirectOrderCreated` here only so this file's two `OrderCreated`
+  // Solidity events do not collide as JS object keys; `identifyLog` still resolves purely by
+  // topic0, so this internal name is never compared against anything on chain.
+  defineEvent("DirectOrderCreated", "OrderCreated(bytes32,address,address,uint128,uint64,bytes32)", [
+    {name: "orderId", type: "bytes32", indexed: true},
+    {name: "recipient", type: "address", indexed: true},
+    {name: "payer", type: "address", indexed: true},
+    {name: "amount", type: "uint128"},
+    {name: "deadline", type: "uint64"},
+    {name: "terminalNode", type: "bytes32"},
+  ]),
 ];
 
 const BY_NAME = new Map(EVENT_DEFS.map((d) => [d.name, d]));
@@ -307,6 +339,22 @@ export function encodeLog(name, values, meta = {}) {
     logIndex: meta.logIndex ?? "0x0",
     removed: false,
   };
+}
+
+/// `SETTLEMENT_ID = keccak256(abi.encode("unica-v5/direct", block.chainid, address(this), asset))`,
+/// IDirectSettlement.sol's own doc comment / DirectSettlement.sol's constructor — recomputed, never
+/// read off a log or trusted from a manifest field alone, matching `recomputeMarketId`'s rule below.
+/// `abi.encode` of a leading `string` is DYNAMIC, unlike every other word this codec handles: the
+/// head carries a 32-byte offset word (here always `0x80`, four head words) followed by the three
+/// static words, and the tail carries the string's own length word plus its bytes, right-padded to
+/// a whole number of words (ABI §"Use of Dynamic Types").
+export function recomputeSettlementId({chainId, settler, asset}) {
+  const label = new TextEncoder().encode("unica-v5/direct");
+  const head = concat(wordUint(0x80), wordUint(chainId), wordAddress(settler), wordAddress(asset));
+  const padded = new Uint8Array(Math.ceil(label.length / 32) * 32);
+  padded.set(label, 0);
+  const tail = concat(wordUint(label.length), padded);
+  return toHex(keccak256(concat(head, tail)));
 }
 
 /// `marketId = keccak256(abi.encode(chainId, registry, asset, payout, version, adapter, feedId))`,

@@ -136,6 +136,26 @@ type Settlement @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
+# ---- DirectReceipt — the same-asset settlement counterpart to Settlement, for
+# src/unica-v5/IDirectSettlement.sol's `DirectReceipt` event. Not one of SETTLEMENT-SCHEMA.md §4's
+# entities (that document predates the direct-settlement path), so it is trimmed the same way the
+# ten entities above are: one entity, one lookup, no market/pool/executor relation, because a direct
+# settlement has none of those (README.md's "WHY IT IS ITS OWN CONTRACT"). `tools/unica-evidence`'s
+# `authenticateDirectReceipt` is what actually answers this question today — see README.md.
+type DirectReceipt @entity(immutable: true) {
+  id: Bytes!                        # orderId — one DirectReceipt per order, ever
+  settler: Bytes!                    # the DirectSettlement contract that emitted this receipt
+  merchant: Merchant!
+  payer: Payer!
+  asset: Bytes!                      # the one asset both sides of a direct settlement move
+  amount: BigInt!
+  terminalNode: Bytes!                # which register raised the sale, from OrderCreated's own salt
+  settledAt: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+}
+
 # ---- §4.25 DeploymentManifest — PROPOSED, kept minimally so EvidenceStatus can point at it ---------
 type DeploymentManifest @entity(immutable: false) {
   id: Bytes!                        # network ++ registry address
@@ -166,8 +186,9 @@ type Anomaly @entity(immutable: true) {
   logIndex: BigInt!
 }
 
-# ---- the two lookups queries.graphql's ReceiptByOrderId actually calls --------------------------
+# ---- the lookups queries.graphql actually calls ---------------------------------------------------
 type Query {
   settlement(id: Bytes!): Settlement
   order(id: Bytes!): Order
+  directReceipt(id: Bytes!): DirectReceipt
 }

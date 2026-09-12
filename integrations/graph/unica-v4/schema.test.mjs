@@ -110,13 +110,20 @@ function parseSelectionSet(text, i) {
   return {fields, next: i};
 }
 
-function parseReceiptByOrderIdQuery(text) {
+/// Generalised over the query's own name so both `ReceiptByOrderId` (market) and
+/// `DirectReceiptByOrderId` (direct settlement) are parsed the same way.
+function parseNamedQuery(text, queryName) {
   const clean = stripComments(text);
-  const headerMatch = /query\s+ReceiptByOrderId\s*\([^)]*\)\s*\{/.exec(clean);
-  assert.ok(headerMatch, "queries.graphql must declare `query ReceiptByOrderId(...)  { ... }`");
+  const headerRe = new RegExp(`query\\s+${queryName}\\s*\\([^)]*\\)\\s*\\{`);
+  const headerMatch = headerRe.exec(clean);
+  assert.ok(headerMatch, `queries.graphql must declare \`query ${queryName}(...)  { ... }\``);
   const bodyStart = headerMatch.index + headerMatch[0].length;
   const {fields} = parseSelectionSet(clean, bodyStart);
   return fields;
+}
+
+function parseReceiptByOrderIdQuery(text) {
+  return parseNamedQuery(text, "ReceiptByOrderId");
 }
 
 // ---- 1. braces balance ------------------------------------------------------------------------
@@ -160,7 +167,29 @@ test("schema.graphql defines every one of the ten SETTLEMENT-SCHEMA.md §4.27 en
   for (const name of required) assert.ok(types.has(name), `missing type ${name}`);
 });
 
-// ---- 3. the query's fields exist in the schema, walked recursively from Query --------------------
+test("schema.graphql defines DirectReceipt, the same-asset settlement counterpart to Settlement", () => {
+  const {types} = parseSchema(SCHEMA_TEXT);
+  assert.ok(types.has("DirectReceipt"), "missing type DirectReceipt");
+});
+
+// ---- 3. each query's fields exist in the schema, walked recursively from Query --------------------
+
+/// Shared by both `ReceiptByOrderId` and `DirectReceiptByOrderId`: a field with a sub-selection
+/// must resolve to a non-scalar type in schema.graphql, and every selected field must exist on the
+/// type it is selected against.
+function walkSelection(types, fields, typeName, path) {
+  const typeFields = types.get(typeName);
+  assert.ok(typeFields, `${path}: type ${typeName} is not defined in schema.graphql`);
+  for (const field of fields) {
+    const here = `${path}.${field.name}`;
+    assert.ok(typeFields.has(field.name), `${here}: no such field on ${typeName}`);
+    const fieldType = typeFields.get(field.name);
+    if (field.children) {
+      assert.ok(!BUILTIN_SCALARS.has(fieldType) && fieldType !== "Bytes" && fieldType !== "BigInt", `${here}: has a sub-selection but ${fieldType} is a scalar`);
+      walkSelection(types, field.children, fieldType, here);
+    }
+  }
+}
 
 test("queries.graphql's ReceiptByOrderId only selects fields that exist on the corresponding schema type", () => {
   const {types} = parseSchema(SCHEMA_TEXT);
@@ -171,28 +200,32 @@ test("queries.graphql's ReceiptByOrderId only selects fields that exist on the c
     ["order", "Order"],
   ]);
 
-  function walk(fields, typeName, path) {
-    const typeFields = types.get(typeName);
-    assert.ok(typeFields, `${path}: type ${typeName} is not defined in schema.graphql`);
-    for (const field of fields) {
-      const here = `${path}.${field.name}`;
-      assert.ok(typeFields.has(field.name), `${here}: no such field on ${typeName}`);
-      const fieldType = typeFields.get(field.name);
-      if (field.children) {
-        assert.ok(!BUILTIN_SCALARS.has(fieldType) && fieldType !== "Bytes" && fieldType !== "BigInt", `${here}: has a sub-selection but ${fieldType} is a scalar`);
-        walk(field.children, fieldType, here);
-      }
-    }
-  }
-
   for (const root of rootFields) {
     const typeName = queryType.get(root.name);
     assert.ok(typeName, `ReceiptByOrderId selects top-level field "${root.name}", which is not settlement/order`);
     assert.ok(root.children, `${root.name} must have a sub-selection`);
-    walk(root.children, typeName, root.name);
+    walkSelection(types, root.children, typeName, root.name);
   }
   assert.deepEqual(
     rootFields.map((f) => f.name),
     ["settlement", "order"],
+  );
+});
+
+test("queries.graphql's DirectReceiptByOrderId only selects fields that exist on DirectReceipt", () => {
+  const {types} = parseSchema(SCHEMA_TEXT);
+  const rootFields = parseNamedQuery(QUERIES_TEXT, "DirectReceiptByOrderId");
+
+  const queryType = new Map([["directReceipt", "DirectReceipt"]]);
+
+  for (const root of rootFields) {
+    const typeName = queryType.get(root.name);
+    assert.ok(typeName, `DirectReceiptByOrderId selects top-level field "${root.name}", which is not directReceipt`);
+    assert.ok(root.children, `${root.name} must have a sub-selection`);
+    walkSelection(types, root.children, typeName, root.name);
+  }
+  assert.deepEqual(
+    rootFields.map((f) => f.name),
+    ["directReceipt"],
   );
 });
