@@ -16,7 +16,6 @@ library UnicaMarketTypes {
         ACTIVE, // 4
         PAUSED, // 5
         RETIRED // 6
-
     }
 
     /// @notice An order's life (SC §9): the frozen numbering, so older decoders still read it.

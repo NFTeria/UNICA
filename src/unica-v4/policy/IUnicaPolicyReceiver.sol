@@ -33,7 +33,11 @@ interface IUnicaPolicyReceiver {
 
     /// @notice Emitted once per accepted report; a rejected report emits nothing and reverts.
     event AdmissionRecorded(
-        bytes32 indexed orderNonce, bytes32 indexed marketId, address indexed payer, address merchant, bytes32 reportHash
+        bytes32 indexed orderNonce,
+        bytes32 indexed marketId,
+        address indexed payer,
+        address merchant,
+        bytes32 reportHash
     );
 
     function FORWARDER() external view returns (address);

@@ -72,7 +72,8 @@ contract AnvilLocal is Script {
     using PoolIdLibrary for PoolKey;
 
     uint256 internal constant LOCAL_CHAIN = 31337;
-    uint160 internal constant HOOK_FLAGS = uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
+    uint160 internal constant HOOK_FLAGS =
+        uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
 
     // ---- market shape: a demonstration rate the admin sets, never a market price ---------------
     uint256 internal constant RATE_E18 = 2e18; // 2 uUSD per 1 tAST
@@ -212,7 +213,8 @@ contract AnvilLocal is Script {
         d.assetUsdFeed = address(assetUsd);
         d.payoutUsdFeed = address(payoutUsd);
 
-        d.adapter = address(new ChainlinkFeedAdapter(address(assetUsd), address(payoutUsd), d.asset, d.payout, address(0), 0));
+        d.adapter =
+            address(new ChainlinkFeedAdapter(address(assetUsd), address(payoutUsd), d.asset, d.payout, address(0), 0));
         vm.stopBroadcast();
     }
 
@@ -248,13 +250,11 @@ contract AnvilLocal is Script {
             fee: FEE,
             tickSpacing: TICK_SPACING,
             policy: UnicaMarketTypes.OraclePolicy({
-                adapter: d.adapter,
-                feedId: d.feedId,
-                maxAge: MAX_AGE,
-                maxDeviationBps: MAX_DEVIATION_BPS,
-                enabled: true
+                adapter: d.adapter, feedId: d.feedId, maxAge: MAX_AGE, maxDeviationBps: MAX_DEVIATION_BPS, enabled: true
             }),
-            caps: UnicaMarketTypes.Caps({maxPerTxPayout: MAX_PER_TX, maxPerDayPayout: MAX_PER_DAY, maxSeedPayout: MAX_SEED})
+            caps: UnicaMarketTypes.Caps({
+                maxPerTxPayout: MAX_PER_TX, maxPerDayPayout: MAX_PER_DAY, maxSeedPayout: MAX_SEED
+            })
         });
     }
 
@@ -336,13 +336,16 @@ contract AnvilLocal is Script {
         LookalikeFactory lf = new LookalikeFactory(a.attacker, IPoolManager(d.poolManager));
         d.lookalikeFactory = address(lf);
         bytes memory creationCode = type(UnicaMarketHook).creationCode;
-        bytes memory args =
-            abi.encode(d.poolManager, lf.REGISTRY(), d.marketId, d.asset, d.payout, FEE, TICK_SPACING, uint8(18), uint8(6));
+        bytes memory args = abi.encode(
+            d.poolManager, lf.REGISTRY(), d.marketId, d.asset, d.payout, FEE, TICK_SPACING, uint8(18), uint8(6)
+        );
         (, bytes32 salt) = HookMiner.find(address(lf), HOOK_FLAGS, creationCode, args);
         lf.spoof(
             d.marketId,
             UnicaMarketTypes.Caps({maxPerTxPayout: MAX_PER_TX, maxPerDayPayout: MAX_PER_DAY, maxSeedPayout: MAX_SEED}),
-            UnicaMarketTypes.OraclePolicy({adapter: address(0), feedId: 0, maxAge: 0, maxDeviationBps: 0, enabled: false})
+            UnicaMarketTypes.OraclePolicy({
+                adapter: address(0), feedId: 0, maxAge: 0, maxDeviationBps: 0, enabled: false
+            })
         );
         (address hook, address executor) = lf.deploy(creationCode, args, salt);
         d.lookalikeHook = hook;
@@ -376,7 +379,9 @@ contract AnvilLocal is Script {
         MockERC20(d.payout).approve(address(router), type(uint256).max);
         router.modifyLiquidity(
             key,
-            ModifyLiquidityParams({tickLower: lower, tickUpper: upper, liquidityDelta: int256(uint256(liquidity)), salt: 0}),
+            ModifyLiquidityParams({
+                tickLower: lower, tickUpper: upper, liquidityDelta: int256(uint256(liquidity)), salt: 0
+            }),
             ""
         );
         vm.stopBroadcast();
@@ -480,9 +485,18 @@ contract AnvilLocal is Script {
         DemoTerms memory t = _terms();
 
         vm.startBroadcast(a.opChair1);
-        bytes32 orderId = TerminalAdmission(d.admission).requestOrder(
-            d.merchantNode, d.chair1Node, d.ensDeploymentId, d.executor, a.payer, t.amountIn, t.minOut, t.deadline, t.nonce
-        );
+        bytes32 orderId = TerminalAdmission(d.admission)
+            .requestOrder(
+                d.merchantNode,
+                d.chair1Node,
+                d.ensDeploymentId,
+                d.executor,
+                a.payer,
+                t.amountIn,
+                t.minOut,
+                t.deadline,
+                t.nonce
+            );
         vm.stopBroadcast();
 
         UnicaMarketTypes.Order memory o = IUnicaMarketExecutor(d.executor).orders(orderId);
@@ -522,9 +536,15 @@ contract AnvilLocal is Script {
         router.modifyLiquidity(
             key, ModifyLiquidityParams({tickLower: lower, tickUpper: upper, liquidityDelta: 1e15, salt: 0}), ""
         );
-        bytes32 orderId = IUnicaMarketExecutor(executor).createOrder(
-            a.attacker, a.attacker, 1e17, 1, uint64(block.timestamp + 3600), keccak256(abi.encode("lookalike", vm.envUint("DEMO_ORDER_SEQ")))
-        );
+        bytes32 orderId = IUnicaMarketExecutor(executor)
+            .createOrder(
+                a.attacker,
+                a.attacker,
+                1e17,
+                1,
+                uint64(block.timestamp + 3600),
+                keccak256(abi.encode("lookalike", vm.envUint("DEMO_ORDER_SEQ")))
+            );
         MockERC20(d.asset).approve(executor, 1e17);
         IUnicaMarketExecutor(executor).pay(orderId);
         vm.stopBroadcast();
