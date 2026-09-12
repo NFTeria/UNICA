@@ -246,3 +246,4 @@ integrations/chainlink-cre-robinhood/**/dist/
 integrations/chainlink-cre-robinhood/.simulator/
 out-*/
 cache-*/
+.vercel
