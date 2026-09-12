@@ -1,0 +1,90 @@
+/* The customer's two screens: the checkout card and the receipt.
+   Everything here is built from the tokens in unica.css — --paper, --ink, --accent, --radius and
+   the 4px grid — so both schemes follow from the four fields that already swap, and nothing in
+   this file needs a second definition for dark.
+
+   COLOUR IN THIS FILE IS ATTRIBUTION, NEVER DECORATION. An integration's own colour appears as a
+   3px rule down the side of one small pill, and the pill always carries that integration's NAME in
+   ordinary ink. The colour therefore never carries meaning on its own, and the pill's text keeps
+   the stylesheet's own contrast in both schemes; apps/web/tests/checkout.test.mjs recomputes that
+   ratio from the hex values here and in assets/brand.js rather than trusting either.
+
+   One integration is allowed in one view. Which one is decided in assets/storefront.js, not here. */
+
+.co { max-width: 34rem; margin: 0 auto; }
+
+/* The identity above the money. A badge the deployment could read, or the business's own accent
+   square derived from its badge's hue; then the name, then the pay name. */
+.co-id { display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0 var(--s3); }
+.co-badge { width: calc(var(--space) * 12); height: calc(var(--space) * 12); flex: 0 0 auto;
+  border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden;
+  background: var(--business-accent, var(--surface)); display: block; }
+.co-badge img, .co-badge svg { display: block; width: 100%; height: 100%; }
+.co-id-text { min-width: 0; }
+.co-name { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.co-payname { margin: var(--s1) 0 0; display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--s2); color: var(--muted); font-size: 0.95rem; overflow-wrap: anywhere; }
+
+/* The card itself: lines, a total, then the two sides of the payment. */
+.co-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper);
+  padding: var(--s4); }
+.co-lines { margin: 0; }
+.co-line { display: flex; justify-content: space-between; gap: var(--s3);
+  padding: var(--s2) 0; border-bottom: 1px solid var(--line); }
+.co-line-what { min-width: 0; overflow-wrap: anywhere; }
+.co-line-much { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.co-total { display: flex; justify-content: space-between; gap: var(--s3);
+  padding: var(--s3) 0 0; font-weight: 700; font-size: 1.15rem; }
+.co-total span:last-child { font-variant-numeric: tabular-nums; }
+
+.co-flow { list-style: none; margin: var(--s3) 0 0; padding: 0; }
+.co-flow li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: var(--s1) var(--s3); padding: var(--s2) 0; }
+.co-flow dfn, .co-flow .co-k { font-style: normal; color: var(--muted); font-size: 0.9rem; }
+.co-flow .co-v { font-variant-numeric: tabular-nums; }
+
+/* One short line under the money. Never a paragraph. */
+.co-note { margin: var(--s3) 0 0; color: var(--muted); font-size: 0.9rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+
+.co-actions { margin: var(--s4) 0 0; }
+.co-actions .cta { width: 100%; }
+.co-status { margin: var(--s3) 0 0; }
+.co-after { margin: var(--s3) 0 0; }
+
+/* The attribution pill. The 3px rule is the only coloured thing; the name beside it is ink. */
+.int { display: inline-flex; align-items: center; gap: var(--s2); font-size: 0.85rem;
+  padding: var(--s1) var(--s2); border-radius: var(--radius); background: var(--surface);
+  color: var(--ink); border-left: 3px solid var(--int, var(--line)); white-space: nowrap; }
+.int[data-int="uniswap"] { --int: #FF007A; }
+.int[data-int="graph"] { --int: #6F4CFF; }
+.int[data-int="ens"] { --int: #5298FF; }
+.int[data-int="chainlink"] { --int: #375BD2; }
+.int[data-int="robinhood"] { --int: #00C805; }
+
+/* The shop: one card per product, each with its own way in. */
+.shop { list-style: none; padding: 0; margin: var(--s4) 0 0; display: grid; gap: var(--s3);
+  grid-template-columns: 1fr; }
+@media (min-width: 34rem) { .shop { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.shop-item { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper);
+  padding: var(--s3) var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+.shop-name { font-weight: 700; overflow-wrap: anywhere; }
+.shop-price { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.shop-kind { color: var(--muted); font-size: 0.9rem; }
+.shop-item .cta { margin-top: auto; align-self: flex-start; }
+
+/* The receipt. The verdict sits beside the amount, never underneath a paragraph. */
+.rc-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+  gap: var(--s2) var(--s3); }
+.rc-amount { margin: 0; font-size: 2rem; font-weight: 700; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; }
+.rc-rows { margin: var(--s4) 0 0; display: grid; grid-template-columns: auto 1fr; gap: var(--s2) var(--s4); }
+.rc-rows dt { color: var(--muted); font-size: 0.9rem; }
+.rc-rows dd { margin: 0; overflow-wrap: anywhere; }
+.rc-links { margin: var(--s4) 0 0; display: flex; flex-wrap: wrap; gap: var(--s3); }
+
+.graph-panel { margin: var(--s4) 0 0; padding: var(--s3) var(--s4); border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface); }
+.graph-panel p { margin: 0; }
+.graph-rows { list-style: none; margin: var(--s2) 0 0; padding: 0; color: var(--muted);
+  font-size: 0.9rem; }
