@@ -243,3 +243,108 @@ label { font-weight: 500; }
 .lay-checkout footer { max-width: 34rem; }
 .lay-checkout h1 { font-size: 1.35rem; text-align: center; margin-top: 0; }
 .bizid { text-align: center; font-weight: 500; color: var(--muted); margin: var(--s4) 0 var(--s1); }
+
+/* ── the component vocabulary ─────────────────────────────────────────────────────────────────
+   One block, one class, one definition. apps/web/DESIGN.md shows each of these rendered, and
+   apps/web/tests/design.test.mjs fails if a class named in that document is missing from here.
+   The accent appears in exactly two places on a screen: the primary action, and the current item
+   in the menu. Everything else earns attention through position, weight and space. */
+
+/* buttons — primary, quiet, danger, and disabled-with-a-reason */
+.cta-danger { background: transparent; color: var(--bad); border: 1px solid var(--bad); }
+.cta-danger:hover { background: color-mix(in srgb, var(--bad) 10%, var(--paper)); }
+
+/* status pill. Mark and word carry the meaning; the border style repeats it for anyone who cannot
+   tell the hues apart, so the colour is never the only signal. */
+.pill { display: inline-flex; align-items: center; gap: var(--s1); border: 1px solid var(--line);
+  border-radius: 999px; padding: var(--s1) var(--s3); font-size: 0.85rem; background: var(--surface);
+  white-space: nowrap; }
+.pill[data-status="verified"] { border-color: var(--accent); font-weight: 700; }
+.pill[data-status="active"] { border-color: var(--accent); }
+.pill[data-status="pending"] { border-style: dashed; }
+.pill[data-status="unknown"] { border-style: dotted; color: var(--muted); }
+.pill[data-status="refused"] { border-color: var(--bad); color: var(--bad); font-weight: 500; }
+.pill[data-status="revoked"] { border-style: dotted; color: var(--muted); text-decoration: line-through; }
+
+/* data table. The WRAPPER scrolls sideways, never the page. */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius);
+  margin: var(--s3) 0; }
+.dtable { width: 100%; display: table; margin: 0; border-collapse: collapse; }
+.dtable th, .dtable td { padding: var(--s3); border-bottom: 1px solid var(--line); }
+.dtable thead th { background: var(--surface); font-weight: 500; font-size: 0.9rem;
+  color: var(--muted); white-space: nowrap; }
+.dtable tbody tr:last-child td { border-bottom: 0; }
+
+/* form field */
+.formfield { display: block; margin: 0 0 var(--s4); }
+.formfield label { display: block; margin-bottom: var(--s1); }
+.help { display: block; color: var(--muted); font-size: 0.9rem; margin-top: var(--s1); }
+.error { display: block; color: var(--bad); font-size: 0.9rem; font-weight: 500; margin-top: var(--s1); }
+.error:empty { margin: 0; }
+select.field { appearance: none; background-image: none; }
+
+/* empty state — what a list says when it holds nothing, instead of showing a row nobody entered */
+.empty { border: 1px dashed var(--line); border-radius: var(--radius); padding: var(--s6) var(--s5);
+  text-align: center; margin: var(--s3) 0; }
+.empty-t { font-weight: 500; margin-bottom: var(--s1); }
+
+/* a message that arrives after load. Empty in the served HTML, and announced when it fills. */
+.toast { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface);
+  border-radius: var(--radius); padding: var(--s3) var(--s4); margin: var(--s3) 0; }
+
+/* products */
+.product-list { list-style: none; margin: var(--s3) 0; padding: 0; }
+.product { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3);
+  padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
+.product-name { flex: 1 1 12rem; font-weight: 500; }
+.product-price { font-variant-numeric: tabular-nums; }
+
+/* one payment in a list */
+.order-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3);
+  padding: var(--s3) 0; border-bottom: 1px solid var(--line); list-style: none; }
+.order-ref { flex: 1 1 10rem; font-weight: 500; }
+.order-when { color: var(--muted); font-size: 0.9rem; }
+.order-amount { font-variant-numeric: tabular-nums; margin-left: auto; }
+
+/* the register: a display you can read across a counter, and keys you can hit without looking */
+.register { max-width: 24rem; }
+.amount-display { display: block; width: 100%; text-align: right; font-size: 2.5rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface); padding: var(--s3) var(--s4);
+  margin-bottom: var(--s3); }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+.keypad .key { font: inherit; font-size: 1.25rem; font-weight: 500; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+  min-height: calc(var(--space) * 14); cursor: pointer; }
+.keypad .key:hover { background: var(--surface); }
+.keypad .key:active { background: var(--accent-quiet); }
+.charge { display: block; width: 100%; margin-top: var(--s3); font-size: 1.1rem;
+  min-height: calc(var(--space) * 14); }
+
+/* the customer's card */
+.checkout { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper);
+  padding: var(--s5); margin: var(--s3) 0; }
+.checkout-head { text-align: center; padding-bottom: var(--s3); border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s3); }
+.checkout-business { font-size: 1.25rem; font-weight: 700; margin: 0; }
+.checkout-lines { margin-bottom: var(--s3); }
+.checkout-line { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s2) 0; }
+.checkout-total { display: flex; justify-content: space-between; gap: var(--s4); font-weight: 700;
+  font-size: 1.25rem; border-top: 1px solid var(--line); padding-top: var(--s3); margin-bottom: var(--s4); }
+.asset-choice { margin-bottom: var(--s4); }
+.asset-choice label { display: block; margin-bottom: var(--s1); }
+.checkout-status { color: var(--muted); text-align: center; margin: var(--s3) 0 0; }
+
+/* the join flow's progress. The state is an attribute; the colour only agrees with it. */
+.stepper { list-style: none; counter-reset: none; display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4);
+  padding: 0; margin: var(--s3) 0; }
+.stepper li { display: flex; align-items: center; gap: var(--s2); color: var(--muted); }
+.stepper .step-mark { display: inline-grid; place-items: center; width: calc(var(--space) * 6);
+  height: calc(var(--space) * 6); border-radius: 999px; border: 1px solid var(--line);
+  font-size: 0.85rem; font-weight: 500; }
+.stepper li[data-state="done"] { color: var(--ink); }
+.stepper li[data-state="done"] .step-mark { border-color: var(--accent); }
+.stepper li[data-state="current"] { color: var(--ink); font-weight: 700; }
+.stepper li[data-state="current"] .step-mark { background: var(--accent); color: var(--on-accent);
+  border-color: var(--accent); }
+.stepper li[data-state="todo"] .step-mark { border-style: dashed; }
