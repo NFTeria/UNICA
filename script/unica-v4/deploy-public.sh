@@ -45,7 +45,7 @@ if [ "${UNICA_IS_MAINNET:-false}" = "true" ]; then
   test -n "${UNICA_PAUSER:-}" && test "$UNICA_PAUSER" != "0x0000000000000000000000000000000000000000" || fail "on a mainnet a pauser is required"
 fi
 
-if [ -n "${UNICA_IDENTITY_AUTHORITY:-}" ] && [ "$STAGE" = "A" ]; then
+if [ -n "${UNICA_IDENTITY_AUTHORITY:-}${UNICA_ENSV2_RESOLVER:-}" ] && [ "$STAGE" = "A" ]; then   # identity configured either way: a pinned authority or a resolver to adapt
   vy=$(vyper --version | head -1); case "$vy" in 0.4.3*) ;; *) fail "vyper 0.4.3 required exactly (ruling H8); found $vy" ;; esac
   IDENTITY_TOKEN_BYTECODE=$(vyper -p vy/src -f bytecode vy/src/art/identity_token.vy); export IDENTITY_TOKEN_BYTECODE
   echo "identity token bytecode: $(( (${#IDENTITY_TOKEN_BYTECODE} - 2) / 2 )) bytes (vyper $vy)"

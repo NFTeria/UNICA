@@ -25,6 +25,7 @@ import {ChainlinkFeedAdapter} from "../../src/unica-v4/oracle/ChainlinkFeedAdapt
 import {AggregatorV3Interface} from "../../src/unica-v4/oracle/AggregatorV3Interface.sol";
 import {UnicaPolicyReceiver} from "../../src/unica-v4/policy/UnicaPolicyReceiver.sol";
 import {TerminalAdmission} from "../../src/identity/TerminalAdmission.sol";
+import {EnsV2ResolverAuthority} from "../../src/identity/EnsV2ResolverAuthority.sol";
 
 /// @notice The one read this script makes of a forwarder before trusting it with a receiver.
 interface ITypeAndVersion {
@@ -88,6 +89,7 @@ contract DeployPublic is Script {
         address workflowOwner;
         bytes32 releaseTag;
         address identityAuthority;
+        address ensV2Resolver;
         bytes32 ensDeploymentId;
         string terminalStatusKey;
         string externalUrlBase;
@@ -103,6 +105,7 @@ contract DeployPublic is Script {
     error MainnetNeedsAPauser();
     error MainnetNeedsTheOracle();
     error NoCode(string what, address at);
+    error MissingConfig(string what);
     error FixtureRefused(string what, address at);
     error SequencerFeedRequired();
     error SeedAboveCap(uint256 seed, uint128 cap);
@@ -143,6 +146,7 @@ contract DeployPublic is Script {
         c.workflowOwner = vm.envOr("UNICA_WORKFLOW_OWNER", address(0));
         c.releaseTag = keccak256(bytes(vm.envString("UNICA_RELEASE_TAG")));
         c.identityAuthority = vm.envOr("UNICA_IDENTITY_AUTHORITY", address(0));
+        c.ensV2Resolver = vm.envOr("UNICA_ENSV2_RESOLVER", address(0));
         c.ensDeploymentId = vm.envOr("UNICA_ENS_DEPLOYMENT_ID", bytes32(0));
         c.terminalStatusKey = vm.envOr("UNICA_TERMINAL_STATUS_KEY", string("com.unica.terminal-status"));
         c.externalUrlBase = vm.envOr("UNICA_EXTERNAL_URL_BASE", string(""));
@@ -288,6 +292,14 @@ contract DeployPublic is Script {
             policyReceiver =
                 address(new UnicaPolicyReceiver(c.forwarder, registry, c.releaseTag, c.workflowId, c.workflowOwner, 1));
         }
+        // The identity authority is either the adapter this stage deploys over the chain's ENSv2
+        // permissioned resolver (UNICA_ENSV2_RESOLVER), or an authority already deployed and pinned
+        // (UNICA_IDENTITY_AUTHORITY). A pinned authority wins, so a redeploy never forks identity.
+        if (c.ensV2Resolver != address(0) && c.identityAuthority == address(0)) {
+            if (c.ensV2Resolver.code.length == 0) revert NoCode("ENSv2 resolver", c.ensV2Resolver);
+            if (c.ensDeploymentId == bytes32(0)) revert MissingConfig("UNICA_ENS_DEPLOYMENT_ID");
+            c.identityAuthority = address(new EnsV2ResolverAuthority(c.ensV2Resolver));
+        }
         address admission;
         if (c.identityAuthority != address(0)) {
             admission = address(
@@ -299,6 +311,8 @@ contract DeployPublic is Script {
         address badge = _deployBadge(registry);
         vm.stopBroadcast();
 
+        _emit("STAGE_A", "ensV2Resolver", vm.toString(c.ensV2Resolver));
+        _emit("STAGE_A", "identityAuthority", vm.toString(c.identityAuthority));
         _emit("STAGE_A", "oracleAdapter", vm.toString(adapter));
         _emit("STAGE_A", "factory", vm.toString(address(factory)));
         _emit("STAGE_A", "registry", vm.toString(registry));
