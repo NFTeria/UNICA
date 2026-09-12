@@ -3,10 +3,10 @@
 # LOCAL_ANVIL_NO_VALUE.
 #
 # A barbershop joins, points its payments at the asset it wants to be paid in, authorizes one
-# register, loses a tablet and revokes it, and then sells twice: once to a customer paying the very
-# asset the shop is paid in, and once to a customer paying something else, which is converted on
-# the way. Both payments are read back from the chain and the shop is only told "Paid" when a
-# reader has confirmed the receipt.
+# register, loses a tablet and revokes it, writes down what it sells, and then sells three times:
+# once off its own list, once to a customer paying the very asset the shop is paid in, and once to a
+# customer paying something else, which is converted on the way. Every payment is read back from the
+# chain and the shop is only told "Paid" when a reader has confirmed the receipt.
 #
 # Everything an engineer needs is written to log files and printed at the end under "Advanced
 # verification". Everything before that is what the owner sees.
@@ -40,8 +40,8 @@ log "  Paid in             uUSD, a local test dollar (not USDC, worth nothing)"
 log "  Registers           $(json_get "$JOIN" .firstTerminalLabel) (authorized), lost-tablet (authorized for now)"
 log "  Business badge      #$(json_get "$JOIN" .tokenId), held by the owner and not transferable"
 
-heading "3. Two sales, one lost tablet, and everything that must be refused"
-quietly "Selling twice and testing every refusal" demo bash script/anvil/demo.sh
+heading "3. Three sales, one lost tablet, and everything that must be refused"
+quietly "Selling three times and testing every refusal" demo bash script/anvil/demo.sh
 test -f "$RECORD" || die "no sales record was produced; see $REHEARSAL_DIR/business-demo.log"
 R=$(cat "$RECORD")
 
@@ -51,6 +51,16 @@ DIRECT_ORDER=$(json_get "$R" .directPayment.orderId)
 DIRECT_TX=$(json_get "$R" .directPayment.txHash)
 DIRECT_BEFORE=$(json_get "$R" .directPayment.businessBalanceBefore)
 DIRECT_AFTER=$(json_get "$R" .directPayment.businessBalanceAfter)
+SHOP_LIST_ONE=$(json_get "$R" .products.onTheList[0].name)
+SHOP_LIST_ONE_PRICE=$(json_get "$R" .products.onTheList[0].price)
+SHOP_LIST_TWO=$(json_get "$R" .products.onTheList[1].name)
+SHOP_LIST_TWO_PRICE=$(json_get "$R" .products.onTheList[1].price)
+SHOP_LIST_TWO_PERIOD=$(json_get "$R" .products.onTheList[1].periodSeconds)
+SHOP_SALE_DECISION=$(json_get "$R" .products.sale.decision)
+SHOP_SALE_ID=$(json_get "$R" .products.sale.id)
+SHOP_SALE_TX=$(json_get "$R" .products.sale.txHash)
+SHOP_SALE_BEFORE=$(json_get "$R" .products.sale.shopBalanceBefore)
+SHOP_SALE_AFTER=$(json_get "$R" .products.sale.shopBalanceAfter)
 SWAP_IN=$(json_get "$R" .order.inputAmount)
 SWAP_OUT=$(json_get "$R" .settlement.outputDelivered)
 SWAP_DECISION=$(json_get "$R" .evidence.decision)
@@ -63,7 +73,17 @@ SWAP_AFTER=$(json_get "$R" .settlement.merchantBalanceAfter)
 # Anything else is "Not confirmed yet", and the reason is printed beside it.
 state_of() { case "$1" in VERIFIED) printf 'Paid (checked)' ;; REFUSED) printf 'Declined' ;; *) printf 'Not confirmed yet' ;; esac; }
 
-heading "4. Sale one: the customer paid the same asset the business is paid in"
+heading "4. Sale one: a customer bought something off the shop's own list"
+log "  Fresh Cuts wrote down what it sells, in its own words, from its own wallet. Nobody has to"
+log "  approve that list and nobody else can change it."
+log "  On the list         $SHOP_LIST_ONE, $(money "$SHOP_LIST_ONE_PRICE" uUSD) — anyone can buy it, any number of times"
+log "  On the list         $SHOP_LIST_TWO, $(money "$SHOP_LIST_TWO_PRICE" uUSD) every $((SHOP_LIST_TWO_PERIOD / 86400)) days — the buyer stays paid up to a date"
+log "  Bought              $SHOP_LIST_ONE"
+log "  Business balance    $(money "$SHOP_SALE_BEFORE" uUSD)  ->  $(money "$SHOP_SALE_AFTER" uUSD)"
+log "  Received            $(money "$(node -e 'console.log((BigInt(process.argv[1])-BigInt(process.argv[2])).toString())' "$SHOP_SALE_AFTER" "$SHOP_SALE_BEFORE")" uUSD), exactly the price on the list"
+log "  Receipt             $(state_of "$SHOP_SALE_DECISION")"
+
+heading "5. Sale two: the customer paid the same asset the business is paid in"
 log "  Nothing was converted, and no conversion route was used at all."
 log "  Amount asked        $(money "$DIRECT_AMOUNT" uUSD)"
 log "  Business balance    $(money "$DIRECT_BEFORE" uUSD)  ->  $(money "$DIRECT_AFTER" uUSD)"
@@ -74,7 +94,7 @@ if [ "$DIRECT_DECISION" != "VERIFIED" ]; then
   log "                      $(json_get "$R" .directPayment.decisionNote)"
 fi
 
-heading "5. Sale two: the customer paid a different asset"
+heading "6. Sale three: the customer paid a different asset"
 log "  The customer paid tAST and the business was paid uUSD. The conversion happened during the"
 log "  payment, and the business never held the asset the customer used."
 log "  Customer paid       $(money "$SWAP_IN" tAST)"
@@ -83,11 +103,12 @@ log "  Received            $(money "$SWAP_OUT" uUSD)"
 log "  Register            chair-1"
 log "  Receipt             $(state_of "$SWAP_DECISION")"
 
-heading "6. What was refused, and why that matters"
+heading "7. What was refused, and why that matters"
 log "  A stranger tried to pay someone else's sale                      Declined"
 log "  The lost tablet tried to raise a new sale after being revoked    Declined"
 log "  The same register tried to raise a sale after being revoked      Declined"
 log "  A look-alike copy of the product tried to pass off a receipt     Declined"
+log "  A copied shopfront sold the same thing and took the money        Declined"
 # One refusal that the sales run above does not reach: an amount too large to convert safely. The
 # limit is the one recorded in the installation, read here rather than typed in.
 CAP=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).market.caps.maxPerTxPayout)' "$MANIFEST_PATH")
@@ -103,7 +124,7 @@ log "  A sale larger than this installation converts safely             Declined
 log "                      the limit is $(money "$CAP" uUSD) per sale, and a sale one smallest unit"
 log "                      above it was refused before the sale existed"
 
-heading "7. What the business can open right now"
+heading "8. What the business can open right now"
 log "  Your business       http://127.0.0.1:$PORT/business/"
 log "  Take a payment      http://127.0.0.1:$PORT/business/payments/new/"
 log "  Customer payment    http://127.0.0.1:$PORT/pay/?order=$SWAP_ORDER"
@@ -111,6 +132,8 @@ log "  Start the screens with: make business-open"
 
 heading "Advanced verification"
 log "  These are for an engineer checking the run. A business owner never needs them."
+log "  sale from the list   $SHOP_SALE_ID"
+log "  its payment          $SHOP_SALE_TX"
 log "  same-asset sale id   $DIRECT_ORDER"
 log "  same-asset payment   $DIRECT_TX"
 log "  converted sale id    $SWAP_ORDER"
