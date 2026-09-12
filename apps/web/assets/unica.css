@@ -1,3 +1,4 @@
+[hidden] { display: none !important; } /* the attribute outranks every display rule: a hidden mark stays hidden */
 /* One stylesheet. Tokens first, then layout, then components. No framework, no build step.
    No external font, no external image, no external anything: every URL a browser would fetch for
    this file would be a URL this project cannot promise stays up, so there are none. */
