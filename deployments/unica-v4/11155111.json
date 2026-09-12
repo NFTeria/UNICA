@@ -6,8 +6,19 @@
   "readAtBlock": 11690204,
   "releaseTag": "unica-v4/sepolia-rehearsal-1",
   "verification": {
-    "status": "not verified",
-    "note": "no read-only explorer result was supplied"
+    "status": "verified",
+    "verifier": "etherscan (Sepolia)",
+    "checkedAt": "2026-09-12",
+    "tool": "script/unica-v4/verify-source.sh",
+    "contracts": {
+      "factory": "verified",
+      "registry": "verified",
+      "hook": "verified",
+      "executor": "verified",
+      "identityAuthority": "verified",
+      "terminalAdmission": "verified",
+      "identityToken": "NOT VERIFIED: Vyper 0.4.3; the explorer's Vyper form is a manual owner step"
+    }
   },
   "contracts": {
     "poolManager": {
