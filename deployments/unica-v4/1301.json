@@ -2,8 +2,9 @@
   "environment": "PUBLIC_TESTNET_NO_VALUE",
   "designation": "TEST_ONLY_NO_VALUE",
   "chainId": 1301,
-  "commit": "2bc7cbcbb33f611c116cdcd8ac357fa8ed55f87c",
-  "readAtBlock": 62381562,
+  "commit": "ff47836717e3d2ede9301f7f89ac5241d349f67d",
+  "readAtBlock": 62398692,
+  "releaseTag": "unica-v5/unichain-sepolia-1",
   "explorer": {
     "kind": "blockscout",
     "api": "https://unichain-sepolia.blockscout.com/api",
@@ -11,7 +12,6 @@
     "note": "public, keyless; a source of logs and links, never a judge"
   },
   "deployedAtBlock": 62380837,
-  "releaseTag": "unica-v5/unichain-sepolia-1",
   "verification": {
     "status": "verified",
     "verifier": "sourcify (Unichain Sepolia)",
@@ -59,6 +59,11 @@
       "address": "0xD3730094f1D481F7501E75B3E6FCDa16fF0C9e67",
       "codeHash": "0x4d0092aab742111d2676c713010b477db7252f0081c6adcd71d099a7f404c382",
       "codeSize": 17280
+    },
+    "productCatalog": {
+      "address": "0x5e23CA4299A4728ae8e55fFE9B707046D38eB19d",
+      "codeHash": "0xba4136f4fa17886867ac05b2d27f8ce261091ba0883fc338bfa0ee5e0e1a6dc2",
+      "codeSize": 10741
     }
   },
   "market": {
@@ -100,6 +105,7 @@
     "pauser": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
     "deployer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73"
   },
+  "knownTokens": [],
   "identity": {
     "note": "no identity authority configured; terminal admission is not deployed on this chain"
   },
