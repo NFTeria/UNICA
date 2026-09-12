@@ -30,6 +30,33 @@ import { sidebarNav, walletChip } from "./components.mjs";
 import { MAINNET_ENVIRONMENT, NO_VALUE_BANNER } from "../assets/product.js";
 
 /**
+ * The colour-scheme control. Three states and no fourth: SYSTEM is the absence of a choice, which
+ * is why it is the served default and why picking it removes the attribute rather than writing a
+ * third value. `assets/app.js` reads and writes one localStorage key; the script in the head below
+ * applies whatever it finds there before the first paint, so a dark-by-choice viewer never sees a
+ * white flash on the way in.
+ */
+const THEME_CONTROL = `<span class="theme-pick">
+  <label for="theme-choice">Theme</label>
+  <select id="theme-choice" name="theme" data-theme-control="true">
+    <option value="system" selected>System</option>
+    <option value="light">Light</option>
+    <option value="dark">Dark</option>
+  </select>
+</span>`;
+
+/**
+ * Runs before anything is painted, which is the whole point: a stored choice has to be on <html>
+ * by the time the first rule is matched or the viewer watches the page change colour under them.
+ * It is inline for the same reason — a separate file is a second request, and a flash is exactly
+ * as long as that request takes. It reads one key, accepts only the two values it wrote, and
+ * swallows every storage failure, because a browser with site data switched off must still render
+ * a correct page. `data-js` is the same script saying script exists, which is what reveals the
+ * control: see assets/screens/theme.css.
+ */
+const THEME_BOOT = `<script>try{var t=localStorage.getItem("unica.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}document.documentElement.setAttribute("data-js","1");</script>`;
+
+/**
  * The environment this artifact is being built for. It is an explicit build input, never a guess:
  * a build says PUBLIC_MAINNET or it does not get to omit the no-value label. `apps/web/build.mjs`
  * checks the emitted documents against this same value, so the two cannot disagree.
@@ -118,6 +145,7 @@ function marketingBody(page, p, navKey) {
   return `<header class="site">
   <a class="mark" href="${esc(p)}"><span aria-hidden="true">◇</span> ${esc(SITE.name)}</a>
   ${nav(p, navKey)}
+  ${THEME_CONTROL}
   ${chip(p)}
 </header>
 <main id="main" tabindex="-1">
@@ -132,6 +160,7 @@ function appBody(page, p) {
   return `<header class="topbar">
   <a class="mark" href="${esc(p)}"><span aria-hidden="true">◇</span> ${esc(SITE.name)}</a>
   <span class="topbar-business" id="topbar-business">Not signed in yet</span>
+  ${THEME_CONTROL}
   ${chip(p)}
 </header>
 <div class="appframe">
@@ -154,6 +183,7 @@ function checkoutBody(page, p) {
     <li><a href="${esc(p)}">Home</a></li>
     <li><a href="${esc(p)}support/">Support</a></li>
   </ul></nav>
+  ${THEME_CONTROL}
   ${chip(p)}
 </header>
 <main id="main" tabindex="-1">
@@ -192,6 +222,8 @@ export function document_(page) {
 <meta name="twitter:card" content="summary_large_image">
 ${page.experimental ? '<meta name="unica:status" content="testnet experiment">' : ""}
 <link rel="stylesheet" href="${esc(p)}assets/unica.css">
+<link rel="stylesheet" href="${esc(p)}assets/screens/theme.css">
+${THEME_BOOT}
 </head>
 <body class="lay lay-${layout}" data-layout="${layout}">
 <a class="skip" href="#main">Skip to main content</a>

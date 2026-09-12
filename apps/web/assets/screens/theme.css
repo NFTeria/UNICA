@@ -1,0 +1,14 @@
+/* The colour-scheme control, and nothing else. Its own file so the shell can carry it on every
+   page without adding a rule to the brand stylesheet.
+
+   IT IS HIDDEN UNTIL SCRIPT EXISTS. The control does nothing without JavaScript — the choice is
+   stored in localStorage and stamped on <html> — and a control that does nothing is worse than
+   no control. The same inline script in the head that applies a stored choice before the first
+   paint also stamps data-js, so this rule reveals the select only where it can work. Nobody ever
+   sees a dead one; without script the page follows the machine's own preference, which is what
+   the served option already says. */
+.theme-pick { display: none; }
+:root[data-js] .theme-pick { display: inline-flex; align-items: center; gap: var(--s2); }
+.theme-pick > select { font: inherit; font-size: 0.9rem; padding: var(--s1) var(--s2);
+  min-height: calc(var(--space) * 9); border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--paper); color: var(--ink); }
