@@ -9,8 +9,8 @@ against `docs/unica-v5/graph/PRIZE-FIT.md`, which this file does not repeat.
 Rank five candidate demos for the Track 2 (AI Tooling or AI Use Case, From Scratch) submission,
 recommend one primary and two fallbacks, and lay out the minimal build sequence for the primary —
 correcting the research brief's starting proposal where the evidence gathered for `PRIZE-FIT.md`
-disagrees with it. Today is 2026-09-11; ETHOnline 2026 runs through 2026-09-16 (VERIFIED,
-`PRIZE-FIT.md` §7) — five days of runway from this file's retrieval date, a hard constraint on
+disagrees with it. Today is 2026-09-11; the submission deadline is Sunday 2026-09-13, 12:00 pm EDT (16:00 UTC) (VERIFIED against ethglobal.com/events/ethonline2026/info/details, retrieved 2026-09-11 and recorded in docs/unica-v4/DECISIONS.md; an earlier reading of 2026-09-16 in this file was wrong — that date is Circle's Arc mainnet launch, not this event's deadline) (
+`PRIZE-FIT.md` §7) — roughly two days of runway from this file's retrieval date, a hard constraint on
 every score below.
 
 ## 2. Candidate demos, described
@@ -190,7 +190,7 @@ no v4 contract is described as live; a demo that cannot fit inside the 2–4 min
 
 1. Whether a reorg can be honestly produced and observed against public Sepolia, or a local fork,
    inside the remaining event window — not resolved by this file; see §6.
-2. Whether the owner will grant G0 for any part of UNICA v4 before 2026-09-16, which would change
+2. Whether the owner will grant G0 for any part of UNICA v4 before the 2026-09-13 deadline, which would change
    whether the v4-dependent path in `PRIZE-FIT.md` §7 becomes reachable this event — an owner
    decision, not a fact this research can settle.
 3. Whether four minutes of demo video is enough to show the verdict, the MCP tool, the
