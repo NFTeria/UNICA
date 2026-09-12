@@ -55,6 +55,8 @@ contract UnicaPolicyReceiver is IUnicaPolicyReceiver {
     error QuoteExpired();
     error PolicyExpired();
     error NonceAlreadyUsed();
+    error ZeroAddress();
+    error RegistryHasNoCode(address registry);
 
     constructor(
         address forwarder,
@@ -64,6 +66,10 @@ contract UnicaPolicyReceiver is IUnicaPolicyReceiver {
         address workflowOwner,
         uint8 reportSchemaVersion
     ) {
+        // A zero forwarder would brick every onReport silently; a registry without code would make
+        // every market-status read revert. Both are deployment mistakes, refused at deployment.
+        if (forwarder == address(0) || registry == address(0) || workflowOwner == address(0)) revert ZeroAddress();
+        if (registry.code.length == 0) revert RegistryHasNoCode(registry);
         FORWARDER = forwarder;
         REGISTRY = registry;
         UNICA_RELEASE = unicaRelease;

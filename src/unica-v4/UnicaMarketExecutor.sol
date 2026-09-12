@@ -280,7 +280,11 @@ contract UnicaMarketExecutor is IUnicaMarketExecutor, IUnlockCallback {
     function _verifyAndAccount(bytes32 orderId, Snapshot memory snap, uint256 out) private returns (uint256 delivered) {
         if (IUnicaReceiptCounter(HOOK).receiptCount() != snap.receiptsBefore + 1) revert NoReceipt(orderId);
 
-        delivered = IUnicaERC20(PAYOUT_TOKEN).balanceOf(snap.recipient) - snap.recipientBefore;
+        // A payout token that DEBITS the recipient while the manager is unlocked would underflow
+        // here; that is refused by name, not by a bare panic, so the diagnosis survives.
+        uint256 recipientAfter = IUnicaERC20(PAYOUT_TOKEN).balanceOf(snap.recipient);
+        if (recipientAfter < snap.recipientBefore) revert DeliveryNotExact(orderId, out, 0);
+        delivered = recipientAfter - snap.recipientBefore;
         if (delivered < snap.minOut) revert RecipientShort(orderId, snap.minOut, delivered);
         if (delivered != out) revert DeliveryNotExact(orderId, out, delivered);
 

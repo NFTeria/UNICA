@@ -153,6 +153,12 @@ contract UnicaMarketFactory {
         if (m.status != UnicaMarketTypes.MarketStatus.INITIALIZED) revert WrongMarketStatus(marketId, uint8(m.status));
         if (minDepth == 0) revert ZeroMinDepth();
 
+        // Depth is read at the pool's CURRENT tick and recorded as depth at the opening tick. The two
+        // agree only while the pool has not moved, which no swap can cause before ACTIVE; this makes
+        // that assumption a check instead of a comment (security review, finding 11).
+        (, int24 currentTick,,) = StateLibrary.getSlot0(POOL_MANAGER, PoolId.wrap(m.poolId));
+        if (currentTick != m.initTick) revert OpeningTickMismatch(m.initTick, currentTick);
+
         depth = _depthAtOpeningTick(m);
         if (depth < minDepth) revert SeedTooShallow(marketId, depth, minDepth);
 

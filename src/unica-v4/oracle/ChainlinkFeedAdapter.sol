@@ -44,6 +44,7 @@ contract ChainlinkFeedAdapter is IUnicaPriceOracle, IUnicaOracleRoute {
     error FeedUnreadable(address feed);
     error FeedDecimalsUnsupported(address feed, uint8 decimals);
     error FeedAnswerNotPositive(address feed, int256 answer);
+    error FeedAnswerOutOfRange(address feed, uint256 answer);
     error FeedNoTimestamp(address feed);
     error FeedRoundIncomplete(address feed, uint80 roundId, uint80 answeredInRound);
     error SequencerDown();
@@ -113,6 +114,10 @@ contract ChainlinkFeedAdapter is IUnicaPriceOracle, IUnicaOracleRoute {
         (uint256 assetAnswer, uint8 assetDecimals, uint256 assetUpdatedAt) = _read(ASSET_FEED);
         (uint256 quoteAnswer, uint8 quoteDecimals, uint256 quoteUpdatedAt) = _read(QUOTE_FEED);
 
+        // Both answers are bounded BEFORE any multiplication, so an absurd feed value refuses by
+        // name and never by a bare arithmetic panic (security review, finding 12).
+        if (assetAnswer > type(uint128).max) revert FeedAnswerOutOfRange(ASSET_FEED, assetAnswer);
+        if (quoteAnswer > type(uint128).max) revert FeedAnswerOutOfRange(QUOTE_FEED, quoteAnswer);
         // quote per whole asset = (assetAnswer / 10**da) / (quoteAnswer / 10**dq), at 1e18.
         price = FullMath.mulDiv(assetAnswer, 1e18 * (10 ** quoteDecimals), quoteAnswer * (10 ** assetDecimals));
         decimals = 18;
@@ -129,7 +134,8 @@ contract ChainlinkFeedAdapter is IUnicaPriceOracle, IUnicaOracleRoute {
         if (feed == address(0)) return;
         (, int256 answer, uint256 startedAt,,) = _roundData(feed);
         if (answer != 0) revert SequencerDown();
-        if (startedAt == 0) revert SequencerStatusUnknown();
+        // A zero or FUTURE start time is a status this contract cannot reason about: unknown, not up.
+        if (startedAt == 0 || startedAt > block.timestamp) revert SequencerStatusUnknown();
         if (block.timestamp - startedAt <= GRACE_PERIOD) revert SequencerGracePeriod(startedAt, GRACE_PERIOD);
     }
 

@@ -441,11 +441,11 @@ contract UnicaMarketHook is BaseHook, IUnicaMarketHook {
         view
         returns (OracleCondition condition, bytes4 reason, uint256 price, uint8 decimals, uint256 updatedAt)
     {
+        // Any status but ACTIVE is a market that cannot settle: PAUSED and RETIRED as SO §6 names,
+        // and the pre-activation states too, so a dashboard never shows OK for a market whose every
+        // payment would revert MarketNotActive (security review, finding 13).
         uint8 status = IUnicaMarketRegistry(REGISTRY).statusOf(MARKET_ID);
-        if (
-            status == uint8(UnicaMarketTypes.MarketStatus.PAUSED)
-                || status == uint8(UnicaMarketTypes.MarketStatus.RETIRED)
-        ) {
+        if (status != uint8(UnicaMarketTypes.MarketStatus.ACTIVE)) {
             return (OracleCondition.MARKET_CLOSED, bytes4(0), 0, 0, 0);
         }
 
