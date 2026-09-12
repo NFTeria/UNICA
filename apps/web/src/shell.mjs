@@ -269,6 +269,7 @@ export function document_(page) {
 ${page.experimental ? '<meta name="unica:status" content="testnet experiment">' : ""}
 <link rel="stylesheet" href="${esc(p)}assets/unica.css">
 <link rel="stylesheet" href="${esc(p)}assets/screens/theme.css">
+<link rel="stylesheet" href="${esc(p)}assets/fold.css">
 ${THEME_BOOT}
 </head>
 <body class="lay lay-${layout}" data-layout="${layout}">
@@ -276,6 +277,7 @@ ${THEME_BOOT}
 ${envBar}
 ${shell}
 <script type="module" src="${esc(p)}assets/app.js"></script>
+<script type="module" src="${esc(p)}assets/fold.js"></script>
 </body>
 </html>
 `;
