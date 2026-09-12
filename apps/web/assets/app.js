@@ -134,7 +134,7 @@ async function driveChip(chip, { load = loadConfig, reconnect = silentReconnect,
     return;
   }
 
-  // Nobody is recognised. Offer the one button, and on the practice network the accounts that
+  // Nobody is recognised. Offer the one button, and on the testnet the accounts that
   // network itself unlocks, because there is no browser wallet there to ask.
   const button = el("button", "cta", "Log in with wallet");
   button.type = "button";
@@ -146,7 +146,7 @@ async function driveChip(chip, { load = loadConfig, reconnect = silentReconnect,
     if (list.length) {
       chooser = document.createElement("select");
       chooser.id = "practice-account";
-      chooser.setAttribute("aria-label", "Practice account to sign in as");
+      chooser.setAttribute("aria-label", "Testnet account to sign in as");
       for (const address of list) {
         const option = document.createElement("option");
         option.value = address;

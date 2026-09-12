@@ -26,7 +26,7 @@ prints one of those words itself: it takes its label from its caller.
 `TESTNET / NO VALUE` above all three layouts, and `build.mjs` refuses to emit a document without it
 unless the build was told `UNICA_BUILD_ENVIRONMENT=PUBLIC_MAINNET` — in which case it refuses to emit
 one *with* it. The customer-facing wording of the same fact is
-`Practice mode, test money only`, from `assets/wallet.js`. Do not write either sentence into a page
+`Testnet. No real money.`, from `assets/wallet.js`. Do not write either sentence into a page
 by hand; both have exactly one source.
 
 And the rule under both of them: **nothing is invented**. A component given no data renders an empty

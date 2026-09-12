@@ -25,7 +25,7 @@ export function addressRow(label, value, explorer) {
 /** The V3 disclosures, verbatim in structure with the shipped page's claims. */
 export function v3Disclosure() {
   return raw(h`<details class="fold">
-  <summary>What the current settlement demo accepts</summary>
+  <summary>What the current settlement accepts</summary>
   <ul>
     <li>Native ETH in. The payer sends ETH and nothing else.</li>
     <li>One configured payout currency out, fixed per chain at deployment and not selectable.</li>
@@ -80,7 +80,7 @@ export function approvedClaim() {
 
 export function v3PinsTable() {
   return raw(h`<table class="pins">
-  <caption>The deployment this demo pays through</caption>
+  <caption>The deployment this release pays through</caption>
   <tbody>
     ${addressRow("Executor", V3.executor, V3.explorer)}
     ${addressRow("Hook", V3.hook, V3.explorer)}

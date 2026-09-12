@@ -241,7 +241,7 @@ test("DESIGN.md states the machine-word rule and the no-value rule", () => {
   const plain = design.replace(/\*/g, "").replace(/\s+/g, " ");
   assert.match(plain, /hook, executor, registry, pool, tick, feed, calldata or hex/);
   assert.match(plain, /TESTNET \/ NO VALUE/);
-  assert.match(plain, /Practice mode, test money only/);
+  assert.match(plain, /Testnet. No real money./);
 });
 
 // ── the two admin screens the menu needed ────────────────────────────────────────────────────────
@@ -346,12 +346,12 @@ test("a wallet that already approved this site is recognised without a prompt", 
   });
   byId.delete("topbar-business");
   assert.match(chip.textContent, /0x001122…2233/);
-  assert.match(chip.textContent, /Local practice network/);
+  assert.match(chip.textContent, /Local testnet/);
   assert.match(chip.textContent, /Log out/);
   assert.equal(topbar.textContent, "freshcuts.unica.eth");
 });
 
-test("on the practice network the accounts that network unlocks are offered before logging in", async () => {
+test("on the testnet the accounts that network unlocks are offered before logging in", async () => {
   const chip = newChip();
   await driveChip(chip, {
     load: async () => ({ chainId: 31337, rpc: "practice" }),
