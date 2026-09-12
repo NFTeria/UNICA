@@ -35,6 +35,8 @@ import {TerminalAdmission} from "../../src/identity/TerminalAdmission.sol";
 import {MerchantOnboarding} from "../../src/identity/MerchantOnboarding.sol";
 import {DirectSettlement} from "../../src/unica-v5/DirectSettlement.sol";
 import {IDirectSettlement} from "../../src/unica-v5/IDirectSettlement.sol";
+import {IProductCatalog} from "../../src/unica-v5/IProductCatalog.sol";
+import {ProductCatalog} from "../../src/unica-v5/ProductCatalog.sol";
 import {IMerchantOnboarding} from "../../src/identity/IMerchantOnboarding.sol";
 import {FixtureAggregator} from "../../test/unica-v4/fixtures/FixtureAggregator.sol";
 import {LookalikeFactory} from "../../test/unica-v4/fixtures/LookalikeFactory.sol";
@@ -148,6 +150,9 @@ contract AnvilLocal is Script {
         address lookalikeExecutor;
         address directSettlement;
         address directAdmission;
+        address productCatalog;
+        bytes32 catalogId;
+        address lookalikeCatalog;
         bytes32 ensDeploymentId;
         bytes32 rootNode;
         bytes32 unicaNode;
@@ -181,7 +186,9 @@ contract AnvilLocal is Script {
         _deployPolicy();
         _deployAdmission();
         _deployDirect();
+        _deployCatalog();
         _deployLookalike();
+        _deployLookalikeCatalog();
         _printManifest();
     }
 
@@ -403,6 +410,20 @@ contract AnvilLocal is Script {
         vm.stopBroadcast();
     }
 
+    /// @dev The list of what a business sells. It answers to nobody: no admin, no registry, no gate,
+    ///      no allowlist of sellers. That is not an omission — a shop's own list of its own prices
+    ///      is not something a payment network should be able to edit, and a seller here can reach
+    ///      only their own rows. It is deployed by the admin account purely because something has to
+    ///      pay the gas; the deployer holds no power over it afterwards, which the attack suite
+    ///      reads back rather than taking on trust.
+    function _deployCatalog() internal {
+        vm.startBroadcast(a.admin);
+        ProductCatalog catalog = new ProductCatalog();
+        vm.stopBroadcast();
+        d.productCatalog = address(catalog);
+        d.catalogId = catalog.CATALOG_ID();
+    }
+
     /// @dev The same hook source, an attacker-controlled registry, the OFFICIAL marketId in its
     ///      immutables. Its receipts are indistinguishable by topic and by field; only the emitter
     ///      address, checked against the official registry, tells them apart. That is the point.
@@ -425,6 +446,18 @@ contract AnvilLocal is Script {
         (address hook, address executor) = lf.deploy(creationCode, args, salt);
         d.lookalikeHook = hook;
         d.lookalikeExecutor = executor;
+        vm.stopBroadcast();
+    }
+
+    /// @dev The counterfeit shopfront, deployed and owned by the attacker: the SAME catalogue
+    ///      source, on which they will list a product with the same name at the same price and point
+    ///      its money at the real shop's own wallet. Its sale event is identical in every field a
+    ///      shopper can see; only the address it comes from differs, and only the evidence reader's
+    ///      emitter rule tells them apart. Deployed here for the same reason the look-alike hook is:
+    ///      a refusal nobody can reproduce is a claim.
+    function _deployLookalikeCatalog() internal {
+        vm.startBroadcast(a.attacker);
+        d.lookalikeCatalog = address(new ProductCatalog());
         vm.stopBroadcast();
     }
 
@@ -709,6 +742,83 @@ contract AnvilLocal is Script {
         _emit(P, "chair1Status", LocalEnsV2Fixture(d.identity).text(d.chair1Node, TERMINAL_STATUS_KEY));
     }
 
+    /// @notice The business writes down what it sells: a haircut anyone can buy any number of times,
+    ///         and a membership paid for a period at a time. Broadcast by the BUSINESS OWNER's own
+    ///         wallet, never by the admin — the list belongs to the shop, and the deployment cannot
+    ///         put anything on it. The money for both is sent to the same address the business is
+    ///         paid at everywhere else in this demonstration.
+    function listProducts() external localOnly {
+        _readAccounts();
+        _readDeployed();
+        uint256 haircutPrice = vm.envUint("PRODUCT_HAIRCUT_PRICE");
+        uint256 membershipPrice = vm.envUint("PRODUCT_MEMBERSHIP_PRICE");
+        uint64 membershipPeriod = uint64(vm.envUint("PRODUCT_MEMBERSHIP_PERIOD"));
+
+        vm.startBroadcast(a.merchantOwner);
+        uint256 haircut = IProductCatalog(d.productCatalog)
+            .list("Haircut", d.payout, haircutPrice, IProductCatalog.Kind.PERMANENT, 0, a.merchantPayout, address(0));
+        uint256 membership = IProductCatalog(d.productCatalog)
+            .list(
+                "Monthly membership",
+                d.payout,
+                membershipPrice,
+                IProductCatalog.Kind.RECURRING,
+                membershipPeriod,
+                a.merchantPayout,
+                address(0)
+            );
+        vm.stopBroadcast();
+
+        _printProducts(haircut, membership);
+    }
+
+    function _printProducts(uint256 haircut, uint256 membership) internal view {
+        string memory P = "PRODUCTS";
+        IProductCatalog c = IProductCatalog(d.productCatalog);
+        _emit(P, "catalog", vm.toString(d.productCatalog));
+        _emit(P, "catalogId", vm.toString(c.CATALOG_ID()));
+        _emit(P, "haircutId", vm.toString(haircut));
+        _emit(P, "haircutName", c.products(haircut).name);
+        _emit(P, "haircutPrice", vm.toString(c.products(haircut).price));
+        _emit(P, "membershipId", vm.toString(membership));
+        _emit(P, "membershipName", c.products(membership).name);
+        _emit(P, "membershipPrice", vm.toString(c.products(membership).price));
+        _emit(P, "membershipPeriod", vm.toString(uint256(c.products(membership).period)));
+        _emit(P, "asset", vm.toString(c.products(haircut).asset));
+        _emit(P, "payTo", vm.toString(c.products(haircut).payout));
+        _emit(P, "listedBy", vm.toString(c.products(haircut).seller));
+    }
+
+    /// @notice Step 16b: the counterfeit shopfront makes a sale. The attacker lists a product with
+    ///         the same name at the same price on their own catalogue and buys it themselves, and
+    ///         they point its money at the REAL shop's wallet, so the sale even shows up in that
+    ///         wallet's own list of what it was paid. Everything about the event a shopper can read
+    ///         is the same; the address it came from is not.
+    function lookalikeSale() external localOnly {
+        _readAccounts();
+        _readDeployed();
+        address fake = vm.envAddress("UNICA_LOOKALIKE_CATALOG");
+        uint256 price = vm.envUint("PRODUCT_HAIRCUT_PRICE");
+
+        vm.startBroadcast(a.attacker);
+        uint256 productId = IProductCatalog(fake)
+            .list("Haircut", d.payout, price, IProductCatalog.Kind.PERMANENT, 0, a.merchantPayout, address(0));
+        MockERC20(d.payout).approve(fake, price);
+        bytes32 saleId = IProductCatalog(fake).buy(productId);
+        vm.stopBroadcast();
+
+        string memory P = "LOOKSALE";
+        _emit(P, "catalog", vm.toString(fake));
+        _emit(P, "officialCatalog", vm.toString(d.productCatalog));
+        _emit(P, "productId", vm.toString(productId));
+        _emit(P, "saleId", vm.toString(saleId));
+        _emit(P, "paidTo", vm.toString(a.merchantPayout));
+        _emit(P, "price", vm.toString(price));
+        _emit(
+            P, "label", "same catalogue source, attacker's own deployment, the real shop's wallet paid; never official"
+        );
+    }
+
     /// @notice Step 16: the attacker settles through the look-alike hook. Same hook source, the
     ///         official marketId in its immutables, a receipt with the same topic and fields —
     ///         emitted from an address the official registry has never heard of. The evidence layer
@@ -824,6 +934,8 @@ contract AnvilLocal is Script {
         d.admission = vm.envAddress("UNICA_ADMISSION");
         d.directSettlement = vm.envAddress("UNICA_DIRECT_SETTLEMENT");
         d.directAdmission = vm.envAddress("UNICA_DIRECT_ADMISSION");
+        d.productCatalog = vm.envAddress("UNICA_PRODUCT_CATALOG");
+        d.lookalikeCatalog = vm.envAddress("UNICA_LOOKALIKE_CATALOG");
         d.ensDeploymentId = vm.envBytes32("UNICA_ENS_DEPLOYMENT_ID");
         d.merchantNode = vm.envBytes32("UNICA_MERCHANT_NODE");
         d.chair1Node = vm.envBytes32("UNICA_CHAIR1_NODE");
@@ -864,6 +976,9 @@ contract AnvilLocal is Script {
         _emit(P, "terminalAdmission", vm.toString(d.admission));
         _emit(P, "directSettlement", vm.toString(d.directSettlement));
         _emit(P, "directAdmission", vm.toString(d.directAdmission));
+        _emit(P, "productCatalog", vm.toString(d.productCatalog));
+        _emit(P, "catalogId", vm.toString(d.catalogId));
+        _emit(P, "lookalikeCatalog", vm.toString(d.lookalikeCatalog));
         _emit(P, "lookalikeFactory", vm.toString(d.lookalikeFactory));
         _emit(P, "lookalikeHook", vm.toString(d.lookalikeHook));
         _emit(P, "lookalikeExecutor", vm.toString(d.lookalikeExecutor));

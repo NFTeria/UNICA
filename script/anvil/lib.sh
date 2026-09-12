@@ -93,6 +93,8 @@ load_manifest_env() {
     put("UNICA_ADMISSION", c.terminalAdmission.address);
     put("UNICA_DIRECT_SETTLEMENT", c.directSettlement.address);
     put("UNICA_DIRECT_ADMISSION", c.directAdmission.address);
+    put("UNICA_PRODUCT_CATALOG", c.productCatalog.address);
+    put("UNICA_LOOKALIKE_CATALOG", c.lookalikeCatalog.address);
     put("UNICA_LOOKALIKE_FACTORY", c.lookalikeFactory.address);
     put("UNICA_LOOKALIKE_HOOK", c.lookalikeHook.address);
     put("UNICA_LOOKALIKE_EXECUTOR", c.lookalikeExecutor.address);

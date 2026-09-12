@@ -9,9 +9,10 @@
 # PARENT name only; MerchantOnboarding, the self-serve door, granted SET_SUBREGISTRY at that
 # parent; the identity NFT, compiled here from vy/src/art/identity_token.vy with the pinned Vyper
 # and minted only by that door; the CRE policy receiver behind a LOCAL forwarder fixture; the
-# terminal-admission gate, allowlisted as the market's order creator; and a look-alike hook behind
-# a spoofed registry. Then a SECOND stage, join(), in which the barbershop joins from its own
-# wallet through that door — the deployment never registers a business on a business's behalf.
+# terminal-admission gate, allowlisted as the market's order creator; the product catalogue, which
+# answers to nobody; and a look-alike hook behind a spoofed registry. Then a SECOND stage, join(),
+# in which the barbershop joins from its own wallet through that door — the deployment never
+# registers a business on a business's behalf.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 # shellcheck source=script/anvil/lib.sh
@@ -80,7 +81,7 @@ const rpcCall = async (method, params) => {
 const {execFileSync} = require("child_process");
 const keccakOfCode = (code) => execFileSync("cast", ["keccak", code], {encoding: "utf8"}).trim();
 (async () => {
-  const names = ["poolManager","assetToken","payoutToken","assetUsdFeed","payoutUsdFeed","oracleAdapter","factory","registry","hook","executor","identityFixture","merchantOnboarding","identityToken","forwarderFixture","policyReceiver","terminalAdmission","directSettlement","directAdmission","lookalikeFactory","lookalikeHook","lookalikeExecutor"];
+  const names = ["poolManager","assetToken","payoutToken","assetUsdFeed","payoutUsdFeed","oracleAdapter","factory","registry","hook","executor","identityFixture","merchantOnboarding","identityToken","forwarderFixture","policyReceiver","terminalAdmission","directSettlement","directAdmission","productCatalog","lookalikeCatalog","lookalikeFactory","lookalikeHook","lookalikeExecutor"];
   const contracts = {};
   for (const n of names) {
     const address = kv[n]; if (!address) throw new Error(`manifest is missing ${n}`);
@@ -88,6 +89,9 @@ const keccakOfCode = (code) => execFileSync("cast", ["keccak", code], {encoding:
     if (code === "0x") throw new Error(`${n} at ${address} has no code`);
     contracts[n] = {address, codeHash: keccakOfCode(code), codeSize: (code.length - 2) / 2};
   }
+  // The catalogue's own id, recorded beside its address so the evidence reader can recompute it
+  // from (chainId, address) and refuse a manifest that disagrees with itself.
+  contracts.productCatalog.catalogId = kv.catalogId;
   const poolKey = {currency0: null, currency1: null, fee: Number(kv.fee), tickSpacing: Number(kv.tickSpacing), hooks: kv.hook};
   const a = kv.assetToken.toLowerCase(), p = kv.payoutToken.toLowerCase();
   if (a < p) { poolKey.currency0 = kv.assetToken; poolKey.currency1 = kv.payoutToken; } else { poolKey.currency0 = kv.payoutToken; poolKey.currency1 = kv.assetToken; }
@@ -111,6 +115,9 @@ const keccakOfCode = (code) => execFileSync("cast", ["keccak", code], {encoding:
       {symbol: "uUSD", address: kv.payoutToken, decimals: 6, role: "payout",
        label: "local test dollar, not USDC"},
     ],
+    productCatalog: {address: kv.productCatalog, catalogId: kv.catalogId, asset: kv.payoutToken,
+      label: "UNICA v5 product catalogue: what a business sells, by name, priced in the local test dollar",
+      authorityNote: "no admin, no gate and no allowlist of sellers; a seller reaches only their own rows, and the account that deployed it holds no power over it"},
     directSettlement: {address: kv.directSettlement, gate: kv.directAdmission, asset: kv.payoutToken,
       label: "UNICA v5 same-asset settlement: the customer pays the asset the business is paid out in, so no pool is used",
       policyNote: "admitted through a second instance of the same admission gate with no confidential policy receiver configured, because that receiver can only record terms for a registered market and a direct sale has none"},
@@ -129,7 +136,9 @@ const keccakOfCode = (code) => execFileSync("cast", ["keccak", code], {encoding:
       ensDeploymentId: kv.ensDeploymentId, ensDeploymentLabel: "LOCAL fixture id = keccak256(abi.encode(31337, identityFixture)); not the ENSv2 Sepolia deployment",
       terminalStatusKey: kv.terminalStatusKey, rendererVersion: kv.rendererVersion, tokenId: j.tokenId},
     policy: {receiver: kv.policyReceiver, forwarder: kv.forwarderFixture, workflowId: kv.workflowId, reportSchemaVersion: 1, source: "LOCAL_CRE_REPORT_FIXTURE", label: "LOCAL CRE REPORT FIXTURE — NOT A DON REPORT"},
-    lookalike: {factory: kv.lookalikeFactory, hook: kv.lookalikeHook, executor: kv.lookalikeExecutor, label: "same hook source behind an attacker-controlled registry; never official"},
+    lookalike: {factory: kv.lookalikeFactory, hook: kv.lookalikeHook, executor: kv.lookalikeExecutor,
+      catalog: kv.lookalikeCatalog,
+      label: "same hook source behind an attacker-controlled registry, and the same catalogue source deployed by the attacker; never official"},
   };
   fs.writeFileSync(out, JSON.stringify(manifest, null, 2) + "\n");
   console.log(JSON.stringify({chainId: manifest.chainId, commit, releaseId, registry: kv.registry, factory: kv.factory, hook: kv.hook, executor: kv.executor, marketId: kv.marketId, identityToken: kv.identityToken, policyReceiver: kv.policyReceiver}, null, 2));
