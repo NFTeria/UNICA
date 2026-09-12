@@ -6,8 +6,17 @@
   "readAtBlock": 308177227,
   "releaseTag": "unica-v5/arbitrum-sepolia-1",
   "verification": {
-    "status": "not verified",
-    "note": "no read-only explorer result was supplied"
+    "status": "verified",
+    "verifier": "etherscan (Arbitrum Sepolia)",
+    "checkedAt": "2026-09-12",
+    "tool": "script/unica-v4/verify-source.sh",
+    "contracts": {
+      "factory": "verified",
+      "registry": "verified",
+      "hook": "verified",
+      "executor": "verified"
+    },
+    "note": "a second stage A run left an unused factory/registry pair at nonce 60; it has no market and is not part of this deployment"
   },
   "contracts": {
     "poolManager": {
