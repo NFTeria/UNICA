@@ -61,7 +61,7 @@ lost device. Explain to a customer what a hash is.
 | 17 | attacks row `REPLAYED_ORDER` | `OrderNotOpen` |
 | 18 | `docs/unica-v4/PUBLIC-DEPLOYMENT-HANDOFF.md` (oracle-age ruling O1–O4), attacks rows `FIXTURE_REPORT_IS_NOT_A_DON_REPORT`, `FORWARDER_SUCCESS_RECEIVER_REJECTED` | demonstration market flag in receipts; fixture label asserted |
 
-One command runs the whole story from an empty chain: `make anvil-test`. The public test network runs
+One command runs the whole story from an empty chain: `make business-demo` (the technical replay is `make anvil-test`). The public test network runs
 frames 7 to 13 against the Sepolia deployment once the owner has sent the four stages in the handoff and
 the business's records exist on ENS. Local evidence and public evidence never share a record; the
 environment label on every screen says which one you are looking at.

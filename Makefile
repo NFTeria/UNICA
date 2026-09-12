@@ -387,6 +387,21 @@ anvil-test:
 anvil-down:
 	bash script/anvil/down.sh
 
+# The business command surface: the five commands a business owner runs, in their own words.
+# They drive the same local chain as the anvil-* targets above; they differ only in what they say
+# while doing it, and in the fact that business-demo runs the whole story from an empty chain.
+.PHONY: business-up business-demo business-open business-test business-down
+business-up:
+	bash script/business/up.sh
+business-demo:
+	bash script/business/demo.sh
+business-open:
+	bash script/business/open.sh
+business-test:
+	bash script/business/test.sh
+business-down:
+	bash script/business/down.sh
+
 # ── go live: the one command the owner runs, and its pre-flight ───────────────────────────────
 go-live:
 	bash script/go-live.sh

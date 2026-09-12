@@ -22,8 +22,13 @@ load_manifest_env
 export DEMO_AMOUNT_IN="${DEMO_AMOUNT_IN:-1000000000000000000}"   # 1.000000 tAST (18 decimals)
 export DEMO_MIN_OUT="${DEMO_MIN_OUT:-1950000}"                      # 1.950000 uUSD (6 decimals)
 export DEMO_TTL_SECONDS="${DEMO_TTL_SECONDS:-1800}"
+# The same-asset sale: 2.50 of the local test dollar, paid in the very asset the business is paid
+# out in. Six decimals, so 2_500_000 base units.
+export DIRECT_AMOUNT="${DIRECT_AMOUNT:-2500000}"
+export DIRECT_TTL_SECONDS="${DIRECT_TTL_SECONDS:-1800}"
 # One order nonce per run: the block height makes a re-run on the same chain a NEW order, never a replay.
 export DEMO_ORDER_SEQ="${DEMO_ORDER_SEQ:-$(cast block-number --rpc-url "$UNICA_LOCAL_RPC")}"
+export DIRECT_ORDER_SEQ="${DIRECT_ORDER_SEQ:-$DEMO_ORDER_SEQ}"
 RECORD="$REHEARSAL_DIR/demo-record.json"
 JOIN_RECORD="$REHEARSAL_DIR/join-record.json"
 FOUNDRY_BROADCAST="$REHEARSAL_DIR/broadcast"; export FOUNDRY_BROADCAST
@@ -126,6 +131,64 @@ const record = {
 fs.writeFileSync(out, JSON.stringify(record, null, 2) + "\n");
 EOF
 node tools/unica-pos-cli/cli.mjs --demo "$RECORD" | tee "$REHEARSAL_DIR/demo-pos.txt"
+
+step "14a. a SAME-ASSET sale: the customer pays the very asset the business is paid out in, so nothing is converted and no pool is touched"
+DIRECT=$(run_stage demoDirect "$ANVIL_OP_CHAIR1" DIRECT)
+log "$DIRECT"
+DIRECT_ORDER=$(json_get "$DIRECT" .orderId)
+DIRECT_SETTLER=$(json_get "$DIRECT" .settler)
+
+step "14b. the wrong customer is refused on the same-asset sale too (UNICA_ONCHAIN: WrongPayer)"
+expect_revert DIRECT_WRONG_PAYER 'WrongPayer(bytes32,address,address)' \
+  "$DIRECT_SETTLER" 'pay(bytes32)' "$DIRECT_ORDER" --from "$ANVIL_WRONG_PAYER"
+
+step "14c. the bound customer approves exactly the amount and pays; the business receives exactly that amount"
+DIRECT_BEFORE=$(call_uint "$UNICA_PAYOUT" 'balanceOf(address)(uint256)' "$ANVIL_MERCHANT_PAYOUT")
+send_as "$ANVIL_PAYER" "$UNICA_PAYOUT" 'approve(address,uint256)' "$DIRECT_SETTLER" "$DIRECT_AMOUNT" >/dev/null
+DIRECT_PAY=$(send_as "$ANVIL_PAYER" "$DIRECT_SETTLER" 'pay(bytes32)' "$DIRECT_ORDER")
+DIRECT_STATUS=$(json_get "$DIRECT_PAY" .status)
+DIRECT_HASH=$(json_get "$DIRECT_PAY" .transactionHash)
+test "$DIRECT_STATUS" = "0x1" || die "the same-asset payment did not succeed: status $DIRECT_STATUS"
+DIRECT_AFTER=$(call_uint "$UNICA_PAYOUT" 'balanceOf(address)(uint256)' "$ANVIL_MERCHANT_PAYOUT")
+DIRECT_DELIVERED=$(node -e 'console.log((BigInt(process.argv[1])-BigInt(process.argv[2])).toString())' "$DIRECT_AFTER" "$DIRECT_BEFORE")
+log "tx $DIRECT_HASH  status $DIRECT_STATUS"
+log "business balance  before $DIRECT_BEFORE  after $DIRECT_AFTER  received $DIRECT_DELIVERED (uUSD base units, local test dollar)"
+# A direct sale converts nothing, so the amount received is not "at least" the amount asked for:
+# it is exactly it, and anything else is a defect rather than a better price.
+test "$DIRECT_DELIVERED" = "$DIRECT_AMOUNT" \
+  || die "the same-asset payment delivered $DIRECT_DELIVERED, not the exact $DIRECT_AMOUNT"
+
+step "14d. the same-asset receipt goes to the evidence reader; the record says what came back, and nothing else"
+# The evidence CLI exits non-zero for anything but VERIFIED, and it does not yet read the direct
+# settler's receipt event. An honest record says "pending evidence support" for that; it never
+# writes VERIFIED for a receipt no reader confirmed.
+DIRECT_EVIDENCE=$(node tools/unica-evidence/cli.mjs --order "$DIRECT_ORDER" --manifest "$MANIFEST_PATH" --rpc "$UNICA_LOCAL_RPC" --confirmations 0 2>/dev/null || true)
+if [ -n "$DIRECT_EVIDENCE" ] && [ "$(json_get "$DIRECT_EVIDENCE" .decision)" = "VERIFIED" ]; then
+  DIRECT_DECISION=VERIFIED
+else
+  DIRECT_DECISION="PENDING_EVIDENCE_SUPPORT"
+fi
+log "same-asset receipt decision  $DIRECT_DECISION"
+node - "$RECORD" "$DIRECT" "$DIRECT_HASH" "$DIRECT_AMOUNT" "$DIRECT_DECISION" "$DIRECT_BEFORE" "$DIRECT_AFTER" "$DIRECT_EVIDENCE" <<'EOF'
+const [out, direct, txHash, amount, decision, before, after, evidence] = process.argv.slice(2);
+const fs = require("fs");
+const r = JSON.parse(fs.readFileSync(out, "utf8"));
+const D = JSON.parse(direct);
+r.directPayment = {
+  orderId: D.orderId, txHash, amount, decision,
+  openOrderId: D.openOrderId,
+  settler: D.settler, gate: D.gate, asset: D.asset, assetSymbol: "uUSD",
+  recipient: D.recipient, payer: D.payer,
+  businessBalanceBefore: before, businessBalanceAfter: after,
+  converted: false,
+  label: "same-asset sale: paid and received in the local test dollar, no pool involved",
+  evidence: evidence ? JSON.parse(evidence) : null,
+  decisionNote: decision === "VERIFIED"
+    ? "the evidence reader authenticated this receipt"
+    : "the evidence reader does not yet read the direct settler's receipt; the payment is on the chain and the balance moved, but no reader has confirmed it",
+};
+fs.writeFileSync(out, JSON.stringify(r, null, 2) + "\n");
+EOF
 
 step "15. revoking the terminal AFTER settlement does not alter the receipt or the order"
 send_as "$ANVIL_MERCHANT_OWNER" "$UNICA_IDENTITY" 'authorizeTextRoles(bytes32,string,address,bool)' "$UNICA_CHAIR1_NODE" 'com.unica.terminal-status' "$ANVIL_OP_CHAIR1" false >/dev/null

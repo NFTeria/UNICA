@@ -23,6 +23,7 @@ test -f "$RECORD" || die "no demo record at $RECORD; run: make anvil-demo"
 ORDER_ID=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).order.id)' "$RECORD")
 ORDER_NONCE=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).order.nonce)' "$RECORD")
 LOOK_ORDER=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).lookalike.orderId)' "$RECORD")
+DIRECT_ORDER=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).directPayment.orderId)' "$RECORD")
 
 step "A. on-chain refusals, from a fork of the live local state (test/anvil/Attacks.t.sol)"
 ATTACK_LOG="$REHEARSAL_DIR/attacks-forge.log"
@@ -64,6 +65,31 @@ LAYER="UNICA_ONCHAIN" expect_revert JOIN_BAD_LABEL 'LabelInvalid(string)' \
   "$UNICA_ONBOARDING" 'join(string,address,string)' 'Fresh Cuts!' "$ANVIL_ATTACKER" 'register-1' --from "$ANVIL_ATTACKER"
 LAYER="UNICA_ONCHAIN" expect_revert JOIN_TWICE 'AlreadyJoined(address,bytes32)' \
   "$UNICA_ONBOARDING" 'join(string,address,string)' 'freshcuts-two' "$ANVIL_MERCHANT_PAYOUT" 'register-1' --from "$ANVIL_MERCHANT_OWNER"
+
+# The same-asset path has the same three bindings as the pooled one: one customer, one settlement,
+# one set of terms. A settled sale is closed to everybody, including the customer who paid it.
+expect_revert DIRECT_REPLAYED_ORDER 'OrderNotOpen(bytes32,uint8)' \
+  "$UNICA_DIRECT_SETTLEMENT" 'pay(bytes32)' "$DIRECT_ORDER" --from "$ANVIL_PAYER"
+# A wrong-customer refusal has to be probed on an OPEN sale, or the closed-sale refusal above would
+# fire first and prove nothing about the payer binding. The demo raised one and left it unpaid,
+# while the register that raised it was still active: by the time this suite runs that register has
+# been revoked and can raise nothing, so the open sale has to come from there and not from here.
+DIRECT_OPEN_ORDER=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).directPayment.openOrderId)' "$RECORD")
+DIRECT_OPEN_STATUS=$(call "$UNICA_DIRECT_SETTLEMENT" 'orders(bytes32)((address,address,address,uint128,uint128,uint64,uint8))' "$DIRECT_OPEN_ORDER" | tr -d '()' | awk -F', ' '{print $NF}')
+test "$DIRECT_OPEN_STATUS" = "1" \
+  || die "the unpaid same-asset sale is not Open (status $DIRECT_OPEN_STATUS); the wrong-customer probe would prove the wrong thing"
+expect_revert DIRECT_WRONG_PAYER 'WrongPayer(bytes32,address,address)' \
+  "$UNICA_DIRECT_SETTLEMENT" 'pay(bytes32)' "$DIRECT_OPEN_ORDER" --from "$ANVIL_WRONG_PAYER"
+# A conversion this market cannot make safely is refused before the sale exists, not attempted and
+# unwound afterwards. The per-transaction cap is read live from the registry by the executor, and
+# the probe impersonates the admission gate so the refusal proved is the cap and not the creator
+# allowlist (which UNAUTHORIZED_CREATOR_DIRECT above proves separately).
+CAP_PER_TX=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).market.caps.maxPerTxPayout)' "$MANIFEST_PATH")
+OVERSIZED_OUT=$(node -e 'console.log((BigInt(process.argv[1])+1n).toString())' "$CAP_PER_TX")
+LAYER="UNICA_ONCHAIN" expect_revert UNSAFE_CONVERSION_OVERSIZED 'OrderAboveCap(uint128,uint128)' \
+  "$UNICA_EXECUTOR" 'createOrder(address,address,uint128,uint128,uint64,bytes32)' \
+  "$ANVIL_MERCHANT_PAYOUT" "$ANVIL_PAYER" 1000000000000000000000 "$OVERSIZED_OUT" 4102444800 "$(cast keccak oversized)" \
+  --from "$UNICA_ADMISSION"
 
 step "C. evidence-layer decisions (GRAPH_EVIDENCE / CLIENT_VERIFICATION)"
 HEAD=$(cast block-number --rpc-url "$UNICA_LOCAL_RPC")

@@ -107,7 +107,21 @@ contract AttacksTest is Test {
     uint128 internal constant MIN_OUT = 1_950_000;
     uint256 internal salt;
 
+    /// @dev THE PRECONDITION, STATED RATHER THAN ASSUMED. Every address below is written by the
+    ///      anvil harness into the environment, so this suite cannot run under a bare `forge test`.
+    ///      It says so and skips, instead of failing with a missing-variable error that reads like a
+    ///      broken test, and instead of relying on the Makefile's path exclusion to hide it: a
+    ///      stated negative beats a hidden exclusion, because an excluded file and a deleted one
+    ///      look identical in a green run. `script/anvil/test.sh` exports the environment and this
+    ///      suite runs there for real.
     function setUp() public {
+        if (vm.envOr("UNICA_REGISTRY", address(0)) == address(0)) {
+            vm.skip(
+                true,
+                "UNICA_REGISTRY is unset: this suite runs only from script/anvil/test.sh against a live local chain"
+            );
+            return;
+        }
         require(block.chainid == 31337, "this suite runs only against the local Anvil chain");
         registry = IUnicaMarketRegistry(vm.envAddress("UNICA_REGISTRY"));
         factory = UnicaMarketFactory(vm.envAddress("UNICA_FACTORY"));
@@ -409,6 +423,13 @@ contract AttacksTest is Test {
         _refused("CHANGED_FEED_ID", "OracleFeedMismatch", "UNICA_ONCHAIN+CHAINLINK_ORACLE");
     }
 
+    /// @dev The refusal this row proves is the same one it always proved: a price older than its
+    ///      bound stops the payment. Which layer says so changed. The feed adapter now carries a
+    ///      freshness bound PER LEG and reverts `FeedStale(feed, updatedAt, maxAge)` inside
+    ///      `latestPrice`, so the asset leg at 301 seconds against its own 300 second bound never
+    ///      reaches the hook's own staleness comparison and the hook's `OracleStale` cannot fire
+    ///      while the two bounds are equal. Fail-closed either way; this row names the layer that
+    ///      actually refuses today rather than the one that used to.
     function test_Market_StaleOracle() public {
         bytes32 id = _freshOrder();
         _approve(payer, AMOUNT_IN);
@@ -416,8 +437,8 @@ contract AttacksTest is Test {
         assetFeed.set(2e8, block.timestamp - 301, 10, 10);
         payoutFeed.set(1e8, block.timestamp - 301, 10, 10);
         vm.stopPrank();
-        _expectHookRevert(bytes4(keccak256("OracleStale(bytes32,uint256,uint48)")), payer, id);
-        _refused("STALE_ORACLE", "OracleStale", "UNICA_ONCHAIN+CHAINLINK_ORACLE");
+        _expectHookRevert(bytes4(keccak256("FeedStale(address,uint256,uint256)")), payer, id);
+        _refused("STALE_ORACLE", "FeedStale", "UNICA_ONCHAIN+CHAINLINK_ORACLE");
     }
 
     function test_Market_ExcessiveDeviation() public {
@@ -607,7 +628,10 @@ contract AttacksTest is Test {
 
     function test_Identity_TerminalEscapeRoutes() public {
         bytes4 eac = bytes4(keccak256("EACUnauthorizedAccountRoles(uint256,uint256,address)"));
-        bytes32 terminalsNode = identity.parentOf(chair1Node);
+        // Read from the tree rather than taken from the environment, and asserted to be the same
+        // node, so this row's peer-creation attempt is aimed at the register's real parent.
+        bytes32 registersNode = identity.parentOf(chair1Node);
+        assertEq(registersNode, terminalsNode, "the register's parent is the terminals node the harness exported");
         vm.startPrank(opChair1);
         (bool ok, bytes memory data) =
             address(identity).call(abi.encodeWithSelector(identity.setResolver.selector, merchantNode, attacker));
@@ -620,7 +644,7 @@ contract AttacksTest is Test {
         assertEq(bytes4(data), eac);
         _refused("SUBREGISTRY_INSTALLATION_ATTEMPT", "EACUnauthorizedAccountRoles", "ENSV2_ONCHAIN");
         (ok, data) = address(identity)
-            .call(abi.encodeWithSelector(identity.register.selector, terminalsNode, "chair-9", opChair1));
+            .call(abi.encodeWithSelector(identity.register.selector, registersNode, "chair-9", opChair1));
         assertFalse(ok);
         assertEq(bytes4(data), eac);
         _refused("PEER_TERMINAL_CREATION_ATTEMPT", "EACUnauthorizedAccountRoles", "ENSV2_ONCHAIN");

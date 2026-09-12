@@ -80,7 +80,7 @@ const rpcCall = async (method, params) => {
 const {execFileSync} = require("child_process");
 const keccakOfCode = (code) => execFileSync("cast", ["keccak", code], {encoding: "utf8"}).trim();
 (async () => {
-  const names = ["poolManager","assetToken","payoutToken","assetUsdFeed","payoutUsdFeed","oracleAdapter","factory","registry","hook","executor","identityFixture","merchantOnboarding","identityToken","forwarderFixture","policyReceiver","terminalAdmission","lookalikeFactory","lookalikeHook","lookalikeExecutor"];
+  const names = ["poolManager","assetToken","payoutToken","assetUsdFeed","payoutUsdFeed","oracleAdapter","factory","registry","hook","executor","identityFixture","merchantOnboarding","identityToken","forwarderFixture","policyReceiver","terminalAdmission","directSettlement","directAdmission","lookalikeFactory","lookalikeHook","lookalikeExecutor"];
   const contracts = {};
   for (const n of names) {
     const address = kv[n]; if (!address) throw new Error(`manifest is missing ${n}`);
@@ -101,6 +101,19 @@ const keccakOfCode = (code) => execFileSync("cast", ["keccak", code], {encoding:
     releaseId,
     release: {tag: kv.unicaRelease, hookCreationCodeHash: null},
     contracts,
+    // What a person is actually paying with and being paid in. Every screen and every script
+    // labels an amount from this list rather than from a symbol written into its own source, so a
+    // renamed or re-deployed token cannot leave a stale name on a receipt. uUSD is a LOCAL TEST
+    // DOLLAR minted by this fixture and is not USDC or any other real dollar token.
+    assets: [
+      {symbol: "tAST", address: kv.assetToken, decimals: 18, role: "customer",
+       label: "local test asset, no value"},
+      {symbol: "uUSD", address: kv.payoutToken, decimals: 6, role: "payout",
+       label: "local test dollar, not USDC"},
+    ],
+    directSettlement: {address: kv.directSettlement, gate: kv.directAdmission, asset: kv.payoutToken,
+      label: "UNICA v5 same-asset settlement: the customer pays the asset the business is paid out in, so no pool is used",
+      policyNote: "admitted through a second instance of the same admission gate with no confidential policy receiver configured, because that receiver can only record terms for a registered market and a direct sale has none"},
     market: {marketId: kv.marketId, version: 1, poolKey, poolId: kv.poolId, feedId: kv.feedId, adapter: kv.oracleAdapter,
       rateE18: kv.rateE18, rateLabel: "demonstration rate set by the admin, never a market price",
       oracle: {maxAge: Number(kv.maxAge), maxDeviationBps: Number(kv.maxDeviationBps), enabled: true, fixtureFeeds: true},

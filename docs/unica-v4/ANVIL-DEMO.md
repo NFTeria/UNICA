@@ -134,3 +134,71 @@ hands every node to the owner while keeping no role on any of them. `demo.sh` st
 `attacks.sh` adds `JOIN_LABEL_TAKEN`, `JOIN_BAD_LABEL`, `JOIN_TWICE` through `eth_call`, and the fork suite adds
 `JOIN_CONTRACT_HOLDS_NO_ROLES`. The browser join screen (`make anvil-serve`, route `join/`) uses the same
 contract from any standard browser wallet, falling back to the local unlocked account on the practice chain.
+
+## Same-asset settlement, and the business command surface (appended 2026-09-12)
+
+### The same-asset sale (UNICA v5 direct settlement)
+
+Some customers pay in the very asset the business wants to be paid in. There is nothing to convert
+in that case, so `src/unica-v5/DirectSettlement.sol` moves the amount straight from the customer to
+the business and never touches a pool, a hook or an oracle. `make anvil-deploy` now deploys one, for
+the payout asset, and `demo.sh` sells through it before it sells through the market:
+
+| step | claim | layer | proved by |
+|---|---|---|---|
+| 14a | `chair-1` admits a same-asset sale, bound to one customer | admission over ENSV2 | `demoDirect()` |
+| 14b | the wrong customer is refused on that sale | UNICA_ONCHAIN | `eth_call` → `WrongPayer` |
+| 14c | the bound customer pays and the business receives **exactly** the amount, not "at least" it | UNICA_ONCHAIN | balance delta, equality asserted |
+| 14d | the receipt goes to the evidence reader and the record says what came back | evidence | `tools/unica-evidence` |
+
+Step 14c asserts equality rather than a lower bound on purpose. A conversion can honestly deliver
+more than the minimum; a direct transfer cannot, and a surplus or a shortfall both mean a token that
+does not behave like the one the sale was priced in.
+
+Step 14d records whatever the reader answered. When the reader has no support for a direct receipt
+the record says `PENDING_EVIDENCE_SUPPORT` and the note beside it says the payment is on the chain
+and the balance moved but no reader confirmed it. It never writes VERIFIED on the strength of a
+balance alone.
+
+`demoDirect()` raises a **second** same-asset sale and leaves it unpaid. The refusal suite needs an
+open sale to prove the customer binding on, and by the time it runs step 15 has revoked `chair-1`,
+which can then raise nothing at all. The open sale has to be raised while the register is still
+active or the probe would prove the wrong thing.
+
+Three refusal rows are added to `anvil-attacks`:
+
+| case | refused with |
+|---|---|
+| `DIRECT_REPLAYED_ORDER` | `OrderNotOpen`, a settled same-asset sale is closed to everybody, the customer who paid it included |
+| `DIRECT_WRONG_PAYER` | `WrongPayer`, on the open sale, so the closed-sale refusal cannot fire first and prove nothing |
+| `UNSAFE_CONVERSION_OVERSIZED` | `OrderAboveCap`, an amount above the per-transaction limit is refused before the sale exists, probed as the admission gate so the refusal proved is the cap and not the creator allowlist |
+
+### Why the direct path has its own admission gate instance
+
+The confidential policy receiver only records terms for a market the official registry knows and
+reports ACTIVE. A direct settler has no market at all, so no report for a same-asset sale can ever be
+delivered to it, and the main admission gate's policy step can only ever refuse one. The deployment
+therefore lands a **second instance of the same admission contract** with no policy receiver
+configured, and the same-asset sale is admitted through that. Both instances read the same identity
+fixture and enforce the same register authority, the same status text and the same payout address, so
+the direct path loses the confidential policy step and nothing else. The settler is also added to the
+main gate's direct settler list, so when the receiver learns to record a direct sale the second
+instance stops being needed and nothing has to be re-wired.
+
+### The stale-price row now names a different layer
+
+`test_Market_StaleOracle` used to expect the hook's own `OracleStale`. The feed adapter now carries a
+freshness bound per leg and reverts `FeedStale(feed, updatedAt, maxAge)` inside `latestPrice`, so a
+price 301 seconds old against its own 300 second bound never reaches the hook's comparison. The
+refusal the row proves is the same one it always proved and it is still fail-closed; the row now
+names the layer that actually refuses.
+
+### The business command surface
+
+`make business-up | business-demo | business-open | business-test | business-down` drive this same
+local chain and say what they are doing in the words a business uses. `business-demo` runs the whole
+story from an empty chain and prints two sales, the balances they moved, both receipt results, five
+refusals, and the addresses to open. Identifiers, transaction hashes and log paths are printed only
+under **Advanced verification** at the end, because a person deciding whether they were paid should
+not have to read a hash to find out. See [`../BUSINESS-START-HERE.md`](../BUSINESS-START-HERE.md) for
+the owner-facing page and [`../RUNBOOK-OPERATOR.md`](../RUNBOOK-OPERATOR.md) for the operator one.

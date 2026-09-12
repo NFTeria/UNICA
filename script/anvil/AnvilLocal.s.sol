@@ -33,6 +33,8 @@ import {UnicaPolicyTypes} from "../../src/unica-v4/policy/UnicaPolicyTypes.sol";
 import {LocalEnsV2Fixture} from "../../src/identity/LocalEnsV2Fixture.sol";
 import {TerminalAdmission} from "../../src/identity/TerminalAdmission.sol";
 import {MerchantOnboarding} from "../../src/identity/MerchantOnboarding.sol";
+import {DirectSettlement} from "../../src/unica-v5/DirectSettlement.sol";
+import {IDirectSettlement} from "../../src/unica-v5/IDirectSettlement.sol";
 import {IMerchantOnboarding} from "../../src/identity/IMerchantOnboarding.sol";
 import {FixtureAggregator} from "../../test/unica-v4/fixtures/FixtureAggregator.sol";
 import {LookalikeFactory} from "../../test/unica-v4/fixtures/LookalikeFactory.sol";
@@ -144,6 +146,8 @@ contract AnvilLocal is Script {
         address lookalikeFactory;
         address lookalikeHook;
         address lookalikeExecutor;
+        address directSettlement;
+        address directAdmission;
         bytes32 ensDeploymentId;
         bytes32 rootNode;
         bytes32 unicaNode;
@@ -176,6 +180,7 @@ contract AnvilLocal is Script {
         _deployIdentityToken();
         _deployPolicy();
         _deployAdmission();
+        _deployDirect();
         _deployLookalike();
         _printManifest();
     }
@@ -218,6 +223,11 @@ contract AnvilLocal is Script {
         asset.mint(a.seeder, 1_000e18);
         payout.mint(a.seeder, 1_000_000e6);
         payout.mint(a.attacker, 1_000_000e6);
+        // A same-asset sale is paid in the very asset the business is paid out in, so the two
+        // customer wallets hold the local test dollar as well as the test asset. Without this the
+        // direct path would fail on an empty wallet and look like a settlement defect.
+        payout.mint(a.payer, 1_000e6);
+        payout.mint(a.wrongPayer, 1_000e6);
 
         FixtureAggregator assetUsd = new FixtureAggregator(8, "FIXTURE tAST / USD - LOCAL ANVIL - NO VALUE");
         FixtureAggregator payoutUsd = new FixtureAggregator(8, "FIXTURE uUSD / USD - LOCAL ANVIL - NO VALUE");
@@ -226,8 +236,26 @@ contract AnvilLocal is Script {
         d.assetUsdFeed = address(assetUsd);
         d.payoutUsdFeed = address(payoutUsd);
 
-        d.adapter =
-            address(new ChainlinkFeedAdapter(address(assetUsd), address(payoutUsd), d.asset, d.payout, address(0), 0));
+        // The two freshness bounds are DEMONSTRATION values for a local chain whose fixture feeds are
+        // poked by this script, chosen only to show the shape of a fast asset leg and a slow quote
+        // leg. Neither 300 nor 86400 is an approved production constant: a public deployment reads
+        // the real feed's heartbeat and sets its own (docs/unica-v4/ORACLE-FRESHNESS-O2.md).
+        d.adapter = address(
+            new ChainlinkFeedAdapter(
+                address(assetUsd),
+                uint48(300),
+                address(payoutUsd),
+                uint48(86_400),
+                d.asset,
+                d.payout,
+                address(0),
+                0,
+                // The local admin is also the account allowed to tighten the quote leg during an
+                // incident. The market's own policy ceiling reaches the asset leg only, so without
+                // this the local demonstration would have no lever over the slow leg at all.
+                a.admin
+            )
+        );
         vm.stopBroadcast();
     }
 
@@ -336,6 +364,42 @@ contract AnvilLocal is Script {
             new TerminalAdmission(d.identity, d.registry, d.ensDeploymentId, d.policyReceiver, TERMINAL_STATUS_KEY);
         d.admission = address(admission);
         IUnicaMarketRegistry(d.registry).setOrderCreator(d.admission, true);
+        vm.stopBroadcast();
+    }
+
+    /// @dev UNICA v5 direct settlement: the customer pays in the very asset the business wants to
+    ///      receive, so there is nothing to convert and no pool is touched. Two things are wired
+    ///      here.
+    ///
+    ///      First, the settler is added to the MAIN admission gate's direct settler list, which is
+    ///      the list that gate consults instead of the market registry for an address that has no
+    ///      market id.
+    ///
+    ///      Second, a SEPARATE instance of the same admission contract is deployed with no policy
+    ///      receiver configured, and that is the gate the local direct sale is admitted through.
+    ///      The reason is a real limit and not a convenience: the confidential policy receiver only
+    ///      records terms for a market the official registry knows and reports ACTIVE, and a direct
+    ///      settler has no market at all, so no report for a direct sale can ever be delivered and
+    ///      the main gate's policy step can only ever refuse one. Both gates read the same identity
+    ///      fixture and enforce the same register authority, status text and payout address, so the
+    ///      direct path loses the confidential policy step and nothing else. When the receiver
+    ///      learns to record a direct sale, the second gate stops being needed and the main gate
+    ///      already carries the settler on its list.
+    function _deployDirect() internal {
+        vm.startBroadcast(a.admin);
+        // The settler takes the REGISTRY, not an admin address: its creator authority is that
+        // registry's live `admin()`, which is the same account the gate below asks before it will
+        // list the settler at all. One key, both surfaces.
+        DirectSettlement direct = new DirectSettlement(d.payout, d.registry);
+        d.directSettlement = address(direct);
+
+        TerminalAdmission directAdmission =
+            new TerminalAdmission(d.identity, d.registry, d.ensDeploymentId, address(0), TERMINAL_STATUS_KEY);
+        d.directAdmission = address(directAdmission);
+
+        TerminalAdmission(d.admission).setDirectSettler(d.directSettlement, true);
+        directAdmission.setDirectSettler(d.directSettlement, true);
+        direct.setOrderCreator(d.directAdmission, true);
         vm.stopBroadcast();
     }
 
@@ -577,6 +641,74 @@ contract AnvilLocal is Script {
         _emit(P, "chair1Status", LocalEnsV2Fixture(d.identity).text(d.chair1Node, TERMINAL_STATUS_KEY));
     }
 
+    /// @notice The same-asset sale: the customer pays in the very asset the business is paid out
+    ///         in, so no conversion happens and no pool is involved. Admission is the same ENS
+    ///         check as every other sale (this register, under this business, published active, to
+    ///         the payout address the business record resolves to now), performed by the gate
+    ///         instance that has no confidential policy receiver configured, for the reason set out
+    ///         on `_deployDirect`. The payment itself runs from the wrapper so its transaction hash
+    ///         is captured as evidence.
+    function demoDirect() external localOnly {
+        _readAccounts();
+        _readDeployed();
+        uint128 amount = uint128(vm.envUint("DIRECT_AMOUNT"));
+        uint64 deadline = uint64(block.timestamp + vm.envUint("DIRECT_TTL_SECONDS"));
+        bytes32 nonce = keccak256(abi.encode("freshcuts/chair-1/direct", vm.envUint("DIRECT_ORDER_SEQ")));
+
+        vm.startBroadcast(a.opChair1);
+        bytes32 orderId = TerminalAdmission(d.directAdmission)
+            .requestOrder(
+                d.merchantNode,
+                d.chair1Node,
+                d.ensDeploymentId,
+                d.directSettlement,
+                a.merchantPayout,
+                a.payer,
+                amount,
+                amount,
+                deadline,
+                nonce
+            );
+        // A SECOND sale, raised by the same register in the same breath and deliberately left
+        // unpaid. The refusal suite needs an OPEN same-asset sale to prove the customer binding on,
+        // and by the time it runs this register has been revoked and can raise nothing at all. A
+        // sale raised here, while the register is still active, is the only honest way to have one.
+        bytes32 openOrderId = TerminalAdmission(d.directAdmission)
+            .requestOrder(
+                d.merchantNode,
+                d.chair1Node,
+                d.ensDeploymentId,
+                d.directSettlement,
+                a.merchantPayout,
+                a.payer,
+                amount,
+                amount,
+                deadline,
+                keccak256(abi.encode("freshcuts/chair-1/direct-open", vm.envUint("DIRECT_ORDER_SEQ")))
+            );
+        vm.stopBroadcast();
+
+        _printDirect(orderId, nonce);
+        _emit("DIRECT", "openOrderId", vm.toString(openOrderId));
+    }
+
+    function _printDirect(bytes32 orderId, bytes32 nonce) internal view {
+        UnicaMarketTypes.Order memory o = IDirectSettlement(d.directSettlement).orders(orderId);
+        string memory P = "DIRECT";
+        _emit(P, "orderId", vm.toString(orderId));
+        _emit(P, "orderNonce", vm.toString(nonce));
+        _emit(P, "settler", vm.toString(d.directSettlement));
+        _emit(P, "gate", vm.toString(d.directAdmission));
+        _emit(P, "asset", vm.toString(IDirectSettlement(d.directSettlement).ASSET()));
+        _emit(P, "settlementId", vm.toString(IDirectSettlement(d.directSettlement).SETTLEMENT_ID()));
+        _emit(P, "recipient", vm.toString(o.recipient));
+        _emit(P, "payer", vm.toString(o.payer));
+        _emit(P, "amountIn", vm.toString(o.amountIn));
+        _emit(P, "minOut", vm.toString(o.minOut));
+        _emit(P, "deadline", vm.toString(o.deadline));
+        _emit(P, "chair1Status", LocalEnsV2Fixture(d.identity).text(d.chair1Node, TERMINAL_STATUS_KEY));
+    }
+
     /// @notice Step 16: the attacker settles through the look-alike hook. Same hook source, the
     ///         official marketId in its immutables, a receipt with the same topic and fields —
     ///         emitted from an address the official registry has never heard of. The evidence layer
@@ -690,6 +822,8 @@ contract AnvilLocal is Script {
         d.forwarder = vm.envAddress("UNICA_FORWARDER");
         d.policyReceiver = vm.envAddress("UNICA_POLICY_RECEIVER");
         d.admission = vm.envAddress("UNICA_ADMISSION");
+        d.directSettlement = vm.envAddress("UNICA_DIRECT_SETTLEMENT");
+        d.directAdmission = vm.envAddress("UNICA_DIRECT_ADMISSION");
         d.ensDeploymentId = vm.envBytes32("UNICA_ENS_DEPLOYMENT_ID");
         d.merchantNode = vm.envBytes32("UNICA_MERCHANT_NODE");
         d.chair1Node = vm.envBytes32("UNICA_CHAIR1_NODE");
@@ -728,6 +862,8 @@ contract AnvilLocal is Script {
         _emit(P, "forwarderFixture", vm.toString(d.forwarder));
         _emit(P, "policyReceiver", vm.toString(d.policyReceiver));
         _emit(P, "terminalAdmission", vm.toString(d.admission));
+        _emit(P, "directSettlement", vm.toString(d.directSettlement));
+        _emit(P, "directAdmission", vm.toString(d.directAdmission));
         _emit(P, "lookalikeFactory", vm.toString(d.lookalikeFactory));
         _emit(P, "lookalikeHook", vm.toString(d.lookalikeHook));
         _emit(P, "lookalikeExecutor", vm.toString(d.lookalikeExecutor));
