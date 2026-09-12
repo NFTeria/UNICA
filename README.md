@@ -151,6 +151,17 @@ pool.
 Some Vyper contracts in this repository are **carried-in prior art rather than work authored
 here**, and which is which is recorded in [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md).
 
+## A payment pool is a closed venue, on purpose
+
+UNICA's v4 pool is not a liquidity pool for the world. The hook admits swaps only from the executor the
+registry names for that market, because the hook must know which order a swap settles (payer, amounts,
+expiry, terminal) and a public router cannot supply that. So the pool is not routable by third-party
+routers, and that is the design: it is a merchant's checkout lane, seeded and capped by the operator, with
+an oracle band and a receipt on every settlement. Anyone who wants to trade the same pair publicly uses
+any other pool; anyone who wants to be paid with those guarantees uses this one. The Uniswap Foundation's
+own guidance during the event, that a hook requiring authorization in `hookData` is only reachable through
+the project's own router or interface, describes UNICA exactly, and UNICA states it rather than hiding it.
+
 ## The problem
 
 A business that settles customer payments in one asset, and a customer who wants to pay in
