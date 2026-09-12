@@ -62,6 +62,18 @@ const RECORD_PATH = join(ROOT, process.env.UNICA_RECORD_PATH);
 const HOST = process.env.UNICA_HOST;
 const PORT = Number(process.env.UNICA_PORT);
 const RPC_URL = process.env.UNICA_RPC_URL;
+const RPC_PROXY_PATH = "/local/rpc";
+
+/** The request body up to `limit` bytes, or null when it is larger than that. */
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (c) => { size += c.length; if (size > limit) { resolve(null); req.destroy(); return; } chunks.push(c); });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
 
 // Read-only passthrough of two real repository files, by their exact repo-relative path, so
 // apps/web/assets/local-pay.js can `import` them with an ordinary relative specifier that resolves
@@ -325,7 +337,25 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname === "/local/config.json") {
       const manifest = readManifest();
-      return sendJson(res, 200, runtimeConfig(manifest, readRecord(), RPC_URL, await readTokenLabels(manifest)));
+      return sendJson(res, 200, runtimeConfig(manifest, readRecord(), RPC_PROXY_PATH, await readTokenLabels(manifest)));
+    }
+
+    // The browser never learns the node's URL. Every read or send the screens make goes to this
+    // path and is forwarded here, so a keyed or private endpoint named in UNICA_LOCAL_RPC stays in
+    // this process. The body is passed through untouched and the node's answer is returned as is;
+    // this is a pipe, not a policy, and it forwards only JSON-RPC-shaped POSTs of a bounded size.
+    if (url.pathname === RPC_PROXY_PATH) {
+      if (req.method !== "POST") return sendJson(res, 405, { error: "POST a JSON-RPC request" });
+      const body = await readBody(req, 1 << 20);
+      if (body === null) return sendJson(res, 413, { error: "request too large" });
+      let parsed;
+      try { parsed = JSON.parse(body); } catch { return sendJson(res, 400, { error: "not JSON" }); }
+      const shaped = (x) => x && typeof x === "object" && typeof x.method === "string";
+      if (!(shaped(parsed) || (Array.isArray(parsed) && parsed.every(shaped)))) return sendJson(res, 400, { error: "not a JSON-RPC request" });
+      const upstream = await fetch(RPC_URL, { method: "POST", headers: { "content-type": "application/json" }, body });
+      const text = await upstream.text();
+      res.writeHead(upstream.status, { "content-type": "application/json", "cache-control": "no-store" });
+      return res.end(text);
     }
 
     if (url.pathname === "/local/record") {
