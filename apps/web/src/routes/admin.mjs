@@ -1,15 +1,27 @@
 /**
- * Two admin screens the signed-in menu points at: what you sell, and who bought it.
+ * The two screens the signed-in menu points at: what this business sells, and who has bought it.
  *
- * THEY ARE HONEST STUBS, AND THAT IS THE WHOLE POINT. The sidebar in `src/shell.mjs` names six
- * destinations, the build refuses a menu item that resolves to no file, and a menu item that leads
- * to a page pretending to hold data would be worse than a broken link — a broken link is obvious.
- * So each of these says, in one sentence a shop owner can read, what the screen will show and where
- * it will read it from, and shows no invented row, no placeholder price and no example customer.
- * The next build fills them in; until then nothing here can be mistaken for a record.
+ * BOTH ARE READ FROM THE CHAIN AND FROM NOWHERE ELSE. Products come from the catalogue the active
+ * deployment names, keyed by the wallet that is signed in — the catalogue keys a listing by the
+ * account that made it, so a person cannot see or change anybody else's. Customers are worked out
+ * from the payments that wallet actually received; this product asks for no name, no email address
+ * and no telephone number, so it has none to show and none to leak.
+ *
+ * WHAT SHIPS IN THE DOCUMENT IS THE SHAPE OF THE ANSWER, NEVER THE ANSWER. A list with nothing in
+ * it says so; a figure nobody has read is an em dash. There is no sample product, no example
+ * customer and no placeholder price anywhere on either screen.
+ *
+ * The tables are written out rather than taken from `dataTable()` because script fills their bodies
+ * row by row and needs an element to address. Their structure is the design system's, cell for
+ * cell; apps/web/DESIGN.md is the copy that governs.
  */
-import { h } from "../html.mjs";
+import { h, raw } from "../html.mjs";
 import * as C from "../components.mjs";
+
+const gate = raw(`<div class="empty adm-gate" id="admin-gate" hidden>
+  <p class="empty-t">Sign in to see your business</p>
+  <p class="sub" id="gate-line">Use the wallet control at the top of this page.</p>
+</div>`);
 
 export const PRODUCTS = [
   {
@@ -17,25 +29,43 @@ export const PRODUCTS = [
     h1: "Products",
     title: "Products — UNICA",
     description:
-      "The things this business sells: what each one is called, what it costs, and whether it can be rung up right now. Read from the business's own catalog.",
+      "What this business sells: the name, the price, whether it is on sale, and the payment link and code for each one.",
     ogTitle: "Products on UNICA",
-    ogDescription: "What this business sells, and what each item costs.",
+    ogDescription: "What this business sells, and the link that pays for each.",
     ogImage: "og-merchant.svg",
-    body: h`
-<p class="lead">This screen lists what your business sells, so a register can ring up an item by
-name instead of somebody typing the price from memory.</p>
-<section class="card">
-  <h2>Nothing is listed here yet</h2>
-  <p>Your catalog is read from your business when this screen is built, in the next release. Until
-  then this page shows no items, rather than showing examples that are not yours.</p>
-  <p class="sub">Nothing on this page is a saved product, a price you have set, or an amount anyone
-  can be charged.</p>
-  <p class="ctas">
-    <a class="cta" href="../payments/new/">Create payment</a>
-    <a class="cta cta-quiet" href="../">Back to my business</a>
-  </p>
-</section>
-${C.statusRegion("products-said", "No catalog has been read.")}`,
+    body: h`<link rel="stylesheet" href="../../assets/screens/admin.css">
+${gate}
+<div id="admin-body">
+<h2>What you sell</h2>
+<ul class="product-list" id="product-list"></ul>
+<div class="empty" id="products-empty">
+  <p class="empty-t">Nothing is listed yet</p>
+  <p class="sub">Add your first item below and it gets its own payment link.</p>
+</div>
+${C.statusRegion("products-said", "Your products have not been read yet.")}
+
+<h2>Add a product</h2>
+<div class="adm-form">
+  ${C.field({ id: "product-name", label: "Name", help: "What your customers call it." })}
+  ${C.field({ id: "product-price", label: "Price", inputmode: "decimal", help: "In the asset you are paid in." })}
+  ${C.selectField({
+    id: "product-kind",
+    label: "Kind",
+    options: [
+      ["one-off", "One-off — sold once, then gone"],
+      ["recurring", "Recurring — a period they keep paying for"],
+      ["permanent", "Permanent — on the shelf, any number of times"],
+    ],
+  })}
+  ${C.field({ id: "product-days", label: "Days one payment covers", inputmode: "numeric", help: "Whole days. Recurring only." })}
+  ${raw('<div class="adm-wide">')}
+  ${C.field({ id: "product-buyer", label: "Reserve it for one buyer", placeholder: "0x…", help: "Optional, and only for a one-off." })}
+  ${raw("</div>")}
+</div>
+${C.button("Add this product", { id: "product-add", disabled: true, reason: "Disabled until this screen has read your business and the list it would be added to." })}
+${C.statusRegion("product-add-said", "Nothing has been added yet.")}
+</div>
+<script type="module" src="../../assets/products.js"></script>`,
   },
 ];
 
@@ -45,25 +75,33 @@ export const CUSTOMERS = [
     h1: "Customers",
     title: "Customers — UNICA",
     description:
-      "The people who have paid this business: what they paid with, when they last bought, and the receipts that prove each visit happened.",
+      "The wallets that have paid this business: how often, how much of each asset, when they last paid, and what they are covered for.",
     ogTitle: "Customers on UNICA",
-    ogDescription: "Who has paid this business, and when they last bought.",
+    ogDescription: "Who has paid this business, and when they last did.",
     ogImage: "og-merchant.svg",
-    body: h`
-<p class="lead">This screen lists the wallets that have paid you, with the date of the last payment
-and the receipts behind each one.</p>
-<section class="card">
-  <h2>Nobody is listed here yet</h2>
-  <p>Your customers are worked out from the payments this business has actually taken, in the next
-  release. A person appears here only once a payment of theirs has been checked against the
-  network — never because a page remembered them.</p>
-  <p class="sub">Nothing on this page is a saved customer, an email address, or a name anybody
-  typed. This product asks for none of those.</p>
-  <p class="ctas">
-    <a class="cta cta-quiet" href="../payments/">Orders</a>
-    <a class="cta cta-quiet" href="../">Back to my business</a>
-  </p>
-</section>
-${C.statusRegion("customers-said", "No payments have been read.")}`,
+    body: h`<link rel="stylesheet" href="../../assets/screens/admin.css">
+${gate}
+<div id="admin-body">
+<p class="sub">Worked out from the payments you have taken. This product asks for no names, so it shows none.</p>
+<div class="table-wrap">
+  <table class="dtable">
+    <caption>Wallets that have paid you</caption>
+    <thead><tr>
+      <th scope="col">Customer</th>
+      <th scope="col">Payments</th>
+      <th scope="col">Total checked</th>
+      <th scope="col">Last paid</th>
+      <th scope="col">Covered</th>
+    </tr></thead>
+    <tbody id="customer-rows"><tr><td class="sub" colspan="5">Nothing has been read yet.</td></tr></tbody>
+  </table>
+</div>
+${C.statusRegion("customers-said", "No payments have been read yet.")}
+<p class="ctas">
+  <a class="cta cta-quiet" href="../payments/">Orders</a>
+  <a class="cta cta-quiet" href="../">Overview</a>
+</p>
+</div>
+<script type="module" src="../../assets/customers.js"></script>`,
   },
 ];
