@@ -23,7 +23,14 @@ interface IDirectSettlement {
         bytes32 terminalNode,
         uint64 settledAt
     );
-    event OrderCreated(bytes32 indexed orderId, address indexed recipient, address indexed payer, uint128 amount, uint64 deadline, bytes32 terminalNode);
+    event OrderCreated(
+        bytes32 indexed orderId,
+        address indexed recipient,
+        address indexed payer,
+        uint128 amount,
+        uint64 deadline,
+        bytes32 terminalNode
+    );
 
     error NotOrderCreator(address who);
     error UnknownOrder(bytes32 orderId);
@@ -40,9 +47,14 @@ interface IDirectSettlement {
     function SETTLEMENT_ID() external view returns (bytes32);
 
     /// @notice Same signature as the market executor's createOrder; `minOut` must equal `amountIn`.
-    function createOrder(address recipient, address payer, uint128 amountIn, uint128 minOut, uint64 deadline, bytes32 salt)
-        external
-        returns (bytes32 orderId);
+    function createOrder(
+        address recipient,
+        address payer,
+        uint128 amountIn,
+        uint128 minOut,
+        uint64 deadline,
+        bytes32 salt
+    ) external returns (bytes32 orderId);
     /// @notice Pull exactly `amount` of ASSET from the bound payer to the recipient; refuses a
     ///         fee-on-transfer shortfall (`DeliveryNotExact`), a wrong payer, replay and expiry.
     function pay(bytes32 orderId) external;
