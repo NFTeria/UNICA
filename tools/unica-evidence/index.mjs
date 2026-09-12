@@ -137,6 +137,43 @@ export async function projectEvidence({rpc, manifest, fromBlock, toBlock} = {}) 
 
 const ORDERS_SELECTOR = selectorOf("orders(bytes32)");
 
+/// Every receipt whose recipient is one wallet, newest first: both receipt shapes decoded by codec,
+/// with the block and log position kept for ordering and links. This LISTS; it does not judge. Pass
+/// each orderId to authenticateReceipt or authenticateDirectReceipt for a verdict, because a
+/// receipt-shaped log from an unregistered emitter is exactly what those two exist to refuse.
+export function receiptsForRecipient({logs = [], recipient} = {}) {
+  const who = String(recipient ?? "").toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(who)) return [];
+  const out = [];
+  for (const log of Array.isArray(logs) ? logs : []) {
+    const name = identifyLog(log);
+    if (name !== "SettlementReceipt" && name !== "DirectReceipt") continue;
+    let d;
+    try {
+      d = decodeLog(name, log);
+    } catch {
+      continue; // a malformed log is not a payment
+    }
+    if (String(d.recipient).toLowerCase() !== who) continue;
+    const direct = name === "DirectReceipt";
+    out.push({
+      kind: direct ? "direct" : "market",
+      orderId: String(d.orderId),
+      recipient: String(d.recipient),
+      payer: String(d.payer),
+      asset: String(direct ? d.asset : d.currencyOut),
+      amount: String(direct ? d.amount : d.amountOut),
+      settledAt: direct ? Number(d.settledAt) : null,
+      emitter: String(log.address ?? ""),
+      transactionHash: log.transactionHash ?? null,
+      blockNumber: Number(toBig(log.blockNumber ?? 0)),
+      logIndex: Number(toBig(log.logIndex ?? 0)),
+    });
+  }
+  out.sort((a, b) => (b.blockNumber - a.blockNumber) || (b.logIndex - a.logIndex));
+  return out;
+}
+
 /// A single `eth_call` to the settler's own `orders(orderId)` view (IDirectSettlement.sol) — the
 /// one piece of `authenticateDirectReceipt`'s evidence that is not a log, because a direct
 /// settlement has no separate executor contract to corroborate the receipt the way `Settled` does

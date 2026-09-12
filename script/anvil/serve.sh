@@ -53,7 +53,7 @@ import { readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 
-import { authenticateReceipt, projectEvidence } from "./tools/unica-evidence/index.mjs";
+import { authenticateDirectReceipt, authenticateReceipt, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
 
 const ROOT = process.cwd();
 const OUT_DIR = join(ROOT, process.env.UNICA_OUT_DIR);
@@ -63,6 +63,51 @@ const HOST = process.env.UNICA_HOST;
 const PORT = Number(process.env.UNICA_PORT);
 const RPC_URL = process.env.UNICA_RPC_URL;
 const RPC_PROXY_PATH = "/local/rpc";
+const LOCAL_CHAIN = 31337;
+// Public nodes cap how many blocks one eth_getLogs may span; the practice chain does not. A scan
+// therefore starts at the block the deployment was recorded from and walks forward in windows of
+// this many blocks, and the result is kept for a few seconds so a dashboard's several reads share
+// one scan. An indexer is the real answer for a long-lived deployment; this is the honest one for
+// a companion on a laptop.
+const LOG_WINDOW = Number(process.env.UNICA_LOG_WINDOW ?? 2000);
+const PROJECTION_TTL_MS = 15_000;
+let projectionMemo = { head: null, at: 0, value: null };
+
+/** Never let an upstream message carry a URL to the browser: the node's address is not the page's business. */
+function redact(text) {
+  return String(text ?? "").replace(/https?:\/\/[^\s"'<>)]+/g, "<node>");
+}
+
+async function projectAll(manifest) {
+  const headHex = await rpc("eth_blockNumber", []);
+  const head = Number(BigInt(headHex));
+  const now = Date.now();
+  if (projectionMemo.value && projectionMemo.head === head && now - projectionMemo.at < PROJECTION_TTL_MS) return projectionMemo.value;
+  const local = Number(manifest?.chainId) === LOCAL_CHAIN;
+  const start = local ? 0 : Number(manifest?.deployedAtBlock ?? 0);
+  if (local || !Number.isFinite(LOG_WINDOW) || LOG_WINDOW <= 0) {
+    const one = await projectEvidence({ rpc: RPC_URL, manifest, fromBlock: start, toBlock: head });
+    projectionMemo = { head, at: now, value: one };
+    return one;
+  }
+  const logs = [];
+  const seen = new Set();
+  let receipts = {};
+  for (let from = start; from <= head; from += LOG_WINDOW) {
+    const to = Math.min(from + LOG_WINDOW - 1, head);
+    const part = await projectEvidence({ rpc: RPC_URL, manifest, fromBlock: from, toBlock: to });
+    for (const log of part.logs ?? []) {
+      const key = `${log.transactionHash}:${log.logIndex}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      logs.push(log);
+    }
+    receipts = { ...receipts, ...(part.receipts ?? {}) };
+  }
+  const merged = { logs, receipts, chainHead: head, fromBlock: start, toBlock: head };
+  projectionMemo = { head, at: now, value: merged };
+  return merged;
+}
 
 /** The request body up to `limit` bytes, or null when it is larger than that. */
 function readBody(req, limit) {
@@ -381,7 +426,7 @@ const server = createServer(async (req, res) => {
       }
       try {
         const manifest = readManifest();
-        const projection = await projectEvidence({ rpc: RPC_URL, manifest });
+        const projection = await projectAll(manifest);
         const verdict = authenticateReceipt({
           orderId: order,
           logs: projection.logs,
@@ -391,7 +436,49 @@ const server = createServer(async (req, res) => {
         });
         return sendJson(res, 200, verdict);
       } catch (e) {
-        return sendJson(res, 502, { decision: "UNKNOWN", reasonCodes: ["EVIDENCE_ENDPOINT_UNAVAILABLE"], receipt: null, error: String(e?.message ?? e) });
+        return sendJson(res, 502, { decision: "UNKNOWN", reasonCodes: ["EVIDENCE_ENDPOINT_UNAVAILABLE"], receipt: null, error: redact(e?.message ?? e) });
+      }
+    }
+
+    // The payments one wallet has received, each with the same verdict the receipt screen would
+    // give it. The list comes from the chain's logs; the verdict comes from the evidence rules; the
+    // wallet comes from the query and is validated, never resolved. Nothing here is remembered.
+    if (url.pathname === "/local/payments") {
+      const wallet = url.searchParams.get("wallet");
+      if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+        return sendJson(res, 400, { error: "wallet must be 0x followed by forty hex digits", payments: [] });
+      }
+      try {
+        const manifest = readManifest();
+        const projection = await projectAll(manifest);
+        const settler = manifest?.contracts?.directSettlement?.address ?? null;
+        const payments = [];
+        for (const r of receiptsForRecipient({ logs: projection.logs, recipient: wallet })) {
+          const common = { orderId: r.orderId, logs: projection.logs, manifest, chainHead: projection.chainHead, requiredConfirmations: 0 };
+          let verdict;
+          if (r.kind === "direct") {
+            let directOrder = null;
+            if (settler) {
+              try { directOrder = await fetchDirectOrder({ rpc: RPC_URL, settler, orderId: r.orderId }); } catch { directOrder = null; }
+            }
+            verdict = authenticateDirectReceipt({ ...common, directOrder });
+          } else {
+            verdict = authenticateReceipt(common);
+          }
+          let settledAt = r.settledAt;
+          if (settledAt === null) {
+            try {
+              const block = await rpc("eth_getBlockByNumber", ["0x" + r.blockNumber.toString(16), false]);
+              settledAt = block?.timestamp ? Number(BigInt(block.timestamp)) : null;
+            } catch {
+              settledAt = null;
+            }
+          }
+          payments.push({ ...r, settledAt, decision: verdict.decision, reasonCodes: verdict.reasonCodes });
+        }
+        return sendJson(res, 200, { wallet, chainId: manifest?.chainId ?? null, chainHead: projection.chainHead ?? null, payments });
+      } catch (e) {
+        return sendJson(res, 502, { error: redact(e?.message ?? e), payments: [] });
       }
     }
 
@@ -402,7 +489,7 @@ const server = createServer(async (req, res) => {
     return await serveStatic(res, url.pathname);
   } catch (e) {
     res.writeHead(500, { "content-type": "text/plain" });
-    res.end(`internal error: ${e?.message ?? e}`);
+    res.end(`internal error: ${redact(e?.message ?? e)}`);
   }
 });
 
