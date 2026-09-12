@@ -169,12 +169,26 @@ test("the keypad fills the width on a phone and is capped above it", () => {
   assert.match(wide, /\.register\s*\{[^}]*max-width:\s*24rem/s);
 });
 
-test("44px targets are reached on a coarse pointer for the three controls under it", () => {
+test("44px targets are reached on a coarse pointer for the four controls under it", () => {
   const coarse = block(fold, "@media (pointer: coarse)");
-  for (const sel of [".wchip .cta", ".wchip select", ".fold summary"]) {
+  for (const sel of [".wchip .cta", ".wchip select", ".fold summary", ".theme-pick > select"]) {
     assert.ok(coarse.includes(sel), `${sel} is not raised to 44px on a coarse pointer`);
   }
   assert.match(coarse, /min-height:\s*44px/);
+});
+
+test("the theme control's own rule is beaten on order, which requires fold.css to load after it", () => {
+  // theme.css sets `.theme-pick > select { min-height: calc(var(--space) * 9) }` — 36px. The
+  // override above matches its specificity exactly, so it only wins because of link order. If the
+  // shell ever moves fold.css above screens/, the control drops back to 36px in silence, and this
+  // is the check that would notice.
+  const theme = readFileSync(join(OUT, "assets", "screens", "theme.css"), "utf8");
+  assert.match(theme, /\.theme-pick > select \{[^}]*min-height:\s*calc\(var\(--space\) \* 9\)/s);
+  const html = readFileSync(join(OUT, "index.html"), "utf8");
+  assert.ok(
+    html.indexOf("assets/screens/theme.css") < html.indexOf("assets/fold.css"),
+    "fold.css is loaded before screens/theme.css, so the 44px override no longer applies",
+  );
 });
 
 /**
@@ -243,6 +257,22 @@ const mix = (a, b, pa) =>
 test("control: the contrast function fails a pair that must fail and passes one that must pass", () => {
   assert.ok(ratio("#000000", "#ffffff") > 20);
   assert.ok(ratio("#777777", "#808080") < 4.5);
+});
+
+test("the two ways of being dark declare the same ground, so one contrast run covers both", () => {
+  // assets/unica.css carries the dark tokens twice: once for the system preference and once for
+  // the explicit toggle on :root[data-theme="dark"]. They are separate blocks and can drift, and
+  // the contrast run below reads only the first — so the run is only honest while they agree.
+  const bySystem = base.indexOf("@media (prefers-color-scheme: dark)");
+  const byChoice = base.indexOf(':root[data-theme="dark"]');
+  assert.ok(byChoice > 0, "the explicit dark toggle no longer declares its own tokens");
+  for (const token of ["paper", "ink", "accent", "on-accent"]) {
+    assert.equal(
+      hexOf(base, token, byChoice),
+      hexOf(base, token, bySystem),
+      `--${token} differs between the system dark scheme and the toggled one`,
+    );
+  }
 });
 
 test("the folded panel keeps 4.5:1 in both schemes, over every surface it can sit on", () => {
