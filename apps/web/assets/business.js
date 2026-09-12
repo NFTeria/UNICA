@@ -88,6 +88,20 @@ export function decisionPill(decision, reasonCodes = []) {
  * `null` for the total means nothing has been read, which is why an empty list returns a total of
  * "0" ONLY when the list itself was read: the caller passes the payments it actually received.
  */
+/**
+ * "Today" is the chain's day, not this browser's. A testnet's clock can sit hours from the wall
+ * clock, and every payment's time comes from the chain, so the day they are counted in must too.
+ */
+async function chainNowSeconds(config) {
+  try {
+    const head = await rpcRequest(config?.rpc, "eth_getBlockByNumber", ["latest", false]);
+    if (head?.timestamp) return Number(BigInt(head.timestamp));
+  } catch {
+    // the wall clock stands in when the chain does not answer
+  }
+  return Math.floor(Date.now() / 1000);
+}
+
 export function kpiFromPayments(payments, nowSeconds, payoutAssetAddress = null) {
   const list = Array.isArray(payments) ? payments : [];
   const dayStart = startOfDay(nowSeconds);
@@ -501,7 +515,7 @@ async function renderKpis(config, wallet, payout) {
     say("business-status", "Payments could not be read just now, so today's figures are not shown.");
     return;
   }
-  const now = Math.floor(Date.now() / 1000);
+  const now = await chainNowSeconds(config);
   const k = kpiFromPayments(answered.payments, now, payout?.address ?? null);
   say("today-count", String(k.verifiedToday));
   say("today-total", k.totalToday === null ? "Not known yet" : formatAmountFor(k.totalToday, payout?.address ?? null, config));
@@ -698,7 +712,7 @@ async function orders(config, business, wallet) {
     say("orders", withReason("Payments could not be read just now. Nothing is shown rather than a partial list."));
     return;
   }
-  const now = Math.floor(Date.now() / 1000);
+  const now = await chainNowSeconds(config);
   const names = await productNames(answered.payments, business);
   const rows = orderRows(answered.payments, { names, nowSeconds: now });
   const chainId = answered.chainId ?? config.chainId ?? null;
@@ -794,7 +808,7 @@ async function orderDetail(config, wallet) {
     say("order-detail", "No payment of yours has that number. It may belong to another business or another network.");
     return;
   }
-  const now = Math.floor(Date.now() / 1000);
+  const now = await chainNowSeconds(config);
   const verdict = decisionPill(hit.decision, hit.reasonCodes);
   say("order-detail", `${formatAmountFor(hit.amount, hit.asset, config)} from ${shortId(hit.payer)}, ${whenText(hit.settledAt, now).toLowerCase()}. ${verdict.label}.`);
   fillAdvanced(config, { order: hit.orderId, tx: hit.transactionHash, reasons: hit.reasonCodes ?? null });
