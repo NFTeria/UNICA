@@ -439,11 +439,18 @@ function amountUnits() {
   return entryToBaseUnits(till.digits, till.payout.decimals, till.entryDecimals);
 }
 
+/**
+ * The number, at the width a till writes it. An amount the keypad can express keeps its two places
+ * — 1.80, never 1.8, because a price that loses its trailing zero looks like a different price
+ * across a counter. Only an amount the keypad CANNOT express is written at its own precision.
+ */
 function renderAmount() {
   const display = document.getElementById("amount-display");
   if (!display) return;
   display.textContent =
-    till.exactUnits !== null ? fromBaseUnits(till.exactUnits, till.payout.decimals) : formatEntry(till.digits, till.entryDecimals);
+    till.digits === "" && till.exactUnits !== null
+      ? fromBaseUnits(till.exactUnits, till.payout.decimals)
+      : formatEntry(till.digits, till.entryDecimals);
 }
 
 function wireKeypad() {
