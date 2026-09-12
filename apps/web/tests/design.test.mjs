@@ -16,7 +16,8 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -25,13 +26,23 @@ import { layoutFor } from "../src/shell.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, "..");
-const OUT = join(APP, "out");
 
 const css = readFileSync(join(APP, "assets", "unica.css"), "utf8");
 const design = readFileSync(join(APP, "DESIGN.md"), "utf8");
 
-// The artifact this file makes claims about must exist and be current.
-execFileSync(process.execPath, [join(APP, "build.mjs")], { encoding: "utf8" });
+/**
+ * The artifact this file makes claims about, built into a directory of ITS OWN.
+ *
+ * `node --test apps/web/tests/*.test.mjs` runs the files in parallel, and build.test.mjs builds
+ * too. Sharing apps/web/out means one run deletes the directory the other is halfway through
+ * reading: measured at four failures in five runs when this file built there. A gate that fails
+ * intermittently is worse than no gate, because it teaches everyone to run it again.
+ */
+const OUT = mkdtempSync(join(tmpdir(), "unica-design-"));
+execFileSync(process.execPath, [join(APP, "build.mjs")], {
+  encoding: "utf8",
+  env: { ...process.env, UNICA_BUILD_OUT: OUT },
+});
 const manifest = JSON.parse(readFileSync(join(OUT, "manifest.json"), "utf8"));
 const doc = (route) => readFileSync(join(OUT, manifest.routes.find((r) => r.route === route).file), "utf8");
 
