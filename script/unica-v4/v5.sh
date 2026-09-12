@@ -16,7 +16,7 @@ chain() { [ "$(cast chain-id --rpc-url "$NET")" = "$C" ] || fail "$NET is not ch
 code() { [ "$(cast code "$1" --rpc-url "$NET")" != "0x" ] || fail "no runtime code at $1"; echo "code ok $1"; }
 need_account() { [ -n "${DEPLOYER_ACCOUNT:-}" ] || { echo "set DEPLOYER_ACCOUNT to one of:"; cast wallet list; exit 1; }; }
 live() { need_account; chain; LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTIONS DEPLOYER_ACCOUNT="$DEPLOYER_ACCOUNT" bash script/unica-v4/deploy-public.sh "$NET" "$1"; }
-status_is() { bash script/unica-v4/deploy-public.sh "$NET" readback 2>/dev/null | grep -q "\"status\":\"$1\"" || fail "readback status is not $1"; echo "readback status $1 ok"; }
+status_is() { local out; out=$(bash script/unica-v4/deploy-public.sh "$NET" readback 2>/dev/null || true); grep -q "\"status\":\"$1\"" <<<"$out" || fail "readback status is not $1"; echo "readback status $1 ok"; }
 case "$STEP" in
   preflight) chain; bash script/unica-v4/deploy-public.sh "$NET" preflight ;;
   A) live A; for v in UNICA_FACTORY UNICA_REGISTRY UNICA_IDENTITY_AUTHORITY UNICA_ADMISSION UNICA_IDENTITY_TOKEN; do a=$(cfg $v); [ -n "$a" ] && code "$a"; done; echo "stage A recorded in $CFG" ;;
