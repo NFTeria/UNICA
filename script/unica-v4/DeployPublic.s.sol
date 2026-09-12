@@ -297,8 +297,30 @@ contract DeployPublic is Script {
         vm.startBroadcast(c.deployer);
         address adapter;
         if (c.requireOracle) {
+            // Per-leg freshness. UNICA_ASSET_MAX_AGE and UNICA_QUOTE_MAX_AGE are read here and
+            // nowhere else, and they have NO usable default: an unset value is zero, the constructor
+            // refuses zero for a leg that exists, and the deploy stops. That is deliberate. Each
+            // bound has to be validated by the deployer against the specific feed's published
+            // heartbeat on the specific network before it is written into the chain's .env file, so
+            // a default would be a number nobody reviewed. UNICA_QUOTE_MAX_AGE stays unset (zero) in
+            // DIRECT MODE, where UNICA_QUOTE_FEED is the zero address and there is no second leg.
             adapter = address(
-                new ChainlinkFeedAdapter(c.assetFeed, c.quoteFeed, c.asset, c.payout, c.sequencerFeed, c.gracePeriod)
+                new ChainlinkFeedAdapter(
+                    c.assetFeed,
+                    uint48(vm.envOr("UNICA_ASSET_MAX_AGE", uint256(0))),
+                    c.quoteFeed,
+                    uint48(vm.envOr("UNICA_QUOTE_MAX_AGE", uint256(0))),
+                    c.asset,
+                    c.payout,
+                    c.sequencerFeed,
+                    c.gracePeriod,
+                    // The one account allowed to tighten the QUOTE leg's freshness bound during an
+                    // incident. Unset means the zero address, which is no lever and leaves the
+                    // adapter exactly as immutable as it was before the parameter existed. It is
+                    // folded into the route id, so setting it later is a new adapter and a new
+                    // market, never a quiet change under a registered one.
+                    vm.envOr("UNICA_QUOTE_FRESHNESS_OPERATOR", address(0))
+                )
             );
         }
         UnicaMarketFactory factory = new UnicaMarketFactory(
