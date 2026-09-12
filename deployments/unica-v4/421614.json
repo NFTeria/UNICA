@@ -4,6 +4,7 @@
   "chainId": 421614,
   "commit": "9676228a7d40975d199ed78f895010a152cfde69",
   "readAtBlock": 308177227,
+  "deployedAtBlock": 308176664,
   "releaseTag": "unica-v5/arbitrum-sepolia-1",
   "verification": {
     "status": "verified",

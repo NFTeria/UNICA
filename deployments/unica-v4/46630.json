@@ -4,6 +4,7 @@
   "chainId": 46630,
   "commit": "e7264f546e5eb374ffe8887c79288d8b938ef8ed",
   "readAtBlock": 118246596,
+  "deployedAtBlock": 118242754,
   "releaseTag": "unica-v5/robinhood-testnet-1",
   "verification": {
     "status": "verified",

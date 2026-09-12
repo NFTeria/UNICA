@@ -4,6 +4,7 @@
   "chainId": 84532,
   "commit": "bd4fa879dd439a6b732534c6a5893b52e37a894a",
   "readAtBlock": 46732149,
+  "deployedAtBlock": 46732058,
   "releaseTag": "unica-v5/base-sepolia-1",
   "verification": {
     "status": "verified",

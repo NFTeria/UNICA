@@ -4,6 +4,7 @@
   "chainId": 11155111,
   "commit": "95fa9b95c2fdc1450ca386717cc7e3ad8f05cc42",
   "readAtBlock": 11690204,
+  "deployedAtBlock": 11690161,
   "releaseTag": "unica-v4/sepolia-rehearsal-1",
   "verification": {
     "status": "verified",

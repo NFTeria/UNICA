@@ -4,6 +4,7 @@
   "chainId": 1301,
   "commit": "2bc7cbcbb33f611c116cdcd8ac357fa8ed55f87c",
   "readAtBlock": 62381562,
+  "deployedAtBlock": 62380837,
   "releaseTag": "unica-v5/unichain-sepolia-1",
   "verification": {
     "status": "verified",
