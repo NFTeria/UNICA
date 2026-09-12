@@ -57,7 +57,7 @@ lists what it sells (one-off, recurring, permanent) into an on-chain catalogue, 
 its own name (`/shop/?name=<label>`), charges a walk-in customer from the register, and every payment ends in a receipt that reads
 "Paid" only after the evidence rules verified it on chain. Same-asset sales settle directly; a different asset converts on Uniswap v4
 through the registered hook. On Ethereum Sepolia the business `freshcuts.unica.eth` is live under ENSv2 (records, registers, lineage)
-and the shop contracts are deployed and source-verified. **The product is public at <https://unica-nine.vercel.app>** (Ethereum Sepolia; the
+and the shop contracts are deployed and source-verified. **The product is public at <https://unica.nfteria.click>** (Ethereum Sepolia; the
 browser talks to the chain through the host's same-origin pipe, never through a node URL of its own — see [`docs/HOSTING.md`](docs/HOSTING.md)).
 Run it against any network above with `make business-live NET=<alias>`.
 

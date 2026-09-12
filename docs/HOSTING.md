@@ -32,6 +32,21 @@ vercel env add ETHERSCAN_API_KEY production       # paste the key at the prompt 
 vercel env add UNICA_SUBGRAPH_URL production
 ```
 
+## A domain with history, not a fresh one
+
+Wallet security scanners weigh the domain a page is served from. A days-old `*.vercel.app` hostname
+that opens a wallet connection matches their phishing heuristics, and MetaMask showed exactly that
+warning on the first listing from one. The product is therefore served from a subdomain of a
+domain the project has held for longer:
+
+```sh
+vercel domains add unica.nfteria.click                        # binds the name to the linked project
+# then, at the DNS provider: CNAME unica.nfteria.click -> cname.vercel-dns.com
+```
+
+Vercel issues the certificate once the record resolves. The `*.vercel.app` alias keeps working; the
+custom name is the one to hand out.
+
 ## What to check, on the URL it prints
 
 ```sh
