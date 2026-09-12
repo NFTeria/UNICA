@@ -3,12 +3,12 @@
 # TESTNET / NO VALUE. Every LIVE step calls script/unica-v4/deploy-public.sh, which broadcasts only
 # with LIVE_BROADCAST on its command line and a forge keystore named in DEPLOYER_ACCOUNT; the
 # password is prompted by cast/forge in the terminal and never passes through this file.
-# Steps: preflight | A | readback | B | C | activate | manifest | verify | evidence | commit | ens-records | ens-lineage
+# Steps: preflight | mint | A | readback | B | C | activate | manifest | verify | evidence | commit | ens-records | ens-lineage
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PATH="$HOME/.foundry/bin:$HOME/.local/bin:$PATH"
 NET=${1:?alias}; STEP=${2:?step}
-case "$NET" in sepolia_testnet) C=11155111;; base_testnet) C=84532;; arbitrum_testnet) C=421614;; unichain_testnet) C=1301;; *) echo "STOP: unknown alias $NET"; exit 1;; esac
+case "$NET" in sepolia_testnet) C=11155111;; base_testnet) C=84532;; arbitrum_testnet) C=421614;; unichain_testnet) C=1301;; robinhood_testnet) C=46630;; *) echo "STOP: unknown alias $NET"; exit 1;; esac
 CFG=config/unica-v4/$C.env; MAN=deployments/unica-v4/$C.json
 fail() { echo "STOP: $1"; exit 1; }
 cfg() { { grep -E "^$1=" "$CFG" || true; } | head -1 | cut -d= -f2 | awk '{print $1}'; }   # a missing key is empty, never a failure under pipefail
@@ -19,6 +19,7 @@ live() { need_account; chain; LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTION
 status_is() { local out; out=$(bash script/unica-v4/deploy-public.sh "$NET" readback 2>/dev/null || true); grep -q "\"status\":\"$1\"" <<<"$out" || fail "readback status is not $1"; echo "readback status $1 ok"; }
 case "$STEP" in
   preflight) chain; bash script/unica-v4/deploy-public.sh "$NET" preflight ;;
+  mint) [ "$C" = 46630 ] || fail "the test dollar (uTUSD) exists only on chain 46630; the other test networks use Circle test USDC from a faucet"; need_account; chain; T=$(cfg UNICA_PAYOUT); D=$(cfg DEPLOYER); [ "$(cast call "$T" "MINTER()(address)" --rpc-url "$NET" | tr "[:upper:]" "[:lower:]")" = "$(tr "[:upper:]" "[:lower:]" <<<"$D")" ] || fail "the recorded deployer is not the minter of $T"; cast send "$T" "mint(address,uint256)" "$D" 100000000 --rpc-url "$NET" --account "$DEPLOYER_ACCOUNT"; echo "uTUSD balance (base units, 6 decimals): $(cast call "$T" "balanceOf(address)(uint256)" "$D" --rpc-url "$NET")" ;;
   A) live A; for v in UNICA_FACTORY UNICA_REGISTRY UNICA_IDENTITY_AUTHORITY UNICA_ADMISSION UNICA_IDENTITY_TOKEN; do a=$(cfg $v); if [ -n "$a" ]; then code "$a"; fi; done; echo "stage A recorded in $CFG" ;;
   readback) bash script/unica-v4/deploy-public.sh "$NET" readback ;;
   B) live B; for v in UNICA_HOOK UNICA_EXECUTOR; do code "$(cfg $v)"; done; status_is 1 ;;

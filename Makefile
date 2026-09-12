@@ -580,5 +580,5 @@ mutants-unica-v4:
 # aliases: sepolia_testnet | base_testnet | arbitrum_testnet | unichain_testnet. LIVE steps prompt for
 # the keystore password in your terminal (DEPLOYER_ACCOUNT names the keystore). TESTNET / NO VALUE.
 NET ?= sepolia_testnet
-v5-preflight v5-A v5-readback v5-B v5-C v5-activate v5-manifest v5-verify v5-evidence v5-commit v5-ens-records v5-ens-lineage:
+v5-preflight v5-mint v5-A v5-readback v5-B v5-C v5-activate v5-manifest v5-verify v5-evidence v5-commit v5-ens-records v5-ens-lineage:
 	bash script/unica-v4/v5.sh $(NET) $(subst v5-,,$@)
