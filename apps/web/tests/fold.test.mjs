@@ -553,12 +553,17 @@ test("every count in the SCREENS.md block table is the number the artifact actua
   console.log(`SCREENS.md block table: ${rows.length} rows re-counted against ${docs.length} documents, 0 wrong`);
 });
 
-test("the contract's own names are rendered by nothing, and SCREENS.md says so", () => {
+test("the contract's unrendered names stay unrendered, the rendered one is counted, and SCREENS.md says both", () => {
   const docs = emittedDocuments();
-  for (const cls of ["checkout", "register", "empty"]) {
+  for (const cls of ["checkout", "register"]) {
     assert.equal(documentsRendering(cls, docs), 0, `.${cls} is on screen now — SCREENS.md's claim that it is not is stale`);
   }
-  assert.match(screens, /No document\s*\nemits either class\.|No document emits either class\./);
+  const empties = documentsRendering("empty", docs);
+  assert.ok(empties > 0, ".empty left the screens — SCREENS.md's count is stale");
+  assert.match(screens, /No document\s*\nemits `\.checkout` or `\.register`/);
+  const claimed = /`\.empty` is emitted by (\d+) documents/.exec(screens);
+  assert.ok(claimed, "SCREENS.md no longer states how many documents emit .empty");
+  assert.equal(Number(claimed[1]), empties, `SCREENS.md says ${claimed?.[1]} documents emit .empty; the artifact shows ${empties}`);
 });
 
 // ── section 7 reaches past the route stylesheet, or it reaches nothing ────────────────────────

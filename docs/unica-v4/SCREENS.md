@@ -221,32 +221,32 @@ shipped `.co-card` into the contract's `.checkout` and a page's `.co-card`/`.sho
 
 | Block the rules target | Documents that render it |
 |---|---|
-| `.theme-pick` | 22 — every page |
-| `.wchip` | 22 — every page |
+| `.theme-pick` | 23 — every page |
+| `.wchip` | 23 — every page |
 | `.appframe` | 7 |
 | `.sidebar` | 7 |
-| `.hex` | 7 |
-| `.card` | 3 |
+| `.hex` | 8 |
+| `.card` | 1 |
 | `.co-card` | 2 — `pay/` and `receipt/` |
 | `.co` | 2 |
 | `.keypad` | 1 — `business/payments/new/` |
 | `.pos` | 1 |
 | `.checkout` | **0** |
 | `.register` | **0** |
-| `.empty` | **0** |
+| `.empty` | **6** — the admin screens' empty states |
 
 ### The contract name and the shipped name are not the same name
 
 `apps/web/DESIGN.md` names the checkout card `.checkout` and the counter `.register`. **No document
-emits either class.** The screens that exist render `.co-card` inside `.lay-checkout` and `.pos`
+emits `.checkout` or `.register`; `.empty` is emitted by 6 documents** (the admin screens' empty states). The screens that exist render `.co-card` inside `.lay-checkout` and `.pos`
 inside `.lay-app` — the same two things under other names. `pay/` does carry `id="checkout"`, which
 is what makes the mistake above easy to make and is exactly why the count is by class token.
 
 This is not a naming quibble. "The checkout card is capped at 28rem" was true of `.checkout` and
 therefore true of nothing a customer could see. `fold.css` § 7 bridges the two and is kept as one
 separable section so it can be deleted whole on the day the screens are rebuilt on the contract
-names. So the rules written against `.checkout`, `.register` and `.empty` are **correct with respect
-to the design system and unexercised by the product**; the rules written against `.co-card`, `.pos`,
+names. So the rules written against `.checkout` and `.register` are **correct with respect
+to the design system and unexercised by the product**, and `.empty` is now exercised on the admin routes; the rules written against `.co-card`, `.pos`,
 `.keypad`, `.card`, `.appframe` and `.hex` are the ones on screen today. Those are different claims
 and the table is where the difference is recorded rather than glossed.
 
