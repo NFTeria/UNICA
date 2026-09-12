@@ -36,8 +36,10 @@ path_of() { case "$1" in
   ChainlinkFeedAdapter) echo "src/unica-v4/oracle/ChainlinkFeedAdapter.sol:ChainlinkFeedAdapter";;
   esac; }
 echo "== source verification for chain $CHAIN (manifest $MANIFEST; verifier ${VERIFIER[1]})"
-# 1. contracts the deployer created directly in stage A, arguments as recorded by forge
-node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); for (const t of j.transactions) if (t.transactionType==="CREATE" && t.contractName) console.log(t.contractName, t.contractAddress, JSON.stringify(t.arguments||[]))' "$BDIR/stageA-latest.json" | while read -r name addr args; do
+# 1. contracts the deployer created directly in stage A, arguments as recorded by forge. Every run file in
+#    the directory is read and only the CREATE whose address the MANIFEST names is used, so a repeated stage
+#    that left an orphan pair behind cannot be verified in place of the recorded one.
+node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const want=new Set(Object.values(m.contracts).map(c=>c.address.toLowerCase())); const seen=new Set(); for (const f of fs.readdirSync(process.argv[2]).filter(f=>f.endsWith(".json"))) { const j=JSON.parse(fs.readFileSync(process.argv[2]+"/"+f,"utf8")); for (const t of (j.transactions||[])) if (t.transactionType==="CREATE" && t.contractName && want.has((t.contractAddress||"").toLowerCase()) && !seen.has(t.contractAddress.toLowerCase())) { seen.add(t.contractAddress.toLowerCase()); console.log(t.contractName, t.contractAddress, JSON.stringify(t.arguments||[])) } }' "$MANIFEST" "$BDIR" | while read -r name addr args; do
   sig=$(sig_of "$name"); [ -n "$sig" ] || { echo "skip $name at $addr (not a forge-verifiable Solidity contract here)"; continue; }
   # shellcheck disable=SC2046
   encoded=$(cast abi-encode "$sig" $(node -e 'for (const a of JSON.parse(process.argv[1])) console.log(a)' "$args"))
