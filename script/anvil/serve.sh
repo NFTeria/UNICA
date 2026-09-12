@@ -53,7 +53,7 @@ import { readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 
-import { authenticateDirectReceipt, authenticateProductSale, authenticateReceipt, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
+import { authenticateDirectReceipt, authenticateProductSale, authenticateReceipt, decodeDirectOrder, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
 import { ExplorerLogs } from "./tools/unica-evidence/explorer.mjs";
 import { selectorOf } from "./tools/unica-sign/abi.mjs";
 
