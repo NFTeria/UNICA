@@ -195,7 +195,7 @@ structurally blocked — it is blocked only on the Track 1 design question in §
 
 PROPOSED, with the buildable-today path separated from the v4-dependent path per the research
 brief's instruction to correct the given build order where the evidence disagrees. Today is
-2026-09-11; ETHOnline 2026 runs through 2026-09-16 (VERIFIED, ETHGlobal event page) — five days
+2026-09-11; the submission deadline is Sunday 2026-09-13, 12:00 pm EDT (16:00 UTC) (VERIFIED, ETHGlobal event page, retrieved 2026-09-11) — roughly two days
 of runway from this file's retrieval date.
 
 **Buildable today, on already-live infrastructure, no new contract and no owner G0 needed:**

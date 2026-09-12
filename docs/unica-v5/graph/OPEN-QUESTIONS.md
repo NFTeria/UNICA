@@ -78,7 +78,7 @@ Source: PRIZE-FIT.md §11.2; MENTOR-QUESTIONS.md Q6.
 ```
 
 ```
-G5. WHETHER TO AUTHORIZE UNICA v4 IMPLEMENTATION WORK BEFORE 2026-09-16
+G5. WHETHER TO AUTHORIZE UNICA v4 IMPLEMENTATION WORK BEFORE THE 2026-09-13 DEADLINE
 Decision: whether to grant authorization for UnicaMarketRegistry/Factory/Hook/Executor
 implementation, unlocking the v4-dependent path (true hook-to-executor pairing, registry-based
 emitter authentication, the full v4 subgraph) before the event window closes.
