@@ -122,3 +122,15 @@ version 1. Each `anvil-test` writes `.rehearsal/anvil/run-evidence.json` with th
 start and end time, manifest hash, order id, settlement transaction, merchant balance delta, identity token,
 receipt decision, look-alike decision and the statement that no external network was contacted. That directory
 is gitignored; the committed evidence is this document and the CI lane that runs the same command.
+
+## Join as a business (appended 2026-09-12)
+
+The barbershop is no longer registered by the deployment script. `make anvil-deploy` deploys the parent
+name only, the self-serve door `MerchantOnboarding` (granted `ROLE_SET_SUBREGISTRY` at `unica.eth`), and the
+identity badge with the door as its only minter; then a second stage, `join()`, is broadcast by the merchant
+owner's own wallet: `join("freshcuts", payout, "chair-1")` registers the name, sets the payout record,
+creates the `terminals` branch and an ACTIVE first register with the owner as operator, mints the badge, and
+hands every node to the owner while keeping no role on any of them. `demo.sh` step 0 prints the join record;
+`attacks.sh` adds `JOIN_LABEL_TAKEN`, `JOIN_BAD_LABEL`, `JOIN_TWICE` through `eth_call`, and the fork suite adds
+`JOIN_CONTRACT_HOLDS_NO_ROLES`. The browser join screen (`make anvil-serve`, route `join/`) uses the same
+contract from any standard browser wallet, falling back to the local unlocked account on the practice chain.

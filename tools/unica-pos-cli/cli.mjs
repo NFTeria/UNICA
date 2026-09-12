@@ -84,6 +84,11 @@ export function buildSummary(record) {
   const evidence = record.evidence ?? {};
   return {
     environment: manifest.environment ?? null,
+    // Who this business is, and who put it here. `businessJoinedBy` is the wallet that ran the
+    // join itself: it is in the summary so that "a business set itself up" is a checkable claim
+    // and not a sentence in a slide. `payName` is the name a customer types, spelled out once.
+    payName: manifest.identity?.merchantName ?? null,
+    businessJoinedBy: manifest.identity?.joinedBy ?? null,
     merchant: {
       name: manifest.identity?.merchantName ?? null,
       address: manifest.accounts?.merchantPayout ?? null,
@@ -156,7 +161,7 @@ function main() {
     return;
   }
 
-  console.log("==== Merchant view ".padEnd(60, "="));
+  console.log("==== Business view ".padEnd(60, "="));
   console.log(renderMerchantView(state));
   console.log();
   console.log("==== Customer view ".padEnd(60, "="));

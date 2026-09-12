@@ -1,4 +1,11 @@
-// The countertop merchant/customer text views and the payment-status rule they both read from.
+// The countertop business/customer text views and the payment-status rule they both read from.
+//
+// WORDS ON A SCREEN. Everything a person reads here is written in the words a shop owner already
+// uses: business, register, customer, sale, payment, pay name, business badge. The code's own
+// identifiers, events and errors keep their protocol names, because those are read by engineers
+// and by other programs; a name that means one thing in the ABI and another on a receipt is worse
+// than either. "Paid (checked)" is deliberately two words: it says the shop was paid AND that
+// something checked, which is the whole claim this file is allowed to make.
 //
 // F8 (docs/unica-v4/EVENT-SCHEMA.md §5, §6.2; docs/unica-v5/pos/POS-FLOWS.md fact F8): "A
 // SettlementReceipt is evidence, not success... No screen, role, or override may mark an order
@@ -78,31 +85,43 @@ export function canAuthorizePayment(state = {}) {
 }
 
 const REASON_TEXT = {
-  WRONG_NETWORK: "Wrong network: switch your wallet to the network this order was created on.",
-  WRONG_PAYER: "This order is bound to a different wallet address than the one connected.",
-  ORDER_EXPIRED: "This order expired before it was paid. Nothing was charged.",
-  TERMINAL_REVOKED: "This terminal's admission has been revoked. It cannot start a new sale.",
+  WRONG_NETWORK: "Wrong network: switch the customer's wallet to the network this sale was created on.",
+  WRONG_PAYER: "This sale is set up for a different wallet than the one connected.",
+  ORDER_EXPIRED: "This sale expired before it was paid. Nothing was charged.",
+  TERMINAL_REVOKED: "This register has been switched off. It cannot start a new sale.",
 };
 
 // ---- shared text fragments --------------------------------------------------------------------------
 
-const TESTNET_TAG = "[TEST MODE]";
-const TESTNET_LINE = "Testnet demonstration -- no real value";
+const PRACTICE_TAG = "[PRACTICE MODE]";
+const PRACTICE_LINE = "Practice mode: test money only -- no real value";
 
+/// The network as a shop owner should see it: a place, not a chain id. An id nobody recognises is
+/// named as unknown rather than dressed up, because "unknown network" is a reason to stop.
+function networkLine(manifest = {}) {
+  const chainId = manifest.chainId;
+  if (Number(chainId) === 31337) return "Local practice network";
+  if (Number(chainId) === 11155111) return "Sepolia test network";
+  return `Unrecognised network (id ${chainId ?? "?"})`;
+}
+
+/// The ONE place the word "Paid" may be produced, and it is produced only for the PAID status,
+/// which `paymentStatus` grants only on `evidence.decision === "VERIFIED"`. Rewording any line
+/// below is safe; moving "Paid" onto another branch breaks the rule these tests exist to hold.
 function statusLine(status) {
   switch (status) {
     case "PAID":
-      return "Paid";
+      return "Paid (checked)";
     case "FAILED":
-      return "Not settled";
+      return "Declined";
     case "PENDING":
-      return "Waiting for network confirmation...";
+      return "Waiting for the network to confirm...";
     case "SUBMITTED":
-      return "Submitted, waiting for a transaction hash...";
+      return "Sent, waiting for the network...";
     case "UNKNOWN":
-      return "Evidence unavailable -- status unknown";
+      return "Not confirmed yet";
     default:
-      return "Awaiting payer";
+      return "Waiting for the customer";
   }
 }
 
@@ -118,15 +137,17 @@ function feesLine(fees = {}) {
   return `Fees: LP ${(lp / 10000).toFixed(2)}% . Protocol ${(protocolFee / 10000).toFixed(2)}% . UNICA ${(hook / 10000).toFixed(2)}%`;
 }
 
-// ---- merchant view ------------------------------------------------------------------------------
+// ---- business view ------------------------------------------------------------------------------
 
 export function renderMerchantView(state = {}) {
   const lines = [];
-  lines.push(`${state.merchant?.name ?? "Merchant"}  ${TESTNET_TAG}`);
-  lines.push(TESTNET_LINE);
+  lines.push(`${state.merchant?.name ?? "Your business"}  ${PRACTICE_TAG}`);
+  lines.push(PRACTICE_LINE);
   lines.push("");
   const order = state.order ?? {};
-  lines.push(`Order: ${order.id ?? "(no order yet)"}`);
+  lines.push(`Pay name: ${state.merchant?.name ?? "(none)"}`);
+  lines.push(`Register: ${state.terminal?.name ?? "(none)"}`);
+  lines.push(`Sale: ${order.id ?? "(no sale yet)"}`);
   lines.push(`Amount due: ${fmtAmount(order.minOut, order.outputAsset?.symbol)}`);
 
   const initiate = canInitiateSale(state);
@@ -140,17 +161,17 @@ export function renderMerchantView(state = {}) {
   lines.push("");
   lines.push(`Status: ${statusLine(status)}`);
   if (status === "PENDING" || status === "SUBMITTED") {
-    lines.push("Do not close this screen. Nothing is marked Paid until this transaction is mined.");
+    lines.push("Do not close this screen. Nothing is marked as paid until the network confirms it.");
   }
   if (status === "PAID") {
     lines.push(`${fmtAmount(order.minOut, order.outputAsset?.symbol)} received.`);
-    lines.push(`Confirmed on ${state.manifest?.environment ?? "the configured network"}.`);
+    lines.push(`Checked on the ${networkLine(state.manifest)}.`);
   }
   if (status === "FAILED") {
-    lines.push("Nothing was charged. This order cannot be reused.");
+    lines.push("Nothing was charged. This sale cannot be used again.");
   }
   if (status === "UNKNOWN") {
-    lines.push("This screen cannot yet confirm or refuse this payment from local evidence.");
+    lines.push("This screen cannot yet confirm or decline this payment. Do not hand over the goods.");
   }
   return lines.join("\n");
 }
@@ -161,27 +182,28 @@ export function renderCustomerView(state = {}) {
   const lines = [];
   const merchant = state.merchant ?? {};
   const order = state.order ?? {};
-  lines.push(`Review payment  ${TESTNET_TAG}`);
-  lines.push(TESTNET_LINE);
+  lines.push(`Review payment  ${PRACTICE_TAG}`);
+  lines.push(PRACTICE_LINE);
   lines.push("");
-  lines.push(`Merchant: ${merchant.name ?? "(unknown)"}`);
-  lines.push(`Merchant address (full): ${merchant.address ?? "(unknown)"}`);
+  lines.push(`Business: ${merchant.name ?? "(unknown)"}`);
+  lines.push(`Pay name: ${merchant.name ?? "(unknown)"}`);
+  lines.push(`Payment address (full): ${merchant.address ?? "(unknown)"}`);
   if (merchant.identityToken || merchant.rendererVersion) {
     lines.push(
-      `Identity art: token ${merchant.identityToken ?? "?"}, renderer ${merchant.rendererVersion ?? "?"} -- not proof of address ownership`,
+      `Business badge: token ${merchant.identityToken ?? "?"}, renderer ${merchant.rendererVersion ?? "?"} -- not proof of address ownership`,
     );
   }
   if (order.recipientAtAdmission && merchant.address && String(order.recipientAtAdmission).toLowerCase() !== String(merchant.address).toLowerCase()) {
-    lines.push(`Recipient at admission (historical, from this order's own record): ${order.recipientAtAdmission}`);
-    lines.push("This differs from the merchant's current address shown above -- this order still pays the address it named at creation.");
+    lines.push(`Recipient at admission (historical, from this sale's own record): ${order.recipientAtAdmission}`);
+    lines.push("This differs from the business's current address shown above -- this sale still pays the address it named when it was created.");
   }
   lines.push("");
   lines.push(`You pay (max): ${fmtAmount(order.amountIn, order.inputAsset?.symbol)}`);
-  lines.push(`Merchant receives (guaranteed minimum): ${fmtAmount(order.minOut, order.outputAsset?.symbol)}`);
-  lines.push(`Network: ${state.manifest?.environment ?? "unknown"} (chainId ${state.manifest?.chainId ?? "?"})`);
+  lines.push(`The business receives (guaranteed minimum): ${fmtAmount(order.minOut, order.outputAsset?.symbol)}`);
+  lines.push(`Network: ${networkLine(state.manifest)} (id ${state.manifest?.chainId ?? "?"})`);
   lines.push(`Expires: ${order.deadline !== undefined ? new Date(Number(order.deadline) * 1000).toISOString() : "unknown"}`);
   lines.push(feesLine(state.fees));
-  lines.push(`Connected payer: ${state.connectedAddress ?? "(not connected)"}`);
+  lines.push(`Customer wallet: ${state.connectedAddress ?? "(not connected)"}`);
 
   const auth = canAuthorizePayment(state);
   lines.push("");
@@ -194,7 +216,9 @@ export function renderCustomerView(state = {}) {
 
   const status = paymentStatus(state);
   lines.push("");
-  lines.push(`Transaction result: ${statusLine(status)}`);
-  lines.push(`Verified receipt status: ${state.evidence?.decision ?? "NONE"}`);
+  lines.push(`Result: ${statusLine(status)}`);
+  // The raw three-way decision stays on the screen next to the plain-language line, because the
+  // plain line is a reading OF it. A customer who wants the underlying answer can see it.
+  lines.push(`Checked receipt: ${state.evidence?.decision ?? "NONE"}`);
   return lines.join("\n");
 }

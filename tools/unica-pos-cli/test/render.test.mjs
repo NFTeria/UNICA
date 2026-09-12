@@ -124,20 +124,43 @@ test("an active terminal may initiate a new sale", () => {
 
 // ---- rendered views ---------------------------------------------------------------------------------
 
-test("both views carry the testnet label", () => {
+test("both views carry the practice-mode label", () => {
   const merchant = renderMerchantView(baseState());
   const customer = renderCustomerView(baseState());
-  assert.match(merchant, /TEST MODE/);
+  assert.match(merchant, /PRACTICE MODE/);
+  assert.match(merchant, /test money only/i);
   assert.match(merchant, /no real value/i);
-  assert.match(customer, /TEST MODE/);
+  assert.match(customer, /PRACTICE MODE/);
+  assert.match(customer, /test money only/i);
   assert.match(customer, /no real value/i);
 });
 
-test("the customer view shows the full current merchant address and the customer-facing identity provenance line", () => {
+test("both views name the business by its pay name", () => {
+  assert.match(renderMerchantView(baseState()), /Pay name: freshcuts\.unica\.eth/);
+  assert.match(renderCustomerView(baseState()), /Pay name: freshcuts\.unica\.eth/);
+});
+
+test("the business view names the register the sale was started on", () => {
+  assert.match(renderMerchantView(baseState()), /Register: chair-1/);
+});
+
+test("the customer view shows the full current business address and the business-badge provenance line", () => {
   const customer = renderCustomerView(baseState());
   assert.match(customer, /0xMERCHANT0000000000000000000000000000001/);
-  assert.match(customer, /token 0xIDENTITY000000000000000000000000000001:1/);
+  assert.match(customer, /Business badge: token 0xIDENTITY000000000000000000000000000001:1/);
   assert.match(customer, /renderer unica-identity-svg\/1/);
+  assert.match(customer, /not proof of address ownership/);
+});
+
+// The network is a place, not a number, and an id nobody recognises must READ as unrecognised
+// rather than as some default. The third row is the one that would catch a silent fallback.
+test("the network is named in plain words, and an unknown id says so", () => {
+  assert.match(renderCustomerView(baseState()), /Network: Local practice network/);
+  const sepolia = renderCustomerView(baseState({manifest: {chainId: 11155111, environment: "SEPOLIA"}, chainId: 11155111}));
+  assert.match(sepolia, /Network: Sepolia test network/);
+  const foreign = renderCustomerView(baseState({manifest: {chainId: 999, environment: "?"}, chainId: 999}));
+  assert.match(foreign, /Unrecognised network \(id 999\)/);
+  assert.doesNotMatch(foreign, /practice network/);
 });
 
 test("the customer view shows the historical recipientAtAdmission separately when it differs from the current merchant address", () => {
@@ -155,15 +178,50 @@ test("the customer view does not call out a historical recipient when it matches
   assert.doesNotMatch(customer, /Recipient at admission/);
 });
 
-test("the merchant view never prints Paid unless evidence says VERIFIED", () => {
-  const submitted = renderMerchantView(baseState({txSubmitted: true}));
-  assert.doesNotMatch(submitted, /^Paid$/m);
-  const verified = renderMerchantView(baseState({txHash: "0xabc", evidence: {decision: "VERIFIED"}}));
-  assert.match(verified, /Status: Paid/);
+// The rule this whole file exists for, in the new words. "Paid" is a substring of nothing else
+// these views produce, so the negative rows can look for the bare word: any future rewording that
+// leaks it onto a non-VERIFIED branch turns these red rather than merely reading oddly.
+test("the word Paid appears on neither view unless the evidence decision is VERIFIED", () => {
+  for (const state of [
+    baseState({txSubmitted: true}),
+    baseState({txHash: "0xabc"}),
+    baseState({txHash: "0xabc", evidence: {decision: "UNKNOWN"}}),
+    baseState({txHash: "0xabc", evidence: {decision: "REFUSED"}}),
+    baseState({txHash: "0xabc", evidence: {decision: "verified"}}),
+    baseState({txHash: "0xabc", txReceipt: {status: "0x0"}, evidence: {decision: "VERIFIED"}}),
+  ]) {
+    assert.doesNotMatch(renderMerchantView(state), /Paid/);
+    assert.doesNotMatch(renderCustomerView(state), /Paid/);
+  }
+  const verified = baseState({txHash: "0xabc", evidence: {decision: "VERIFIED"}});
+  assert.match(renderMerchantView(verified), /Status: Paid \(checked\)/);
+  assert.match(renderCustomerView(verified), /Result: Paid \(checked\)/);
+});
+
+test("a refused decision reads Declined and an unknown one reads Not confirmed yet", () => {
+  const refused = baseState({txHash: "0xabc", evidence: {decision: "REFUSED"}});
+  assert.match(renderMerchantView(refused), /Status: Declined/);
+  assert.match(renderMerchantView(refused), /Nothing was charged/);
+  const unknown = baseState({txHash: "0xabc", evidence: {decision: "UNKNOWN"}});
+  assert.match(renderMerchantView(unknown), /Status: Not confirmed yet/);
+  assert.match(renderMerchantView(unknown), /Do not hand over the goods/);
+});
+
+test("the customer view keeps the raw three-way decision beside the plain-language line", () => {
+  assert.match(renderCustomerView(baseState({txHash: "0xabc", evidence: {decision: "UNKNOWN"}})), /Checked receipt: UNKNOWN/);
+  assert.match(renderCustomerView(baseState()), /Checked receipt: NONE/);
+});
+
+test("a switched-off register blocks a new sale, in words a shop owner can act on", () => {
+  const view = renderMerchantView(baseState({terminal: {name: "lost-tablet", statusAtAdmission: "REVOKED"}}));
+  assert.match(view, /New sale blocked/);
+  assert.match(view, /This register has been switched off/);
 });
 
 test("the customer view disables the pay action and states why when authorization is blocked", () => {
   const customer = renderCustomerView(baseState({chainId: 1}));
   assert.match(customer, /Confirm and pay \] {2}-- disabled/);
   assert.match(customer, /Wrong network/);
+  const wrongWallet = renderCustomerView(baseState({connectedAddress: "0xSOMEONEELSE000000000000000000000000001"}));
+  assert.match(wrongWallet, /set up for a different wallet/);
 });
