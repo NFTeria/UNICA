@@ -30,8 +30,8 @@ bash script/anvil/serve.sh
 ```
 UNICA local demo server listening on http://127.0.0.1:8787/
 Pay screen:            http://127.0.0.1:8787/pay/
-Pay screen (this order id, from the record): http://127.0.0.1:8787/pay/?order=0x784dfac9a852886bbdd22e0391d099059ccc01d7a30b4c8e9962599774f66539
-  as the wrong payer:    http://127.0.0.1:8787/pay/?order=0x784dfac9a852886bbdd22e0391d099059ccc01d7a30b4c8e9962599774f66539&as=0x0000000000000000000000000000000000000001
+Pay screen (this order id, from the record): http://127.0.0.1:8787/pay/?order=<orderId from .rehearsal/anvil/demo-record.json>
+  as the wrong payer:    http://127.0.0.1:8787/pay/?order=<orderId from .rehearsal/anvil/demo-record.json>&as=0x0000000000000000000000000000000000000001
 ```
 
 Open the "Pay screen (this order)" URL. If `make anvil-demo` has not been run yet, the page still

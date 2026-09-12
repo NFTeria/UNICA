@@ -235,6 +235,26 @@ and the threats in [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md).
 All Sepolia addresses were read from the official v4 deployments page and confirmed to hold code
 on 2026-09-04 (`cast code <addr> --rpc-url https://ethereum-sepolia-rpc.publicnode.com`).
 
+## UNICA v4 — the local acceptance run (2026-09-12, appended)
+
+The generic-market release, built from `docs/unica-v4/`, runs end to end on a throwaway local chain with one
+command and no key anywhere:
+
+```sh
+make anvil-test
+```
+
+That is: Uniswap's official PoolManager bytecode, a registered and versioned market at a mined `0x20C0` hook,
+the real Chainlink feed adapter over fixture feeds, a merchant identity with an active and a revoked
+terminal, a non-transferable identity badge, a confidential-policy record delivered through a local forwarder
+fixture, one payer-bound settlement, the receipt authenticated through the registry, a POS that says PAID only
+from that decision, then the adversarial matrix. Every fixture is labelled a fixture; nothing here has value.
+Read [`docs/unica-v4/ANVIL-DEMO.md`](docs/unica-v4/ANVIL-DEMO.md), the enforcement-layer matrix
+[`docs/unica-v4/ENFORCEMENT-MATRIX.md`](docs/unica-v4/ENFORCEMENT-MATRIX.md), the first-party review record
+[`docs/unica-v4/SECURITY-REVIEW-V4.md`](docs/unica-v4/SECURITY-REVIEW-V4.md) and the public deployment handoff
+[`docs/unica-v4/PUBLIC-DEPLOYMENT-HANDOFF.md`](docs/unica-v4/PUBLIC-DEPLOYMENT-HANDOFF.md). No UNICA v4
+contract is deployed on any public chain at this commit.
+
 ## Setup, test, fuzz
 
 ```sh
