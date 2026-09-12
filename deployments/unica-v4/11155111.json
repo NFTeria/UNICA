@@ -2,8 +2,9 @@
   "environment": "PUBLIC_TESTNET_NO_VALUE",
   "designation": "TEST_ONLY_NO_VALUE",
   "chainId": 11155111,
-  "commit": "95fa9b95c2fdc1450ca386717cc7e3ad8f05cc42",
-  "readAtBlock": 11690204,
+  "commit": "440e74d14cc28b29b3ba11040dbea009800f31a5",
+  "readAtBlock": 11691626,
+  "releaseTag": "unica-v4/sepolia-rehearsal-1",
   "explorer": {
     "kind": "blockscout",
     "api": "https://eth-sepolia.blockscout.com/api",
@@ -11,7 +12,6 @@
     "note": "public, keyless; a source of logs and links, never a judge"
   },
   "deployedAtBlock": 11690161,
-  "releaseTag": "unica-v4/sepolia-rehearsal-1",
   "verification": {
     "status": "verified",
     "verifier": "etherscan (Sepolia)",
@@ -123,8 +123,11 @@
     "pauser": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
     "deployer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73"
   },
+  "knownTokens": [],
   "identity": {
     "authority": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+    "parentName": "unica.eth",
+    "parentNode": "0xa1666e95e38a3be2115a9a801792914ca6dca4fa6297d21e835f284254337537",
     "authorityKind": "EnsV2ResolverAuthority over the chain's ENSv2 permissioned resolver",
     "ensV2Resolver": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
     "ensDeploymentId": "0xb21f8341b4168d56bf301fbc8f2923f2210b99ddcfd72e1fdad2113ba862bb90",

@@ -128,6 +128,41 @@ async function projectAll(manifest) {
 
 const BUSINESS_JOINED_TOPIC0 = "0x" + keccak256Hex("BusinessJoined(bytes32,address,string,address,bytes32,bytes32,uint256)");
 
+const LINEAGE_TOPIC0 = "0x" + keccak256Hex("LineageRegistered(bytes32,bytes32,string)");
+const ADDR_SELECTOR_HEX = selectorOf("addr(bytes32)").replace(/^0x/, "");
+const TEXT_SELECTOR_HEX = selectorOf("text(bytes32,string)").replace(/^0x/, "");
+const CONTROLLER_SELECTOR_HEX = selectorOf("isNamespaceController(bytes32,address)").replace(/^0x/, "");
+const word = (hex) => String(hex).replace(/^0x/, "").toLowerCase().padStart(64, "0");
+function encodeTextCall(node, key) {
+  const bytes = Buffer.from(String(key), "utf8");
+  const len = bytes.length;
+  const padded = bytes.toString("hex").padEnd(Math.ceil(len / 32) * 64, "0");
+  return "0x" + TEXT_SELECTOR_HEX + word(node) + word("40") + word(len.toString(16)) + padded;
+}
+function encodeControllerCall(node, account) {
+  return "0x" + CONTROLLER_SELECTOR_HEX + word(node) + word(account);
+}
+function decodeAddressReturn(hex) {
+  const h = String(hex ?? "").replace(/^0x/, "");
+  return h.length >= 64 ? "0x" + h.slice(24, 64) : null;
+}
+function decodeBoolReturn(hex) {
+  const h = String(hex ?? "").replace(/^0x/, "");
+  return h.length >= 64 && BigInt("0x" + h.slice(0, 64)) === 1n;
+}
+let lineageMemo = { at: 0, key: "", value: null };
+/** Every LineageRegistered record the authority ever emitted, through the explorer on a public chain. */
+async function lineageLogs(manifest, authority) {
+  const key = String(authority).toLowerCase();
+  if (lineageMemo.value && lineageMemo.key === key && Date.now() - lineageMemo.at < PROJECTION_TTL_MS) return lineageMemo.value;
+  const local = Number(manifest?.chainId) === LOCAL_CHAIN;
+  const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
+  const filter = { address: authority, topics: [LINEAGE_TOPIC0], fromBlock: local ? "0x0" : "0x" + Number(manifest?.deployedAtBlock ?? 0).toString(16), toBlock: "latest" };
+  const logs = explorerApi ? await new ExplorerLogs({ api: explorerApi, rpc: RPC_URL }).logs(filter) : await rpc("eth_getLogs", [filter]);
+  lineageMemo = { at: Date.now(), key, value: logs ?? [] };
+  return logs ?? [];
+}
+
 /** The business whose payout wallet is `payout`, from the onboarding contract's own records; null when none or no onboarding here. */
 async function businessByPayout(manifest, payout) {
   const onboarding = manifest?.contracts?.merchantOnboarding?.address ?? null;
@@ -286,6 +321,39 @@ function holdingsFrom(manifest, tokenLabels = {}) {
   return out;
 }
 
+// A name tree from the identity authority's own LineageRegistered records: every business is a child of the
+// parent name, its registers are the children of its "terminals" child. Pure: logs in, tree out.
+function lineageTree(logs = []) {
+  const children = new Map();
+  const labelOf = new Map();
+  for (const log of Array.isArray(logs) ? logs : []) {
+    const topics = Array.isArray(log?.topics) ? log.topics : [];
+    if (topics.length !== 3) continue;
+    const child = String(topics[1]).toLowerCase();
+    const parent = String(topics[2]).toLowerCase();
+    const raw = String(log.data ?? "0x").slice(2);
+    if (raw.length < 128) continue;
+    const offset = Number(BigInt("0x" + raw.slice(0, 64))) * 2;
+    const length = Number(BigInt("0x" + raw.slice(offset, offset + 64)));
+    const label = Buffer.from(raw.slice(offset + 64, offset + 64 + length * 2), "hex").toString("utf8");
+    labelOf.set(child, label);
+    if (!children.has(parent)) children.set(parent, []);
+    if (!children.get(parent).some((c) => c.node === child)) children.get(parent).push({ node: child, label });
+  }
+  return { children, labelOf };
+}
+
+/** The businesses under `parentNode` as the lineage records them: label, node, and the node of each one's terminals branch. */
+function businessesFromLineage(logs, parentNode, parentName = null) {
+  const { children } = lineageTree(logs);
+  const under = children.get(String(parentNode ?? "").toLowerCase()) ?? [];
+  return under.map(({ node, label }) => {
+    const terminals = (children.get(node) ?? []).find((c) => c.label === "terminals") ?? null;
+    const registers = terminals ? (children.get(terminals.node) ?? []).map((c) => ({ node: c.node, label: c.label })) : [];
+    return { label, name: parentName ? `${label}.${parentName}` : label, merchantNode: node, terminalsNode: terminals?.node ?? null, registers };
+  });
+}
+
 const MARKET_STATUS_ACTIVE = 4;
 
 function marketPairFrom(manifest) {
@@ -338,7 +406,7 @@ function runtimeConfig(manifest, record, rpc, tokenLabels = {}) {
       oracleAdapter: contracts.oracleAdapter?.address ?? null,
     },
     merchantOnboarding: contracts.merchantOnboarding?.address ?? null,
-    identity: contracts.identityFixture?.address ?? null,
+    identity: contracts.identityFixture?.address ?? identity.authority ?? null,
     identityToken: contracts.identityToken?.address ?? null,
     parentNode: identity.parentNode ?? null,
     parentName: identity.parentName ?? null,
@@ -704,6 +772,54 @@ const server = createServer(async (req, res) => {
         });
       } catch (e) {
         return sendJson(res, 502, { error: redact(e?.message ?? e), order: null });
+      }
+    }
+
+    // The businesses under this deployment's parent name, read from the identity authority's lineage and
+    // resolver records — the chain's own answer to "which business is this wallet's" on a network that has
+    // no self-serve sign-up contract. ?wallet= lists the businesses whose payout is that wallet (or all of
+    // them for the parent name's controller); ?label= answers one by name. Registers ride along with their
+    // published status. Nothing here is typed in.
+    if (url.pathname === "/local/businesses" || url.pathname === "/local/registers") {
+      try {
+        const manifest = readManifest();
+        const identity = manifest?.identity ?? {};
+        const authority = identity.authority ?? null;
+        const parentNode = identity.parentNode ?? null;
+        if (!authority || !parentNode) return sendJson(res, 200, { businesses: [], registers: [], note: "no name authority on this network" });
+        const logs = await lineageLogs(manifest, authority);
+        const key = identity.terminalStatusKey ?? "com.unica.terminal-status";
+        const statusOf = async (node) => { try { return decodeStringReturn(await rpc("eth_call", [{ to: authority, data: encodeTextCall(node, key) }, "latest"])) ?? ""; } catch { return ""; } };
+        if (url.pathname === "/local/registers") {
+          const terminals = url.searchParams.get("terminals");
+          if (!terminals || !HASH32.test(terminals)) return sendJson(res, 400, { error: "terminals must be a 32-byte node", registers: [] });
+          const { children } = lineageTree(logs);
+          const rows = children.get(terminals.toLowerCase()) ?? [];
+          const registers = [];
+          for (const c of rows) registers.push({ node: c.node, label: c.label, status: await statusOf(c.node), operators: [] });
+          return sendJson(res, 200, { terminalsNode: terminals, registers });
+        }
+        const wallet = url.searchParams.get("wallet");
+        const label = url.searchParams.get("label");
+        if (wallet && !/^0x[0-9a-fA-F]{40}$/.test(wallet)) return sendJson(res, 400, { error: "wallet must be 0x followed by forty hex digits", businesses: [] });
+        let list = businessesFromLineage(logs, parentNode, identity.parentName ?? null);
+        if (label) list = list.filter((b) => b.label === String(label).toLowerCase());
+        const out = [];
+        let controller = false;
+        if (wallet) {
+          try { controller = decodeBoolReturn(await rpc("eth_call", [{ to: authority, data: encodeControllerCall(parentNode, wallet) }, "latest"])); } catch { controller = false; }
+        }
+        for (const b of list) {
+          let payout = null;
+          try { payout = decodeAddressReturn(await rpc("eth_call", [{ to: authority, data: "0x" + ADDR_SELECTOR_HEX + b.merchantNode.slice(2).padStart(64, "0") }, "latest"])); } catch { payout = null; }
+          if (wallet && !controller && String(payout ?? "").toLowerCase() !== wallet.toLowerCase()) continue;
+          const registers = [];
+          for (const r of b.registers) registers.push({ ...r, status: await statusOf(r.node), operators: [] });
+          out.push({ ...b, payout, seller: payout, registers });
+        }
+        return sendJson(res, 200, { parentName: identity.parentName ?? null, parentNode, wallet: wallet ?? null, controller, businesses: out });
+      } catch (e) {
+        return sendJson(res, 502, { error: redact(e?.message ?? e), businesses: [], registers: [] });
       }
     }
 
