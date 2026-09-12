@@ -193,30 +193,32 @@ The claims this product may make in public, with their evidence and their limits
 - Sponsor relevance: Uniswap.
 - Last verified commit: `316df1c6f89c`
 
-### V1 Graph Indexer
+### UNICA v5 subgraph
 
 - Id: `v1-graph-indexer`
-- Purpose: turn V1 receipts into queryable settlement history.
-- Product role: the "what happened" surface.
-- Version: 0.1.0
-- Location: `integrations/graph/subgraph.yaml`, `integrations/graph/schema.graphql`,
-  `integrations/graph/src`
-- Inputs: the hook's `SettlementReceipt` logs.
-- Outputs: `Settlement` entities with a deterministic id.
-- Trust boundary: it trusts the chain and the ABI compiled from this repository's own artifact.
+- Purpose: turn the Sepolia settlement and sale logs into queryable history.
+- Product role: the "what happened" surface behind the receipt and the sales list.
+- Version: 0.2.0
+- Location: `integrations/graph/subgraph.yaml`, `integrations/graph/networks.json`,
+  `integrations/graph/schema.graphql`, `integrations/graph/src`, `integrations/graph/abis`
+- Inputs: `SettlementReceipt` from the market hook, `DirectReceipt` from the direct settler and
+  `ProductSold` from the product catalogue — three pinned Sepolia addresses, no templates.
+- Outputs: `Settlement` and `ProductSale` entities whose ids are the on-chain order and sale ids.
+- Trust boundary: it trusts the chain and the ABIs extracted from this repository's own compiled
+  artifacts.
 - Security guarantees: none; it is an observer.
-- Explicit non-guarantees: it indexes V1 only and knows nothing about the V2 invoice path.
+- Explicit non-guarantees: it indexes Ethereum Sepolia only; the other four networks have no index.
 - Dependencies: `graph-cli`, `matchstick`.
 - Networks: Ethereum Sepolia.
 - Status: IMPLEMENTED — LOCAL TESTS
-- Evidence: `bash integrations/graph/local-e2e.sh` reconstructs a settlement end to end;
-  `integrations/graph/STUDIO-PREFLIGHT.md` records what a Studio deploy would need.
+- Evidence: `cd integrations/graph && npx graph codegen && npx graph build --network sepolia
+  --network-file networks.json && npx graph test` builds the manifest and runs the matchstick
+  rows offline; `integrations/graph/README.md` names the three sources, their blocks and the deploy.
 - Tests: `integrations/graph/tests`
 - Deployment: none. Deploying to Subgraph Studio is an owner action and has not been taken.
-- Limitations: not deployed; V1 only. **Not audited.**
-- Sponsor relevance: The Graph — and qualification is on HOLD until a composition that actually
-  meets their published requirement is found. No claim is made that it qualifies.
-- Last verified commit: `5e1d8436fc76`
+- Limitations: not deployed; Sepolia only. **Not audited.**
+- Sponsor relevance: The Graph. No claim is made that it qualifies until it is deployed and queried.
+- Last verified commit: `b2f3da15351c`
 
 ---
 

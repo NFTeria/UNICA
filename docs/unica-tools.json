@@ -147,13 +147,15 @@
     },
     {
       "id": "v1-graph-indexer",
-      "name": "V1 Graph Indexer",
+      "name": "UNICA v5 subgraph",
       "version": "0.2.0",
       "status": "IMPLEMENTED — LOCAL TESTS",
       "paths": [
         "integrations/graph/subgraph.yaml",
+        "integrations/graph/networks.json",
         "integrations/graph/schema.graphql",
-        "integrations/graph/src"
+        "integrations/graph/src",
+        "integrations/graph/abis"
       ],
       "networks": [
         "ethereum-sepolia"
@@ -166,17 +168,17 @@
         "integrations/graph/tests"
       ],
       "evidence": [
-        {"kind": "command", "value": "bash integrations/graph/local-e2e.sh"},
-        {"kind": "artifact", "value": "integrations/graph/STUDIO-PREFLIGHT.md"}
+        {"kind": "command", "value": "cd integrations/graph && npx graph codegen && npx graph build --network sepolia --network-file networks.json && npx graph test"},
+        {"kind": "artifact", "value": "integrations/graph/README.md"}
       ],
       "limitations": [
         "not deployed to Subgraph Studio; that is an owner action and has not been taken",
-        "indexes the V1 receipt only"
+        "indexes three pinned Sepolia contracts only: the market hook, the direct settler and the product catalogue; the other four networks are not indexed"
       ],
       "sponsorRoles": [
         "the-graph"
       ],
-      "lastVerifiedCommit": "5e1d8436fc76b3dae20431255fefb81c7f12fa91"
+      "lastVerifiedCommit": "b2f3da15351ca1630a653b7542cd9714af78501c"
     },
     {
       "id": "ensv2-merchant-resolver",
