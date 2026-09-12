@@ -86,6 +86,7 @@ load_manifest_env() {
     put("UNICA_HOOK", c.hook.address);
     put("UNICA_EXECUTOR", c.executor.address);
     put("UNICA_IDENTITY", c.identityFixture.address);
+    put("UNICA_ONBOARDING", c.merchantOnboarding.address);
     put("UNICA_IDENTITY_TOKEN", c.identityToken.address);
     put("UNICA_FORWARDER", c.forwarderFixture.address);
     put("UNICA_POLICY_RECEIVER", c.policyReceiver.address);
@@ -97,11 +98,24 @@ load_manifest_env() {
     put("UNICA_POOL_ID", m.market.poolId);
     put("UNICA_FEED_ID", m.market.feedId);
     put("UNICA_ENS_DEPLOYMENT_ID", m.identity.ensDeploymentId);
+    put("UNICA_PARENT_NODE", m.identity.parentNode);
     put("UNICA_MERCHANT_NODE", m.identity.merchantNode);
+    put("UNICA_TERMINALS_NODE", m.identity.terminalsNode);
     put("UNICA_CHAIR1_NODE", m.identity.terminals[0].node);
     put("UNICA_LOST_TABLET_NODE", m.identity.terminals[1].node);
     console.log(out.join("\n"));
   ' "$MANIFEST_PATH")"
+}
+
+# Run one `AnvilLocal.s.sol` stage and return the record it printed, as one JSON object.
+# $1 the stage's function name and log suffix · $2 the sender to impersonate · $3 the line prefix
+# the stage tags its fields with. The stage's own output goes to a file: on failure it is printed
+# whole and the caller dies, so a half-run stage can never be read as a record.
+run_stage() {
+  local log="$REHEARSAL_DIR/stage-$1.log"
+  forge script script/anvil/AnvilLocal.s.sol:AnvilLocal --sig "$1()" --rpc-url "$UNICA_LOCAL_RPC" \
+    --unlocked --sender "$2" --broadcast -vv >"$log" 2>&1 || { cat "$log"; die "stage $1 failed"; }
+  printf '{%s}' "$(grep -o "$3:.*" "$log" | sed "s/^$3://" | tr -d '\n' | sed 's/,$//')"
 }
 
 # `cast call` that MUST revert with the named custom error. Prints a structured refusal line.

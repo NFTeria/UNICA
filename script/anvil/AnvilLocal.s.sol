@@ -32,12 +32,15 @@ import {LocalCreReportFixture} from "../../src/unica-v4/policy/LocalCreReportFix
 import {UnicaPolicyTypes} from "../../src/unica-v4/policy/UnicaPolicyTypes.sol";
 import {LocalEnsV2Fixture} from "../../src/identity/LocalEnsV2Fixture.sol";
 import {TerminalAdmission} from "../../src/identity/TerminalAdmission.sol";
+import {MerchantOnboarding} from "../../src/identity/MerchantOnboarding.sol";
+import {IMerchantOnboarding} from "../../src/identity/IMerchantOnboarding.sol";
 import {FixtureAggregator} from "../../test/unica-v4/fixtures/FixtureAggregator.sol";
 import {LookalikeFactory} from "../../test/unica-v4/fixtures/LookalikeFactory.sol";
 
-/// @notice The one function of the identity token this script calls after deploying its bytecode.
+/// @notice The read-only surface of the identity token this script uses after deploying its
+///         bytecode. There is deliberately no `mint` here: only `MerchantOnboarding` may mint, and
+///         a mint entry point on this script would be a second way to hand out a badge.
 interface IIdentityToken {
-    function mint(address to, bytes32 node, string calldata normalizedName) external returns (uint256);
     function tokenURI(uint256 tokenId) external view returns (string memory);
     function ownerOf(uint256 tokenId) external view returns (address);
     function token_of_node(bytes32 node) external view returns (uint256);
@@ -49,16 +52,20 @@ interface IIdentityToken {
 ///         handed in by address through the environment (`script/anvil/env.sh`) and impersonated
 ///         with `--unlocked`; nothing in this repository signs.
 ///
-///         Three entry points, one per `make anvil-*` stage, so a stage can be re-run and inspected:
+///         Four entry points, one per `make anvil-*` stage, so a stage can be re-run and inspected:
 ///           deploy() — Uniswap's OFFICIAL PoolManager bytecode, two test tokens, the fixture price
 ///                      feeds behind the REAL ChainlinkFeedAdapter, the UNICA v4 factory + registry,
 ///                      one registered market (PROPOSED), the local ENSv2-compatible identity fixture
-///                      with the barbershop name tree, the identity NFT (Vyper bytecode supplied by
-///                      the wrapper), the CRE policy receiver behind a local forwarder fixture, the
-///                      terminal-admission gate, and a look-alike hook behind a spoofed registry.
+///                      holding the PARENT name only, the self-serve onboarding door, the identity
+///                      NFT (Vyper bytecode supplied by the wrapper) whose minter is that door, the
+///                      CRE policy receiver behind a local forwarder fixture, the terminal-admission
+///                      gate, and a look-alike hook behind a spoofed registry.
+///           join()   — the barbershop joins from ITS OWN wallet through that same door, exactly as
+///                      any business would: name, payout record, terminals branch, first register,
+///                      badge. The script registers nothing on the business's behalf.
 ///           seed()   — initialise the pool at the recorded opening price, add the capped no-value
 ///                      seed over the band-width range, prove SEEDED from PoolManager state, ACTIVATE.
-///           demo()   — mint the identity badge, revoke the lost terminal, refresh the fixture feeds,
+///           demo()   — read the badge back, revoke the lost terminal, refresh the fixture feeds,
 ///                      deliver the LOCAL CRE REPORT FIXTURE, admit the order through the active
 ///                      terminal. The payment itself and every expected refusal run from the wrapper
 ///                      so their transaction hashes and revert selectors are captured as evidence.
@@ -88,6 +95,11 @@ contract AnvilLocal is Script {
 
     // ---- the barbershop -----------------------------------------------------------------------
     string internal constant MERCHANT_NAME = "freshcuts.unica.eth";
+    /// @dev The parent every business joins under. `PARENT_NAME` must be the dotted form of the
+    ///      node built as `eth` -> `unica`, or `MerchantOnboarding`'s constructor refuses the pair.
+    string internal constant PARENT_NAME = "unica.eth";
+    string internal constant MERCHANT_LABEL = "freshcuts";
+    string internal constant FIRST_TERMINAL_LABEL = "chair-1";
     string internal constant TERMINAL_STATUS_KEY = "com.unica.terminal-status";
     string internal constant RENDERER_VERSION = "unica-identity-svg/1";
     string internal constant EXTERNAL_URL_BASE = "https://nfteria.github.io/unica/identity/";
@@ -124,6 +136,7 @@ contract AnvilLocal is Script {
         bytes32 feedId;
         bytes32 hookSalt;
         address identity;
+        address onboarding;
         address identityToken;
         address forwarder;
         address policyReceiver;
@@ -258,30 +271,22 @@ contract AnvilLocal is Script {
         });
     }
 
-    /// @dev The barbershop tree on the local ENSv2-compatible fixture: unica.eth held by the admin,
-    ///      freshcuts.unica.eth by the merchant, terminals under `terminals.`, each operator holding
-    ///      SET_TEXT at ONE per-key resource. Both terminals start active; demo() revokes one.
+    /// @dev The parent only. `eth` -> `unica.eth` held by the admin, and the self-serve door
+    ///      (`MerchantOnboarding`) granted the ONE standing role it ever holds: SET_SUBREGISTRY at
+    ///      the parent, so it can register a business's name when that business asks it to.
+    ///      Nothing about the barbershop is registered here: the barbershop joins in `join()`,
+    ///      through the same door and from the same kind of wallet a real business would use, so
+    ///      the demo cannot pass on a tree the script hand-built and the door never had to produce.
     function _deployIdentity() internal {
         vm.startBroadcast(a.admin);
         LocalEnsV2Fixture identity = new LocalEnsV2Fixture();
         d.identity = address(identity);
         d.rootNode = identity.createRoot("eth");
         d.unicaNode = identity.register(d.rootNode, "unica", a.admin);
-        d.merchantNode = identity.register(d.unicaNode, "freshcuts", a.merchantOwner);
-        vm.stopBroadcast();
-
-        vm.startBroadcast(a.merchantOwner);
-        identity.setAddr(d.merchantNode, a.merchantPayout);
-        d.terminalsNode = identity.register(d.merchantNode, "terminals", a.merchantOwner);
-        d.chair1Node = identity.register(d.terminalsNode, "chair-1", a.merchantOwner);
-        d.lostTabletNode = identity.register(d.terminalsNode, "lost-tablet", a.merchantOwner);
-        d.agentNode = identity.register(d.merchantNode, "agent", a.merchantOwner);
-        identity.authorizeTextRoles(d.chair1Node, TERMINAL_STATUS_KEY, a.opChair1, true);
-        identity.setText(d.chair1Node, TERMINAL_STATUS_KEY, "active");
-        identity.authorizeTextRoles(d.lostTabletNode, TERMINAL_STATUS_KEY, a.opLostTablet, true);
-        identity.setText(d.lostTabletNode, TERMINAL_STATUS_KEY, "active");
-        // The agent subname holds one narrow text key and nothing else: no admission authority.
-        identity.authorizeTextRoles(d.agentNode, "com.unica.agent-status", a.opLostTablet, true);
+        MerchantOnboarding onboarding =
+            new MerchantOnboarding(d.identity, d.unicaNode, PARENT_NAME, a.admin, TERMINAL_STATUS_KEY);
+        d.onboarding = address(onboarding);
+        identity.authorizeNameRoles(d.unicaNode, identity.ROLE_SET_SUBREGISTRY(), d.onboarding, true);
         vm.stopBroadcast();
 
         // Locally the identity fixture stands in for the Universal Resolver entry point in the id.
@@ -290,12 +295,14 @@ contract AnvilLocal is Script {
 
     /// @dev The Vyper identity token: the wrapper compiles `vy/src/art/identity_token.vy` with the
     ///      pinned compiler and hands the bytecode in; the constructor arguments are appended here
-    ///      because two of them are addresses this very run created.
+    ///      because two of them are addresses this very run created. The MINTER is the onboarding
+    ///      door, not the admin, because the badge is part of joining: no human hands one out.
+    ///      `linkBadge` is the admin's only power over the door and can be used exactly once.
     function _deployIdentityToken() internal {
         bytes memory bytecode = vm.envBytes("IDENTITY_TOKEN_BYTECODE");
         bytes memory initcode = abi.encodePacked(
             bytecode,
-            abi.encode(a.admin, d.identity, d.identity, d.ensDeploymentId, RENDERER_VERSION, EXTERNAL_URL_BASE)
+            abi.encode(d.onboarding, d.identity, d.identity, d.ensDeploymentId, RENDERER_VERSION, EXTERNAL_URL_BASE)
         );
         vm.startBroadcast(a.admin);
         address token;
@@ -305,6 +312,10 @@ contract AnvilLocal is Script {
         vm.stopBroadcast();
         require(token != address(0), "identity token creation failed");
         d.identityToken = token;
+
+        vm.startBroadcast(a.admin);
+        MerchantOnboarding(d.onboarding).linkBadge(token);
+        vm.stopBroadcast();
     }
 
     function _deployPolicy() internal {
@@ -351,6 +362,62 @@ contract AnvilLocal is Script {
         d.lookalikeHook = hook;
         d.lookalikeExecutor = executor;
         vm.stopBroadcast();
+    }
+
+    // =========================================================================================
+    // stage 1b: join — the barbershop walks through the self-serve door
+    // =========================================================================================
+
+    /// @notice Broadcast by the MERCHANT OWNER's own wallet, never by the admin. One call to
+    ///         `MerchantOnboarding.join` produces the whole business: `freshcuts.unica.eth` owned
+    ///         by that wallet, its payout address, the `terminals` branch, `chair-1` ACTIVE, and
+    ///         the identity badge. Everything after that call is ordinary owner work on nodes the
+    ///         owner now holds: a second register, the agent subname, and the operator grants.
+    /// @dev The door's own authority is gone before this function's first statement returns:
+    ///      `join` reverts with `RolesRetained` unless every role bit it held at each of the three
+    ///      new resources moved to the caller. `test/anvil/Attacks.t.sol` reads the same bitmaps
+    ///      back from the live chain afterwards, because a contract's self-assertion is a claim.
+    function join() external localOnly {
+        _readAccounts();
+        d.identity = vm.envAddress("UNICA_IDENTITY");
+        d.onboarding = vm.envAddress("UNICA_ONBOARDING");
+        d.identityToken = vm.envAddress("UNICA_IDENTITY_TOKEN");
+        LocalEnsV2Fixture identity = LocalEnsV2Fixture(d.identity);
+        uint256 tokenId;
+
+        vm.startBroadcast(a.merchantOwner);
+        (d.merchantNode, d.terminalsNode, d.chair1Node, tokenId) =
+            IMerchantOnboarding(d.onboarding).join(MERCHANT_LABEL, a.merchantPayout, FIRST_TERMINAL_LABEL);
+        // From here the owner is acting on its own property. A second register, so the demo has
+        // one to lose, and the agent subname, which holds one narrow key and no admission power.
+        d.lostTabletNode = identity.register(d.terminalsNode, "lost-tablet", a.merchantOwner);
+        d.agentNode = identity.register(d.merchantNode, "agent", a.merchantOwner);
+        // Each operator holds SET_TEXT at exactly ONE per-key resource and nothing else. `join`
+        // delegated chair-1's key to the owner's own wallet; the owner hands it to the till.
+        identity.authorizeTextRoles(d.chair1Node, TERMINAL_STATUS_KEY, a.opChair1, true);
+        identity.authorizeTextRoles(d.lostTabletNode, TERMINAL_STATUS_KEY, a.opLostTablet, true);
+        identity.setText(d.lostTabletNode, TERMINAL_STATUS_KEY, "active");
+        identity.authorizeTextRoles(d.agentNode, "com.unica.agent-status", a.opLostTablet, true);
+        vm.stopBroadcast();
+
+        _printJoin(tokenId);
+    }
+
+    function _printJoin(uint256 tokenId) internal view {
+        string memory P = "JOIN";
+        _emit(P, "merchantNode", vm.toString(d.merchantNode));
+        _emit(P, "terminalsNode", vm.toString(d.terminalsNode));
+        _emit(P, "chair1Node", vm.toString(d.chair1Node));
+        _emit(P, "lostTabletNode", vm.toString(d.lostTabletNode));
+        _emit(P, "agentNode", vm.toString(d.agentNode));
+        _emit(P, "tokenId", vm.toString(tokenId));
+        _emit(P, "badgeOwner", vm.toString(IIdentityToken(d.identityToken).ownerOf(tokenId)));
+        _emit(P, "joinedBy", vm.toString(a.merchantOwner));
+        _emit(P, "payoutAddress", vm.toString(LocalEnsV2Fixture(d.identity).addr(d.merchantNode)));
+        _emit(P, "payName", MERCHANT_NAME);
+        _emit(P, "firstTerminalLabel", FIRST_TERMINAL_LABEL);
+        _emit(P, "chair1Status", LocalEnsV2Fixture(d.identity).text(d.chair1Node, TERMINAL_STATUS_KEY));
+        _emit(P, "lostTabletStatus", LocalEnsV2Fixture(d.identity).text(d.lostTabletNode, TERMINAL_STATUS_KEY));
     }
 
     // =========================================================================================
@@ -440,14 +507,12 @@ contract AnvilLocal is Script {
         _readDeployed();
         DemoTerms memory t = _terms();
 
-        // 2. the immutable identity badge, minted once to the namespace controller. A re-run on the
-        //    same chain finds the badge already minted: one token per node, never a second.
+        // 2. the immutable identity badge. Nothing mints here any more: the badge was minted by the
+        //    door inside `join`, in the business's own transaction, so this stage only reads it
+        //    back. A zero here means the business never actually joined, and the demo must stop
+        //    rather than quietly hand out a badge the join was supposed to have produced.
         uint256 tokenId = IIdentityToken(d.identityToken).token_of_node(d.merchantNode);
-        if (tokenId == 0) {
-            vm.startBroadcast(a.admin);
-            tokenId = IIdentityToken(d.identityToken).mint(a.merchantOwner, d.merchantNode, MERCHANT_NAME);
-            vm.stopBroadcast();
-        }
+        require(tokenId != 0, "no badge for the merchant node: the business did not join");
 
         // 4. the lost tablet is revoked: its per-key role is removed and its status text says so
         vm.startBroadcast(a.merchantOwner);
@@ -658,6 +723,7 @@ contract AnvilLocal is Script {
         _emit(P, "feedId", vm.toString(d.feedId));
         _emit(P, "hookSalt", vm.toString(d.hookSalt));
         _emit(P, "identityFixture", vm.toString(d.identity));
+        _emit(P, "merchantOnboarding", vm.toString(d.onboarding));
         _emit(P, "identityToken", vm.toString(d.identityToken));
         _emit(P, "forwarderFixture", vm.toString(d.forwarder));
         _emit(P, "policyReceiver", vm.toString(d.policyReceiver));
@@ -668,11 +734,11 @@ contract AnvilLocal is Script {
         _emit(P, "ensDeploymentId", vm.toString(d.ensDeploymentId));
         _emit(P, "rootNode", vm.toString(d.rootNode));
         _emit(P, "unicaNode", vm.toString(d.unicaNode));
-        _emit(P, "merchantNode", vm.toString(d.merchantNode));
-        _emit(P, "terminalsNode", vm.toString(d.terminalsNode));
-        _emit(P, "chair1Node", vm.toString(d.chair1Node));
-        _emit(P, "lostTabletNode", vm.toString(d.lostTabletNode));
-        _emit(P, "agentNode", vm.toString(d.agentNode));
+        // The parent, not the business. Every node under it is produced by `join()`, which runs
+        // next and prints its own record; nothing here can be mistaken for a pre-built barbershop.
+        _emit(P, "parentNode", vm.toString(d.unicaNode));
+        _emit(P, "parentName", PARENT_NAME);
+        _emit(P, "firstTerminalLabel", FIRST_TERMINAL_LABEL);
         _emit(P, "rateE18", vm.toString(RATE_E18));
         _emit(P, "fee", vm.toString(uint256(FEE)));
         _emit(P, "tickSpacing", vm.toString(TICK_SPACING));
