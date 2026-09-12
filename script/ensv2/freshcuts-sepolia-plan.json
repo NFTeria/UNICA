@@ -1,0 +1,205 @@
+{
+  "_label": "UNSIGNED PLAN — Ethereum Sepolia 11155111 — TESTNET / NO VALUE — nothing here has been sent",
+  "chainId": 11155111,
+  "mode": "subtree",
+  "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+  "contracts": {
+    "resolver": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+    "identityAuthority": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+    "authorityNote": "deployed by public stage A; the address is the nonce-493 prediction until stage A is sent"
+  },
+  "names": {
+    "eth": "eth",
+    "unica": "unica.eth",
+    "merchant": "freshcuts.unica.eth",
+    "terminals": "terminals.freshcuts.unica.eth",
+    "chair1": "chair-1.terminals.freshcuts.unica.eth",
+    "lostTablet": "lost-tablet.terminals.freshcuts.unica.eth"
+  },
+  "namehashes": {
+    "namehash eth": "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae",
+    "namehash unica": "0xa1666e95e38a3be2115a9a801792914ca6dca4fa6297d21e835f284254337537",
+    "namehash merchant": "0xf20516307d58ce944ff8836b2f4327b03d3ff731d4451487b4377784ecf7bb12",
+    "namehash terminals": "0xae578a6fd5e5ee92c72a07935abbaf26c95c178cb81849718943b5417192d140",
+    "namehash chair1": "0x782b05e4c83262070602527c08c2d159cc29720f120ccd7dd0a57fbb0f72a1cf",
+    "namehash lostTablet": "0x01f7ef9c7e5415bc95964aab5e38b53acf6e21a0607ea400e0460e4e18290297"
+  },
+  "dnsNames": {
+    "dns vector eth": "0x0365746800",
+    "dns vector unica": "0x05756e6963610365746800",
+    "dns vector merchant": "0x0966726573686375747305756e6963610365746800",
+    "dns vector terminals": "0x097465726d696e616c730966726573686375747305756e6963610365746800",
+    "dns vector chair1": "0x0763686169722d31097465726d696e616c730966726573686375747305756e6963610365746800",
+    "dns vector lostTablet": "0x0b6c6f73742d7461626c6574097465726d696e616c730966726573686375747305756e6963610365746800"
+  },
+  "textKey": "com.unica.terminal-status",
+  "perKeyResources": {
+    "chair1 resource": "0xaccf62cee3215ebe65ddf053bf192040643f8517b34c995625c477de1d94c0ff",
+    "lostTablet resource": "0x2b9127f29f24ec5e2b322583cada646605cf80e92b80a28148bdd291a5fee37d"
+  },
+  "terminalState": {
+    "chair-1": {
+      "status": "active",
+      "operator": "0x19E56831a10d43CfF5d77f886c799C6b916da7Ae",
+      "grant": "SET_TEXT at the per-key resource"
+    },
+    "lost-tablet": {
+      "status": "revoked",
+      "operator": null,
+      "grant": "none"
+    }
+  },
+  "steps": [
+    {
+      "id": "R1",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+      "signature": "setAddr(bytes32,address)",
+      "argsLine": "bytes32/args: 0xf20516307d58ce944ff8836b2f4327b03d3ff731d4451487b4377784ecf7bb12 | 0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "calldataVector": "0xd5fa2b00f20516307d58ce944ff8836b2f4327b03d3ff731d4451487b4377784ecf7bb12000000000000000000000000a121e1ef31bbf0826aa67dc01e7977e80af58d73",
+      "why": "the pay name freshcuts.unica.eth resolves to the business's payout wallet; TerminalAdmission freezes this into every order at admission",
+      "expectedPostState": "namehash/post-state: addr(freshcuts.unica.eth) == 0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73"
+    },
+    {
+      "id": "R2",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+      "signature": "setText(bytes32,string,string)",
+      "argsLine": "bytes32/args: 0x782b05e4c83262070602527c08c2d159cc29720f120ccd7dd0a57fbb0f72a1cf | com.unica.terminal-status | active",
+      "calldataVector": "0x10f13a8c782b05e4c83262070602527c08c2d159cc29720f120ccd7dd0a57fbb0f72a1cf000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000019636f6d2e756e6963612e7465726d696e616c2d7374617475730000000000000000000000000000000000000000000000000000000000000000000000000000066163746976650000000000000000000000000000000000000000000000000000",
+      "why": "chair-1 is an ACTIVE register",
+      "expectedPostState": "namehash/post-state: text(chair-1.terminals.freshcuts.unica.eth, com.unica.terminal-status) == \"active\""
+    },
+    {
+      "id": "R3",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+      "signature": "setText(bytes32,string,string)",
+      "argsLine": "bytes32/args: 0x01f7ef9c7e5415bc95964aab5e38b53acf6e21a0607ea400e0460e4e18290297 | com.unica.terminal-status | revoked",
+      "calldataVector": "0x10f13a8c01f7ef9c7e5415bc95964aab5e38b53acf6e21a0607ea400e0460e4e18290297000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000019636f6d2e756e6963612e7465726d696e616c2d7374617475730000000000000000000000000000000000000000000000000000000000000000000000000000077265766f6b656400000000000000000000000000000000000000000000000000",
+      "why": "the lost tablet is REVOKED from the start on Sepolia (locally it is active first and revoked in the demo)",
+      "expectedPostState": "namehash/post-state: text(lost-tablet.terminals.freshcuts.unica.eth, com.unica.terminal-status) == \"revoked\""
+    },
+    {
+      "id": "R4",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+      "signature": "authorizeTextRoles(bytes,string,address,bool)",
+      "argsLine": "bytes32/args: 0x0763686169722d31097465726d696e616c730966726573686375747305756e6963610365746800 | com.unica.terminal-status | 0x19E56831a10d43CfF5d77f886c799C6b916da7Ae | true",
+      "calldataVector": "0xf2d1eb25000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000019e56831a10d43cff5d77f886c799c6b916da7ae000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000270763686169722d31097465726d696e616c730966726573686375747305756e6963610365746800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000019636f6d2e756e6963612e7465726d696e616c2d73746174757300000000000000",
+      "why": "chair-1's operator key holds SET_TEXT at the per-key status resource and nothing else (measured on this resolver, fork suite rows 10-14)",
+      "expectedPostState": "namehash/post-state: hasRoles(keccak256(abi.encode(node, keccak256(key))), SET_TEXT=1<<4, 0x19E56831a10d43CfF5d77f886c799C6b916da7Ae) == true; name-level and ROOT untouched"
+    },
+    {
+      "id": "L1",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+      "signature": "registerLineage(bytes32,string)",
+      "argsLine": "bytes32/args: 0x0000000000000000000000000000000000000000000000000000000000000000 | eth",
+      "calldataVector": "0x68a874fa0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000036574680000000000000000000000000000000000000000000000000000000000",
+      "why": "lineage root",
+      "expectedPostState": "namehash/post-state: parentOf(0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae) == 0x0"
+    },
+    {
+      "id": "L2",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+      "signature": "registerLineage(bytes32,string)",
+      "argsLine": "bytes32/args: 0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae | unica",
+      "calldataVector": "0x68a874fa93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005756e696361000000000000000000000000000000000000000000000000000000",
+      "why": "lineage",
+      "expectedPostState": "namehash/post-state: parentOf(0xa1666e95e38a3be2115a9a801792914ca6dca4fa6297d21e835f284254337537) == 0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
+    },
+    {
+      "id": "L3",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+      "signature": "registerLineage(bytes32,string)",
+      "argsLine": "bytes32/args: 0xa1666e95e38a3be2115a9a801792914ca6dca4fa6297d21e835f284254337537 | freshcuts",
+      "calldataVector": "0x68a874faa1666e95e38a3be2115a9a801792914ca6dca4fa6297d21e835f284254337537000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000096672657368637574730000000000000000000000000000000000000000000000",
+      "why": "lineage",
+      "expectedPostState": "namehash/post-state: parentOf(0xf20516307d58ce944ff8836b2f4327b03d3ff731d4451487b4377784ecf7bb12) == 0xa1666e95e38a3be2115a9a801792914ca6dca4fa6297d21e835f284254337537"
+    },
+    {
+      "id": "L4",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+      "signature": "registerLineage(bytes32,string)",
+      "argsLine": "bytes32/args: 0xf20516307d58ce944ff8836b2f4327b03d3ff731d4451487b4377784ecf7bb12 | terminals",
+      "calldataVector": "0x68a874faf20516307d58ce944ff8836b2f4327b03d3ff731d4451487b4377784ecf7bb12000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000097465726d696e616c730000000000000000000000000000000000000000000000",
+      "why": "lineage",
+      "expectedPostState": "namehash/post-state: parentOf(0xae578a6fd5e5ee92c72a07935abbaf26c95c178cb81849718943b5417192d140) == 0xf20516307d58ce944ff8836b2f4327b03d3ff731d4451487b4377784ecf7bb12"
+    },
+    {
+      "id": "L5",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+      "signature": "registerLineage(bytes32,string)",
+      "argsLine": "bytes32/args: 0xae578a6fd5e5ee92c72a07935abbaf26c95c178cb81849718943b5417192d140 | chair-1",
+      "calldataVector": "0x68a874faae578a6fd5e5ee92c72a07935abbaf26c95c178cb81849718943b5417192d1400000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000763686169722d3100000000000000000000000000000000000000000000000000",
+      "why": "lineage TerminalAdmission reads: parentOf(parentOf(chair-1)) == freshcuts",
+      "expectedPostState": "namehash/post-state: parentOf(0x782b05e4c83262070602527c08c2d159cc29720f120ccd7dd0a57fbb0f72a1cf) == 0xae578a6fd5e5ee92c72a07935abbaf26c95c178cb81849718943b5417192d140"
+    },
+    {
+      "id": "L6",
+      "chainId": 11155111,
+      "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+      "to": "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133",
+      "signature": "registerLineage(bytes32,string)",
+      "argsLine": "bytes32/args: 0xae578a6fd5e5ee92c72a07935abbaf26c95c178cb81849718943b5417192d140 | lost-tablet",
+      "calldataVector": "0x68a874faae578a6fd5e5ee92c72a07935abbaf26c95c178cb81849718943b5417192d1400000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000b6c6f73742d7461626c6574000000000000000000000000000000000000000000",
+      "why": "lineage",
+      "expectedPostState": "namehash/post-state: parentOf(0x01f7ef9c7e5415bc95964aab5e38b53acf6e21a0607ea400e0460e4e18290297) == 0xae578a6fd5e5ee92c72a07935abbaf26c95c178cb81849718943b5417192d140"
+    }
+  ],
+  "readback": [
+    "# namehash / resource readbacks, sepolia_testnet alias from foundry.toml",
+    "cast call 0x3D2d26801632e7b13B2fa75236a634e75684988c 'addr(bytes32)(address)' 0xf20516307d58ce944ff8836b2f4327b03d3ff731d4451487b4377784ecf7bb12 --rpc-url sepolia_testnet",
+    "cast call 0x3D2d26801632e7b13B2fa75236a634e75684988c 'text(bytes32,string)(string)' 0x782b05e4c83262070602527c08c2d159cc29720f120ccd7dd0a57fbb0f72a1cf 'com.unica.terminal-status' --rpc-url sepolia_testnet",
+    "cast call 0x3D2d26801632e7b13B2fa75236a634e75684988c 'text(bytes32,string)(string)' 0x01f7ef9c7e5415bc95964aab5e38b53acf6e21a0607ea400e0460e4e18290297 'com.unica.terminal-status' --rpc-url sepolia_testnet",
+    "cast call 0x3D2d26801632e7b13B2fa75236a634e75684988c 'hasRoles(uint256,uint256,address)(bool)' 0xaccf62cee3215ebe65ddf053bf192040643f8517b34c995625c477de1d94c0ff 16 0x19E56831a10d43CfF5d77f886c799C6b916da7Ae --rpc-url sepolia_testnet   # resource = keccak256(abi.encode(node, keccak256(key))); 16 = SET_TEXT",
+    "cast call 0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133 'parentOf(bytes32)(bytes32)' 0x782b05e4c83262070602527c08c2d159cc29720f120ccd7dd0a57fbb0f72a1cf --rpc-url sepolia_testnet"
+  ],
+  "revocation": {
+    "what": "revoke chair-1 (forward-looking; existing orders and receipts unchanged)",
+    "steps": [
+      {
+        "id": "V1",
+        "chainId": 11155111,
+        "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+        "to": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+        "signature": "authorizeTextRoles(bytes,string,address,bool)",
+        "argsLine": "bytes32/args: 0x0763686169722d31097465726d696e616c730966726573686375747305756e6963610365746800 | com.unica.terminal-status | 0x19E56831a10d43CfF5d77f886c799C6b916da7Ae | false",
+        "calldataVector": "0xf2d1eb25000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000019e56831a10d43cff5d77f886c799c6b916da7ae000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000270763686169722d31097465726d696e616c730966726573686375747305756e6963610365746800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000019636f6d2e756e6963612e7465726d696e616c2d73746174757300000000000000",
+        "why": "clear the operator's per-key SET_TEXT",
+        "expectedPostState": "namehash/post-state: hasRoles(...) == false"
+      },
+      {
+        "id": "V2",
+        "chainId": 11155111,
+        "signer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+        "to": "0x3D2d26801632e7b13B2fa75236a634e75684988c",
+        "signature": "setText(bytes32,string,string)",
+        "argsLine": "bytes32/args: 0x782b05e4c83262070602527c08c2d159cc29720f120ccd7dd0a57fbb0f72a1cf | com.unica.terminal-status | revoked",
+        "calldataVector": "0x10f13a8c782b05e4c83262070602527c08c2d159cc29720f120ccd7dd0a57fbb0f72a1cf000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000019636f6d2e756e6963612e7465726d696e616c2d7374617475730000000000000000000000000000000000000000000000000000000000000000000000000000077265766f6b656400000000000000000000000000000000000000000000000000",
+        "why": "the status text says so",
+        "expectedPostState": "namehash/post-state: text == \"revoked\""
+      }
+    ],
+    "rollback": "there is no rollback of a broadcast; every step is idempotent and re-runnable, and revocation is itself the recovery"
+  },
+  "invariants": [
+    "existing signed order terms and historical receipts stay independent of every record above (payout frozen at admission)",
+    "no registry write: subtree mode; no subname is registered; unica.eth's owner remains the only registry owner",
+    "the signer never receives a password from this tool; the owner broadcasts each step from a real terminal"
+  ]
+}
