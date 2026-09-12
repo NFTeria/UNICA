@@ -31,6 +31,7 @@ import {
   integrationForCheckout,
   integrationForReceipt,
   orderCard,
+  orderCardFromRead,
   paidThroughText,
   payLink,
   periodText,
