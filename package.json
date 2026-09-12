@@ -19,7 +19,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present && node apps/web/tests/build.test.mjs && node apps/web/tests/parity.test.mjs && node --test apps/web/tests/*.test.mjs tools/unica-evidence/test/*.test.mjs tools/unica-pos-cli/test/*.test.mjs integrations/graph/unica-v4/schema.test.mjs",
+    "test": "npm run test --workspaces --if-present && node apps/web/tests/build.test.mjs && node apps/web/tests/parity.test.mjs && node --test apps/web/tests/*.test.mjs tools/unica-evidence/test/*.test.mjs tools/unica-pos-cli/test/*.test.mjs integrations/graph/schema.test.mjs integrations/graph/unica-v4/schema.test.mjs",
     "format": "prettier --write packages scripts package.json tsconfig.base.json",
     "format:check": "prettier --check packages scripts package.json tsconfig.base.json",
     "check": "npm run format:check && npm run typecheck && npm run build:web && npm run test && npm run verify:candidate",
