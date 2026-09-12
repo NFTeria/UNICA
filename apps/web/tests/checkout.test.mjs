@@ -28,9 +28,12 @@ import {
   graphPanel,
   graphQueryFor,
   graphRowsFrom,
+  NOT_FOUND_TEXT,
+  checkoutVerdict,
   integrationForCheckout,
   integrationForReceipt,
   orderCard,
+  orderStatusOf,
   paidThroughText,
   payLink,
   periodText,
@@ -44,6 +47,7 @@ import {
   verdictFromPayments,
   whenText,
 } from "../assets/storefront.js";
+import { ORDER_URL, blockerSubject, computeBlockers, readOrder, settlementTarget } from "../assets/local-pay.js";
 import { INTEGRATIONS, contrastRatio } from "../assets/brand.js";
 import { encodeCall } from "../assets/abi.js";
 import { PILL_STATES } from "../src/components.mjs";
@@ -563,3 +567,282 @@ test("the checkout's one action is a single button that says why it is disabled"
   assert.match(payDoc, /<button type="button" class="cta charge" id="co-pay" disabled aria-describedby="co-why">Pay<\/button>/);
 });
 
+// ---- an order read from the chain by its id ------------------------------------------------------
+//
+// These rows are the everyday path. A payment link carries nothing but an identifier, so the card a
+// customer reads has to be built from what the chain answers for it — not from the one order this
+// deployment happens to have stored. The shapes below are written from the /local/order contract.
+
+/** The direct, open order the companion answers with: one asset, no conversion, nobody paid yet. */
+const readDirect = (over = {}) => ({
+  orderId: ORDER_ID,
+  kind: "direct",
+  settler: "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
+  chainId: 31337,
+  order: { recipient: SHOP, payer: BUYER, amountIn: "1250000", minOut: "1250000", deadline: "1789243437", status: 1 },
+  assetIn: { address: PAYOUT, symbol: "uUSD", decimals: 6 },
+  assetOut: { address: PAYOUT, symbol: "uUSD", decimals: 6 },
+  business: { label: "freshcuts", name: "freshcuts.unica.eth", owner: SELLER, payout: SHOP, merchantNode: MERCHANT_NODE },
+  ...over,
+});
+
+/** A converting order, held by the market executor: spent in one asset, received in another. */
+const readMarket = (over = {}) => ({
+  orderId: SALE_ID,
+  kind: "market",
+  settler: "0x8562a445A32131bede8832fA66De2cc07fC83A6A",
+  chainId: 31337,
+  order: { recipient: SHOP, payer: BUYER, amountIn: "1000000000000000000", minOut: "1980000", deadline: "1789243437", status: 3 },
+  assetIn: { address: SPEND, symbol: "tAST", decimals: 18 },
+  assetOut: { address: PAYOUT, symbol: "uUSD", decimals: 6 },
+  business: { label: "fresh-cuts", name: "fresh-cuts.unica.eth", owner: SELLER, payout: SHOP, merchantNode: MERCHANT_NODE },
+  ...over,
+});
+
+test("a direct order read by its id becomes the card, in the asset it is written in", () => {
+  const card = orderCard(converting(), readDirect(), ORDER_ID);
+  assert.equal(card.kind, "order");
+  assert.equal(card.id, ORDER_ID);
+  assert.equal(card.total, "1.25 uUSD");
+  assert.equal(card.pay.text, "1.25 uUSD");
+  assert.equal(card.receive.text, "1.25 uUSD");
+  assert.equal(card.converts, false);
+  assert.equal(card.priceChecked, false);
+  assert.equal(card.payer, BUYER);
+  assert.equal(card.expiry, 1789243437);
+  assert.equal(card.status, "open");
+  assert.equal(card.settled, false);
+  assert.equal(card.settler, "0x67d269191c92Caf3cD7723F116c85e6E9bf55933");
+  assert.equal(card.assetIn.address, PAYOUT);
+  assert.equal(card.amountIn, "1250000");
+});
+
+test("the business on the card is the one the chain named, with the money going to its payout", () => {
+  const card = orderCard(converting(), readDirect(), ORDER_ID);
+  assert.equal(card.identity.payName, "freshcuts.unica.eth");
+  assert.equal(card.identity.label, "freshcuts");
+  assert.equal(card.identity.display, "Freshcuts");
+  assert.equal(card.identity.address, SHOP);
+  assert.equal(card.identity.node, MERCHANT_NODE);
+  // The badge is the deployment's identity token, and only when the manifest carries one.
+  assert.deepEqual(card.identity.badge, { address: "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44", tokenId: "1" });
+  const bare = converting();
+  delete bare.identityToken;
+  assert.equal(orderCard(bare, readDirect(), ORDER_ID).identity.badge, null);
+});
+
+test("a market order converts, wears the Uniswap mark, and is held by the executor", () => {
+  const card = orderCard(converting(), readMarket(), SALE_ID);
+  assert.equal(card.converts, true);
+  assert.equal(card.priceChecked, true);
+  assert.equal(card.integration, "uniswap");
+  assert.equal(card.total, "1 tAST");
+  assert.equal(card.receive.text, "1.98 uUSD");
+  assert.equal(card.settler, "0x8562a445A32131bede8832fA66De2cc07fC83A6A");
+  assert.equal(card.status, "settled");
+  assert.equal(card.settled, true);
+});
+
+test("the KIND decides a conversion, not a comparison of the two asset addresses", () => {
+  // A market order denominated in one asset is still routed through the pool. Comparing addresses
+  // would drop the attribution; the kind the chain answered with is the honest signal.
+  const oneAsset = readMarket({ assetOut: { address: SPEND, symbol: "tAST", decimals: 18 } });
+  assert.equal(orderCard(converting(), oneAsset, SALE_ID).converts, true);
+  assert.equal(orderCard(converting(), readDirect(), ORDER_ID).converts, false);
+});
+
+test("an order the chain has no business for still shows its recipient rather than nothing", () => {
+  const card = orderCard(converting(), readDirect({ business: null }), ORDER_ID);
+  assert.equal(card.identity.address, SHOP);
+});
+
+test("the three order statuses are named, and an undefined one is not invented", () => {
+  assert.equal(orderStatusOf(1), "open");
+  assert.equal(orderStatusOf(2), "paying");
+  assert.equal(orderStatusOf(3), "settled");
+  assert.equal(orderStatusOf(9), "unknown");
+  const paying = readDirect();
+  paying.order.status = 2;
+  assert.equal(orderCard(converting(), paying, ORDER_ID).status, "paying");
+});
+
+test("an answer with no order in it is no card at all, never a card of zeros", () => {
+  assert.equal(orderCard(converting(), { orderId: ORDER_ID, order: null }, ORDER_ID), null);
+});
+
+// ---- the stored record is a fallback, and only for its own id ------------------------------------
+
+test("the record is used only when the chain did not answer AND the record is about this very id", () => {
+  const config = converting();
+  // The chain did not answer, and the record IS this order: the stored snapshot may stand in.
+  const fell = orderCard(config, null, ORDER_ID);
+  assert.ok(fell, "the record should stand in for its own id");
+  assert.equal(fell.id, ORDER_ID);
+  // The chain did not answer, and the record is about a DIFFERENT order: no card. Rendering the
+  // stored one here would show this person one business's name and amount while they paid another.
+  assert.equal(orderCard(config, null, SALE_ID), null);
+  // And with no id asked for at all, the record is not a licence to render something.
+  assert.equal(orderCard(config, null, null), null);
+});
+
+test("a chain answer always beats the stored record, even when the record names the same id", () => {
+  // The record is a snapshot; the chain is the current truth. A stale record must never win.
+  const card = orderCard(converting(), readDirect(), ORDER_ID);
+  assert.equal(card.total, "1.25 uUSD"); // the chain's amount
+  assert.notEqual(card.total, "1 tAST"); // not the record's
+  assert.equal(card.identity.payName, "freshcuts.unica.eth"); // the chain's business
+});
+
+// ---- the four words this checkout is allowed to say ----------------------------------------------
+
+test("an open order the chain has not been paid for invites the payment, and nothing stronger", () => {
+  const v = checkoutVerdict({ evidence: { decision: "UNKNOWN", reasonCodes: ["ORDER_OPEN"] }, expiry: 1789243437, now: 1789243000 });
+  assert.equal(v.word, "Waiting for your payment");
+  assert.equal(v.status, "waiting");
+  assert.equal(v.payable, true);
+});
+
+test("only a VERIFIED decision may say Paid", () => {
+  const v = checkoutVerdict({ evidence: { decision: "VERIFIED", reasonCodes: [] }, expiry: 1789243437, now: 1789243000 });
+  assert.equal(v.word, "Paid");
+  assert.equal(v.payable, false);
+});
+
+test("a REFUSED decision says Refused, and closes the button", () => {
+  const v = checkoutVerdict({ evidence: { decision: "REFUSED", reasonCodes: ["WRONG_PAYER"] }, expiry: 1789243437, now: 1789243000 });
+  assert.equal(v.word, "Refused");
+  assert.equal(v.payable, false);
+});
+
+test("a deadline that has passed says Expired", () => {
+  const v = checkoutVerdict({ evidence: { decision: "UNKNOWN", reasonCodes: ["ORDER_OPEN"] }, expiry: 1789243437, now: 1789243438 });
+  assert.equal(v.word, "Expired");
+  assert.equal(v.payable, false);
+});
+
+test("a payment made inside its deadline keeps reading Paid after the deadline passes", () => {
+  // The clock must never turn a settled payment into "Expired" — that is how somebody pays twice.
+  const v = checkoutVerdict({ evidence: { decision: "VERIFIED", reasonCodes: [] }, expiry: 1789243437, now: 1789299999 });
+  assert.equal(v.word, "Paid");
+  assert.equal(checkoutVerdict({ evidence: { decision: "REFUSED" }, expiry: 1, now: 2 }).word, "Refused");
+});
+
+test("a check that has not answered is Checking — not Paid, and not Refused either", () => {
+  assert.equal(checkoutVerdict({ evidence: null, expiry: null }).word, "Checking");
+  assert.equal(checkoutVerdict({ evidence: { decision: "UNKNOWN", reasonCodes: ["VERIFICATION_UNREACHABLE"] }, expiry: null }).word, "Checking");
+  assert.equal(checkoutVerdict({}).payable, false);
+});
+
+test("control: the four verdict words are distinct, so no two states read the same", () => {
+  const words = new Set(
+    [
+      checkoutVerdict({ evidence: { decision: "UNKNOWN", reasonCodes: ["ORDER_OPEN"] }, expiry: null }).word,
+      checkoutVerdict({ evidence: { decision: "VERIFIED" }, expiry: null }).word,
+      checkoutVerdict({ evidence: { decision: "REFUSED" }, expiry: null }).word,
+      checkoutVerdict({ evidence: null, expiry: 1, now: 2 }).word,
+    ].map(String),
+  );
+  assert.equal(words.size, 4);
+});
+
+// ---- a link to an order that is not there ---------------------------------------------------------
+
+test("an id the companion answers 404 for reads as not found, and shapes no card", async () => {
+  const notFound = async () => ({ status: 404, ok: false, json: async () => ({}) });
+  const answer = await readOrder(SALE_ID, notFound);
+  assert.equal(answer.found, false);
+  assert.equal(answer.reachable, true); // the chain looked: this is a fact about the link
+  assert.equal(answer.read, null);
+  assert.equal(orderCard({ assets: [] }, answer.read, SALE_ID), null);
+  assert.equal(NOT_FOUND_TEXT, "This payment could not be found.");
+});
+
+test("a companion nobody could reach is not reported as an order that does not exist", async () => {
+  const down = async () => {
+    throw new Error("connection refused");
+  };
+  const answer = await readOrder(ORDER_ID, down);
+  assert.equal(answer.found, false);
+  assert.equal(answer.reachable, false);
+});
+
+test("a malformed id is refused by the companion and never rendered as a card", async () => {
+  const bad = async () => ({ status: 400, ok: false, json: async () => ({}) });
+  assert.equal((await readOrder("0x1234", bad)).read, null);
+});
+
+test("the order read asks the companion for this id, at its own relative path", async () => {
+  let asked = null;
+  const spy = async (url) => {
+    asked = url;
+    return { status: 200, ok: true, json: async () => readDirect() };
+  };
+  const answer = await readOrder(ORDER_ID, spy);
+  assert.equal(asked, `/local/order?id=${ORDER_ID}`);
+  assert.equal(ORDER_URL, "/local/order");
+  assert.equal(answer.found, true);
+  assert.equal(orderCard(converting(), answer.read, ORDER_ID).id, ORDER_ID);
+});
+
+// ---- which contract this order is paid to ---------------------------------------------------------
+
+test("a direct order is paid to the settler that holds it; a converting one to the executor", () => {
+  const config = converting();
+  const direct = settlementTarget(orderCard(config, readDirect(), ORDER_ID), config);
+  assert.equal(direct.kind, "direct");
+  assert.equal(direct.settler, "0x67d269191c92Caf3cD7723F116c85e6E9bf55933");
+  assert.equal(direct.assetIn, PAYOUT);
+  assert.equal(direct.amountIn, "1250000");
+  const market = settlementTarget(orderCard(config, readMarket(), SALE_ID), config);
+  assert.equal(market.kind, "market");
+  assert.equal(market.settler, "0x8562a445A32131bede8832fA66De2cc07fC83A6A");
+  assert.equal(market.assetIn, SPEND);
+});
+
+test("a converting order with no settler of its own falls back to the deployment's executor", () => {
+  const config = converting();
+  const card = orderCard(config, readMarket({ settler: null }), SALE_ID);
+  assert.equal(settlementTarget(card, config).settler, config.contracts.executor);
+});
+
+test("an order that says neither where nor in what is never sent as a payment", () => {
+  const t = settlementTarget(null, {});
+  assert.equal(t.settler, null);
+  assert.equal(t.assetIn, null);
+  assert.equal(t.amountIn, null);
+});
+
+// ---- the blockers answer for the order on screen, not for the stored one -------------------------
+
+test("a live order is not blocked by the stored record's own expiry", () => {
+  // Seen against the running companion: the stored record's deadline had passed while the order the
+  // link named was still open. Asking the record would disable the button on a payable order.
+  const config = converting(); // its record expires at 1789086612
+  const open = readDirect(); // the chain's order runs to 1789243437
+  const card = orderCard(config, open, ORDER_ID);
+  const now = 1789243018; // after the record's deadline, before the order's
+  const stale = computeBlockers({ config, record: config.record, connectedAddress: BUYER, walletChainId: 31337, now });
+  assert.ok(stale.reasons.includes("ORDER_EXPIRED"), "the stored record is the stale one");
+  const live = computeBlockers({ config, record: blockerSubject(card, config.record), connectedAddress: BUYER, walletChainId: 31337, now });
+  assert.equal(live.reasons.includes("ORDER_EXPIRED"), false);
+  assert.equal(live.allowed, true);
+});
+
+test("the payer the order names is the one the blockers check, not the record's", () => {
+  const config = converting();
+  const other = "0x1111111111111111111111111111111111111111";
+  const card = orderCard(config, readDirect({ order: { ...readDirect().order, payer: other } }), ORDER_ID);
+  const subject = blockerSubject(card, config.record);
+  assert.equal(subject.order.payer, other);
+  const now = 1789243018;
+  assert.ok(computeBlockers({ config, record: subject, connectedAddress: BUYER, walletChainId: 31337, now }).reasons.includes("WRONG_PAYER"));
+  assert.equal(computeBlockers({ config, record: subject, connectedAddress: other, walletChainId: 31337, now }).reasons.includes("WRONG_PAYER"), false);
+});
+
+test("the register is the one thing carried over from the record, because it is not per-order", () => {
+  const config = converting();
+  config.record.terminal = { name: "chair-1.terminals.freshcuts.unica.eth", statusAtAdmission: "REVOKED" };
+  const card = orderCard(config, readDirect(), ORDER_ID);
+  const now = 1789243018;
+  assert.ok(computeBlockers({ config, record: blockerSubject(card, config.record), connectedAddress: BUYER, walletChainId: 31337, now }).reasons.includes("TERMINAL_REVOKED"));
+});
