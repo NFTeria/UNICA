@@ -41,9 +41,17 @@ stage() { # $1 sig, $2 sender, $3 prefix
 }
 gas() { grep -E "Estimated total gas used|Estimated amount required" "$OUT/$1.log" | sed 's/^/    /'; }
 
+if [ -n "${UNICA_IDENTITY_AUTHORITY:-}${UNICA_ENSV2_RESOLVER:-}" ]; then
+  vy=$(vyper --version | head -1); case "$vy" in 0.4.3*) ;; *) fail "vyper 0.4.3 required exactly (ruling H8); found $vy" ;; esac
+  IDENTITY_TOKEN_BYTECODE=$(vyper -p vy/src -f bytecode vy/src/art/identity_token.vy); export IDENTITY_TOKEN_BYTECODE
+  echo "identity token bytecode: $(( (${#IDENTITY_TOKEN_BYTECODE} - 2) / 2 )) bytes (vyper $vy), so stage A deploys the badge as it will on Sepolia"
+fi
 echo "== stage A (infrastructure)"
 A=$(stage stageA "$DEPLOYER" STAGE_A); echo "  {$A}"; gas stageA
-eval "$(node -e 'const o=JSON.parse("{"+process.argv[1]+"}"); console.log(`export UNICA_FACTORY=${o.factory} UNICA_REGISTRY=${o.registry} UNICA_ORACLE_ADAPTER=${o.oracleAdapter} UNICA_POLICY_RECEIVER=${o.policyReceiver} UNICA_ADMISSION=${o.terminalAdmission}`)' "$A")"
+eval "$(node -e 'const o=JSON.parse("{"+process.argv[1]+"}"); console.log(`export UNICA_FACTORY=${o.factory} UNICA_REGISTRY=${o.registry} UNICA_ORACLE_ADAPTER=${o.oracleAdapter} UNICA_POLICY_RECEIVER=${o.policyReceiver} UNICA_ADMISSION=${o.terminalAdmission} UNICA_IDENTITY_AUTHORITY=${o.identityAuthority} UNICA_IDENTITY_TOKEN=${o.identityToken}`)' "$A")"
+for v in UNICA_ORACLE_ADAPTER UNICA_POLICY_RECEIVER UNICA_ADMISSION UNICA_IDENTITY_AUTHORITY UNICA_IDENTITY_TOKEN; do
+  [ "${!v}" = "0x0000000000000000000000000000000000000000" ] && unset "$v"   # not deployed on this chain: absent, never a zero address
+done
 
 echo "== stage B (propose the market)"
 B=$(stage stageB "$DEPLOYER" STAGE_B); echo "  {$B}"; gas stageB
@@ -60,7 +68,8 @@ FOUNDRY_BROADCAST="$OUT/broadcast" forge script script/unica-v4/DeployPublic.s.s
   --rpc-url "$LOCAL" --sender "$DEPLOYER" -vv 2>&1 | grep -o 'READBACK:.*' | sed 's/^READBACK://' | sed 's/,$//' | sed 's/^/  /'
 
 echo "== manifest, written from the fork's state the way it will be from Sepolia's"
-{ cat "$CONFIG"; echo "UNICA_FACTORY=$UNICA_FACTORY"; echo "UNICA_REGISTRY=$UNICA_REGISTRY"; echo "UNICA_MARKET_ID=$UNICA_MARKET_ID"; } >"$OUT/config-after-stages.env"
+{ cat "$CONFIG"; echo "UNICA_FACTORY=$UNICA_FACTORY"; echo "UNICA_REGISTRY=$UNICA_REGISTRY"; echo "UNICA_MARKET_ID=$UNICA_MARKET_ID"
+  for v in UNICA_ORACLE_ADAPTER UNICA_POLICY_RECEIVER UNICA_ADMISSION UNICA_IDENTITY_AUTHORITY UNICA_IDENTITY_TOKEN; do [ -n "${!v:-}" ] && echo "$v=${!v}"; done; } >"$OUT/config-after-stages.env"
 bash script/unica-v4/manifest.sh "$LOCAL" "$OUT/config-after-stages.env" "$OUT/11155111.rehearsal.json"
 node -e 'const m=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log("  contracts:", Object.keys(m.contracts).join(", ")); console.log("  market:", m.market.marketId, "status", m.market.status, "demonstrationOnly", m.market.demonstrationOnly)' "$OUT/11155111.rehearsal.json"
 

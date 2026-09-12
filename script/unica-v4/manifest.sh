@@ -44,7 +44,7 @@ HEAD_BLOCK=$(cast block-number --rpc-url "$RPC")
 
 codeOf() { local c; c=$(cast code "$1" --rpc-url "$RPC"); test "$c" != "0x" || fail "$2 at $1 has no code"; printf '{"address":"%s","codeHash":"%s","codeSize":%s}' "$1" "$(cast keccak "$c")" "$(( (${#c} - 2) / 2 ))"; }
 CONTRACTS="\"poolManager\":$(codeOf "$UNICA_POOL_MANAGER" poolManager),\"assetToken\":$(codeOf "$UNICA_ASSET" asset),\"payoutToken\":$(codeOf "$UNICA_PAYOUT" payout),\"factory\":$(codeOf "$UNICA_FACTORY" factory),\"registry\":$(codeOf "$UNICA_REGISTRY" registry),\"hook\":$(codeOf "$HOOK_ADDR" hook),\"executor\":$(codeOf "$EXEC_ADDR" executor)"
-for opt in UNICA_ORACLE_ADAPTER:oracleAdapter UNICA_POLICY_RECEIVER:policyReceiver UNICA_ADMISSION:terminalAdmission UNICA_IDENTITY_TOKEN:identityToken UNICA_FORWARDER:forwarderFixture UNICA_IDENTITY_AUTHORITY:identityFixture; do
+for opt in UNICA_ORACLE_ADAPTER:oracleAdapter UNICA_POLICY_RECEIVER:policyReceiver UNICA_ADMISSION:terminalAdmission UNICA_IDENTITY_TOKEN:identityToken UNICA_FORWARDER:forwarderFixture UNICA_IDENTITY_AUTHORITY:identityAuthority UNICA_ENSV2_RESOLVER:ensV2Resolver; do
   var=${opt%%:*}; name=${opt##*:}; val=${!var:-}
   if [ -n "$val" ] && [ "$val" != "0x0000000000000000000000000000000000000000" ]; then CONTRACTS="$CONTRACTS,\"$name\":$(codeOf "$val" "$name")"; fi
 done
@@ -71,7 +71,7 @@ const manifest = {
     assetDecimals: m.assetDecimals, payoutDecimals: m.payoutDecimals, assetIsCurrency0: m.assetIsCurrency0,
   },
   accounts: {admin: env.UNICA_ADMIN, pauser: env.UNICA_PAUSER || null, deployer: env.DEPLOYER},
-  identity: env.UNICA_IDENTITY_AUTHORITY ? {authority: env.UNICA_IDENTITY_AUTHORITY, ensDeploymentId: env.UNICA_ENS_DEPLOYMENT_ID || null, rendererVersion: env.UNICA_RENDERER_VERSION || null, terminalStatusKey: env.UNICA_TERMINAL_STATUS_KEY || null} : {note: "no identity authority configured; terminal admission is not deployed on this chain"},
+  identity: env.UNICA_IDENTITY_AUTHORITY ? {authority: env.UNICA_IDENTITY_AUTHORITY, authorityKind: env.UNICA_ENSV2_RESOLVER ? "EnsV2ResolverAuthority over the chain's ENSv2 permissioned resolver" : "pinned", ensV2Resolver: env.UNICA_ENSV2_RESOLVER || null, ensDeploymentId: env.UNICA_ENS_DEPLOYMENT_ID || null, terminalAdmission: env.UNICA_ADMISSION || null, identityToken: env.UNICA_IDENTITY_TOKEN || null, rendererVersion: env.UNICA_RENDERER_VERSION || null, terminalStatusKey: env.UNICA_TERMINAL_STATUS_KEY || null} : {note: "no identity authority configured; terminal admission is not deployed on this chain"},
   policy: env.UNICA_FORWARDER ? {forwarder: env.UNICA_FORWARDER, receiver: env.UNICA_POLICY_RECEIVER || null, workflowId: env.UNICA_WORKFLOW_ID || null} : {note: "no confidential-policy receiver configured on this chain"},
 };
 fs.writeFileSync(out, JSON.stringify(manifest, null, 2) + "\n");
