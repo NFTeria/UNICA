@@ -1,31 +1,72 @@
+# integrations/graph/schema.graphql — what this subgraph stores, and nothing more.
+#
+# Two entities, because a UNICA v5 deployment settles a payer's money along exactly two paths and
+# sells catalogue products along a third. The field names here are not a design of their own: they
+# are the names apps/web/assets/storefront.js `graphQueryFor` already asks for, so the receipt page
+# reads one shape whichever path paid.
+#
+# NOTHING IS DERIVED. Every value below is copied from the log that carried it, or from the block
+# that log sat in. No arithmetic, no conversion, no price. A field the event does not carry is left
+# null rather than filled with a zero that would read like an answer.
+
 """
-One settlement receipt, schema v1, exactly as the hook emitted it plus the indexing context.
-Immutable: a receipt is never edited, and exactly one exists per (network, hook, orderId).
-Field names follow the emitted ABI (docs/RECEIPT-SCHEMA.md in the repository).
+One settlement, from either of the two paths that move a payer's money to a merchant: the Uniswap
+v4 market hook (`kind: "market"`, a swap whose output is delivered) and the direct settler
+(`kind: "direct"`, the same asset in and out). `id` is the transaction hash concatenated with the
+log index, so two receipts in one transaction are two rows.
 """
 type Settlement @entity(immutable: true) {
   "transaction hash ++ log index, unique on one network"
   id: Bytes!
-  "the network this subgraph indexes, from the data source"
-  network: String!
-  schemaVersion: Int!
   orderId: Bytes!
-  poolId: Bytes!
-  payer: Bytes!
+  "the merchant the money was delivered to"
   recipient: Bytes!
-  "address(0) is native ETH"
-  currencyIn: Bytes!
-  currencyOut: Bytes!
-  amountIn: BigInt!
-  amountOut: BigInt!
-  fee: BigInt!
-  "reserved; zero until the executor applies a policy or benefit"
-  policyId: Bytes!
-  executor: Bytes!
-  "the emitter of the receipt"
-  hook: Bytes!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
+  payer: Bytes!
+  "what the merchant received: `currencyOut` on the market path, `asset` on the direct one"
+  asset: Bytes!
+  "how much of `asset` arrived: `amountOut` on the market path, `amount` on the direct one"
+  amount: BigInt!
+  """
+  Which path settled this: "market" or "direct". Written by the handler from which data source's
+  log it was, never from anything inside the log.
+  """
+  kind: String!
+  "the block's timestamp, except on the direct path, where the receipt carries its own `settledAt`"
+  settledAt: BigInt!
   transactionHash: Bytes!
-  logIndex: BigInt!
+  blockNumber: BigInt!
+
+  # ---- the market path only; null on a direct settlement, which has no market ----
+  marketId: Bytes
+  "what the payer put in, in `currencyIn` units"
+  amountIn: BigInt
+  currencyIn: Bytes
+  "as the hook emitted it — a market running without an oracle bound says so here"
+  demonstrationOnly: Boolean
+}
+
+"""
+One catalogue sale, exactly as `ProductCatalog.ProductSold` emitted it. `id` is that event's own
+`saleId`, unique across every sale a catalogue has ever made, so the same buyer buying the same
+permanent product twice is two rows.
+"""
+type ProductSale @entity(immutable: true) {
+  "the sale id the catalogue emitted, as hex"
+  id: Bytes!
+  productId: BigInt!
+  buyer: Bytes!
+  "the account that listed the product"
+  seller: Bytes!
+  "the wallet the money arrived at; the seller's own address unless the listing named another"
+  payout: Bytes!
+  asset: Bytes!
+  amount: BigInt!
+  "the product's kind as the event emitted it: 0 ONE_OFF, 1 RECURRING, 2 PERMANENT"
+  kind: Int!
+  "the date a RECURRING buyer is now covered to; 0 for the other two kinds, which cover no time"
+  paidThrough: BigInt!
+  "the block's timestamp — `ProductSold` carries no time of its own"
+  settledAt: BigInt!
+  transactionHash: Bytes!
+  blockNumber: BigInt!
 }
