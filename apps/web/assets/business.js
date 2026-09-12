@@ -28,7 +28,7 @@ import { fillAdvanced, loadConfig, say, shortId } from "./local.js";
 import { listRegisters, registerStatusText, revokeRegisterOnChain } from "./local-join.js";
 import { readBusiness, silentReconnect } from "./session.js";
 import { shopPath } from "./shop-resolve.js";
-import { connectWallet, discoverProviders, rpcRequest } from "./wallet.js";
+import { rpcRequest } from "./wallet.js";
 import { encodeCall } from "./abi.js";
 
 // ---- the day, and the words for a moment in it --------------------------------------------------
@@ -467,10 +467,10 @@ async function overview(config, session, business, wallet, prefix) {
   await renderShopShare(business, session, prefix);
   await renderKpis(config, wallet, payout);
   await renderHoldings(config, readOnlySession(config), wallet);
-  wireLookup(config);
+  wireLookup(config, wallet);
   wireLogout();
   const registers = await renderRegisters(config, business);
-  wireRevoke(config, registers);
+  wireRevoke(config, session, registers);
   fillAdvanced(config, {});
 }
 
@@ -556,7 +556,7 @@ async function renderHoldings(config, session, owner) {
   say("holdings-said", `${read} of ${rows.length} read for ${shortId(owner)}.`);
 }
 
-function wireLookup(config) {
+function wireLookup(config, mine) {
   const button = document.getElementById("holdings-read");
   const box = document.getElementById("holdings-address");
   const connect = document.getElementById("holdings-connect");
@@ -583,18 +583,19 @@ function wireLookup(config) {
       }
     });
   }
+  // "Read my wallet" goes back to the wallet this screen is ALREADY signed in as. It deliberately
+  // asks nothing: a second approval prompt on a page whose whole subject is the signed-in wallet is
+  // a second sign-in, and this product has exactly one — the control in the header.
   if (connect) {
     connect.addEventListener("click", async () => {
+      if (!isAddress(mine)) {
+        say("holdings-said", "This screen has not read your wallet yet.");
+        return;
+      }
       connect.disabled = true;
       try {
-        const providers = await discoverProviders(window);
-        const result = await connectWallet({ config, providers });
-        if (result.blocked) {
-          say("holdings-said", result.blocked);
-          return;
-        }
-        if (box) box.value = result.session.address;
-        await renderHoldings(config, result.session, result.session.address);
+        if (box) box.value = mine;
+        await renderHoldings(config, readOnlySession(config), mine);
       } catch (e) {
         say("holdings-said", `Could not read that wallet: ${e.message}`);
       } finally {
@@ -646,7 +647,7 @@ async function renderRegisters(config, business) {
   }
 }
 
-function wireRevoke(config, registers) {
+function wireRevoke(config, session, registers) {
   const button = document.getElementById("revoke-register");
   if (!button) return;
   const active = registers.filter((r) => String(r.status).toLowerCase() === "active");
@@ -660,14 +661,10 @@ function wireRevoke(config, registers) {
   button.addEventListener("click", async () => {
     button.disabled = true;
     try {
-      const providers = await discoverProviders(window);
-      const result = await connectWallet({ config, providers });
-      if (result.blocked) {
-        say("registers-said", result.blocked);
-        return;
-      }
+      // The session this screen was opened with, not a fresh approval: the wallet already signed in
+      // is the wallet that owns this register, and asking again would be a second sign-in.
       await revokeRegisterOnChain({
-        session: result.session,
+        session,
         identity: config.identity,
         statusKey: config.terminalStatusKey ?? "com.unica.terminal-status",
         register: target,
