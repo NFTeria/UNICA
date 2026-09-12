@@ -39,12 +39,92 @@ import { canAuthorizePayment, canInitiateSale, paymentStatus } from "../../../to
 import { keccak256, toHex } from "../../../web/ensv2/keccak.mjs";
 import { PRACTICE_MODE_LABEL, connectWallet, discoverProviders, networkName, rpcRequest, waitForReceipt } from "./wallet.js";
 import { fillAdvanced, loadConfig, loadEvidence, say as setText } from "./local.js";
-const ORDER_URL = "/local/order";
 import { chooseSettlementRoute, routeLabel, validateEnvironment } from "./product.js";
 import { decodeString, decodeUint, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
 import { businessAccent, businessStyle } from "./brand.js";
-import { businessIdentity, orderCard, paidThroughText, productCard, readPayTarget, shopCard, shortAddress, verdict, orderCardFromRead } from "./storefront.js";
+import {
+  NOT_FOUND_TEXT,
+  businessIdentity,
+  checkoutVerdict,
+  orderCard,
+  paidThroughText,
+  productCard,
+  readPayTarget,
+  shopCard,
+  shortAddress,
+  verdict,
+} from "./storefront.js";
+
+/** The companion's own path for one order by id. Relative, so it is whatever host served the page. */
+export const ORDER_URL = "/local/order";
+
+/**
+ * Ask the companion for one order by its id.
+ *
+ * Three outcomes are kept apart deliberately. A body means the chain answered and this is the
+ * order. `found: false, reachable: true` is a 404 — the chain looked and has no such order, which
+ * is a fact about the link. `reachable: false` means nobody answered at all, which is a fact about
+ * the connection and must never be reported as though the order did not exist.
+ */
+export async function readOrder(orderId, fetchImpl = globalThis.fetch) {
+  if (!orderId) return { found: false, reachable: true, read: null };
+  try {
+    const res = await fetchImpl(`${ORDER_URL}?id=${encodeURIComponent(orderId)}`);
+    if (res.status === 404 || res.status === 400) return { found: false, reachable: true, read: null };
+    if (!res.ok) return { found: false, reachable: false, read: null };
+    return { found: true, reachable: true, read: await res.json() };
+  } catch (e) {
+    return { found: false, reachable: false, read: null, error: String(e?.message ?? e) };
+  }
+}
+
+/**
+ * Which contract this order is paid to, and in what.
+ *
+ * A direct sale is held by the direct settler the chain named for it; a converting one is held by
+ * the market executor. Both come off the order itself — `settler` is what answered for this id —
+ * and the deployment's executor is only a fallback for a converting order whose read did not carry
+ * one. The contract is never guessed from the kind alone, because paying the wrong settler moves a
+ * customer's money to a contract that knows nothing about their order.
+ */
+export function settlementTarget(card, config = {}) {
+  const executor = config.contracts?.executor ?? config.manifest?.contracts?.executor?.address ?? null;
+  const direct = config.contracts?.directSettlement ?? null;
+  const settler = card?.settler ?? (card?.orderKind === "market" ? executor : direct) ?? null;
+  return {
+    settler,
+    assetIn: card?.assetIn?.address ?? null,
+    amountIn: card?.amountIn ?? null,
+    kind: card?.orderKind ?? null,
+  };
+}
+
+/**
+ * What the blockers are allowed to ask about: the order ON SCREEN, never the stored record.
+ *
+ * The record is a snapshot of one particular sale, and its payer and deadline belong to that sale
+ * alone. Checking a live order against them gates this payment on a stranger's terms — an expiry
+ * that passed days ago disables the button on an order that is still open, and a payer that does
+ * not match refuses the very customer the order was made for. Only the register is carried over,
+ * because a revoked register is a fact about the deployment rather than about one order.
+ */
+export function blockerSubject(card, record = null) {
+  return { order: { payer: card?.payer ?? null, expiry: card?.expiry ?? null }, terminal: record?.terminal ?? null };
+}
+
+/** True when `owner` has not already allowed `spender` at least `amount` of `asset`. */
+async function allowanceShort(config, asset, owner, spender, amount) {
+  try {
+    const data = encodeCall("allowance(address,address)", [owner, spender]);
+    const current = BigInt(decodeUint(await rpcRequest(config.rpc, "eth_call", [{ to: asset, data }, "latest"])));
+    return current < BigInt(amount);
+  } catch {
+    // The allowance could not be read. Approve rather than assume, so the payment is not refused
+    // by a spender that was never permitted.
+    return true;
+  }
+}
 
 // ---- labels ---------------------------------------------------------------------------------------
 
@@ -530,24 +610,14 @@ async function readPaidThrough(config, productId, buyer) {
 async function renderOrder(config, orderId) {
   setHidden("co-shop", true);
   const record = config.record ?? null;
-  let card = orderCard(config);
-  if (!card || !orderId || String(card.id ?? "").toLowerCase() !== String(orderId).toLowerCase()) {
-    // Not the record's order: ask the chain for this id, through the companion, and build the card
-    // from what it answers. A link is a claim; the chain is the answer.
-    card = null;
-    if (orderId) {
-      try {
-        const res = await fetch(`${ORDER_URL}?id=${encodeURIComponent(orderId)}`);
-        if (res.ok) card = orderCardFromRead(config, await res.json());
-      } catch {
-        card = null;
-      }
-    }
-    if (!card) {
-      setText("co-status", "This payment could not be found.");
-      setText("co-why", "Nothing has been read for this link.");
-      return;
-    }
+  // The link names an id; the chain answers for it. The stored record is consulted only by
+  // orderCard, and only when this read came back empty AND the record is about this very id.
+  const answer = await readOrder(orderId);
+  const card = orderCard(config, answer.read, orderId);
+  if (!card) {
+    setText("co-status", NOT_FOUND_TEXT);
+    setText("co-why", answer.reachable ? "No order with this identifier." : "The network could not be reached.");
+    return;
   }
   // The chain's clock, read once: every deadline on this screen is judged and counted down by it.
   let chainSkew = 0;
@@ -571,7 +641,9 @@ async function renderOrder(config, orderId) {
   setText("order-input", card.pay.text ?? "—");
   setText("order-max", card.pay.text ? `${card.pay.text} — this is the exact amount, and it cannot rise` : "—");
   setText("order-output", card.receive.text ? `at least ${card.receive.text}` : "—");
-  setText("order-route", conversionLine(record, config));
+  // The route belongs to the order on screen. Reading it off the stored record would describe a
+  // different sale whenever this card came from the chain.
+  setText("order-route", card.converts ? "Converted when it is paid." : "Paid in the asset it is priced in.");
   setText("order-fees", formatFeesLine(record?.evidence?.receipt));
   setText("order-id", card.id ?? "—");
   const expiry = document.getElementById("order-expiry");
@@ -584,17 +656,14 @@ async function renderOrder(config, orderId) {
   }
 
   let session = null;
+  let spoken = checkoutVerdict({ evidence: null, expiry: card.expiry });
   const payBtn = document.getElementById("co-pay");
-  // The blockers judge THIS card, whether it came from the record or from the chain by id, and they
-  // judge it by the chain's clock: a local testnet's time can sit hours from the wall clock, and an
-  // order's deadline lives on the chain, not in this browser.
-  const fromRecord = Boolean(record?.order?.id) && String(record.order.id).toLowerCase() === String(card.id ?? "").toLowerCase();
-  const judged = fromRecord ? record : { order: { id: card.id, expiry: card.expiry, payer: card.payer }, terminal: null };
+  const asRecord = blockerSubject(card, record);
   const refresh = () => {
     const now = Math.floor(Date.now() / 1000) + chainSkew;
     const { allowed, reasons } = computeBlockers({
       config,
-      record: judged,
+      record: asRecord,
       connectedAddress: session?.address ?? null,
       walletChainId: session?.chainId ?? null,
       now,
@@ -612,39 +681,65 @@ async function renderOrder(config, orderId) {
     const expired = reasons.includes("ORDER_EXPIRED");
     setHidden("co-expired", !expired);
     if (expired) setText("co-expired", REASON_TEXT.ORDER_EXPIRED);
-    const settled = Boolean(card.settledTx);
-    setHidden("co-settled", !settled);
-    if (settled) setText("co-settled", "This payment has already been made.");
+    const done = spoken.status === "verified" || card.settled;
+    setHidden("co-settled", !done);
+    if (done) setText("co-settled", "This payment has already been made.");
     if (payBtn) {
-      payBtn.disabled = !allowed || settled;
+      // One button. It opens only for the order's own payer, on the right network, while the
+      // chain still says the order is open.
+      payBtn.disabled = !allowed || done || !spoken.payable;
       setText(
         "co-why",
-        settled
+        done
           ? "This payment has already been made."
-          : allowed
-            ? session
-              ? "Your wallet confirms the amount."
-              : "Your wallet opens when you press it."
-            : "One of the checks above has not passed.",
+          : spoken.status === "refused"
+            ? "This payment was refused."
+            : spoken.status === "expired"
+              ? "This payment expired before it was made."
+              : allowed
+                ? session
+                  ? "Your wallet confirms the amount."
+                  : "Your wallet opens when you press it."
+                : "One of the checks above has not passed.",
       );
     }
-    return allowed;
+    return allowed && spoken.payable && !done;
   };
   refresh();
 
+  /** One reading of the payment check, turned into the one word this screen is allowed to say. */
   const check = async () => {
     const evidence = await loadEvidence(card.id);
     fillAdvanced(config, { order: card.id, tx: card.settledTx, reasons: evidence?.reasonCodes ?? null });
-    const spoken = verdict(evidence?.decision ?? null);
-    setText("co-status", spoken.word === "Paid" ? statusText("PAID") : decisionText(evidence?.decision));
+    spoken = checkoutVerdict({ evidence, expiry: card.expiry });
+    setText("co-status", spoken.word);
+    const pill = document.getElementById("co-status");
+    if (pill) pill.dataset.status = spoken.status;
+    refresh();
     return spoken;
   };
+
+  // Keep asking while the answer can still change. A settled or refused order is final, and an
+  // expired one cannot become anything else, so the poll stops rather than hammering the companion.
+  let polling = null;
+  const poll = () => {
+    if (polling) return;
+    polling = setInterval(async () => {
+      const now = await check().catch(() => null);
+      if (!now || now.status === "verified" || now.status === "refused" || now.status === "expired") {
+        clearInterval(polling);
+        polling = null;
+      }
+    }, 4000);
+  };
+
+  await check().catch(() => {});
+  poll();
 
   if (card.settledTx) {
     const link = document.getElementById("co-receipt-link");
     if (link) link.setAttribute("href", `../receipt/?chain=${config.chainId}&tx=${card.settledTx}`);
     setHidden("co-after", false);
-    check().catch(() => {});
   }
   const recheck = document.getElementById("co-recheck");
   if (recheck) recheck.addEventListener("click", () => check().catch((e) => setText("co-status", `Could not check again: ${e.message}`)));
@@ -664,13 +759,15 @@ async function renderOrder(config, orderId) {
         if (!refresh()) return;
         payBtn.disabled = true;
         setText("co-status", statusText("SUBMITTED"));
-        // Pay the settler that holds this order, in the asset it is written in: the market executor
-        // for a converting sale, the direct settler for a same-asset one. Never a guessed contract.
-        const settler = card.settler ?? config.contracts?.executor ?? record?.manifest?.contracts?.executor?.address;
-        const assetIn = card.assetIn?.address ?? record?.order?.inputAsset;
-        const amountIn = card.amountIn ?? record?.order?.inputAmount;
-        if (!settler || !assetIn || amountIn === null || amountIn === undefined) throw new Error("This payment does not say where it is paid or in what.");
-        await session.send({ to: assetIn, data: encodeApproveCalldata(settler, amountIn) });
+        const { settler, assetIn, amountIn } = settlementTarget(card, config);
+        if (!settler || !assetIn || amountIn === null || amountIn === undefined) {
+          throw new Error("This payment does not say where it is paid or in what.");
+        }
+        // Approve only when the allowance is actually short. A second approval of an amount the
+        // spender already has costs the customer a confirmation and a fee for nothing.
+        if (await allowanceShort(config, assetIn, session.address, settler, amountIn)) {
+          await session.send({ to: assetIn, data: encodeApproveCalldata(settler, amountIn) });
+        }
         const hash = await session.send({ to: settler, data: encodePayCalldata(card.id) });
         setText("co-status", statusText("PENDING"));
         const receipt = await waitForReceipt(session, hash);

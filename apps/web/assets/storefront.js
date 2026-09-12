@@ -148,15 +148,36 @@ const assetOf = (config, address) =>
 
 const amountText = (units, asset) => (units === null || units === undefined ? null : formatAsset(units, asset ?? {}));
 
+/** What `order.status` means on the wire: 1 open, 2 paying, 3 settled. */
+export const ORDER_STATUS = { 1: "open", 2: "paying", 3: "settled" };
+
+/** The status word for a card, or "unknown" for a number this product does not define. */
+export function orderStatusOf(status) {
+  return ORDER_STATUS[Number(status)] ?? "unknown";
+}
+
 /**
- * An order, as a card. One line, one total, what the customer spends and what the business is
- * guaranteed. `converts` is true only when the two assets genuinely differ, so the Uniswap mark
- * appears on a conversion and never on a same-asset sale.
+ * An order, as a card — one line, one total, what the customer spends and what the business is
+ * guaranteed to receive.
+ *
+ * `read` is the body of GET /local/order?id=<id>, and it is the authoritative source. A payment
+ * link only CLAIMS an id; the chain is what answers for it. So the everyday path is: the link
+ * names an id, the id is asked of the chain, and this shapes the chain's answer — the settler
+ * that holds the order, the asset it is written in, the business it pays.
+ *
+ * `config.record` is a STORED snapshot of one single order. It is consulted only when the
+ * companion did not answer at all (`read === null`) AND that snapshot is about the very id being
+ * asked for. Without the id check, a link to ANY other order would silently render the stored
+ * one, and the person paying would read one order's business, amount and expiry while paying
+ * another's. That is the worst thing this screen can do, so a record that does not match the
+ * requested id is no card at all rather than a plausible wrong one.
  */
-export function orderCard(config = {}) {
+export function orderCard(config = {}, read = null, orderId = null) {
+  if (read) return read.order ? cardFromRead(config, read) : null;
   const record = config.record ?? null;
   const order = record?.order ?? null;
   if (!order) return null;
+  if (!orderId || String(order.id ?? "").toLowerCase() !== String(orderId).toLowerCase()) return null;
   const spend = assetOf(config, order.inputAsset);
   const receive = assetOf(config, order.outputAsset);
   const converts = Boolean(
@@ -181,28 +202,34 @@ export function orderCard(config = {}) {
     settler: config.contracts?.executor ?? config.manifest?.contracts?.executor?.address ?? null,
     assetIn: spend,
     amountIn: order.inputAmount ?? null,
+    orderKind: converts ? "market" : "direct",
+    status: record?.settlement?.transactionHash ? "settled" : "open",
+    settled: Boolean(record?.settlement?.transactionHash),
   };
 }
 
 /**
- * An order read by its id from the companion (GET /local/order?id=), as the same card. This is the
- * everyday path: a payment link names an id, the id is asked of the chain, and the card is what the
- * chain answered — the settler that holds it, the asset it is paid in, the business it pays.
+ * The chain's own answer for one id, as the card. The order's KIND is what decides whether this is
+ * a conversion — not a comparison of the two asset addresses. A market order is routed through the
+ * pool whatever it is denominated in, so `kind` is the honest signal; comparing addresses would
+ * quietly drop the Uniswap attribution from a market order that happens to name one asset twice.
  */
-export function orderCardFromRead(config = {}, read = null) {
-  const o = read?.order ?? null;
-  if (!read || !o) return null;
+function cardFromRead(config, read) {
+  const o = read.order;
   const spend = read.assetIn ? { ...(assetOf(config, read.assetIn.address) ?? {}), ...read.assetIn } : null;
   const receive = read.assetOut ? { ...(assetOf(config, read.assetOut.address) ?? {}), ...read.assetOut } : null;
-  const converts = read.kind === "market" && Boolean(spend?.address && receive?.address) && spend.address.toLowerCase() !== receive.address.toLowerCase();
+  const converts = read.kind === "market";
   const priceChecked = Boolean(config.manifest?.market?.oracle?.enabled) && converts;
   const fallback = businessIdentity(config);
   const b = read.business ?? null;
   const label = b?.label ?? (b?.name ? String(b.name).split(".")[0] : null);
+  // The money arrives at the business's payout wallet; the order's recipient is the same address
+  // on a well-formed order, and is what we fall back to when the business could not be read.
   const identity = b
-    ? { payName: b.name ?? null, label, display: displayName(label), address: o.recipient ?? null, node: b.merchantNode ?? null, badge: fallback.badge }
+    ? { payName: b.name ?? null, label, display: displayName(label), address: b.payout ?? o.recipient ?? null, node: b.merchantNode ?? null, badge: fallback.badge }
     : { ...fallback, address: o.recipient ?? fallback.address };
-  const settled = Number(o.status) === 3;
+  const status = orderStatusOf(o.status);
+  const settled = status === "settled";
   return {
     kind: "order",
     id: read.orderId ?? null,
@@ -218,6 +245,8 @@ export function orderCardFromRead(config = {}, read = null) {
     expiry: o.deadline !== undefined && o.deadline !== null ? Number(o.deadline) : null,
     settledTx: null,
     settled,
+    status,
+    orderKind: read.kind ?? null,
     settler: read.settler ?? null,
     assetIn: spend,
     amountIn: o.amountIn ?? null,
@@ -311,6 +340,32 @@ export function verdict(decision) {
   if (d === "UNKNOWN") return { status: "unknown", word: "Unknown", mark: "?" };
   return { status: "pending", word: "Checking", mark: "\u25d0" };
 }
+
+/**
+ * What the CHECKOUT says about the order in front of the person, in one sentence each.
+ *
+ * The order of these branches is the whole point. A decision that was actually reached — VERIFIED
+ * or REFUSED — outranks the clock, because an order paid inside its deadline must keep reading
+ * "Paid" a minute later when the deadline passes; letting expiry win would turn a settled payment
+ * into "Expired" and send somebody to pay it twice. Only once no decision has been reached does an
+ * expired deadline matter, and only then does an order the chain says is still open invite a
+ * payment. Anything else is "Checking", because a check that has not answered is not a refusal.
+ */
+export function checkoutVerdict({ evidence = null, expiry = null, now = Math.floor(Date.now() / 1000) } = {}) {
+  const decision = evidence?.decision === null || evidence?.decision === undefined ? "" : String(evidence.decision).toUpperCase();
+  if (decision === "VERIFIED") return { status: "verified", word: "Paid", payable: false };
+  if (decision === "REFUSED") return { status: "refused", word: "Refused", payable: false };
+  const expired = expiry !== null && expiry !== undefined && Number.isFinite(Number(expiry)) && Number(now) >= Number(expiry);
+  if (expired) return { status: "expired", word: "Expired", payable: false };
+  const codes = (Array.isArray(evidence?.reasonCodes) ? evidence.reasonCodes : []).map((c) => String(c).toUpperCase());
+  if (decision === "UNKNOWN" && codes.includes("ORDER_OPEN")) {
+    return { status: "waiting", word: "Waiting for your payment", payable: true };
+  }
+  return { status: "pending", word: "Checking", payable: false };
+}
+
+/** The one sentence shown when the companion has no such order. A link is a claim; this is the answer. */
+export const NOT_FOUND_TEXT = "This payment could not be found.";
 
 /** The verdict for one payment out of /local/payments, matched on its transaction or its sale. */
 export function verdictFromPayments(payments, { tx = null, orderId = null } = {}) {

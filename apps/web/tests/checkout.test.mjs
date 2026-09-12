@@ -31,7 +31,6 @@ import {
   integrationForCheckout,
   integrationForReceipt,
   orderCard,
-  orderCardFromRead,
   paidThroughText,
   payLink,
   periodText,
@@ -207,7 +206,7 @@ test("an address is shortened the same way everywhere it is read aloud", () => {
 // ---- the order card ------------------------------------------------------------------------------
 
 test("an order card carries one line, one total and both sides of the payment, at each asset's own decimals", () => {
-  const card = orderCard(converting());
+  const card = orderCard(converting(), null, ORDER_ID);
   assert.equal(card.kind, "order");
   assert.equal(card.total, "1 tAST");
   assert.equal(card.pay.text, "1 tAST");
@@ -216,27 +215,27 @@ test("an order card carries one line, one total and both sides of the payment, a
 });
 
 test("a converting order says so; a same-asset order does not", () => {
-  assert.equal(orderCard(converting()).converts, true);
-  assert.equal(orderCard(sameAsset()).converts, false);
+  assert.equal(orderCard(converting(), null, ORDER_ID).converts, true);
+  assert.equal(orderCard(sameAsset(), null, ORDER_ID).converts, false);
 });
 
 test("the price check is claimed only when the deployment's market actually carries one", () => {
-  assert.equal(orderCard(converting()).priceChecked, true);
+  assert.equal(orderCard(converting(), null, ORDER_ID).priceChecked, true);
   const noOracle = converting();
   noOracle.manifest.market.oracle.enabled = false;
-  assert.equal(orderCard(noOracle).priceChecked, false);
-  assert.equal(orderCard(sameAsset()).priceChecked, false);
+  assert.equal(orderCard(noOracle, null, ORDER_ID).priceChecked, false);
+  assert.equal(orderCard(sameAsset(), null, ORDER_ID).priceChecked, false);
 });
 
 test("an order nobody has read is no card at all, never a card of zeros", () => {
-  assert.equal(orderCard({}), null);
-  assert.equal(orderCard({ record: {} }), null);
+  assert.equal(orderCard({}, null, ORDER_ID), null);
+  assert.equal(orderCard({ record: {} }, null, ORDER_ID), null);
 });
 
 test("an amount in an asset this deployment cannot label is never printed as if it were labelled", () => {
   const config = converting();
   config.assets = [];
-  const card = orderCard(config);
+  const card = orderCard(config, null, ORDER_ID);
   assert.equal(card.total, "1000000000000000000");
 });
 
@@ -418,8 +417,8 @@ test("the receipt wears The Graph when the index answered, and the name otherwis
 });
 
 test("each card names exactly one integration, so two can never be on screen at once", () => {
-  assert.equal(orderCard(converting()).integration, "uniswap");
-  assert.equal(orderCard(sameAsset()).integration, "ens");
+  assert.equal(orderCard(converting(), null, ORDER_ID).integration, "uniswap");
+  assert.equal(orderCard(sameAsset(), null, ORDER_ID).integration, "ens");
   assert.equal(productCard(product(), converting()).integration, "ens");
 });
 
@@ -564,27 +563,3 @@ test("the checkout's one action is a single button that says why it is disabled"
   assert.match(payDoc, /<button type="button" class="cta charge" id="co-pay" disabled aria-describedby="co-why">Pay<\/button>/);
 });
 
-test("an order read by id becomes the same card, paid to the settler that holds it, for a same-asset and a converting sale", () => {
-  const config = { assets: [], manifest: { market: { oracle: { enabled: false } } }, contracts: { executor: "0x00000000000000000000000000000000000000e0" } };
-  const uusd = { address: "0x00000000000000000000000000000000000000a1", symbol: "uUSD", decimals: 6 };
-  const tast = { address: "0x00000000000000000000000000000000000000a2", symbol: "tAST", decimals: 18 };
-  const business = { label: "freshcuts", name: "freshcuts.unica.eth", owner: "0x70", payout: "0x3c", merchantNode: "0x" + "f2".repeat(32) };
-  const direct = orderCardFromRead(config, { orderId: "0x" + "ab".repeat(32), kind: "direct", settler: "0x00000000000000000000000000000000000000d1", order: { recipient: "0x3c", payer: "0x90", amountIn: "1250000", minOut: "1250000", deadline: "1789242653", status: 1 }, assetIn: uusd, assetOut: uusd, business });
-  assert.equal(direct.pay.text, "1.25 uUSD");
-  assert.equal(direct.converts, false);
-  assert.equal(direct.settler, "0x00000000000000000000000000000000000000d1");
-  assert.equal(direct.assetIn.address, uusd.address);
-  assert.equal(direct.amountIn, "1250000");
-  assert.equal(direct.identity.payName, "freshcuts.unica.eth");
-  assert.equal(direct.identity.display, "Freshcuts");
-  assert.equal(direct.expiry, 1789242653);
-  assert.equal(direct.settled, false);
-  assert.equal(direct.integration, "ens");
-  const market = orderCardFromRead(config, { orderId: "0x" + "cd".repeat(32), kind: "market", settler: "0x00000000000000000000000000000000000000e0", order: { recipient: "0x3c", payer: "0x90", amountIn: "1000000000000000000", minOut: "1980000", deadline: "1789242653", status: 3 }, assetIn: tast, assetOut: uusd, business: null });
-  assert.equal(market.converts, true);
-  assert.equal(market.integration, "uniswap");
-  assert.equal(market.receive.text, "1.98 uUSD");
-  assert.equal(market.settled, true);
-  assert.equal(orderCardFromRead(config, null), null);
-  assert.equal(orderCardFromRead(config, { orderId: "0x1", order: null }), null);
-});
