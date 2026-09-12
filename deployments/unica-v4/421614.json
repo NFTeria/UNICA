@@ -2,11 +2,11 @@
   "environment": "PUBLIC_TESTNET_NO_VALUE",
   "designation": "TEST_ONLY_NO_VALUE",
   "chainId": 421614,
-  "commit": "9676228a7d40975d199ed78f895010a152cfde69",
-  "readAtBlock": 308177227,
+  "commit": "f1301cda63ff26e2635e2a1e3c7ba3b5e63ab0b0",
+  "readAtBlock": 308249111,
+  "releaseTag": "unica-v5/arbitrum-sepolia-1",
   "explorer": null,
   "deployedAtBlock": 308176664,
-  "releaseTag": "unica-v5/arbitrum-sepolia-1",
   "verification": {
     "status": "verified",
     "verifier": "etherscan (Arbitrum Sepolia)",
@@ -55,6 +55,11 @@
       "address": "0x79552Ad852304D04b246a85168D562B8eE244879",
       "codeHash": "0x26dc046ab0ae0fd14c9b180574eca432ec76db1729dd5ca8790c6fc210ec7a59",
       "codeSize": 17280
+    },
+    "productCatalog": {
+      "address": "0xb2467E28CA57987Cc4d58FD46902661D98bb951d",
+      "codeHash": "0xe48d502800b7e3d3c8e56e2c950c97cf781ccc0d3160c5c8723c85df62c2ce17",
+      "codeSize": 10741
     }
   },
   "market": {
@@ -96,6 +101,7 @@
     "pauser": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
     "deployer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73"
   },
+  "knownTokens": [],
   "identity": {
     "note": "no identity authority configured; terminal admission is not deployed on this chain"
   },
