@@ -1,0 +1,1004 @@
+// companion.mjs — the UNICA companion: the /local/ endpoints the screens read, and the static
+// artifact when a host asks this process to serve one. It is a MODULE, not a program: nothing here
+// reads the environment, binds a socket on import, or knows where it runs. Every value it needs —
+// the repository root, the built directory, the manifest, the node URL, the subgraph URL, the host
+// and port it will be reachable at, the log window — arrives as a parameter of `createCompanion`.
+//
+// WHY A MODULE AND NOT A SCRIPT. The same endpoints have to answer in two places: on the owner's
+// laptop, where `script/anvil/serve.sh` binds a socket and serves apps/web/out, and behind a public
+// host, where a serverless function is handed one request at a time and the static files are served
+// by the host's own edge. A script can only do the first. A module with one `handler(req, res)` does
+// both from the same bytes, so a rule that holds locally cannot quietly stop holding in public.
+//
+// WHAT NEVER REACHES A BROWSER. `rpcUrl` is the address of a node, and on a public host it usually
+// carries a key. It stays in this process: the config the screens read names `/local/rpc`, the pipe,
+// and every upstream message is passed through `redact` before it can be printed.
+//
+// No secret, no key material, no signing — every RPC call this makes or forwards is either a read or
+// a send the BROWSER issues from its own wallet.
+
+import { createServer } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve, extname, normalize, sep } from "node:path";
+
+import { authenticateDirectReceipt, authenticateProductSale, authenticateReceipt, decodeDirectOrder, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "../../tools/unica-evidence/index.mjs";
+import { identifyLog } from "../../tools/unica-evidence/codec.mjs";
+import { ExplorerLogs } from "../../tools/unica-evidence/explorer.mjs";
+import { selectorOf } from "../../tools/unica-sign/abi.mjs";
+import { keccak256, toHex } from "../../web/ensv2/keccak.mjs";
+const keccak256Hex = (s) => toHex(keccak256(new TextEncoder().encode(s))).replace(/^0x/, "");
+
+const RPC_PROXY_PATH = "/local/rpc";
+const ORDERS_SELECTOR_HEX = selectorOf("orders(bytes32)").replace(/^0x/, ""); // computed, never typed: the same view on both settlers
+const ORDER_SETTLED = 3; // UnicaMarketTypes.OrderStatus.Settled, frozen numbering
+const LOCAL_CHAIN = 31337;
+const PROJECTION_TTL_MS = 15_000;
+
+/** Never let an upstream message carry a URL to the browser: the node's address is not the page's business. */
+function redact(text) {
+  return String(text ?? "").replace(/https?:\/\/[^\s"'<>)]+/g, "<node>");
+}
+
+const BUSINESS_JOINED_TOPIC0 = "0x" + keccak256Hex("BusinessJoined(bytes32,address,string,address,bytes32,bytes32,uint256)");
+
+const LINEAGE_TOPIC0 = "0x" + keccak256Hex("LineageRegistered(bytes32,bytes32,string)");
+const ADDR_SELECTOR_HEX = selectorOf("addr(bytes32)").replace(/^0x/, "");
+const TEXT_SELECTOR_HEX = selectorOf("text(bytes32,string)").replace(/^0x/, "");
+const CONTROLLER_SELECTOR_HEX = selectorOf("isNamespaceController(bytes32,address)").replace(/^0x/, "");
+const word = (hex) => String(hex).replace(/^0x/, "").toLowerCase().padStart(64, "0");
+function encodeTextCall(node, key) {
+  const bytes = Buffer.from(String(key), "utf8");
+  const len = bytes.length;
+  const padded = bytes.toString("hex").padEnd(Math.ceil(len / 32) * 64, "0");
+  return "0x" + TEXT_SELECTOR_HEX + word(node) + word("40") + word(len.toString(16)) + padded;
+}
+function encodeControllerCall(node, account) {
+  return "0x" + CONTROLLER_SELECTOR_HEX + word(node) + word(account);
+}
+function decodeAddressReturn(hex) {
+  const h = String(hex ?? "").replace(/^0x/, "");
+  return h.length >= 64 ? "0x" + h.slice(24, 64) : null;
+}
+function decodeBoolReturn(hex) {
+  const h = String(hex ?? "").replace(/^0x/, "");
+  return h.length >= 64 && BigInt("0x" + h.slice(0, 64)) === 1n;
+}
+
+/** The request body up to `limit` bytes, or null when it is larger than that. */
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (c) => { size += c.length; if (size > limit) { resolve(null); req.destroy(); return; } chunks.push(c); });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".json": "application/json; charset=utf-8",
+};
+
+const HASH32 = /^0x[0-9a-fA-F]{64}$/;
+
+function readJsonSync(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+// @runtimeConfig-begin
+// The object GET /local/config.json answers with. Pure: manifest, record and already-read token
+// labels in, plain object out, so apps/web/tests/serve-config.test.mjs can run this exact function
+// without binding a socket or reaching a chain.
+//
+// The join screen needs the onboarding contract, the identity authority, the badge contract and
+// the parent every business joins under; each is null when the manifest does not carry it, and the
+// screen says the local setup has no onboarding contract yet rather than guessing.
+//
+// The business screens additionally need the payment assets, the pair that can convert between
+// them, and the direct settler. THREE RULES HOLD HERE, and each exists because the alternative
+// misleads somebody:
+//
+//   1. An asset is only listed when its own label was READ FROM THE CHAIN the manifest names.
+//      A manifest records addresses, not symbols or decimal places, and a screen that invents
+//      "6 decimals" for a token it never asked would show a customer the wrong amount. An asset
+//      whose label could not be read is listed with a null symbol, and every screen treats that
+//      as temporarily unavailable.
+//   2. `directSettlement` and `productCatalog` are null until those contracts are part of the
+//      deployment. Null is a real answer that the screens turn into "temporarily unavailable" for
+//      a same-asset payment, and into "this deployment has no list of things to sell yet" for the
+//      catalogue; a guessed address would be a promise the checkout could not keep.
+//   3. `marketPair.active` is true only at market status 4, ACTIVE, in the frozen status
+//      numbering (src/unica-v4/UnicaMarketTypes.sol). A proposed, seeded, paused or retired
+//      market cannot convert anything, so it must not be offered as if it could.
+function assetsFrom(manifest, tokenLabels = {}) {
+  const contracts = manifest?.contracts ?? {};
+  const wanted = [
+    ["payoutToken", "payout"],
+    ["assetToken", "customer"],
+  ];
+  const out = [];
+  for (const [key, role] of wanted) {
+    const address = contracts[key]?.address ?? null;
+    if (!address) continue;
+    const label = tokenLabels[String(address).toLowerCase()] ?? {};
+    out.push({
+      key,
+      role,
+      address,
+      symbol: label.symbol ?? null,
+      decimals: label.decimals === undefined || label.decimals === null ? null : Number(label.decimals),
+      labelled: Boolean(label.symbol) && label.decimals !== undefined && label.decimals !== null,
+    });
+  }
+  return out;
+}
+
+// What a wallet on this network may hold, as far as this deployment knows: the two payment assets
+// plus every address the manifest lists under `knownTokens`. The same rule 1 applies — a symbol
+// or a decimal count is never invented — and an address that appears twice is listed once. The
+// list is what the app KNOWS, never what the wallet has: a token the manifest does not name is
+// invisible here, and the dashboard says so instead of pretending to be an indexer.
+function holdingsFrom(manifest, tokenLabels = {}) {
+  const seen = new Set();
+  const out = [];
+  const add = (address, role) => {
+    if (!address) return;
+    const key = String(address).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    const label = tokenLabels[key] ?? {};
+    out.push({
+      role,
+      address,
+      symbol: label.symbol ?? null,
+      decimals: label.decimals === undefined || label.decimals === null ? null : Number(label.decimals),
+      labelled: Boolean(label.symbol) && label.decimals !== undefined && label.decimals !== null,
+    });
+  };
+  for (const a of assetsFrom(manifest, tokenLabels)) add(a.address, a.role);
+  for (const t of Array.isArray(manifest?.knownTokens) ? manifest.knownTokens : []) add(t?.address ?? null, "known");
+  return out;
+}
+
+// A name tree from the identity authority's own LineageRegistered records: every business is a child of the
+// parent name, its registers are the children of its "terminals" child. Pure: logs in, tree out.
+function lineageTree(logs = []) {
+  const children = new Map();
+  const labelOf = new Map();
+  for (const log of Array.isArray(logs) ? logs : []) {
+    const topics = Array.isArray(log?.topics) ? log.topics : [];
+    if (topics.length !== 3) continue;
+    const child = String(topics[1]).toLowerCase();
+    const parent = String(topics[2]).toLowerCase();
+    const raw = String(log.data ?? "0x").slice(2);
+    if (raw.length < 128) continue;
+    const offset = Number(BigInt("0x" + raw.slice(0, 64))) * 2;
+    const length = Number(BigInt("0x" + raw.slice(offset, offset + 64)));
+    const label = Buffer.from(raw.slice(offset + 64, offset + 64 + length * 2), "hex").toString("utf8");
+    labelOf.set(child, label);
+    if (!children.has(parent)) children.set(parent, []);
+    if (!children.get(parent).some((c) => c.node === child)) children.get(parent).push({ node: child, label });
+  }
+  return { children, labelOf };
+}
+
+/** The businesses under `parentNode` as the lineage records them: label, node, and the node of each one's terminals branch. */
+function businessesFromLineage(logs, parentNode, parentName = null) {
+  const { children } = lineageTree(logs);
+  const under = children.get(String(parentNode ?? "").toLowerCase()) ?? [];
+  return under.map(({ node, label }) => {
+    const terminals = (children.get(node) ?? []).find((c) => c.label === "terminals") ?? null;
+    const registers = terminals ? (children.get(terminals.node) ?? []).map((c) => ({ node: c.node, label: c.label })) : [];
+    return { label, name: parentName ? `${label}.${parentName}` : label, merchantNode: node, terminalsNode: terminals?.node ?? null, registers };
+  });
+}
+
+const MARKET_STATUS_ACTIVE = 4;
+
+function marketPairFrom(manifest) {
+  const market = manifest?.market;
+  if (!market) return null;
+  const status = Number(market.status ?? manifest?.seed?.status ?? 0);
+  return {
+    marketId: market.marketId ?? null,
+    currency0: market.poolKey?.currency0 ?? null,
+    currency1: market.poolKey?.currency1 ?? null,
+    poolId: market.poolId ?? null,
+    status,
+    active: status === MARKET_STATUS_ACTIVE,
+  };
+}
+
+// A record is served only when it belongs to the chain the manifest names. The practice-chain
+// record carries chainId 31337; served under a public-network manifest it would show yesterday's
+// local sale as if it had happened on that network. A record with no chainId at all is the older
+// local shape and is accepted for the local practice chain only.
+const LOCAL_PRACTICE_CHAIN_ID = 31337;
+function recordFor(manifest, record) {
+  if (!record || typeof record !== "object") return null;
+  const chain = Number(manifest?.chainId);
+  if (record.chainId === undefined || record.chainId === null) return chain === LOCAL_PRACTICE_CHAIN_ID ? record : null;
+  return Number(record.chainId) === chain ? record : null;
+}
+
+// `subgraphUrl` is a PARAMETER, not an environment read. This function used to reach into
+// process.env for it, which meant the one object every screen reads could say something different
+// depending on who started the process — and made this file impossible to run anywhere but a shell
+// that had been set up first. A public index either was named by whoever created this companion or
+// it was not, and null is the honest answer when it was not.
+function runtimeConfig(manifest, record, rpc, tokenLabels = {}, subgraphUrl = null) {
+  const contracts = manifest?.contracts ?? {};
+  const identity = manifest?.identity ?? {};
+  return {
+    rpc,
+    chainId: manifest?.chainId ?? null,
+    environment: manifest?.environment ?? null,
+    manifest,
+    record: recordFor(manifest, record),
+    assets: assetsFrom(manifest, tokenLabels),
+    holdings: holdingsFrom(manifest, tokenLabels),
+    marketPair: marketPairFrom(manifest),
+    contracts: {
+      directSettlement: contracts.directSettlement?.address ?? null,
+      terminalAdmission: contracts.terminalAdmission?.address ?? null,
+      marketAdmission: contracts.marketAdmission?.address ?? null,
+      directAdmission: contracts.directAdmission?.address ?? null,
+      productCatalog: contracts.productCatalog?.address ?? null,
+      executor: contracts.executor?.address ?? null,
+      hook: contracts.hook?.address ?? null,
+      registry: contracts.registry?.address ?? null,
+      oracleAdapter: contracts.oracleAdapter?.address ?? null,
+    },
+    graph: { url: subgraphUrl || null },
+    merchantOnboarding: contracts.merchantOnboarding?.address ?? null,
+    identity: contracts.identityFixture?.address ?? identity.authority ?? null,
+    identityToken: contracts.identityToken?.address ?? null,
+    parentNode: identity.parentNode ?? null,
+    parentName: identity.parentName ?? null,
+    terminalStatusKey: identity.terminalStatusKey ?? null,
+  };
+}
+// @runtimeConfig-end
+
+// @catalog-begin
+// The pure half of GET /local/catalog: what a page is allowed to ask for, and how the catalogue's
+// own answers are read. No import, no socket, no chain — apps/web/tests/serve-config.test.mjs
+// slices this region out of the heredoc and runs these exact functions against bytes a node
+// actually returned, so a decoder that drifts fails here rather than on a shop owner's screen.
+//
+// WHY THE STRUCT IS DECODED HERE AND NOT IN EVERY SCREEN. `products(uint256)` answers a tuple with
+// a dynamic string in it — the seller's own name for the thing they sell. Decoding it once means
+// every screen reads that name the same way; a second decoder somewhere else would be free to
+// disagree about where the name starts, and the disagreement would show up as a mangled word on a
+// price tag rather than as an error.
+//
+// AN ABSENT RESTRICTION IS NULL, NEVER A ZERO ADDRESS. `onlyBuyer` is `address(0)` on chain when
+// anyone may buy. Served verbatim, that is twenty zero bytes sitting in a field a screen would
+// print beside the words "reserved for", and a zero-looking address reads as a real one. It is
+// served as null, which is the fact: there is no named buyer.
+const CATALOG_KIND_NAMES = ["one-off", "recurring", "permanent"];
+const CATALOG_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const CATALOG_WHOLE_NUMBER = /^[0-9]{1,20}$/;
+const CATALOG_NOBODY = "0x0000000000000000000000000000000000000000";
+
+/** What the query string asked for: one seller's list, one product, or nothing this path serves. */
+function catalogQuery({ seller = null, product = null } = {}) {
+  if (seller !== null && product !== null) return { kind: "bad", error: "ask for one seller or one product, not both" };
+  if (seller !== null) {
+    if (!CATALOG_ADDRESS.test(String(seller))) return { kind: "bad", error: "seller must be an 0x address of forty characters" };
+    return { kind: "seller", seller: String(seller) };
+  }
+  if (product !== null) {
+    const asked = String(product);
+    if (!CATALOG_WHOLE_NUMBER.test(asked) || BigInt(asked) === 0n) return { kind: "bad", error: "product must be a whole number above zero" };
+    return { kind: "product", productId: BigInt(asked).toString() };
+  }
+  return { kind: "bad", error: "name a seller or a product" };
+}
+
+/** A `uint256[]` return: a head word holding the offset, then the length, then the elements. */
+function decodeUintArray(hexData) {
+  const h = String(hexData ?? "").replace(/^0x/, "");
+  if (h.length < 128) return [];
+  const at = Number(BigInt("0x" + h.slice(0, 64))) * 2;
+  const length = Number(BigInt("0x" + h.slice(at, at + 64)));
+  const out = [];
+  for (let i = 0; i < length; i += 1) {
+    const word = h.slice(at + 64 + i * 64, at + 128 + i * 64);
+    if (word.length < 64) break;
+    out.push(BigInt("0x" + word).toString());
+  }
+  return out;
+}
+
+/**
+ * One `Product` (src/unica-v5/IProductCatalog.sol). The struct holds a string, so the return is a
+ * DYNAMIC tuple: the first word is the offset of the tuple itself, the tuple's ten words follow,
+ * and its tenth word is the offset of the name measured from the tuple's own start.
+ */
+function decodeProduct(hexData) {
+  const h = String(hexData ?? "").replace(/^0x/, "");
+  if (h.length < 64) return null;
+  const at = Number(BigInt("0x" + h.slice(0, 64))) * 2;
+  const word = (i) => h.slice(at + i * 64, at + (i + 1) * 64);
+  if (word(9).length < 64) return null;
+  const address = (w) => "0x" + w.slice(24);
+  const nameAt = at + Number(BigInt("0x" + word(9))) * 2;
+  const nameLength = Number(BigInt("0x" + h.slice(nameAt, nameAt + 64)));
+  const nameBytes = new Uint8Array(nameLength);
+  for (let i = 0; i < nameLength; i += 1) nameBytes[i] = parseInt(h.slice(nameAt + 64 + i * 2, nameAt + 66 + i * 2), 16);
+  return {
+    seller: address(word(0)),
+    payout: address(word(1)),
+    asset: address(word(2)),
+    price: BigInt("0x" + word(3)).toString(),
+    kind: CATALOG_KIND_NAMES[Number(BigInt("0x" + word(4)))] ?? null,
+    period: Number(BigInt("0x" + word(5))),
+    onlyBuyer: address(word(6)),
+    active: BigInt("0x" + word(7)) !== 0n,
+    sold: BigInt("0x" + word(8)) !== 0n,
+    name: new TextDecoder().decode(nameBytes),
+  };
+}
+
+/** Nobody listed it: `products()` answers a zero struct for an unknown id rather than refusing. */
+function catalogIsUnknown(decoded) {
+  return !decoded || String(decoded.seller).toLowerCase() === CATALOG_NOBODY;
+}
+
+/**
+ * The one shape every screen consumes. `label` is what the ASSET itself answered when asked its
+ * symbol and its precision; an asset that did not answer leaves both null, and a screen shows the
+ * price as the raw count it is rather than inventing a decimal point.
+ */
+function catalogProduct(productId, decoded, label = {}) {
+  if (!decoded) return null;
+  return {
+    id: String(productId),
+    name: decoded.name,
+    asset: decoded.asset,
+    symbol: label.symbol ?? null,
+    decimals: label.decimals === undefined || label.decimals === null ? null : Number(label.decimals),
+    price: decoded.price,
+    kind: decoded.kind,
+    period: decoded.period,
+    payout: decoded.payout,
+    onlyBuyer: String(decoded.onlyBuyer).toLowerCase() === CATALOG_NOBODY ? null : decoded.onlyBuyer,
+    active: decoded.active,
+    sold: decoded.sold,
+    seller: decoded.seller,
+  };
+}
+// @catalog-end
+
+const SELECTOR_SYMBOL = "0x95d89b41"; // keccak256("symbol()") first four bytes
+const SELECTOR_DECIMALS = "0x313ce567"; // keccak256("decimals()") first four bytes
+
+/** Decode one dynamic `string` return value: offset word, length word, then the bytes. */
+function decodeStringReturn(hex) {
+  const h = String(hex ?? "").replace(/^0x/, "");
+  if (h.length < 128) return null;
+  const at = Number(BigInt("0x" + h.slice(0, 64))) * 2;
+  const length = Number(BigInt("0x" + h.slice(at, at + 64)));
+  const bytes = h.slice(at + 64, at + 64 + length * 2);
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 2) out += String.fromCharCode(parseInt(bytes.slice(i, i + 2), 16));
+  return out;
+}
+
+// ---- reading the catalogue through the node -----------------------------------------------------
+// The two selectors are DERIVED from the signatures in src/unica-v5/IProductCatalog.sol rather than
+// typed as four bytes of hex. A mistyped selector reaches a contract as a call to nothing and comes
+// back as empty data, which decodes to a product nobody listed — a wrong answer that looks like a
+// true one. Deriving it means the signature in this file is the thing under test.
+
+const SELECTOR_PRODUCTS_OF = selectorOf("productsOf(address)");
+const SELECTOR_PRODUCTS = selectorOf("products(uint256)");
+
+const uintWord = (value) => BigInt(value).toString(16).padStart(64, "0");
+const addressWord = (value) => String(value).replace(/^0x/i, "").toLowerCase().padStart(64, "0");
+
+
+function sendJson(res, status, obj) {
+  const body = JSON.stringify(obj, null, 2);
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+  res.end(body);
+}
+
+async function sendFile(res, path, status = 200) {
+  const body = await readFile(path);
+  res.writeHead(status, { "content-type": MIME[extname(path)] ?? "application/octet-stream", "cache-control": "no-store", "cache-control": "no-cache" });
+  res.end(body);
+}
+
+/**
+ * The companion, bound to nothing. `handler(req, res)` answers one request — a /local/ endpoint, one
+ * of the two passthrough files, or a file out of `outDir` when one was named — and `close()` drops
+ * everything this instance remembered.
+ *
+ * `root` is the repository. `outDir` may be null, which is the honest shape behind a host that serves
+ * the built screens itself: the companion then answers /local/ and nothing else. `recordPath` may be
+ * null too — a public network has no practice-run record, and null is what /local/record then says.
+ * `host` and `port` are only ever used to recognise this site's own pages and to print an address.
+ */
+export function createCompanion({
+  root,
+  outDir = null,
+  manifestPath,
+  recordPath = null,
+  rpcUrl,
+  subgraphUrl = null,
+  host = "127.0.0.1",
+  port = 0,
+  logWindow = 2000,
+}) {
+  const ROOT = resolve(root);
+  const OUT_DIR = outDir === null || outDir === undefined ? null : resolve(ROOT, outDir);
+  const MANIFEST_PATH = resolve(ROOT, manifestPath);
+  const RECORD_PATH = recordPath === null || recordPath === undefined ? null : resolve(ROOT, recordPath);
+  const HOST = host;
+  const PORT = Number(port);
+  const RPC_URL = rpcUrl;
+  const SUBGRAPH_URL = subgraphUrl || null;
+
+  // Public nodes cap how many blocks one eth_getLogs may span; the practice chain does not. A scan
+  // therefore starts at the block the deployment was recorded from and walks forward in windows of
+  // this many blocks, and the result is kept for a few seconds so a dashboard's several reads share
+  // one scan. An indexer is the real answer for a long-lived deployment; this is the honest one for
+  // a companion on a laptop.
+  const LOG_WINDOW = Number(logWindow);
+  let projectionMemo = { head: null, at: 0, value: null };
+
+  async function projectAll(manifest) {
+    const headHex = await rpc("eth_blockNumber", []);
+    const head = Number(BigInt(headHex));
+    const now = Date.now();
+    if (projectionMemo.value && projectionMemo.head === head && now - projectionMemo.at < PROJECTION_TTL_MS) return projectionMemo.value;
+    const local = Number(manifest?.chainId) === LOCAL_CHAIN;
+    const start = local ? 0 : Number(manifest?.deployedAtBlock ?? 0);
+    // A public chain whose manifest names a Blockscout API gets its logs from the explorer in one
+    // range; the node still answers block numbers, receipts and calls. Without an explorer the walk
+    // below runs in windows, which a free-tier node may still refuse: the error then says so.
+    const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
+    if (explorerApi) {
+      const client = new ExplorerLogs({ api: explorerApi, rpc: RPC_URL });
+      const one = await projectEvidence({ rpc: client, manifest, fromBlock: start, toBlock: head });
+      projectionMemo = { head, at: now, value: one };
+      return one;
+    }
+    if (local || !Number.isFinite(LOG_WINDOW) || LOG_WINDOW <= 0) {
+      const one = await projectEvidence({ rpc: RPC_URL, manifest, fromBlock: start, toBlock: head });
+      projectionMemo = { head, at: now, value: one };
+      return one;
+    }
+    const logs = [];
+    const seen = new Set();
+    let receipts = {};
+    for (let from = start; from <= head; from += LOG_WINDOW) {
+      const to = Math.min(from + LOG_WINDOW - 1, head);
+      const part = await projectEvidence({ rpc: RPC_URL, manifest, fromBlock: from, toBlock: to });
+      for (const log of part.logs ?? []) {
+        const key = `${log.transactionHash}:${log.logIndex}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        logs.push(log);
+      }
+      receipts = { ...receipts, ...(part.receipts ?? {}) };
+    }
+    const merged = { logs, receipts, chainHead: head, fromBlock: start, toBlock: head };
+    projectionMemo = { head, at: now, value: merged };
+    return merged;
+  }
+
+  let lineageMemo = { at: 0, key: "", value: null };
+  /** Every LineageRegistered record the authority ever emitted, through the explorer on a public chain. */
+  async function lineageLogs(manifest, authority) {
+    const key = String(authority).toLowerCase();
+    if (lineageMemo.value && lineageMemo.key === key && Date.now() - lineageMemo.at < PROJECTION_TTL_MS) return lineageMemo.value;
+    const local = Number(manifest?.chainId) === LOCAL_CHAIN;
+    const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
+    const filter = { address: authority, topics: [LINEAGE_TOPIC0], fromBlock: local ? "0x0" : "0x" + Number(manifest?.deployedAtBlock ?? 0).toString(16), toBlock: "latest" };
+    const logs = explorerApi ? await new ExplorerLogs({ api: explorerApi, rpc: RPC_URL }).logs(filter) : await rpc("eth_getLogs", [filter]);
+    lineageMemo = { at: Date.now(), key, value: logs ?? [] };
+    return logs ?? [];
+  }
+
+
+  /** The business whose payout wallet is `payout`, from the onboarding contract's own records; null when none or no onboarding here. */
+  async function businessByPayout(manifest, payout) {
+    const onboarding = manifest?.contracts?.merchantOnboarding?.address ?? null;
+    if (!onboarding || !payout) return null;
+    try {
+      const local = Number(manifest?.chainId) === LOCAL_CHAIN;
+      const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
+      const filter = { address: onboarding, topics: [BUSINESS_JOINED_TOPIC0], fromBlock: local ? "0x0" : "0x" + Number(manifest?.deployedAtBlock ?? 0).toString(16), toBlock: "latest" };
+      const logs = explorerApi ? await new ExplorerLogs({ api: explorerApi, rpc: RPC_URL }).logs(filter) : await rpc("eth_getLogs", [filter]);
+      for (const log of (logs ?? []).slice().reverse()) {
+        const words = String(log.data ?? "0x").slice(2).match(/.{64}/g) ?? [];
+        if (words.length < 5) continue;
+        const recordedPayout = "0x" + words[1].slice(24);
+        if (recordedPayout.toLowerCase() !== String(payout).toLowerCase()) continue;
+        const offset = Number(BigInt("0x" + words[0])) * 2;
+        const raw = String(log.data).slice(2);
+        const length = Number(BigInt("0x" + raw.slice(offset, offset + 64)));
+        const label = Buffer.from(raw.slice(offset + 64, offset + 64 + length * 2), "hex").toString("utf8");
+        const parent = manifest?.identity?.parentName ?? null;
+        return { label, name: parent ? `${label}.${parent}` : label, owner: "0x" + String(log.topics[2]).slice(26), payout: recordedPayout, merchantNode: log.topics[1] };
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+
+  /**
+   * True when the request comes from this site's own pages (or from no page at all, i.e. a local
+   * tool). A public host has no fixed port and no fixed name, so the test that matters is the one
+   * the browser itself supplies: the Origin's host is this very request's own host. `Host` is what
+   * the browser asked for; `X-Forwarded-Host` is what a proxy in front of this process says it was,
+   * and behind a host that terminates TLS it is the only true one. Loopback is still accepted as it
+   * always was, so the laptop keeps working exactly as before.
+   *
+   * A foreign Origin is refused, and so is a Sec-Fetch-Site of cross-site, whatever the hosts say.
+   */
+  function sameOriginRequest(req) {
+    const site = String(req.headers["sec-fetch-site"] ?? "").toLowerCase();
+    if (site === "cross-site" || site === "same-site") return false;
+    const origin = req.headers.origin;
+    if (!origin) return true; // no Origin: not a browser page, or a same-origin request from an older browser
+    const forwarded = String(req.headers["x-forwarded-host"] ?? "").split(",")[0].trim();
+    const selfHost = (forwarded || String(req.headers.host ?? "")).trim().toLowerCase();
+    try {
+      const o = new URL(origin);
+      if (selfHost && o.host.toLowerCase() === selfHost) return true;
+      const h = o.hostname === "localhost" ? "127.0.0.1" : o.hostname;
+      const p = Number(o.port || (o.protocol === "https:" ? 443 : 80));
+      return (h === "127.0.0.1" || h === "::1" || h === HOST) && p === PORT;
+    } catch {
+      return false;
+    }
+  }
+
+  // Read-only passthrough of two real repository files, by their exact repo-relative path, so
+  // apps/web/assets/local-pay.js can `import` them with an ordinary relative specifier that resolves
+  // the same way on disk (node --test) and over HTTP (a browser). Nothing else is served from outside
+  // OUT_DIR — this allowlist is deliberately exactly two entries.
+  const PASSTHROUGH = new Map([
+    ["/web/ensv2/keccak.mjs", join(ROOT, "web/ensv2/keccak.mjs")],
+    ["/tools/unica-pos-cli/render.mjs", join(ROOT, "tools/unica-pos-cli/render.mjs")],
+  ]);
+
+  function readManifest() {
+    return readJsonSync(MANIFEST_PATH);
+  }
+  function readRecord() {
+    return RECORD_PATH && existsSync(RECORD_PATH) ? readJsonSync(RECORD_PATH) : null;
+  }
+
+  // ---- reading an asset's own label from the chain -------------------------------------------------
+  // A manifest records addresses. A symbol and a decimal count are properties of the token itself,
+  // so they are asked of the token, once per address, and cached for the life of this process. An
+  // unreachable chain leaves the label unread: `assetsFrom` then marks the asset unlabelled and the
+  // screens show it as temporarily unavailable, which is true, instead of guessing a decimal count
+  // and showing a customer the wrong amount.
+
+  const tokenLabelCache = new Map();
+
+  async function rpc(method, params) {
+    const res = await fetch(RPC_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    const body = await res.json();
+    if (body.error) throw new Error(body.error.message);
+    return body.result;
+  }
+
+
+
+  async function readTokenLabel(address) {
+    const key = String(address).toLowerCase();
+    if (tokenLabelCache.has(key)) return tokenLabelCache.get(key);
+    let label = {};
+    try {
+      const symbol = decodeStringReturn(await rpc("eth_call", [{ to: address, data: SELECTOR_SYMBOL }, "latest"]));
+      const decimalsHex = await rpc("eth_call", [{ to: address, data: SELECTOR_DECIMALS }, "latest"]);
+      const decimals = Number(BigInt(decimalsHex));
+      if (symbol) label = { symbol, decimals };
+    } catch {
+      label = {}; // the chain is not up, or this address is not a token: say nothing rather than guess
+    }
+    if (label.symbol) tokenLabelCache.set(key, label); // only a successful read is remembered
+    return label;
+  }
+
+  /** Labels for every token address the manifest names, keyed by lowercase address. */
+  async function readTokenLabels(manifest) {
+    const contracts = manifest?.contracts ?? {};
+    const labels = {};
+    for (const key of ["payoutToken", "assetToken"]) {
+      const address = contracts[key]?.address;
+      if (!address) continue;
+      labels[String(address).toLowerCase()] = await readTokenLabel(address);
+    }
+    for (const t of Array.isArray(manifest?.knownTokens) ? manifest.knownTokens : []) {
+      if (!t?.address) continue;
+      labels[String(t.address).toLowerCase()] = await readTokenLabel(t.address);
+    }
+    return labels;
+  }
+
+  async function catalogReadProduct(catalog, productId) {
+    const decoded = decodeProduct(await rpc("eth_call", [{ to: catalog, data: SELECTOR_PRODUCTS + uintWord(productId) }, "latest"]));
+    if (catalogIsUnknown(decoded)) return null;
+    return catalogProduct(productId, decoded, await readTokenLabel(decoded.asset));
+  }
+
+  // A companion with no `outDir` serves no files. That is the shape behind a host whose own edge
+  // serves the built screens: this process is reached for /local/ and for the two passthrough files
+  // and for nothing else, and a request that arrives here anyway is told so plainly rather than
+  // being answered out of a directory that does not exist.
+  async function serveStatic(res, pathname) {
+    if (!OUT_DIR) {
+      res.writeHead(404, { "content-type": "text/plain", "cache-control": "no-store" });
+      return res.end("this companion serves /local/ only");
+    }
+    let decoded;
+    try {
+      decoded = decodeURIComponent(pathname);
+    } catch {
+      return sendFile(res, join(OUT_DIR, "404.html"), 404).catch(() => { res.writeHead(404); res.end("not found"); });
+    }
+    let rel = normalize(decoded);
+    if (rel.split(sep).includes("..")) return sendFile(res, join(OUT_DIR, "404.html"), 404).catch(() => { res.writeHead(404); res.end("not found"); });
+    if (rel === sep || rel === ".") rel = "index.html";
+    let filePath = join(OUT_DIR, rel);
+    try {
+      const s = await stat(filePath);
+      if (s.isDirectory()) filePath = join(filePath, "index.html");
+      await sendFile(res, filePath);
+    } catch {
+      try {
+        await sendFile(res, join(OUT_DIR, "404.html"), 404);
+      } catch {
+        res.writeHead(404, { "content-type": "text/plain" });
+        res.end("not found");
+      }
+    }
+  }
+
+  const handler = async (req, res) => {
+    let url;
+    try {
+      // The base is never read back: only the pathname and the query are used. A fixed one keeps a
+      // strange Host header from turning a good request into a parse failure.
+      url = new URL(req.url, "http://companion.invalid");
+    } catch {
+      res.writeHead(400);
+      return res.end("bad request");
+    }
+
+    try {
+      if (PASSTHROUGH.has(url.pathname)) {
+        return await sendFile(res, PASSTHROUGH.get(url.pathname));
+      }
+
+      if (url.pathname === "/local/config.json") {
+        const manifest = readManifest();
+        return sendJson(
+          res,
+          200,
+          runtimeConfig(manifest, readRecord(), RPC_PROXY_PATH, await readTokenLabels(manifest), SUBGRAPH_URL),
+        );
+      }
+
+      // The browser never learns the node's URL. Every read or send the screens make goes to this
+      // path and is forwarded here, so a keyed or private endpoint named in UNICA_LOCAL_RPC stays in
+      // this process. The body is passed through untouched and the node's answer is returned as is;
+      // this is a pipe, not a policy, and it forwards only JSON-RPC-shaped POSTs of a bounded size.
+      if (url.pathname === RPC_PROXY_PATH) {
+        if (req.method !== "POST") return sendJson(res, 405, { error: "POST a JSON-RPC request" });
+        // Only this site's own pages may use the pipe. Another tab on another origin could otherwise
+        // POST here blind (a browser sends it without asking) and drive the local node through us.
+        // A same-origin fetch carries Sec-Fetch-Site same-origin or an Origin of this server; a plain
+        // curl on the same machine carries neither and is the owner's own hand, which is allowed.
+        if (!sameOriginRequest(req)) return sendJson(res, 403, { error: "this path answers this site's own pages only" });
+        const body = await readBody(req, 1 << 20);
+        if (body === null) return sendJson(res, 413, { error: "request too large" });
+        let parsed;
+        try { parsed = JSON.parse(body); } catch { return sendJson(res, 400, { error: "not JSON" }); }
+        const shaped = (x) => x && typeof x === "object" && !Array.isArray(x) && typeof x.method === "string";
+        if (!(shaped(parsed) || (Array.isArray(parsed) && parsed.length > 0 && parsed.every(shaped)))) return sendJson(res, 400, { error: "not a JSON-RPC request" });
+        const upstream = await fetch(RPC_URL, { method: "POST", headers: { "content-type": "application/json" }, body });
+        const text = await upstream.text();
+        res.writeHead(upstream.status, { "content-type": "application/json", "cache-control": "no-store" });
+        return res.end(text);
+      }
+
+      if (url.pathname === "/local/record") {
+        return sendJson(res, 200, readRecord());
+      }
+
+      if (url.pathname === "/local/evidence") {
+        const order = url.searchParams.get("order");
+        if (!order || !HASH32.test(order)) {
+          return sendJson(res, 400, { decision: "UNKNOWN", reasonCodes: ["MALFORMED_ORDER_ID"], receipt: null });
+        }
+        try {
+          const manifest = readManifest();
+          // Which settler holds this order, and is it settled yet? An OPEN order is a fact of its own
+          // (UNKNOWN, ORDER_OPEN), never a refusal: the customer has simply not paid. Only a settled
+          // order goes through the receipt rules, direct or market by where it lives.
+          const settler = manifest?.contracts?.directSettlement?.address ?? null;
+          const executor = manifest?.contracts?.executor?.address ?? null;
+          const ordersData = "0x" + ORDERS_SELECTOR_HEX + order.slice(2).toLowerCase().padStart(64, "0");
+          const readOrder = async (at) => {
+            if (!at) return null;
+            try { return decodeDirectOrder(await rpc("eth_call", [{ to: at, data: ordersData }, "latest"])); } catch { return null; }
+          };
+          const direct = await readOrder(settler);
+          const market = direct && direct.status !== 0 ? null : await readOrder(executor);
+          const held = direct && direct.status !== 0 ? { kind: "direct", order: direct } : market && market.status !== 0 ? { kind: "market", order: market } : null;
+          // Settled means a receipt exists for this id on the chain, judged by the receipt rules; a
+          // status field alone is not the evidence. No receipt and an order that exists is OPEN; no
+          // receipt and no order anywhere is NOT FOUND, which is unknown, not refused.
+          const projection = await projectAll(manifest);
+          const wanted = order.toLowerCase();
+          const receiptLog = (projection.logs ?? []).find((l) => {
+            const t = l?.topics ?? [];
+            if (String(t[1] ?? "").toLowerCase() !== wanted) return false;
+            const name = identifyLog(l);
+            return name === "DirectReceipt" || name === "SettlementReceipt";
+          });
+          if (!receiptLog) {
+            if (held) {
+              return sendJson(res, 200, { decision: "UNKNOWN", reasonCodes: ["ORDER_OPEN"], kind: held.kind, order: { ...held.order, amountIn: String(held.order.amountIn), minOut: String(held.order.minOut), deadline: String(held.order.deadline) }, receipt: null });
+            }
+            return sendJson(res, 200, { decision: "UNKNOWN", reasonCodes: ["ORDER_NOT_FOUND"], kind: null, order: null, receipt: null });
+          }
+          const kind = identifyLog(receiptLog) === "DirectReceipt" ? "direct" : "market";
+          const common = { orderId: order, logs: projection.logs, manifest, chainHead: projection.chainHead, requiredConfirmations: 0 };
+          let directOrder = held?.kind === "direct" ? held.order : null;
+          if (kind === "direct" && !directOrder && settler) {
+            try { directOrder = await fetchDirectOrder({ rpc: RPC_URL, settler, orderId: order }); } catch { directOrder = null; }
+          }
+          const verdict = kind === "direct" ? authenticateDirectReceipt({ ...common, directOrder }) : authenticateReceipt(common);
+          return sendJson(res, 200, { ...verdict, kind });
+        } catch (e) {
+          return sendJson(res, 502, { decision: "UNKNOWN", reasonCodes: ["EVIDENCE_ENDPOINT_UNAVAILABLE"], receipt: null, error: redact(e?.message ?? e) });
+        }
+      }
+
+      // One order, by id, from whichever settler holds it, with the business it pays. This is how a
+      // payment link becomes a card without a stored record: the id in the link is asked of the chain.
+      if (url.pathname === "/local/order") {
+        const id = url.searchParams.get("id");
+        if (!id || !HASH32.test(id)) return sendJson(res, 400, { error: "id must be a 32-byte hex order id", order: null });
+        try {
+          const manifest = readManifest();
+          const settler = manifest?.contracts?.directSettlement?.address ?? null;
+          const executor = manifest?.contracts?.executor?.address ?? null;
+          const data = "0x" + ORDERS_SELECTOR_HEX + id.slice(2).toLowerCase().padStart(64, "0");
+          const readAt = async (at) => { if (!at) return null; try { return decodeDirectOrder(await rpc("eth_call", [{ to: at, data }, "latest"])); } catch { return null; } };
+          const direct = await readAt(settler);
+          const held = direct && direct.status !== 0 ? { kind: "direct", settler, order: direct } : null;
+          const market = held ? null : await readAt(executor);
+          const found = held ?? (market && market.status !== 0 ? { kind: "market", settler: executor, order: market } : null);
+          if (!found) return sendJson(res, 404, { error: "no order with that id on this deployment", order: null });
+          const labels = await readTokenLabels(manifest);
+          const assetIn = found.kind === "direct" ? manifest?.contracts?.payoutToken?.address : manifest?.contracts?.assetToken?.address;
+          const assetOut = manifest?.contracts?.payoutToken?.address ?? null;
+          const label = (a) => (a ? { address: a, ...(labels[String(a).toLowerCase()] ?? { symbol: null, decimals: null }) } : null);
+          const business = await businessByPayout(manifest, found.order.recipient);
+          const o = found.order;
+          return sendJson(res, 200, {
+            orderId: id, kind: found.kind, settler: found.settler, chainId: manifest?.chainId ?? null,
+            order: { recipient: o.recipient, payer: o.payer, amountIn: String(o.amountIn), minOut: String(o.minOut), deadline: String(o.deadline), status: o.status },
+            assetIn: label(assetIn), assetOut: label(assetOut), business,
+          });
+        } catch (e) {
+          return sendJson(res, 502, { error: redact(e?.message ?? e), order: null });
+        }
+      }
+
+      // The businesses under this deployment's parent name, read from the identity authority's lineage and
+      // resolver records — the chain's own answer to "which business is this wallet's" on a network that has
+      // no self-serve sign-up contract. ?wallet= lists the businesses whose payout is that wallet (or all of
+      // them for the parent name's controller); ?label= answers one by name. Registers ride along with their
+      // published status. Nothing here is typed in.
+      if (url.pathname === "/local/businesses" || url.pathname === "/local/registers") {
+        try {
+          const manifest = readManifest();
+          const identity = manifest?.identity ?? {};
+          const authority = identity.authority ?? null;
+          const parentNode = identity.parentNode ?? null;
+          if (!authority || !parentNode) return sendJson(res, 200, { businesses: [], registers: [], note: "no name authority on this network" });
+          const logs = await lineageLogs(manifest, authority);
+          const key = identity.terminalStatusKey ?? "com.unica.terminal-status";
+          const statusOf = async (node) => { try { return decodeStringReturn(await rpc("eth_call", [{ to: authority, data: encodeTextCall(node, key) }, "latest"])) ?? ""; } catch { return ""; } };
+          if (url.pathname === "/local/registers") {
+            const terminals = url.searchParams.get("terminals");
+            if (!terminals || !HASH32.test(terminals)) return sendJson(res, 400, { error: "terminals must be a 32-byte node", registers: [] });
+            const { children } = lineageTree(logs);
+            const rows = children.get(terminals.toLowerCase()) ?? [];
+            const registers = [];
+            for (const c of rows) registers.push({ node: c.node, label: c.label, status: await statusOf(c.node), operators: [] });
+            return sendJson(res, 200, { terminalsNode: terminals, registers });
+          }
+          const wallet = url.searchParams.get("wallet");
+          const label = url.searchParams.get("label");
+          if (wallet && !/^0x[0-9a-fA-F]{40}$/.test(wallet)) return sendJson(res, 400, { error: "wallet must be 0x followed by forty hex digits", businesses: [] });
+          let list = businessesFromLineage(logs, parentNode, identity.parentName ?? null);
+          if (label) list = list.filter((b) => b.label === String(label).toLowerCase());
+          const out = [];
+          let controller = false;
+          if (wallet) {
+            try { controller = decodeBoolReturn(await rpc("eth_call", [{ to: authority, data: encodeControllerCall(parentNode, wallet) }, "latest"])); } catch { controller = false; }
+          }
+          for (const b of list) {
+            let payout = null;
+            try { payout = decodeAddressReturn(await rpc("eth_call", [{ to: authority, data: "0x" + ADDR_SELECTOR_HEX + b.merchantNode.slice(2).padStart(64, "0") }, "latest"])); } catch { payout = null; }
+            if (wallet && !controller && String(payout ?? "").toLowerCase() !== wallet.toLowerCase()) continue;
+            const registers = [];
+            for (const r of b.registers) registers.push({ ...r, status: await statusOf(r.node), operators: [] });
+            out.push({ ...b, payout, seller: payout, registers });
+          }
+          return sendJson(res, 200, { parentName: identity.parentName ?? null, parentNode, wallet: wallet ?? null, controller, businesses: out });
+        } catch (e) {
+          return sendJson(res, 502, { error: redact(e?.message ?? e), businesses: [], registers: [] });
+        }
+      }
+
+      // The payments one wallet has received, each with the same verdict the receipt screen would
+      // give it. The list comes from the chain's logs; the verdict comes from the evidence rules; the
+      // wallet comes from the query and is validated, never resolved. Nothing here is remembered.
+      if (url.pathname === "/local/payments") {
+        const wallet = url.searchParams.get("wallet");
+        if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+          return sendJson(res, 400, { error: "wallet must be 0x followed by forty hex digits", payments: [] });
+        }
+        try {
+          const manifest = readManifest();
+          const projection = await projectAll(manifest);
+          const settler = manifest?.contracts?.directSettlement?.address ?? null;
+          const payments = [];
+          for (const r of receiptsForRecipient({ logs: projection.logs, recipient: wallet })) {
+            const common = { orderId: r.orderId, logs: projection.logs, manifest, chainHead: projection.chainHead, requiredConfirmations: 0 };
+            let verdict;
+            if (r.kind === "direct") {
+              let directOrder = null;
+              if (settler) {
+                try { directOrder = await fetchDirectOrder({ rpc: RPC_URL, settler, orderId: r.orderId }); } catch { directOrder = null; }
+              }
+              verdict = authenticateDirectReceipt({ ...common, directOrder });
+            } else if (r.kind === "product") {
+              // A catalogue sale is judged by its sale id, which `receiptsForRecipient` puts in the
+              // same `orderId` field every other row uses, so the row's own kind chooses the reader
+              // and nothing here has to know how a sale id is built.
+              const { orderId, ...rest } = common;
+              verdict = authenticateProductSale({ saleId: orderId, ...rest });
+            } else {
+              verdict = authenticateReceipt(common);
+            }
+            let settledAt = r.settledAt;
+            if (settledAt === null) {
+              try {
+                const block = await rpc("eth_getBlockByNumber", ["0x" + r.blockNumber.toString(16), false]);
+                settledAt = block?.timestamp ? Number(BigInt(block.timestamp)) : null;
+              } catch {
+                settledAt = null;
+              }
+            }
+            payments.push({ ...r, settledAt, decision: verdict.decision, reasonCodes: verdict.reasonCodes });
+          }
+          return sendJson(res, 200, { wallet, chainId: manifest?.chainId ?? null, chainHead: projection.chainHead ?? null, payments });
+        } catch (e) {
+          return sendJson(res, 502, { error: redact(e?.message ?? e), payments: [] });
+        }
+      }
+
+      // What a business sells, read from the catalogue the manifest names. One seller's whole list,
+      // or one product by the id its payment link carries. Nothing here is remembered and nothing is
+      // written: it is `productsOf` and `products` through the node, decoded above, with each asset's
+      // own symbol and precision taken from the same label cache every other screen reads.
+      //
+      // A DEPLOYMENT WITH NO CATALOGUE IS NOT AN ERROR. It answers an empty list and says why, so a
+      // products screen can print one true sentence instead of a failure a shop owner cannot act on.
+      // 404 is kept for what it means: this catalogue exists and nobody has listed that product.
+      if (url.pathname === "/local/catalog") {
+        const asked = catalogQuery({ seller: url.searchParams.get("seller"), product: url.searchParams.get("product") });
+        if (asked.kind === "bad") return sendJson(res, 400, { error: asked.error, products: [], product: null });
+        const manifest = readManifest();
+        const chainId = manifest?.chainId ?? null;
+        const catalog = manifest?.contracts?.productCatalog?.address ?? null;
+        if (!catalog) {
+          return sendJson(res, 200, {
+            seller: asked.seller ?? null,
+            chainId,
+            products: [],
+            product: null,
+            note: "no catalogue on this network",
+          });
+        }
+        try {
+          if (asked.kind === "product") {
+            const product = await catalogReadProduct(catalog, asked.productId);
+            if (!product) return sendJson(res, 404, { error: "no product with that number", product: null, products: [] });
+            return sendJson(res, 200, { chainId, product, products: [product] });
+          }
+          const ids = decodeUintArray(await rpc("eth_call", [{ to: catalog, data: SELECTOR_PRODUCTS_OF + addressWord(asked.seller) }, "latest"]));
+          const products = [];
+          for (const id of ids) {
+            const product = await catalogReadProduct(catalog, id);
+            if (product) products.push(product);
+          }
+          return sendJson(res, 200, { seller: asked.seller, chainId, products });
+        } catch (e) {
+          return sendJson(res, 502, { error: redact(e?.message ?? e), products: [], product: null });
+        }
+      }
+
+      if (url.pathname.startsWith("/local/")) {
+        return sendJson(res, 404, { error: "no such /local/ endpoint", path: url.pathname });
+      }
+
+      return await serveStatic(res, url.pathname);
+    } catch (e) {
+      res.writeHead(500, { "content-type": "text/plain" });
+      res.end(`internal error: ${redact(e?.message ?? e)}`);
+    }
+  };
+
+  /** Everything this instance remembered, dropped. Nothing here owns a socket or a timer. */
+  function close() {
+    projectionMemo = { head: null, at: 0, value: null };
+    lineageMemo = { at: 0, key: "", value: null };
+    tokenLabelCache.clear();
+  }
+
+  return { handler, close };
+}
+
+/**
+ * The companion on a socket, for `script/anvil/serve.sh`. Same handler, same rules; the only thing
+ * this adds is the listen and the addresses it prints.
+ */
+export function startCompanion(options) {
+  const { handler } = createCompanion(options);
+  const server = createServer(handler);
+  const HOST = options.host;
+  const PORT = Number(options.port);
+  const readManifest = () => JSON.parse(readFileSync(resolve(options.root, options.manifestPath), "utf8"));
+  const readRecord = () => {
+    if (!options.recordPath) return null;
+    const at = resolve(options.root, options.recordPath);
+    return existsSync(at) ? JSON.parse(readFileSync(at, "utf8")) : null;
+  };
+  server.listen(PORT, HOST, () => {
+    const base = `http://${HOST}:${PORT}`;
+    console.log(`UNICA local demo server listening on ${base}/`);
+    console.log(`Home:                  ${base}/`);
+    console.log(`Add your business:     ${base}/join/`);
+    console.log(`Business dashboard:    ${base}/business/`);
+    console.log(`Create a payment:      ${base}/business/payments/new/`);
+    console.log(`Customer checkout:     ${base}/pay/`);
+    const onboarding = runtimeConfig(readManifest(), null, "/local/rpc").merchantOnboarding;
+    if (!onboarding) console.log("  (the manifest names no merchantOnboarding contract; the join screen will say so)");
+    const record = readRecord();
+    if (record?.order?.id) {
+      console.log(`Pay screen (this order): ${base}/pay/?order=${record.order.id}`);
+      console.log(`  as the wrong payer:    ${base}/pay/?order=${record.order.id}&as=0x0000000000000000000000000000000000000001`);
+    } else {
+      console.log("No demo record yet at " + options.recordPath + " -- run: make anvil-demo, then reload.");
+    }
+  });
+  return server;
+}

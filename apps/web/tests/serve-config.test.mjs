@@ -1,9 +1,11 @@
 // apps/web/tests/serve-config.test.mjs: the shape GET /local/config.json answers with, executed
-// from the exact function script/anvil/serve.sh runs, without binding a socket or needing a chain.
+// from the exact function the companion runs, without binding a socket or needing a chain.
 //
-// serve.sh keeps its server in a heredoc, so the function is sliced out between two marker comments
-// and evaluated here. If the markers move or the function is renamed, this file fails loudly rather
-// than testing a copy that drifted.
+// The companion is script/anvil/companion.mjs — one module, run on this machine by
+// script/anvil/serve.sh and behind a public host by api/local.mjs. The pure functions are sliced
+// out of it between two marker comments and evaluated here rather than imported, so this file
+// cannot accidentally pull in the module's imports or its chain reads. If the markers move or a
+// function is renamed, this fails loudly rather than testing a copy that drifted.
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -21,11 +23,11 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
-const source = readFileSync(join(ROOT, "script", "anvil", "serve.sh"), "utf8");
+const source = readFileSync(join(ROOT, "script", "anvil", "companion.mjs"), "utf8");
 
 const begin = source.indexOf("// @runtimeConfig-begin");
 const end = source.indexOf("// @runtimeConfig-end");
-assert.ok(begin > 0 && end > begin, "serve.sh carries the @runtimeConfig markers");
+assert.ok(begin > 0 && end > begin, "companion.mjs carries the @runtimeConfig markers");
 const slice = source.slice(begin, end);
 const runtimeConfig = new Function(`${slice}\nreturn runtimeConfig;`)();
 
@@ -231,7 +233,7 @@ test("a record is served only for the chain its manifest names; the practice-cha
 
 const catalogBegin = source.indexOf("// @catalog-begin");
 const catalogEnd = source.indexOf("// @catalog-end");
-assert.ok(catalogBegin > 0 && catalogEnd > catalogBegin, "serve.sh carries the @catalog markers");
+assert.ok(catalogBegin > 0 && catalogEnd > catalogBegin, "companion.mjs carries the @catalog markers");
 const catalog = new Function(
   `${source.slice(catalogBegin, catalogEnd)}\nreturn { catalogQuery, decodeUintArray, decodeProduct, catalogIsUnknown, catalogProduct };`,
 )();
