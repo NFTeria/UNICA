@@ -56,6 +56,8 @@ import { join, extname, normalize, sep } from "node:path";
 import { authenticateDirectReceipt, authenticateProductSale, authenticateReceipt, decodeDirectOrder, fetchDirectOrder, projectEvidence, receiptsForRecipient } from "./tools/unica-evidence/index.mjs";
 import { ExplorerLogs } from "./tools/unica-evidence/explorer.mjs";
 import { selectorOf } from "./tools/unica-sign/abi.mjs";
+import { keccak256, toHex } from "./web/ensv2/keccak.mjs";
+const keccak256Hex = (s) => toHex(keccak256(new TextEncoder().encode(s))).replace(/^0x/, "");
 
 const ROOT = process.cwd();
 const OUT_DIR = join(ROOT, process.env.UNICA_OUT_DIR);
@@ -121,6 +123,35 @@ async function projectAll(manifest) {
   const merged = { logs, receipts, chainHead: head, fromBlock: start, toBlock: head };
   projectionMemo = { head, at: now, value: merged };
   return merged;
+}
+
+const BUSINESS_JOINED_TOPIC0 = "0x" + keccak256Hex("BusinessJoined(bytes32,address,string,address,bytes32,bytes32,uint256)");
+
+/** The business whose payout wallet is `payout`, from the onboarding contract's own records; null when none or no onboarding here. */
+async function businessByPayout(manifest, payout) {
+  const onboarding = manifest?.contracts?.merchantOnboarding?.address ?? null;
+  if (!onboarding || !payout) return null;
+  try {
+    const local = Number(manifest?.chainId) === LOCAL_CHAIN;
+    const explorerApi = !local && manifest?.explorer?.kind === "blockscout" ? manifest.explorer.api : null;
+    const filter = { address: onboarding, topics: [BUSINESS_JOINED_TOPIC0], fromBlock: local ? "0x0" : "0x" + Number(manifest?.deployedAtBlock ?? 0).toString(16), toBlock: "latest" };
+    const logs = explorerApi ? await new ExplorerLogs({ api: explorerApi, rpc: RPC_URL }).logs(filter) : await rpc("eth_getLogs", [filter]);
+    for (const log of (logs ?? []).slice().reverse()) {
+      const words = String(log.data ?? "0x").slice(2).match(/.{64}/g) ?? [];
+      if (words.length < 5) continue;
+      const recordedPayout = "0x" + words[1].slice(24);
+      if (recordedPayout.toLowerCase() !== String(payout).toLowerCase()) continue;
+      const offset = Number(BigInt("0x" + words[0])) * 2;
+      const raw = String(log.data).slice(2);
+      const length = Number(BigInt("0x" + raw.slice(offset, offset + 64)));
+      const label = Buffer.from(raw.slice(offset + 64, offset + 64 + length * 2), "hex").toString("utf8");
+      const parent = manifest?.identity?.parentName ?? null;
+      return { label, name: parent ? `${label}.${parent}` : label, owner: "0x" + String(log.topics[2]).slice(26), payout: recordedPayout, merchantNode: log.topics[1] };
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 /** True when the request comes from this server's own pages (or from no page at all, i.e. a local tool). */
@@ -495,6 +526,38 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 200, { ...verdict, kind: held?.kind ?? "market" });
       } catch (e) {
         return sendJson(res, 502, { decision: "UNKNOWN", reasonCodes: ["EVIDENCE_ENDPOINT_UNAVAILABLE"], receipt: null, error: redact(e?.message ?? e) });
+      }
+    }
+
+    // One order, by id, from whichever settler holds it, with the business it pays. This is how a
+    // payment link becomes a card without a stored record: the id in the link is asked of the chain.
+    if (url.pathname === "/local/order") {
+      const id = url.searchParams.get("id");
+      if (!id || !HASH32.test(id)) return sendJson(res, 400, { error: "id must be a 32-byte hex order id", order: null });
+      try {
+        const manifest = readManifest();
+        const settler = manifest?.contracts?.directSettlement?.address ?? null;
+        const executor = manifest?.contracts?.executor?.address ?? null;
+        const data = "0x" + ORDERS_SELECTOR_HEX + id.slice(2).toLowerCase().padStart(64, "0");
+        const readAt = async (at) => { if (!at) return null; try { return decodeDirectOrder(await rpc("eth_call", [{ to: at, data }, "latest"])); } catch { return null; } };
+        const direct = await readAt(settler);
+        const held = direct && direct.status !== 0 ? { kind: "direct", settler, order: direct } : null;
+        const market = held ? null : await readAt(executor);
+        const found = held ?? (market && market.status !== 0 ? { kind: "market", settler: executor, order: market } : null);
+        if (!found) return sendJson(res, 404, { error: "no order with that id on this deployment", order: null });
+        const labels = await readTokenLabels(manifest);
+        const assetIn = found.kind === "direct" ? manifest?.contracts?.payoutToken?.address : manifest?.contracts?.assetToken?.address;
+        const assetOut = manifest?.contracts?.payoutToken?.address ?? null;
+        const label = (a) => (a ? { address: a, ...(labels[String(a).toLowerCase()] ?? { symbol: null, decimals: null }) } : null);
+        const business = await businessByPayout(manifest, found.order.recipient);
+        const o = found.order;
+        return sendJson(res, 200, {
+          orderId: id, kind: found.kind, settler: found.settler, chainId: manifest?.chainId ?? null,
+          order: { recipient: o.recipient, payer: o.payer, amountIn: String(o.amountIn), minOut: String(o.minOut), deadline: String(o.deadline), status: o.status },
+          assetIn: label(assetIn), assetOut: label(assetOut), business,
+        });
+      } catch (e) {
+        return sendJson(res, 502, { error: redact(e?.message ?? e), order: null });
       }
     }
 
