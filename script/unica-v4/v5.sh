@@ -19,7 +19,7 @@ live() { need_account; chain; LIVE_BROADCAST=I_UNDERSTAND_THIS_SENDS_TRANSACTION
 status_is() { local out; out=$(bash script/unica-v4/deploy-public.sh "$NET" readback 2>/dev/null || true); grep -q "\"status\":\"$1\"" <<<"$out" || fail "readback status is not $1"; echo "readback status $1 ok"; }
 case "$STEP" in
   preflight) chain; bash script/unica-v4/deploy-public.sh "$NET" preflight ;;
-  A) live A; for v in UNICA_FACTORY UNICA_REGISTRY UNICA_IDENTITY_AUTHORITY UNICA_ADMISSION UNICA_IDENTITY_TOKEN; do a=$(cfg $v); [ -n "$a" ] && code "$a"; done; echo "stage A recorded in $CFG" ;;
+  A) live A; for v in UNICA_FACTORY UNICA_REGISTRY UNICA_IDENTITY_AUTHORITY UNICA_ADMISSION UNICA_IDENTITY_TOKEN; do a=$(cfg $v); if [ -n "$a" ]; then code "$a"; fi; done; echo "stage A recorded in $CFG" ;;
   readback) bash script/unica-v4/deploy-public.sh "$NET" readback ;;
   B) live B; for v in UNICA_HOOK UNICA_EXECUTOR; do code "$(cfg $v)"; done; status_is 1 ;;
   C) live C; status_is 3 ;;
