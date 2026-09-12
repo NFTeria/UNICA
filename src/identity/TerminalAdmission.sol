@@ -94,8 +94,14 @@ contract TerminalAdmission {
     ///         to the business without a pool, so it has no market id and the registry has never
     ///         heard of it; without this list every same asset sale would be refused as an
     ///         unregistered executor. The list is deliberately small and explicit: an address is on
-    ///         it only because the registry's own admin put it there, which is the same authority
-    ///         that decides who may raise an order at all.
+    ///         it only because the registry's own admin put it there.
+    ///
+    ///         AND THAT IS THE SAME AUTHORITY THAT DECIDES WHO MAY RAISE AN ORDER, which is a fact
+    ///         about the code and not a hope about the deployment. `setDirectSettler` refuses any
+    ///         settler that does not name THIS registry as the one it answers to, and a settler
+    ///         resolves its own creator authority by reading that registry's `admin()` live. So one
+    ///         handover of the registry admin moves both surfaces at once, and there is no second
+    ///         key on the direct path for this gate's revocation to miss.
     mapping(address => bool) private _directSettlers;
 
     event OrderAdmitted(
@@ -124,6 +130,13 @@ contract TerminalAdmission {
     error ExecutorNotRegistered(address executor);
     /// @notice Only the official registry's admin may change the direct settler allowlist.
     error NotRegistryAdmin(address caller);
+    /// @notice The settler does not answer to this gate's registry, so listing it would put a second
+    ///         admin key on the direct path: one deciding who may raise a sale there, another
+    ///         deciding whether the gate accepts it. Refused rather than listed.
+    error SettlerRegistryMismatch(address settler, address settlerRegistry, address expected);
+    /// @notice The settler does not answer the one question this gate has to ask it. An address that
+    ///         cannot say which registry governs it cannot be shown to share this one.
+    error SettlerRegistryUnreadable(address settler);
     error PolicyNotAuthorized(bytes32 salt);
     error ZeroAddress();
 
@@ -200,11 +213,34 @@ contract TerminalAdmission {
     ///         of that role. This is the only writable configuration on this contract, and it
     ///         changes what a FUTURE call to `requestOrder` will accept: an order already admitted
     ///         is untouched, because nothing here reaches back into one.
+    /// @dev Listing also requires the settler to name this exact registry, so that the account which
+    ///      may raise a sale on that settler and the account which may list it here are the same
+    ///      account by construction. Without that check the two are unrelated keys, and revoking the
+    ///      settler from this gate would leave a creator the settler's own admin had listed still
+    ///      able to raise sales on it. Removal (`allowed == false`) skips the check on purpose: a
+    ///      settler that has stopped answering must still be revocable.
     function setDirectSettler(address settler, bool allowed) external {
         if (msg.sender != REGISTRY.admin()) revert NotRegistryAdmin(msg.sender);
         if (settler == address(0)) revert ZeroAddress();
+        if (allowed) _requireSameRegistry(settler);
         _directSettlers[settler] = allowed;
         emit DirectSettlerSet(settler, allowed);
+    }
+
+    /// @dev Asks the settler which registry governs it. A settler that reverts, or that answers
+    ///      something undecodable, is refused by name rather than read as agreement.
+    function _requireSameRegistry(address settler) private view {
+        (bool ok, bytes memory ret) = settler.staticcall(abi.encodeWithSignature("REGISTRY()"));
+        if (!ok || ret.length != 32) revert SettlerRegistryUnreadable(settler);
+        // Decoded as a raw word and range checked by hand, so a settler that answers with a dirty
+        // upper half is named as unreadable instead of being silently truncated into a match, and
+        // instead of failing as a bare panic out of `abi.decode(ret, (address))`.
+        bytes32 word = abi.decode(ret, (bytes32));
+        if (uint256(word) >> 160 != 0) revert SettlerRegistryUnreadable(settler);
+        address settlerRegistry = address(uint160(uint256(word)));
+        if (settlerRegistry != address(REGISTRY)) {
+            revert SettlerRegistryMismatch(settler, settlerRegistry, address(REGISTRY));
+        }
     }
 
     /// @dev Checks (b)-(e): the terminal lives under the claimed merchant, `msg.sender` currently

@@ -9,6 +9,13 @@ import {IDirectSettlement} from "./IDirectSettlement.sol";
 ///      `false`, is refused by name instead of being read as success. `transferFrom` is called
 ///      through a low level call because a token that returns nothing at all is still a token this
 ///      settler must be able to move, and the compiler's generated call would reject it.
+/// @dev The one call this contract makes on the registry. Declared here, rather than importing the
+///      whole registry interface, because a settler that only ever asks "who is the admin right now"
+///      should not compile against every other read the registry offers.
+interface IDirectRegistryAdmin {
+    function admin() external view returns (address);
+}
+
 interface IDirectERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
@@ -35,6 +42,15 @@ interface IDirectERC20 {
 ///         transaction is undone. There is no partial success: either the business is paid the
 ///         whole amount or nothing moved at all.
 ///
+///         WHO DECIDES WHO MAY RAISE A SALE. The official v4 registry's admin, read live on every
+///         check, never copied into this contract at construction. A settler that kept its own copy
+///         would be a second authority beside the one the terminal gate consults: the registry admin
+///         can be handed over in two steps and can revoke a settler from the gate, but neither of
+///         those would have reached a creator that a separate settler admin had listed, and a copied
+///         admin has no transfer, no accept and no renounce, so it would be fixed for the life of
+///         the deployment. Reading `REGISTRY.admin()` instead means one handover carries both
+///         surfaces and one revocation reaches both.
+///
 /// @dev No `receive()`, no sweep, no rescue. This contract never holds a balance, because the money
 ///      goes from the customer to the business in one transfer and never lands here. The admin's
 ///      only power is `setOrderCreator`. Nothing, admin included, can move a token, change an
@@ -46,8 +62,18 @@ contract DirectSettlement is IDirectSettlement {
     address public immutable ASSET;
     /// @inheritdoc IDirectSettlement
     bytes32 public immutable SETTLEMENT_ID;
-    /// @notice The only account that may add or remove an order creator. It cannot do anything else.
-    address public immutable ADMIN;
+    /// @inheritdoc IDirectSettlement
+    address public immutable REGISTRY;
+
+    /// @inheritdoc IDirectSettlement
+    /// @dev A live read, not a stored copy. `REGISTRY` is fixed, the account it names is not: the
+    ///      registry's own two step `transferAdmin`/`acceptAdmin` moves it, and this settler follows
+    ///      without a transaction of its own. A registry with no `admin()` to read, or one that has
+    ///      stopped answering, makes this revert, which refuses `setOrderCreator` rather than
+    ///      falling back to some earlier answer.
+    function admin() public view returns (address) {
+        return IDirectRegistryAdmin(REGISTRY).admin();
+    }
 
     /// @notice Present so a caller written against the market executor's ABI reads the same three
     ///         fields here and gets true answers. There is no market, so the market id is this
@@ -92,6 +118,10 @@ contract DirectSettlement is IDirectSettlement {
     ///      failed sale says which precondition it broke.
     error NotAdmin(address who);
     error ZeroAddress();
+    /// @notice A registry address with no code can never answer `admin()`, so a settler built on one
+    ///         could never have an order creator added to it. Refused at construction, loudly,
+    ///         rather than deployed as a settler nobody can ever configure.
+    error RegistryNoCode(address registry);
     error ZeroRecipient();
     error ZeroPayer();
     error ReservedRecipient(address recipient);
@@ -108,11 +138,14 @@ contract DirectSettlement is IDirectSettlement {
     // ---- construction ------------------------------------------------------------------------------
 
     /// @param asset the one asset this settler moves. Both halves of every sale are this asset.
-    /// @param admin the only account that may call `setOrderCreator`.
-    constructor(address asset, address admin) {
-        if (asset == address(0) || admin == address(0)) revert ZeroAddress();
+    /// @param registry the official UNICA v4 registry whose live `admin()` may call
+    ///        `setOrderCreator`. It is the SAME registry the terminal gate asks before it will list
+    ///        this settler, which is what makes the two surfaces one authority instead of two.
+    constructor(address asset, address registry) {
+        if (asset == address(0) || registry == address(0)) revert ZeroAddress();
+        if (registry.code.length == 0) revert RegistryNoCode(registry);
         ASSET = asset;
-        ADMIN = admin;
+        REGISTRY = registry;
         SETTLEMENT_ID = keccak256(abi.encode("unica-v5/direct", block.chainid, address(this), asset));
     }
 
@@ -226,9 +259,11 @@ contract DirectSettlement is IDirectSettlement {
 
     /// @inheritdoc IDirectSettlement
     /// @dev The admin's only power. It decides who may raise a sale; it can neither pay one, nor
-    ///      change one, nor move a token.
+    ///      change one, nor move a token. The authority is resolved at the moment of the call, so a
+    ///      completed registry handover takes effect here immediately and the account that used to
+    ///      hold it is refused by name from that block on.
     function setOrderCreator(address creator, bool allowed) external {
-        if (msg.sender != ADMIN) revert NotAdmin(msg.sender);
+        if (msg.sender != admin()) revert NotAdmin(msg.sender);
         _orderCreators[creator] = allowed;
         emit OrderCreatorSet(creator, allowed);
     }

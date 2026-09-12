@@ -83,6 +83,10 @@ contract DirectSettlementTest is Test {
 
     MockERC20 internal uusd; // a local test dollar, 6 decimals
     DirectSettlement internal settler;
+    /// @dev The registry the settler answers to. Its `admin()` IS the settler's creator authority:
+    ///      the settler holds no admin of its own, so `admin` below is a registry admin and nothing
+    ///      else. One double serves the settler and the gate, which is the shape the deployment has.
+    RegistryDouble internal registry;
 
     address internal admin = makeAddr("admin");
     address internal register = makeAddr("register"); // the allowlisted order creator
@@ -97,7 +101,9 @@ contract DirectSettlementTest is Test {
         DEADLINE = uint64(block.timestamp + 1 days);
 
         uusd = new MockERC20("Unica test dollar", "uUSD", 6);
-        settler = new DirectSettlement(address(uusd), admin);
+        registry = new RegistryDouble();
+        registry.setAdmin(admin);
+        settler = new DirectSettlement(address(uusd), address(registry));
 
         vm.prank(admin);
         settler.setOrderCreator(register, true);
@@ -123,7 +129,7 @@ contract DirectSettlementTest is Test {
     /// @dev Puts a hostile token's code under a fresh settler, funded and approved, so a row can
     ///      run its control and its attack against the same shape as every other row.
     function _settlerFor(address token) internal returns (DirectSettlement s) {
-        s = new DirectSettlement(token, admin);
+        s = new DirectSettlement(token, address(registry));
         vm.prank(admin);
         s.setOrderCreator(register, true);
         MockERC20(token).mint(customer, 1_000_000_000);
@@ -421,7 +427,7 @@ contract DirectSettlementTest is Test {
 
         // A second settler on the very same asset is a different settlement id, so evidence from
         // one can never be read as evidence from the other.
-        DirectSettlement other = new DirectSettlement(address(uusd), admin);
+        DirectSettlement other = new DirectSettlement(address(uusd), address(registry));
         assertTrue(other.SETTLEMENT_ID() != settler.SETTLEMENT_ID(), "two settlers, two ids");
         assertEq(settler.MARKET_ID(), settler.SETTLEMENT_ID());
         assertEq(settler.ASSET_TOKEN(), address(uusd));
@@ -451,6 +457,9 @@ contract DirectSettlementTest is Test {
             address payoutAddr
         ) = _buildIdentityTree();
 
+        assertEq(registryDouble.admin(), admin, "one registry, and its admin is the settler's authority");
+        assertEq(settler.admin(), admin, "the settler resolves the same account, live, with no copy");
+
         // The registry has never heard of a direct settler, so its own admin puts it on the gate's
         // list. Without that, the very same call is refused as an unregistered executor.
         vm.prank(operator);
@@ -468,7 +477,6 @@ contract DirectSettlementTest is Test {
             keccak256("sale-16")
         );
 
-        vm.mockCall(address(registryDouble), abi.encodeWithSignature("admin()"), abi.encode(admin));
         vm.prank(admin);
         admission.setDirectSettler(address(settler), true);
         assertTrue(admission.isDirectSettler(address(settler)));
@@ -528,7 +536,7 @@ contract DirectSettlementTest is Test {
         ens.setText(chair1Node, "com.unica.terminal-status", "revoked");
         vm.stopPrank();
 
-        vm.mockCall(address(registryDouble), abi.encodeWithSignature("admin()"), abi.encode(admin));
+        assertEq(registryDouble.admin(), admin, "the same one registry admin governs both surfaces");
         vm.prank(admin);
         admission.setDirectSettler(address(settler), true);
         vm.prank(admin);
@@ -583,7 +591,10 @@ contract DirectSettlementTest is Test {
         ens.setText(chair1Node, "com.unica.terminal-status", "active");
         vm.stopPrank();
 
-        registryDouble = new RegistryDouble();
+        // The SAME registry the settler answers to. `TerminalAdmission.setDirectSettler` refuses a
+        // settler that names a different one, and that refusal is the whole point: it is what makes
+        // "who may list this settler" and "who may raise a sale on it" one account.
+        registryDouble = registry;
         admission = new TerminalAdmission(
             address(ens),
             address(registryDouble),

@@ -628,7 +628,6 @@ contract TerminalTrustTreeTest is Test {
         );
         assertFalse(admission.isDirectSettler(address(settler)));
 
-        vm.mockCall(address(registryDouble), abi.encodeWithSignature("admin()"), abi.encode(address(this)));
         vm.expectEmit(true, true, true, true, address(admission));
         emit DirectSettlerSet(address(settler), true);
         admission.setDirectSettler(address(settler), true);
@@ -656,7 +655,6 @@ contract TerminalTrustTreeTest is Test {
     ///      handover of that role moves this power with it.
     function test_StrangerCannotSetDirectSettler() public {
         (DirectSettlement settler,) = _newDirectSettler();
-        vm.mockCall(address(registryDouble), abi.encodeWithSignature("admin()"), abi.encode(address(this)));
 
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(TerminalAdmission.NotRegistryAdmin.selector, attacker));
@@ -676,7 +674,6 @@ contract TerminalTrustTreeTest is Test {
     /// @dev Taking a settler off the list refuses the next admission and leaves the last one alone.
     function test_RemovingDirectSettler_RefusesTheNextAdmissionOnly() public {
         (DirectSettlement settler,) = _newDirectSettler();
-        vm.mockCall(address(registryDouble), abi.encodeWithSignature("admin()"), abi.encode(address(this)));
         admission.setDirectSettler(address(settler), true);
         settler.setOrderCreator(address(admission), true);
 
@@ -717,10 +714,14 @@ contract TerminalTrustTreeTest is Test {
         );
     }
 
-    /// @dev A settler on a fresh local test dollar, admitted by this test contract, which is also
-    ///      the admin the mocked registry names.
+    /// @dev A settler on a fresh local test dollar, built on the SAME registry double the gate
+    ///      uses. That double names this test contract as its admin, so this contract is both the
+    ///      account that may list the settler here and the account that may name an order creator
+    ///      on it. That is not two coincidences: the settler holds no admin of its own and reads
+    ///      the registry's live, and the gate refuses to list a settler naming another registry.
     function _newDirectSettler() internal returns (DirectSettlement settler, MockERC20 uusd) {
         uusd = new MockERC20("Unica test dollar", "uUSD", 6);
-        settler = new DirectSettlement(address(uusd), address(this));
+        settler = new DirectSettlement(address(uusd), address(registryDouble));
+        assertEq(settler.admin(), registryDouble.admin(), "one authority, resolved live from the registry");
     }
 }

@@ -45,6 +45,14 @@ interface IDirectSettlement {
     function ASSET() external view returns (address);
     /// @notice A stable id for evidence: keccak256("unica-v5/direct", chainid, this, asset).
     function SETTLEMENT_ID() external view returns (bytes32);
+    /// @notice The official UNICA v4 registry this settler answers to. Fixed at construction.
+    function REGISTRY() external view returns (address);
+    /// @notice The only account that may call `setOrderCreator`: the registry's admin RIGHT NOW,
+    ///         read live on every check rather than copied here at construction. It is the same
+    ///         account `TerminalAdmission.setDirectSettler` asks for, so listing a settler on the
+    ///         gate and deciding who may raise a sale on it are one authority, not two, and a
+    ///         handover of the registry admin carries both without a transaction here.
+    function admin() external view returns (address);
 
     /// @notice Same signature as the market executor's createOrder; `minOut` must equal `amountIn`.
     function createOrder(
