@@ -205,6 +205,9 @@ label { font-weight: 500; }
 .lay-marketing header.site { display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--s2) var(--s4); max-width: 64rem; }
 .lay-marketing header.site nav { flex: 1 1 20rem; }
+/* When the navigation wraps to two lines the name must not end up floating beside its second row,
+   so below the sidebar's own breakpoint the name takes a row of its own. */
+@media (max-width: 51.99rem) { .lay-marketing header.site .mark { flex: 1 0 100%; } }
 .hero { padding: var(--s8) 0 var(--s2); }
 .hero h1 { margin: 0; font-size: 2.1rem; line-height: 1.15; max-width: 20ch; }
 .lay-marketing .hero + .lead { font-size: 1.2rem; max-width: 60ch; }
