@@ -366,6 +366,27 @@ balances: _need-deployer
 anvil:
 	anvil --fork-url $(SEPOLIA_RPC_URL) --port 8545 --auto-impersonate
 
+# ── UNICA v4 on a local Anvil chain: LOCAL_ANVIL_NO_VALUE ─────────────────────────────────────
+# The complete vertical slice (Uniswap v4 market, ENSv2-compatible identity fixture, identity NFT,
+# CRE policy fixture, evidence projection, POS CLI) on chain 31337 and nowhere else. Every script
+# refuses any other chain id; accounts are Anvil's public fixture accounts, impersonated; no key
+# exists anywhere. `anvil-test` runs the whole sequence from a clean chain and stops the node.
+.PHONY: anvil-up anvil-deploy anvil-seed anvil-demo anvil-attacks anvil-test anvil-down
+anvil-up:
+	bash script/anvil/up.sh
+anvil-deploy:
+	bash script/anvil/deploy.sh
+anvil-seed:
+	bash script/anvil/seed.sh
+anvil-demo:
+	bash script/anvil/demo.sh
+anvil-attacks:
+	bash script/anvil/attacks.sh
+anvil-test:
+	bash script/anvil/test.sh
+anvil-down:
+	bash script/anvil/down.sh
+
 # ── go live: the one command the owner runs, and its pre-flight ───────────────────────────────
 go-live:
 	bash script/go-live.sh
