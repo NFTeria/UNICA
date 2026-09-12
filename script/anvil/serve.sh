@@ -120,6 +120,21 @@ async function projectAll(manifest) {
   return merged;
 }
 
+/** True when the request comes from this server's own pages (or from no page at all, i.e. a local tool). */
+function sameOriginRequest(req) {
+  const site = String(req.headers["sec-fetch-site"] ?? "").toLowerCase();
+  if (site === "cross-site" || site === "same-site") return false;
+  const origin = req.headers.origin;
+  if (!origin) return true; // no Origin: not a browser page, or a same-origin request from an older browser
+  try {
+    const o = new URL(origin);
+    const host = o.hostname === "localhost" ? "127.0.0.1" : o.hostname;
+    return (host === "127.0.0.1" || host === "::1" || host === HOST) && Number(o.port || (o.protocol === "https:" ? 443 : 80)) === PORT;
+  } catch {
+    return false;
+  }
+}
+
 /** The request body up to `limit` bytes, or null when it is larger than that. */
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
@@ -371,7 +386,13 @@ async function sendFile(res, path, status = 200) {
 }
 
 async function serveStatic(res, pathname) {
-  let rel = normalize(decodeURIComponent(pathname));
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return sendFile(res, join(OUT_DIR, "404.html"), 404).catch(() => { res.writeHead(404); res.end("not found"); });
+  }
+  let rel = normalize(decoded);
   if (rel.split(sep).includes("..")) return sendFile(res, join(OUT_DIR, "404.html"), 404).catch(() => { res.writeHead(404); res.end("not found"); });
   if (rel === sep || rel === ".") rel = "index.html";
   let filePath = join(OUT_DIR, rel);
@@ -414,12 +435,17 @@ const server = createServer(async (req, res) => {
     // this is a pipe, not a policy, and it forwards only JSON-RPC-shaped POSTs of a bounded size.
     if (url.pathname === RPC_PROXY_PATH) {
       if (req.method !== "POST") return sendJson(res, 405, { error: "POST a JSON-RPC request" });
+      // Only this site's own pages may use the pipe. Another tab on another origin could otherwise
+      // POST here blind (a browser sends it without asking) and drive the local node through us.
+      // A same-origin fetch carries Sec-Fetch-Site same-origin or an Origin of this server; a plain
+      // curl on the same machine carries neither and is the owner's own hand, which is allowed.
+      if (!sameOriginRequest(req)) return sendJson(res, 403, { error: "this path answers this site's own pages only" });
       const body = await readBody(req, 1 << 20);
       if (body === null) return sendJson(res, 413, { error: "request too large" });
       let parsed;
       try { parsed = JSON.parse(body); } catch { return sendJson(res, 400, { error: "not JSON" }); }
-      const shaped = (x) => x && typeof x === "object" && typeof x.method === "string";
-      if (!(shaped(parsed) || (Array.isArray(parsed) && parsed.every(shaped)))) return sendJson(res, 400, { error: "not a JSON-RPC request" });
+      const shaped = (x) => x && typeof x === "object" && !Array.isArray(x) && typeof x.method === "string";
+      if (!(shaped(parsed) || (Array.isArray(parsed) && parsed.length > 0 && parsed.every(shaped)))) return sendJson(res, 400, { error: "not a JSON-RPC request" });
       const upstream = await fetch(RPC_URL, { method: "POST", headers: { "content-type": "application/json" }, body });
       const text = await upstream.text();
       res.writeHead(upstream.status, { "content-type": "application/json", "cache-control": "no-store" });
