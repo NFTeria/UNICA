@@ -14,7 +14,7 @@ this demonstration. It is not USDC.
 ## What you will see
 
 A barbershop called Fresh Cuts joins, says which asset it wants to be paid in, authorizes one
-register, loses a tablet and revokes it, and then sells twice.
+register, loses a tablet and revokes it, writes down what it sells, and then sells three times.
 
 1. **A clean start.** Nothing from an earlier run is reused, so nothing you see can be left over.
 2. **The business.** Its name, the wallet it joined from, the address it is paid into, the asset it

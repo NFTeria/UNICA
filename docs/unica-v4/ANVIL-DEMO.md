@@ -19,7 +19,7 @@ node on every exit path. The stages are also individually runnable:
 | `make anvil-up` | starts a fresh Anvil on `127.0.0.1:8545`, chain id 31337, pinned genesis timestamp, auto-impersonation | — |
 | `make anvil-deploy` | the whole fixture stack (below) and `deployments/31337.local.json` | the node's chain id is not 31337; Vyper is not exactly 0.4.3 |
 | `make anvil-seed` | initialise the pool at the recorded opening price, add the $5-equivalent **demonstration** seed over the band-width range, prove SEEDED from PoolManager state, ACTIVATE | the market is not PROPOSED (a live market is never reseeded) |
-| `make anvil-demo` | the sixteen-step barbershop scenario | any expected refusal stops refusing; the evidence layer does not return VERIFIED |
+| `make anvil-demo` | the barbershop scenario: the shop's list (step 0a) and the sixteen numbered steps | any expected refusal stops refusing; the evidence layer does not return VERIFIED |
 | `make anvil-attacks` | the adversarial matrix against the live local deployment | any case that must refuse settles, or any UNKNOWN case reads VERIFIED |
 | `make anvil-down` | stops the node; leaves `.rehearsal/anvil/` for inspection | — |
 
@@ -197,8 +197,80 @@ names the layer that actually refuses.
 
 `make business-up | business-demo | business-open | business-test | business-down` drive this same
 local chain and say what they are doing in the words a business uses. `business-demo` runs the whole
-story from an empty chain and prints two sales, the balances they moved, both receipt results, five
+story from an empty chain and prints three sales, the balances they moved, every receipt result, six
 refusals, and the addresses to open. Identifiers, transaction hashes and log paths are printed only
 under **Advanced verification** at the end, because a person deciding whether they were paid should
 not have to read a hash to find out. See [`../BUSINESS-START-HERE.md`](../BUSINESS-START-HERE.md) for
 the owner-facing page and [`../RUNBOOK-OPERATOR.md`](../RUNBOOK-OPERATOR.md) for the operator one.
+
+## The shop's own list of what it sells (appended 2026-09-12)
+
+A business should be able to write down what it sells, by name, and be paid for it. That is what
+`src/unica-v5/ProductCatalog.sol` is: one list, three shapes, and nothing else.
+
+| shape | what it is | what the sale does |
+|---|---|---|
+| `ONE_OFF` | sold once — a chair, a repair, a slot. It may name ONE buyer, which is how a quote becomes an invoice | marks it sold; nobody can buy it again |
+| `RECURRING` | a period the buyer keeps paying for | moves the date they are **paid through** forward by one period, from today or from the date they had already reached, whichever is later |
+| `PERMANENT` | the thing on the shelf | nothing beyond the sale; anyone buys it, any number of times |
+
+Same asset only. The buyer pays the asset the product names and the payout wallet receives **exactly**
+the price, measured as a balance change on that wallet, so a token that skims a fee is refused and
+nothing moves. Converting between assets is the market path's job and is not in this contract.
+
+Price, asset, kind, period and name are written once and there is no function that changes them: a
+subscriber's terms cannot move under them, and a permanent product cannot be renamed after someone
+bought it. A seller who wants different terms lists a new product and stops selling the old one. The
+seller's only other power is whether the thing is on sale. There is no owner, no admin, no pauser and
+no upgrade path, so no account — the deployer included — can take a listing down, redirect a payment,
+refund a buyer, or edit a deal.
+
+### In the demonstration
+
+`make anvil-deploy` lands the catalogue, and records it as `contracts.productCatalog` (with its own
+`catalogId`) in `deployments/31337.local.json`. `make anvil-demo` adds one step:
+
+| step | claim | layer | proved by |
+|---|---|---|---|
+| 0a | Fresh Cuts lists `Haircut` (permanent, 25.00 uUSD) and `Monthly membership` (recurring, 40.00 uUSD, 30 days) from its OWN wallet | UNICA_ONCHAIN | `listProducts()` |
+| 0a | the customer buys the haircut and the shop receives **exactly** the price | UNICA_ONCHAIN | balance delta, equality asserted |
+| 0a | the sale id is derived from the documented expression and the counter read before the sale, then found on the chain and authenticated | evidence | `tools/unica-evidence/cli.mjs --sale` |
+
+Nothing in that step asks anyone's permission. A shop's own list of its own prices is not something a
+payment network should be able to edit, so the catalogue has no gate and no allowlist of sellers.
+
+### The counterfeit shopfront
+
+Anybody can deploy this same source and sell a product with the same name at the same price — and
+point the money at the real shop's wallet, so the sale even shows up in that wallet's own list of
+what it was paid. `test/unica-v5/ProductCatalogAttacks.t.sol` S6 and `test/anvil/Attacks.t.sol`
+measure how much a shopper could tell from the chain alone: the sale event is identical in every
+field a receipt shows, and only the address it came from differs. So that is the check the reader
+makes, and `make anvil-demo` proves it end to end against a real counterfeit catalogue the deploy
+stage lands for the attacker.
+
+| case | answer | why |
+|---|---|---|
+| `PRODUCT_SALE_CONTROL` | VERIFIED | the sale the shop's own list really made |
+| `PRODUCT_LOOKALIKE_CATALOG` | REFUSED, `UNREGISTERED_EMITTER` | a real sale, real money, from a catalogue this deployment never named |
+| `PRODUCT_SALE_NEVER_MADE` | REFUSED, `MISSING_PRODUCT_SALE` | the source answered and holds no such sale; that is not "unknown" |
+| `PRODUCT_INACTIVE` | REFUSED, `ProductInactive` | the seller stopped selling it |
+| `PRODUCT_ONE_OFF_TWICE` | REFUSED, `AlreadySold` | one-off means once |
+| `PRODUCT_WRONG_BUYER` | REFUSED, `WrongBuyer` | a one-off written for one person cannot be taken by whoever saw it first |
+| `PRODUCT_FEE_ON_TRANSFER` | REFUSED, `DeliveryNotExact` | the shop must receive the price, not the price minus a fee |
+| `PRODUCT_DEACTIVATE_NOT_SELLER` | REFUSED, `NotSeller` | not a stranger, not the market's admin, not the deployer |
+
+### What the reader does NOT check, and why
+
+`authenticateDirectReceipt` cross-checks its receipt against the settler's stored order, because that
+order was raised in an earlier transaction by a different contract and is therefore independent
+evidence. A catalogue sale has no second witness: the product row and the sale event are written by
+one contract in one transaction, so reading the row back would prove only that the contract agrees
+with itself. `authenticateProductSale` says so in its own note instead of performing a check that
+looks like corroboration and is not.
+
+### Not deployed publicly
+
+The five manifests under `deployments/unica-v4/` carry no catalogue: nothing has been deployed to any
+public chain by this work. `script/unica-v4/manifest.sh` accepts an optional `UNICA_PRODUCT_CATALOG`
+and records it as `contracts.productCatalog` when a deployment eventually has one.
