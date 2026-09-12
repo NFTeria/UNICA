@@ -656,7 +656,9 @@ async function renderOrder(config, orderId) {
   }
 
   let session = null;
-  let spoken = checkoutVerdict({ evidence: null, expiry: card.expiry });
+  // The verdict is judged by the chain's clock, exactly as the blockers and the countdown are: on a
+  // drifting testnet the status line would otherwise say Expired while the blockers still said open.
+  let spoken = checkoutVerdict({ evidence: null, expiry: card.expiry, now: Math.floor(Date.now() / 1000) + chainSkew });
   const payBtn = document.getElementById("co-pay");
   const asRecord = blockerSubject(card, record);
   const refresh = () => {
@@ -711,7 +713,7 @@ async function renderOrder(config, orderId) {
   const check = async () => {
     const evidence = await loadEvidence(card.id);
     fillAdvanced(config, { order: card.id, tx: card.settledTx, reasons: evidence?.reasonCodes ?? null });
-    spoken = checkoutVerdict({ evidence, expiry: card.expiry });
+    spoken = checkoutVerdict({ evidence, expiry: card.expiry, now: Math.floor(Date.now() / 1000) + chainSkew });
     setText("co-status", spoken.word);
     const pill = document.getElementById("co-status");
     if (pill) pill.dataset.status = spoken.status;

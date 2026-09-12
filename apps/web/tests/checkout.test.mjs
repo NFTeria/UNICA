@@ -22,7 +22,6 @@ import { dirname, join } from "node:path";
 import {
   ADDRESS,
   businessIdentity,
-  orderCardFromRead,
   displayName,
   explorerTxLink,
   graphPanel,
@@ -845,4 +844,27 @@ test("the register is the one thing carried over from the record, because it is 
   const card = orderCard(config, readDirect(), ORDER_ID);
   const now = 1789243018;
   assert.ok(computeBlockers({ config, record: blockerSubject(card, config.record), connectedAddress: BUYER, walletChainId: 31337, now }).reasons.includes("TERMINAL_REVOKED"));
+});
+
+
+// ── the chain's clock reaches the verdict ──────────────────────────────────────────────────────
+
+test("a verdict judged by the chain's clock keeps an order open that the browser's clock would call expired", () => {
+  const browserNow = 2_000_000_000;
+  const chainSkew = -7200; // the testnet's clock sits two hours behind this browser
+  const expiry = browserNow - 3600; // past on the wall clock, an hour away on the chain
+  const open = { decision: "UNKNOWN", reasonCodes: ["ORDER_OPEN"] };
+  const judgedByChain = checkoutVerdict({ evidence: open, expiry, now: browserNow + chainSkew });
+  assert.equal(judgedByChain.word, "Waiting for your payment");
+  assert.equal(judgedByChain.payable, true);
+  const judgedByBrowser = checkoutVerdict({ evidence: open, expiry, now: browserNow });
+  assert.equal(judgedByBrowser.word, "Expired", "control: without the skew the same order reads Expired");
+});
+
+test("renderOrder passes the chain-adjusted time to both of its verdict calls", () => {
+  const source = readFileSync(new URL("../assets/local-pay.js", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("async function renderOrder("));
+  const calls = body.match(/checkoutVerdict\(\{[^}]*\}\)/g) ?? [];
+  assert.equal(calls.length, 2, `renderOrder calls checkoutVerdict ${calls.length} times`);
+  for (const call of calls) assert.match(call, /now: Math\.floor\(Date\.now\(\) \/ 1000\) \+ chainSkew/, `a verdict call without the chain's clock: ${call}`);
 });
