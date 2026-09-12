@@ -1,9 +1,31 @@
-/** The signed-in screens: the dashboard, the payments list and one payment's detail. One route per export so the index keeps the original order. */
-import { h, raw, hex, evidenceBadge } from "../html.mjs";
-import { SITE, V3, EXPERIMENT } from "../site.mjs";
+/**
+ * The signed-in business: the overview, the orders list, and one order.
+ *
+ * WHAT THE SERVED HTML IS FOR. Every figure on these screens is read from the chain when the page
+ * runs, so what ships in the document is the SHAPE of the answer and never the answer: a label, an
+ * em dash, and a live region that says nothing has been read yet. A page with no script is then a
+ * true description of what this screen shows, and a page with script fills it in. Nothing here
+ * carries a sample price, an example customer or a zero standing in for a number nobody has read.
+ *
+ * THE GATE IS HIDDEN AT REST, AND THAT IS DELIBERATE. `assets/business.js` reveals it and hides the
+ * body when no wallet is recognised. Shipping it the other way round would mean a reader with no
+ * script sees a sign-in prompt and none of the page, when the truth is that the page exists and
+ * simply has not read anything.
+ *
+ * The table below is written out rather than taken from `dataTable()` because script fills its
+ * body row by row and needs the element to address. Its structure is the design system's, cell for
+ * cell; apps/web/DESIGN.md is the copy that governs.
+ */
+import { h, raw } from "../html.mjs";
 import * as C from "../components.mjs";
 
 const P = (id) => raw(` data-parity="${id}"`);
+
+/** The one line a person reads when nobody is signed in, and the block that carries it. */
+const gate = raw(`<div class="empty adm-gate" id="admin-gate" hidden>
+  <p class="empty-t">Sign in to see your business</p>
+  <p class="sub" id="gate-line">Use the wallet control at the top of this page.</p>
+</div>`);
 
 export const DASHBOARD = [
   {
@@ -11,71 +33,71 @@ export const DASHBOARD = [
     h1: "My business",
     title: "My business — UNICA",
     description:
-      "The business dashboard: the payout asset, which customer assets can be paid right now, the active register, and the payments verified today.",
+      "The overview: what you are paid in, what you took today, what your payout wallet holds, your registers and your settings.",
     ogTitle: "Your business on UNICA",
-    ogDescription: "Payout asset, payment assets, register, today's takings.",
+    ogDescription: "Payout asset, today's takings, holdings, registers.",
     ogImage: "og-merchant.svg",
-    body: h`
-<section class="card"${P("merchant-drawer")} id="business-summary">
-  <p class="headline" id="business-title">Fresh Cuts</p>
-  <p class="big" id="business-ready">Ready to accept payments</p>
-  <p class="sub" id="business-payname">—</p>
+    body: h`<link rel="stylesheet" href="../assets/screens/admin.css">
+${gate}
+<div id="admin-body">
+<section class="card adm-owned"${P("merchant-drawer")} id="business-summary">
+  <p class="headline" id="business-title">Your business</p>
+  <p class="sub"><span id="business-payname">—</span> <span class="adm-marks" id="payname-mark"></span></p>
   <p class="ctas">
-    <a class="cta" href="payments/new/">Create payment</a>
-    <a class="cta cta-quiet" href="payments/">Receipts</a>
-    <a class="cta cta-quiet" href="../join/">Add another register</a>
+    <a class="cta" href="payments/new/">New sale</a>
+    <a class="cta cta-quiet" href="products/">Add product</a>
   </p>
 </section>
 <dl class="kpis">
   <div class="kpi"><dt>You receive</dt><dd id="payout-asset">—</dd></div>
-  <div class="kpi"><dt>Active register</dt><dd id="active-register">—</dd></div>
-  <div class="kpi"><dt>Verified payments today</dt><dd id="today-count">—</dd></div>
+  <div class="kpi"><dt>Checked today</dt><dd id="today-count">—</dd></div>
+  <div class="kpi"><dt>Taken today</dt><dd id="today-total">—</dd></div>
+  <div class="kpi"><dt>Last payment</dt><dd id="last-payment">—</dd></div>
 </dl>
-${C.statusRegion("business-status", "This page reads your business from the network when it runs.")}
+${C.statusRegion("business-status", "Today's figures have not been read yet.")}
 
-<h2>Payment assets your customers can use</h2>
-<p>Each asset says what it can do right now. An asset is only offered when this setup can actually
-complete a payment in it; otherwise it says it is temporarily unavailable, rather than failing
-after a customer has pressed pay.</p>
-<ul id="asset-list" class="assets"></ul>
-${C.statusRegion("assets-said", "Payment assets have not been read yet.")}
+<h2>Your shop</h2>
+<p class="sub">One page for everything you sell, at your own name.</p>
+<div class="adm-share" id="shop-share">
+  <div class="qr" id="shop-qr"></div>
+  <div>
+    <code class="adm-link" id="shop-link">—</code>
+    <p class="ctas">
+      <button type="button" class="cta cta-quiet" data-copy="true">Copy link</button>
+      <button type="button" class="cta cta-quiet" data-share="true">Share</button>
+    </p>
+    <p class="sub" id="shop-said">Your shop link has not been read yet.</p>
+  </div>
+</div>
 
 <h2>What your wallet holds</h2>
-<p>Every asset this app knows on this network, with the amount your payout wallet holds right now,
-read from the network when this page opens. Read a different wallet instead by connecting it. An
-asset this app does not know is not shown, and no amount is ever guessed.</p>
-<p>
-  <label for="holdings-address">Or read any wallet address</label>
-  <input id="holdings-address" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x…" size="46">
-  <button type="button" id="holdings-read">Read this wallet</button>
-  <button type="button" id="holdings-connect">Read my connected wallet</button>
-</p>
+<p class="sub">Every asset this app knows on this network, for your payout wallet.</p>
 <ul id="holdings-list" class="assets"></ul>
 ${C.statusRegion("holdings-said", "Holdings have not been read yet.")}
 
-<h2>Today</h2>
-<p id="today-line">Today's verified payments are read from this business's own record.</p>
-<ul id="today-list" class="registers"></ul>
-<p class="sub" id="today-unresolved">A payment that has not been verified is never counted as taken.</p>
-
-<h2>Registers</h2>
-<p>A register is a place a sale can start. Revoking one stops new sales from it. Sales it already
-started are unaffected.</p>
+<h2 id="registers">Registers</h2>
+<p class="sub">A register is a place a sale can start. Switching one off stops new sales from it.</p>
+<dl class="kpis">
+  <div class="kpi"><dt>Active register</dt><dd id="active-register">—</dd></div>
+</dl>
 <ul id="register-list" class="registers"></ul>
 ${C.statusRegion("registers-said", "Registers have not been read yet.")}
-<p><button type="button" class="cta cta-quiet" id="revoke-register" disabled aria-describedby="revoke-why">Revoke register</button></p>
-<p class="sub" id="revoke-why">Disabled until a register has been read from the network and your
-wallet is connected as the owner of this business.</p>
+${C.button("Switch a register off", { variant: "danger", id: "revoke-register", disabled: true, reason: "Disabled until a register has been read and your wallet is connected as the owner." })}
 
-<section${P("ens-resolve")}>
-  <h2>Your pay name</h2>
-  <p>Customers pay a name, not an address. The name is resolved to your payout wallet before a sale
-  exists, and the resolved wallet is shown for checking before anything is confirmed.</p>
-  <p>Resolution fails closed. A name with no record resolves to nothing, never to an empty address
-  that would quietly create a sale paying nobody.</p>
-  ${C.statusRegion("ens-status", "The pay name has not been resolved yet.")}
-</section>
+<h2 id="settings">Settings</h2>
+<dl class="adm-facts">
+  <div${P("ens-resolve")}><dt>Pay name</dt><dd id="set-payname">—</dd></div>
+  <div><dt>Payout wallet</dt><dd id="set-payout">—</dd></div>
+  <div><dt>Your colour</dt><dd><span class="adm-swatch" id="set-accent">Not read yet</span></dd></div>
+</dl>
+${C.field({ id: "holdings-address", label: "Look up a wallet", placeholder: "0x…", help: "Reads what that wallet holds. Nothing is sent." })}
+<p class="ctas">
+  <button type="button" class="cta cta-quiet" id="holdings-read">Read this wallet</button>
+  <button type="button" class="cta cta-quiet" id="holdings-connect">Read my wallet</button>
+  <button type="button" class="cta cta-quiet" id="admin-logout">Log out</button>
+</p>
 ${C.advancedVerification("adv")}
+</div>
 <script type="module" src="../assets/business.js"></script>`,
   },
 ];
@@ -83,22 +105,37 @@ ${C.advancedVerification("adv")}
 export const PAYMENTS = [
   {
     route: "business/payments",
-    h1: "Receipts",
-    title: "Receipts — UNICA",
+    h1: "Orders",
+    title: "Orders — UNICA",
     description:
-      "Every payment this business has taken, with the verification decision beside each one, read from the network rather than remembered.",
-    ogTitle: "UNICA receipts",
-    ogDescription: "Payments taken, and whether each was verified.",
+      "Every payment this business has taken, with what it was for, who paid it, and the verification decision beside each one.",
+    ogTitle: "UNICA orders",
+    ogDescription: "Payments taken, and whether each one was checked.",
     ogImage: "og-merchant.svg",
-    body: h`
-<p>Payments are read from the network when this page runs. It states the number it read, or says
-the read failed. An unread count is never shown as zero.</p>
-${C.statusRegion("orders", "Payments have not been read yet.")}
-<ul id="payment-list" class="registers"></ul>
+    body: h`<link rel="stylesheet" href="../../assets/screens/admin.css">
+${gate}
+<div id="admin-body">
 <p class="ctas">
-  <a class="cta" href="new/">Create payment</a>
-  <a class="cta cta-quiet" href="../">Back to my business</a>
+  <a class="cta" href="new/">New sale</a>
+  <a class="cta cta-quiet" href="../">Overview</a>
 </p>
+<p class="adm-marks" id="orders-mark"></p>
+<div class="table-wrap">
+  <table class="dtable">
+    <caption>Payments to your payout wallet</caption>
+    <thead><tr>
+      <th scope="col">When</th>
+      <th scope="col">What</th>
+      <th scope="col">Amount</th>
+      <th scope="col">From</th>
+      <th scope="col">State</th>
+      <th scope="col">Receipt</th>
+    </tr></thead>
+    <tbody id="payment-list"><tr><td class="sub" colspan="6">Nothing has been read yet.</td></tr></tbody>
+  </table>
+</div>
+${C.statusRegion("orders", "Payments have not been read yet.")}
+</div>
 <script type="module" src="../../assets/business.js"></script>`,
   },
 ];
@@ -109,20 +146,20 @@ export const PAYMENT_DETAILS = [
     h1: "Payment details",
     title: "Payment details — UNICA",
     description:
-      "One payment, addressed by its order number in the link, so the same link always reloads to the same payment.",
+      "One payment of yours, addressed by its number in the link, so the same link always reloads to the same payment.",
     ogTitle: "UNICA payment details",
     ogDescription: "One payment, reload-safe.",
     ogImage: "og-merchant.svg",
-    body: h`
-<p class="sub">This page takes an order number from the link, for example
-<code>?order=0x…</code>. The state lives entirely in the link, so reloading or sharing it
-reconstructs the same page. A static host cannot serve one file per order number, which is why it
-is a query parameter rather than a path segment.</p>
+    body: h`<link rel="stylesheet" href="../../../assets/screens/admin.css">
+${gate}
+<div id="admin-body">
 ${C.statusRegion("order-detail", "No payment in this link.")}
 <p class="ctas">
-  <a class="cta cta-quiet" href="../../../pay/">Open the customer's view</a>
-  <a class="cta cta-quiet" href="../../../receipt/">Open the receipt</a>
+  <a class="cta cta-quiet" id="order-receipt" href="../../../receipt/" hidden>Open the receipt</a>
+  <a class="cta cta-quiet" href="../">Back to orders</a>
 </p>
+${C.advancedVerification("adv")}
+</div>
 <script type="module" src="../../../assets/business.js"></script>`,
   },
 ];
