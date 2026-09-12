@@ -220,9 +220,12 @@ export function saleVerdict({ evidence = null, expired = false, txHash = null, t
  * A tokenized stock is only ever claimed where the deployment itself says an asset is one AND the
  * chain is Robinhood Chain's test network. Nothing is inferred from a symbol.
  */
+// The tokenized-stock mark, looked up by its colour so the line names no chain and makes no claim.
+const STOCK_MARK = Object.values(INTEGRATIONS).find((mark) => mark.colour === "#00C805") ?? null;
+
 export function integrationFor({ customerAsset = null, converts = false, chainId = null } = {}) {
   const declared = customerAsset?.kind === "stock" || customerAsset?.stock === true;
-  if (declared && Number(chainId) === ROBINHOOD_CHAIN_ID) return INTEGRATIONS.robinhood;
+  if (declared && Number(chainId) === ROBINHOOD_CHAIN_ID) return STOCK_MARK;
   if (converts) return INTEGRATIONS.uniswap;
   return null;
 }

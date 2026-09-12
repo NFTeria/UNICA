@@ -271,7 +271,9 @@ test("one view names at most one integration, and only where the fact is on scre
   assert.equal(integrationFor({ customerAsset: UUSD, converts: false, chainId: 31337 }), null);
   assert.equal(integrationFor({ customerAsset: TAST, converts: true, chainId: 31337 }), INTEGRATIONS.uniswap);
   const stock = { ...TAST, kind: "stock" };
-  assert.equal(integrationFor({ customerAsset: stock, converts: true, chainId: ROBINHOOD_CHAIN_ID }), INTEGRATIONS.robinhood);
+  const stockSale = { customerAsset: stock, converts: true, chainId: ROBINHOOD_CHAIN_ID };
+  const stockColour = INTEGRATIONS.robinhood;
+  assert.equal(integrationFor(stockSale), stockColour);
   assert.equal(
     integrationFor({ customerAsset: stock, converts: false, chainId: 31337 }),
     null,

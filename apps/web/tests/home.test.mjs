@@ -44,11 +44,18 @@ const MARK = readFileSync(join(APP, "assets", "mark.svg"), "utf8");
  */
 const BASELINE_COMMIT = "4d1c4544a248b0746ff3d710a4b2c0846654bab7";
 
+// The baseline is a committed copy of the landing route as it stood at BASELINE_COMMIT, so the rule
+// holds on a checkout that has only the one commit CI fetched. The git read stays as a cross-check
+// where the history is present: the two must agree, or the fixture has drifted from what it claims.
 function baselineHomeSource() {
-  return execFileSync("git", ["show", `${BASELINE_COMMIT}:apps/web/src/routes/home.mjs`], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
+  const fixture = readFileSync(join(HERE, "fixtures", "home-baseline.mjs.txt"), "utf8");
+  try {
+    const fromGit = execFileSync("git", ["show", `${BASELINE_COMMIT}:apps/web/src/routes/home.mjs`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    if (fromGit !== fixture) throw new Error("the committed baseline fixture does not match the commit it names");
+  } catch (e) {
+    if (String(e?.message ?? "").includes("does not match")) throw e; // drift is a failure; a missing commit is not
+  }
+  return fixture;
 }
 
 // ── small readers, each with a control ───────────────────────────────────────────────────────────
