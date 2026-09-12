@@ -13,7 +13,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
-import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+import {HookSalt} from "../../src/unica-v4/HookSalt.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {V4PoolManagerDeployer} from "hookmate/artifacts/V4PoolManager.sol";
@@ -231,7 +231,7 @@ contract AnvilLocal is Script {
         d.feedId = IUnicaOracleRoute(d.adapter).feedIdFor(d.asset, d.payout);
         UnicaMarketTypes.MarketConfig memory cfg = _config();
         (bytes32 marketId,, bytes memory hookArgs,) = factory.previewMarket(cfg);
-        (address predicted, bytes32 salt) = HookMiner.find(d.factory, HOOK_FLAGS, creationCode, hookArgs);
+        (address predicted, bytes32 salt) = HookSalt.find(d.factory, HOOK_FLAGS, creationCode, hookArgs);
         (bytes32 id, address hook, address executor) = factory.createMarket(cfg, salt, creationCode);
         require(id == marketId && hook == predicted, "preview and creation disagree");
         d.marketId = id;
@@ -339,7 +339,7 @@ contract AnvilLocal is Script {
         bytes memory args = abi.encode(
             d.poolManager, lf.REGISTRY(), d.marketId, d.asset, d.payout, FEE, TICK_SPACING, uint8(18), uint8(6)
         );
-        (, bytes32 salt) = HookMiner.find(address(lf), HOOK_FLAGS, creationCode, args);
+        (, bytes32 salt) = HookSalt.find(address(lf), HOOK_FLAGS, creationCode, args);
         lf.spoof(
             d.marketId,
             UnicaMarketTypes.Caps({maxPerTxPayout: MAX_PER_TX, maxPerDayPayout: MAX_PER_DAY, maxSeedPayout: MAX_SEED}),

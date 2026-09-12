@@ -11,7 +11,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
-import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+import {HookSalt} from "../../src/unica-v4/HookSalt.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {IERC20Minimal} from "@uniswap/v4-core/src/interfaces/external/IERC20Minimal.sol";
 
@@ -379,7 +379,7 @@ contract DeployPublic is Script {
     {
         bytes memory creationCode = type(UnicaMarketHook).creationCode;
         (bytes32 previewId,, bytes memory hookArgs,) = factory.previewMarket(cfg);
-        (address predicted, bytes32 salt) = HookMiner.find(address(factory), HOOK_FLAGS, creationCode, hookArgs);
+        (address predicted, bytes32 salt) = HookSalt.find(address(factory), HOOK_FLAGS, creationCode, hookArgs);
         vm.startBroadcast(c.deployer);
         (p.marketId, p.hook, p.executor) = factory.createMarket(cfg, salt, creationCode);
         vm.stopBroadcast();

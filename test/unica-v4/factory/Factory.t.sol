@@ -13,7 +13,7 @@ import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
-import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+import {HookSalt} from "../../../src/unica-v4/HookSalt.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {V4PoolManagerDeployer} from "hookmate/artifacts/V4PoolManager.sol";
 
@@ -369,7 +369,7 @@ contract FactoryTest is Test {
         // A second market on the same pair, with a fresh mined salt, is refused while one is live.
         UnicaMarketTypes.MarketConfig memory again = _config(address(asset), address(payout));
         (bytes32 nextId,, bytes memory args,) = factory.previewMarket(again);
-        (, bytes32 freshSalt) = HookMiner.find(address(factory), FLAGS, type(UnicaMarketHook).creationCode, args);
+        (, bytes32 freshSalt) = HookSalt.find(address(factory), FLAGS, type(UnicaMarketHook).creationCode, args);
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(UnicaMarketRegistry.LiveMarketExists.selector, id));
         factory.createMarket(again, freshSalt, type(UnicaMarketHook).creationCode);
@@ -379,7 +379,7 @@ contract FactoryTest is Test {
         UnicaMarketTypes.MarketConfig memory reversed = _config(address(payout), address(asset));
         (bytes32 reversedId,, bytes memory reversedArgs,) = factory.previewMarket(reversed);
         (, bytes32 reversedSalt) =
-            HookMiner.find(address(factory), FLAGS, type(UnicaMarketHook).creationCode, reversedArgs);
+            HookSalt.find(address(factory), FLAGS, type(UnicaMarketHook).creationCode, reversedArgs);
         vm.prank(admin);
         factory.createMarket(reversed, reversedSalt, type(UnicaMarketHook).creationCode);
         assertTrue(reversedId != id, "the reverse pair has a distinct id");
@@ -539,7 +539,7 @@ contract FactoryTest is Test {
     function _minedConfig() internal view returns (UnicaMarketTypes.MarketConfig memory config, bytes32 salt) {
         config = _config(address(asset), address(payout));
         (,, bytes memory args,) = factory.previewMarket(config);
-        (, salt) = HookMiner.find(address(factory), FLAGS, type(UnicaMarketHook).creationCode, args);
+        (, salt) = HookSalt.find(address(factory), FLAGS, type(UnicaMarketHook).creationCode, args);
     }
 
     function _predict(bytes32 salt, UnicaMarketTypes.MarketConfig memory config) internal view returns (address) {
@@ -576,7 +576,7 @@ contract FactoryTest is Test {
         UnicaMarketTypes.MarketConfig memory config = _config(address(a), address(p));
         config.caps = UnicaMarketTypes.Caps(CAP_TX, CAP_DAY, maxSeedPayout);
         (,, bytes memory args,) = factory.previewMarket(config);
-        (, bytes32 salt) = HookMiner.find(address(factory), FLAGS, type(UnicaMarketHook).creationCode, args);
+        (, bytes32 salt) = HookSalt.find(address(factory), FLAGS, type(UnicaMarketHook).creationCode, args);
         vm.prank(admin);
         (id, hook, executor) = factory.createMarket(config, salt, type(UnicaMarketHook).creationCode);
     }

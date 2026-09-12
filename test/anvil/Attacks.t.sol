@@ -10,7 +10,7 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
-import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+import {HookSalt} from "../../src/unica-v4/HookSalt.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 
 import {UnicaMarketTypes} from "../../src/unica-v4/UnicaMarketTypes.sol";
@@ -375,7 +375,7 @@ contract AttacksTest is Test {
         });
         bytes memory code = type(UnicaMarketHook).creationCode;
         (,, bytes memory hookArgs,) = factory.previewMarket(cfg);
-        (, bytes32 minedSalt) = HookMiner.find(address(factory), uint160(0x20C0), code, hookArgs);
+        (, bytes32 minedSalt) = HookSalt.find(address(factory), uint160(0x20C0), code, hookArgs);
         vm.prank(admin);
         (bool ok, bytes memory data) =
             address(factory).call(abi.encodeWithSelector(factory.createMarket.selector, cfg, minedSalt, code));

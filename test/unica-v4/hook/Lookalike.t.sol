@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {Vm} from "forge-std/Vm.sol";
-import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+import {HookSalt} from "../../../src/unica-v4/HookSalt.sol";
 
 import {UnicaMarketTypes} from "../../../src/unica-v4/UnicaMarketTypes.sol";
 import {UnicaMarketRegistry} from "../../../src/unica-v4/UnicaMarketRegistry.sol";
@@ -130,7 +130,7 @@ contract LookalikeTest is UnicaV4TestBase {
             spec.assetDecimals,
             spec.payoutDecimals
         );
-        (, bytes32 salt) = HookMiner.find(address(this), HOOK_FLAGS, type(UnicaMarketHook).creationCode, args);
+        (, bytes32 salt) = HookSalt.find(address(this), HOOK_FLAGS, type(UnicaMarketHook).creationCode, args);
         UnicaMarketHook forged = new UnicaMarketHook{salt: salt}(
             manager,
             address(attackerRegistry),
