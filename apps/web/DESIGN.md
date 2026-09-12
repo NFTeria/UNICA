@@ -123,6 +123,12 @@ The wrapper scrolls sideways so the page never does.
 </div>
 ```
 
+**A cell is escaped unless it is a rendered block.** `h` escapes every interpolation, which is the
+property that stops a business name from becoming markup. So a cell that should hold a pill takes
+the value `pill("verified")` returns — not that value turned into a string. Pass a string and you
+will see the tags on screen, which is the escaping working, not failing. The same holds for the
+product list and anywhere else a block nests inside a block.
+
 ### Pill
 
 Six states. The mark and the word carry the meaning; the colour only agrees with them.
