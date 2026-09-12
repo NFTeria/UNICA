@@ -1,12 +1,16 @@
 {
   "sepolia": {
-    "V4SettlementHook": {
-      "address": "0x11202071DA4EB91bE3041A174d0c20fdaC0Ea0C0",
-      "startBlock": 11639895
+    "UnicaMarketHook": {
+      "address": "0x2570a593e0D24ede29eC926e0c5a88B427b9A0c0",
+      "startBlock": 11690161
     },
-    "UnicaHookV3": {
-      "address": "0x5d6AdF56facB123A2e46D36EA7034cb393D6A0c0",
-      "startBlock": 11667702
+    "DirectSettlement": {
+      "address": "0x14a95db5463d27a97DF464001ec65d5DADffC88e",
+      "startBlock": 11691641
+    },
+    "ProductCatalog": {
+      "address": "0xEf837110e2A60B4940E57570E5AD05f39d8C398A",
+      "startBlock": 11691641
     }
   }
 }
