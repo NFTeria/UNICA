@@ -88,8 +88,13 @@ generations, which have their own records.
 | Drop `adapter` and `feedId` from the recomputed `marketId` | `test_R7_marketIdDiffersAcrossChainVersionAdapterAndFeed` |
 | Delete both residual comparisons in `_verifyAndAccount` | nothing at review time → `Guards.t.sol` X14 rows and mutants M-res-1/2 now |
 
-The full mutation table and its verdicts live in `script/mutation-unica-v4.sh` and are reproduced by
-`make mutants-unica-v4`; the run's output is the evidence, not this paragraph.
+The full mutation table lives in `script/mutation-unica-v4.sh` and is reproduced by `make mutants-unica-v4`
+on a mirror of the tree. First run after the guard rows landed: 18 mutants, 14 killed by the row that names
+them alone, 4 killed by that row and by further rows as well (the runner reports those as over-coverage),
+0 survived. Guard rows: 17, each beside its control. Measured on the way: the oversized order at spacing 10
+is refused by name (`PartialFill`) at 1,408,162 gas; band spend halts on the third maximum payment with the
+hook's floor equal to an independent recomputation; the hook's external ABI digests 30 selectors and the
+runtime dispatcher recovers exactly 30.
 
 ## Process incident, recorded
 
