@@ -1,0 +1,217 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.30;
+
+// LOCAL ENSv2-COMPATIBLE FIXTURE for Anvil integration tests. Not the isolated ENSv2 Sepolia
+// deployment; mirrors its measured Enhanced Access Control shape (per-key text resources, role
+// bitmaps, admin bits at +128) so the order-admission path can be tested end to end without a
+// network. Pinned Sepolia configuration lives in integrations/ensv2/profile.mjs.
+
+import {IIdentityAuthority} from "./interfaces/IIdentityAuthority.sol";
+import {IUnicaMarketExecutor} from "../unica-v4/interfaces/IUnicaMarketExecutor.sol";
+import {IUnicaPolicyReceiver} from "../unica-v4/policy/IUnicaPolicyReceiver.sol";
+
+/// @title TerminalAdmission
+/// @notice The registry-allowlisted order creator that gates NEW orders by terminal authority.
+///         Written from `docs/unica-v5/ens/POS-TERMINALS.md` §3-6 and
+///         `docs/unica-v5/ens/ACCESS-CONTROL.md` §5, §8-9.
+///
+/// @dev WHAT THIS CONTRACT DOES AND DOES NOT DO — stated plainly because it is the property every
+///      negative test here exists to defend:
+///
+///      ENS gates ADMISSION of a new order only. `requestOrder` checks a terminal's identity and
+///      status BEFORE calling `IUnicaMarketExecutor.createOrder`, and once that call returns, this
+///      contract's job is finished. It never alters an existing order's merchant, payer, asset,
+///      amount, market, chain, nonce, expiry, hook, executor or payout — none of those fields are
+///      writable from here, before or after admission. Revoking a terminal's authority, or editing
+///      the merchant's ENS records, changes what a FUTURE call to `requestOrder` will accept; it
+///      does not and cannot invalidate an order that already exists, because this contract holds
+///      no reference back into an admitted order once `createOrder` returns. This contract is
+///      outside v4 settlement: it never touches a pool, a hook, or a token balance directly, and
+///      `pay`/settlement proceed entirely inside the executor named at admission time.
+contract TerminalAdmission {
+    /// @dev Mirrors `IIdentityAuthority`/`LocalEnsV2Fixture`'s `ROLE_SET_TEXT` bit
+    ///      (`docs/unica-v5/ens/ACCESS-CONTROL.md` §5.2). Not imported from the fixture: this
+    ///      contract depends only on the `IIdentityAuthority` interface, and the bit's meaning is
+    ///      part of that shared convention, not a fixture implementation detail.
+    uint256 private constant ROLE_SET_TEXT = 1 << 4;
+
+    struct AdmissionRecord {
+        bytes32 merchantNode;
+        bytes32 terminalNode;
+        address operator;
+        address recipientAtAdmission;
+        uint64 admittedAt;
+        bytes32 orderNonce;
+    }
+
+    /// @dev One request's working state, carried as a single memory pointer between the internal
+    ///      steps below instead of as nine-plus separate parameters. `via_ir = false` is pinned in
+    ///      `foundry.toml`, and `requestOrder`'s own parameter count plus this contract's chain of
+    ///      external reads (identity, executor, policy) does not fit the legacy pipeline's stack
+    ///      budget as plain scalars — this is the standard, documented way around that without
+    ///      asking for the optimizer pipeline to change.
+    struct Request {
+        bytes32 merchantNode;
+        bytes32 terminalNode;
+        address executor;
+        address payer;
+        uint128 amountIn;
+        uint128 minOut;
+        uint64 deadline;
+        bytes32 salt;
+        address recipient;
+        bytes32 marketId;
+        address assetToken;
+        address payoutToken;
+    }
+
+    IIdentityAuthority public immutable IDENTITY;
+    bytes32 public immutable ENS_DEPLOYMENT_ID;
+    /// @notice Zero means no policy gate: every ENS-admitted terminal is admitted outright.
+    IUnicaPolicyReceiver public immutable POLICY;
+    /// @notice The ENS text key a terminal must publish `"active"` under to admit orders
+    ///         (`docs/unica-v5/ens/RECORDS.md` §6.9). Not declared `immutable`: Solidity's
+    ///         `immutable` keyword accepts only value types, and `string` is a reference type — so
+    ///         this is a plain state variable, written exactly once, in the constructor, and never
+    ///         again.
+    string public TERMINAL_STATUS_KEY;
+
+    mapping(bytes32 => AdmissionRecord) private _admissions;
+
+    event OrderAdmitted(
+        bytes32 indexed orderId,
+        bytes32 indexed merchantNode,
+        bytes32 indexed terminalNode,
+        address operator,
+        address recipient,
+        address payer,
+        bytes32 orderNonce
+    );
+
+    error WrongEnsDeployment(bytes32 expected, bytes32 got);
+    error TerminalNotUnderMerchant(bytes32 terminalNode, bytes32 merchantNode);
+    error TerminalNotAuthorized(bytes32 terminalNode, address caller);
+    error TerminalNotActive(bytes32 terminalNode, string statusText);
+    error MerchantHasNoPayoutAddress(bytes32 merchantNode);
+    error PolicyNotAuthorized(bytes32 salt);
+
+    constructor(address identity, bytes32 ensDeploymentId, address policyReceiver, string memory terminalStatusKey) {
+        IDENTITY = IIdentityAuthority(identity);
+        ENS_DEPLOYMENT_ID = ensDeploymentId;
+        POLICY = IUnicaPolicyReceiver(policyReceiver);
+        TERMINAL_STATUS_KEY = terminalStatusKey;
+    }
+
+    /// @notice Admits one new order after checking that `msg.sender` is the operator key currently
+    ///         authorized, by the merchant, to publish `TERMINAL_STATUS_KEY` on `terminalNode`,
+    ///         that the terminal is under `merchantNode` at exactly `<label>.terminals.<merchant>`,
+    ///         that its published status is `"active"`, that the merchant still has a payout
+    ///         address, and — when a policy gate is configured — that the policy receiver admits
+    ///         this exact set of terms.
+    function requestOrder(
+        bytes32 merchantNode,
+        bytes32 terminalNode,
+        bytes32 ensDeploymentId,
+        address executor,
+        address payer,
+        uint128 amountIn,
+        uint128 minOut,
+        uint64 deadline,
+        bytes32 salt
+    ) external returns (bytes32 orderId) {
+        if (ensDeploymentId != ENS_DEPLOYMENT_ID) {
+            revert WrongEnsDeployment(ENS_DEPLOYMENT_ID, ensDeploymentId);
+        }
+
+        Request memory req;
+        req.merchantNode = merchantNode;
+        req.terminalNode = terminalNode;
+        req.executor = executor;
+        req.payer = payer;
+        req.amountIn = amountIn;
+        req.minOut = minOut;
+        req.deadline = deadline;
+        req.salt = salt;
+
+        _checkTerminalAndRecipient(req);
+        if (address(POLICY) != address(0)) _checkPolicy(req);
+        orderId = _admitOrder(req);
+    }
+
+    function admissionOf(bytes32 orderId) external view returns (AdmissionRecord memory) {
+        return _admissions[orderId];
+    }
+
+    /// @dev Checks (b)-(e): the terminal lives under the claimed merchant, `msg.sender` currently
+    ///      holds `SET_TEXT` at the terminal's own status-key resource, the published status text
+    ///      is exactly `"active"`, and the merchant still has a payout address. Writes
+    ///      `req.recipient` in place rather than returning it, so the caller never holds it as a
+    ///      separate scalar (see `Request`'s own comment on why).
+    function _checkTerminalAndRecipient(Request memory req) internal view {
+        if (IDENTITY.parentOf(IDENTITY.parentOf(req.terminalNode)) != req.merchantNode) {
+            revert TerminalNotUnderMerchant(req.terminalNode, req.merchantNode);
+        }
+
+        uint256 statusResource = IDENTITY.textResource(req.terminalNode, TERMINAL_STATUS_KEY);
+        if (!IDENTITY.hasRoles(statusResource, ROLE_SET_TEXT, msg.sender)) {
+            revert TerminalNotAuthorized(req.terminalNode, msg.sender);
+        }
+
+        string memory statusText = IDENTITY.text(req.terminalNode, TERMINAL_STATUS_KEY);
+        if (keccak256(bytes(statusText)) != keccak256(bytes("active"))) {
+            revert TerminalNotActive(req.terminalNode, statusText);
+        }
+
+        req.recipient = IDENTITY.addr(req.merchantNode);
+        if (req.recipient == address(0)) revert MerchantHasNoPayoutAddress(req.merchantNode);
+    }
+
+    /// @dev Check (f): the optional confidential-policy gate. Only ever called when `POLICY` is
+    ///      non-zero. Every argument `isAdmitted` needs is read from `req` one field at a time —
+    ///      `req.marketId`/`assetToken`/`payoutToken` are filled here from the executor first, so
+    ///      the final call's argument list is nine plain memory reads and never a nested external
+    ///      call evaluated inline.
+    function _checkPolicy(Request memory req) internal view {
+        IUnicaMarketExecutor mkt = IUnicaMarketExecutor(req.executor);
+        req.marketId = mkt.MARKET_ID();
+        req.assetToken = mkt.ASSET_TOKEN();
+        req.payoutToken = mkt.PAYOUT_TOKEN();
+
+        bool admitted = POLICY.isAdmitted(
+            req.salt,
+            req.marketId,
+            req.recipient,
+            req.payer,
+            req.assetToken,
+            req.payoutToken,
+            req.amountIn,
+            req.minOut,
+            req.terminalNode
+        );
+        if (!admitted) revert PolicyNotAuthorized(req.salt);
+    }
+
+    /// @dev Check/effect (g): the executor call plus the bookkeeping and event that follow it.
+    function _admitOrder(Request memory req) internal returns (bytes32 orderId) {
+        orderId = IUnicaMarketExecutor(req.executor)
+            .createOrder(
+                req.recipient,
+                req.payer,
+                req.amountIn,
+                req.minOut,
+                req.deadline,
+                keccak256(abi.encode(req.terminalNode, req.salt))
+            );
+
+        _admissions[orderId] = AdmissionRecord({
+            merchantNode: req.merchantNode,
+            terminalNode: req.terminalNode,
+            operator: msg.sender,
+            recipientAtAdmission: req.recipient,
+            admittedAt: uint64(block.timestamp),
+            orderNonce: req.salt
+        });
+
+        emit OrderAdmitted(orderId, req.merchantNode, req.terminalNode, msg.sender, req.recipient, req.payer, req.salt);
+    }
+}
