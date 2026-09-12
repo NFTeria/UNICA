@@ -7,7 +7,9 @@
 # (broadcast/DeployPublic.s.sol/<chainId>/stageA-latest.json) and runs `forge verify-contract` for each
 # Solidity contract with the constructor arguments those records carry; the registry, hook and executor
 # were created by the factory, so their arguments are rebuilt from the manifest's market record and one
-# read of the registry. Verifier: Etherscan V2 when ETHERSCAN_API_KEY is in the shell (never in a file),
+# read of the registry. Verifier, in order: UNICA_VERIFIER (+ UNICA_VERIFIER_URL) if given; the chain's public Blockscout when
+# this file knows one; Etherscan V2 when ETHERSCAN_API_KEY is in the shell (never in a file), falling back to Sourcify when Etherscan
+# has no endpoint for the chain; Sourcify otherwise.
 # Sourcify otherwise. The Vyper identity badge is not verifiable by forge; its exact inputs are printed.
 # Nothing here signs or broadcasts. --dry-run prints every command and runs none.
 set -euo pipefail
@@ -15,7 +17,7 @@ cd "$(dirname "$0")/../.."
 export PATH="$HOME/.foundry/bin:$PATH"
 CHAIN=${1:?chainId}; shift || true
 DRY=0; MANIFEST=deployments/unica-v4/$CHAIN.json; BDIR=broadcast/DeployPublic.s.sol/$CHAIN
-while [ $# -gt 0 ]; do case "$1" in --dry-run) DRY=1;; --manifest) MANIFEST=$2; shift;; --broadcast-dir) BDIR=$2; shift;; *) echo "STOP: unknown option $1"; exit 1;; esac; shift; done
+while [ $# -gt 0 ]; do case "$1" in --dry-run) DRY=1;; --manifest) [ -n "${2:-}" ] || { echo "STOP: --manifest needs a path"; exit 1; }; MANIFEST=$2; shift;; --broadcast-dir) [ -n "${2:-}" ] || { echo "STOP: --broadcast-dir needs a path"; exit 1; }; BDIR=$2; shift;; *) echo "STOP: unknown option $1"; exit 1;; esac; shift; done
 test -f "$MANIFEST" || { echo "STOP: no manifest at $MANIFEST"; exit 1; }
 test -f "$BDIR/stageA-latest.json" || { echo "STOP: no stage A broadcast record at $BDIR/stageA-latest.json"; exit 1; }
 m() { node -e 'const m=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log(process.argv[2].split(".").reduce((o,k)=>o?.[k], m) ?? "")' "$MANIFEST" "$1"; }
@@ -34,13 +36,18 @@ elif [ -n "$(blockscout_api_of "$CHAIN")" ]; then
 elif [ -n "${ETHERSCAN_API_KEY:-}" ]; then VERIFIER=(--verifier etherscan --etherscan-api-key "$ETHERSCAN_API_KEY"); else VERIFIER=(--verifier sourcify); fi
 PENDING=0
 LOG=$(mktemp -t unica-verify.XXXXXX)
-trap 'rm -f "$LOG"' EXIT
+trap 'rm -f "$LOG" "$LOG.creates"' EXIT
 # Etherscan V2 covers many chains and not all of ours; when forge answers "No known Etherscan API URL" for this
 # chain the run switches to Sourcify for the rest of it and retries the same contract, because a shell that
 # happens to carry an explorer key must not turn a supported chain into four false "pending" rows.
 verify_once() { forge verify-contract --chain-id "$CHAIN" --watch "${VERIFIER[@]}" --constructor-args "$4" "$2" "$3" 2>&1 | tee "$LOG"; return "${PIPESTATUS[0]}"; }
 run() {
-  if [ "$DRY" = 1 ]; then printf 'DRY: forge verify-contract --chain-id %s --watch %s %s --constructor-args %s\n' "$CHAIN" "$2" "$3" "$4"; return 0; fi
+  if [ "$DRY" = 1 ]; then
+    # the real command, with an explorer key shown as <redacted>: a dry run is only worth reading if it IS the command
+    local shown=() hide=0 v
+    for v in "${VERIFIER[@]}"; do if [ "$hide" = 1 ]; then shown+=("<redacted>"); hide=0; continue; fi; shown+=("$v"); [ "$v" = "--etherscan-api-key" ] && hide=1; done
+    printf 'DRY: forge verify-contract --chain-id %s --watch' "$CHAIN"; printf ' %s' "${shown[@]}" --constructor-args "$4" "$2" "$3"; printf '\n'; return 0
+  fi
   if verify_once "$@"; then return 0; fi
   if [ "${VERIFIER[1]}" = etherscan ] && grep -q "No known Etherscan API URL" "$LOG"; then
     echo "etherscan has no endpoint for chain $CHAIN; switching this run to sourcify"
@@ -69,8 +76,9 @@ echo "== source verification for chain $CHAIN (manifest $MANIFEST; verifier ${VE
 node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const want=new Set(Object.values(m.contracts).map(c=>c.address.toLowerCase())); const seen=new Set(); for (const f of fs.readdirSync(process.argv[2]).filter(f=>f.endsWith(".json"))) { const j=JSON.parse(fs.readFileSync(process.argv[2]+"/"+f,"utf8")); for (const t of (j.transactions||[])) if (t.transactionType==="CREATE" && t.contractName && want.has((t.contractAddress||"").toLowerCase()) && !seen.has(t.contractAddress.toLowerCase())) { seen.add(t.contractAddress.toLowerCase()); console.log(t.contractName, t.contractAddress, JSON.stringify(t.arguments||[])) } }' "$MANIFEST" "$BDIR" > "$LOG.creates"
 while read -r name addr args; do
   sig=$(sig_of "$name"); [ -n "$sig" ] || { echo "skip $name at $addr (not a forge-verifiable Solidity contract here)"; continue; }
-  # shellcheck disable=SC2046
-  encoded=$(cast abi-encode "$sig" $(node -e 'for (const a of JSON.parse(process.argv[1])) console.log(a)' "$args"))
+  # one recorded argument per line, kept whole: a string argument may carry spaces and must reach cast as one word
+  ARGV=(); while IFS= read -r line; do ARGV+=("$line"); done < <(node -e 'for (const a of JSON.parse(process.argv[1])) console.log(a)' "$args")
+  encoded=$(cast abi-encode "$sig" "${ARGV[@]}") || { echo "PENDING/RETRY: $name at $addr (constructor arguments could not be encoded)"; PENDING=$((PENDING+1)); continue; }
   run "$name" "$addr" "$(path_of "$name")" "$encoded"
 done < "$LOG.creates"
 rm -f "$LOG.creates"
