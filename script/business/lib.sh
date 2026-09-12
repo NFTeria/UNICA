@@ -50,3 +50,13 @@ quietly() { # $1 human sentence, $2 log name, rest: the command
     die "$what did not finish. The full output is in $REHEARSAL_DIR/business-$name.log"
   fi
 }
+
+# Start a long-lived process in its own session, so it outlives the shell that started it: a
+# terminal that closes, a tool that reaps its children, a make target that returns. `setsid` where
+# the system has it; POSIX setsid through perl where it does not (macOS ships perl, not setsid).
+detach() {
+  if command -v setsid >/dev/null 2>&1; then setsid "$@" </dev/null >/dev/null 2>&1 &
+  else perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' -- "$@" </dev/null >/dev/null 2>&1 &
+  fi
+  echo $!
+}

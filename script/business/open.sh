@@ -25,8 +25,8 @@ if curl -fsS "http://127.0.0.1:$PORT/" >/dev/null 2>&1; then
   log "  This command did not start them, so make business-down will not stop them."
 else
   SERVE_LOG="$REHEARSAL_DIR/business-serve.log"
-  nohup bash script/anvil/serve.sh >"$SERVE_LOG" 2>&1 &
-  echo $! >"$BUSINESS_SERVER_PID_FILE"
+  pid=$(detach bash -c 'exec bash script/anvil/serve.sh >"$0" 2>&1' "$SERVE_LOG")
+  echo "$pid" >"$BUSINESS_SERVER_PID_FILE"
   for _ in $(seq 1 40); do
     if curl -fsS "http://127.0.0.1:$PORT/" >/dev/null 2>&1; then break; fi
     sleep 0.25
