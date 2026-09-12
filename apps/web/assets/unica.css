@@ -184,3 +184,62 @@ label { font-weight: 500; }
 .steps > li > h2::before { content: counter(step) ". "; color: var(--muted); }
 .receipt-lines dt { color: var(--muted); font-size: 0.85rem; margin-top: var(--s2); }
 .receipt-lines dd { margin: var(--s1) 0 0; }
+
+/* ── the three layouts ────────────────────────────────────────────────────────────────────────
+   One stylesheet holds all three because they share every token; what differs is the frame around
+   the content, never the ink inside it. `src/shell.mjs` chooses the frame from the route path and
+   stamps it on <body>, so a screen cannot pick its own. */
+
+/* Shared frame furniture. */
+.mark { display: inline-flex; align-items: center; gap: var(--s1); white-space: nowrap; }
+.wchip { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s2);
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  padding: var(--s1) var(--s3); font-size: 0.9rem; min-height: calc(var(--space) * 9); }
+.wchip-line { color: var(--muted); }
+.wchip-addr { font-weight: 500; color: var(--ink); }
+.wchip .cta { padding: var(--s1) var(--s3); min-height: calc(var(--space) * 8); font-size: 0.9rem; }
+.wchip select { font: inherit; font-size: 0.9rem; padding: var(--s1) var(--s2); max-width: 12rem;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); }
+
+/* marketing — the home page, the explanations, the legal pages. Roomy, one measure, a hero band. */
+.lay-marketing header.site { display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--s2) var(--s4); max-width: 64rem; }
+.lay-marketing header.site nav { flex: 1 1 20rem; }
+.hero { padding: var(--s8) 0 var(--s2); }
+.hero h1 { margin: 0; font-size: 2.1rem; line-height: 1.15; max-width: 20ch; }
+.lay-marketing .hero + .lead { font-size: 1.2rem; max-width: 60ch; }
+
+/* app — the signed-in screens. Sidebar, top bar, content column. */
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3);
+  padding: var(--s3) var(--s5); border-bottom: 1px solid var(--line); background: var(--paper); }
+.topbar-business { font-weight: 500; }
+.topbar .wchip { margin-left: auto; }
+.appframe { display: grid; grid-template-columns: minmax(0, 1fr); }
+.sidebar { padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); }
+.sidenav { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s1); }
+.sidenav a { display: block; text-decoration: none; color: var(--ink); border-radius: var(--radius);
+  padding: var(--s2) var(--s3); min-height: calc(var(--space) * 11); line-height: calc(var(--space) * 7); }
+.sidenav a:hover { background: var(--surface); }
+.sidenav a[aria-current="page"] { background: var(--accent-quiet); font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--accent); }
+.pagehead { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2) var(--s4);
+  border-bottom: 1px solid var(--line); padding-bottom: var(--s3); margin-bottom: var(--s4); }
+.pagehead h1 { margin: 0; }
+.actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: var(--s2); }
+.lay-app main { max-width: 58rem; }
+.lay-app footer { max-width: 58rem; }
+@media (min-width: 52rem) {
+  .appframe { grid-template-columns: 14rem minmax(0, 1fr); }
+  .sidebar { border-bottom: 0; border-right: 1px solid var(--line); min-height: 60vh; }
+  .sidenav { display: block; }
+  .sidenav li + li { margin-top: var(--s1); }
+}
+
+/* checkout — one card, the least chrome that is still navigable, identity above the card. */
+.lay-checkout header.site { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3);
+  max-width: 34rem; border-bottom: 1px solid var(--line); }
+.lay-checkout header.site nav { flex: 1 1 auto; }
+.lay-checkout main { max-width: 34rem; }
+.lay-checkout footer { max-width: 34rem; }
+.lay-checkout h1 { font-size: 1.35rem; text-align: center; margin-top: 0; }
+.bizid { text-align: center; font-weight: 500; color: var(--muted); margin: var(--s4) 0 var(--s1); }
