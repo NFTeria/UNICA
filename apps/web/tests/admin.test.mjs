@@ -30,9 +30,11 @@ import {
   graphMarkAllowed,
   integrationMark,
   kpiFromPayments,
+  noSignupLine,
   orderRows,
   payoutWalletFor,
   receiptHref,
+  shopUrl,
   startOfDay,
   whenText,
 } from "../assets/business.js";
@@ -47,6 +49,7 @@ import {
   productLink,
   setActiveCalldata,
 } from "../assets/products.js";
+import { askedName, buyHref, onSale, shopCountText } from "../assets/shop.js";
 import { coverText, customersFrom } from "../assets/customers.js";
 import { INTEGRATIONS, contrastRatio } from "../assets/brand.js";
 
@@ -421,4 +424,80 @@ test("the three admin screens name no machinery in the sentences they can put on
   assert.deepEqual(leaked, [], "a machine word reached a sentence a shop owner reads");
   assert.ok(said.length >= 20, `only ${said.length} sentences were scanned; the scanner has stopped finding them`);
   assert.ok(banned.test("the executor refused"), "control: the rule catches a planted word");
+});
+
+// ---- the shop: one link, one name, and only what is actually for sale -------------------------------
+
+const SITE_ROOT = "https://example.test/unica/";
+
+test("a shop is addressed by its name when it has one, and by its wallet until it does", () => {
+  assert.equal(shopUrl(SITE_ROOT, { label: "freshcuts", seller: SELLER }), `${SITE_ROOT}shop/?name=freshcuts`);
+  // the name wins over the wallet whenever there is one: it is the address that survives a new wallet
+  assert.equal(shopUrl(SITE_ROOT, { label: "freshcuts" }), `${SITE_ROOT}shop/?name=freshcuts`);
+  assert.equal(shopUrl(SITE_ROOT, { seller: SELLER }), `${SITE_ROOT}pay/?business=${SELLER}`);
+  // a base path is honoured, because this link is handed to somebody else and has to be absolute
+  assert.equal(shopUrl("https://example.test/", { label: "freshcuts" }), "https://example.test/shop/?name=freshcuts");
+});
+
+test("no name and no wallet is no link at all, never one ending in nothing", () => {
+  assert.equal(shopUrl(SITE_ROOT, {}), null);
+  assert.equal(shopUrl(SITE_ROOT, { seller: "not an address" }), null);
+  assert.equal(shopUrl(SITE_ROOT), null);
+  // control: the same call with a real name does produce one, or the row above proves nothing
+  assert.ok(shopUrl(SITE_ROOT, { label: "freshcuts" }));
+});
+
+test("a network with no business sign-up says so in the chain's own words, and every other one says nothing", () => {
+  assert.equal(noSignupLine({ available: false, joined: false, reason: "Pay names are set up elsewhere." }), "Pay names are set up elsewhere.");
+  // a network that refused without saying why still gets a sentence rather than silence
+  assert.match(noSignupLine({ available: false, joined: false }), /not available on this network/);
+  assert.equal(noSignupLine({ available: true, joined: true }), null);
+  assert.equal(noSignupLine({ available: true, joined: false }), null);
+  assert.equal(noSignupLine(null), null);
+});
+
+test("a shop link carries the name it was opened with, and an empty one names nothing", () => {
+  assert.equal(askedName("?name=freshcuts"), "freshcuts");
+  assert.equal(askedName("?name=freshcuts.unica.eth"), "freshcuts.unica.eth"); // resolving it is not this function's job
+  assert.equal(askedName("?name=%20freshcuts%20"), "freshcuts");
+  assert.equal(askedName("?name="), null);
+  assert.equal(askedName("?other=freshcuts"), null);
+  assert.equal(askedName(""), null);
+  assert.equal(askedName(null), null);
+});
+
+test("only what can actually be bought is put in front of a customer", () => {
+  const listings = [
+    { id: "1", kind: "one-off", active: true, sold: false },
+    { id: "2", kind: "one-off", active: true, sold: true },      // already bought: no longer an offer
+    { id: "3", kind: "one-off", active: false, sold: false },    // the business switched it off
+    { id: "4", kind: "recurring", active: true, sold: true },    // sold means nothing to a recurring one
+    { id: "5", kind: "permanent", active: true, sold: true },    // ...nor to a permanent one
+    { id: "6", kind: "permanent", active: false, sold: false },
+  ];
+  assert.deepEqual(onSale(listings).map((p) => p.id), ["1", "4", "5"]);
+  assert.deepEqual(onSale([]), []);
+  assert.deepEqual(onSale(null), []);
+});
+
+test("the shop says how many listings it is not showing, rather than being quietly short", () => {
+  assert.equal(shopCountText(0, 0), "Nothing is listed here yet.");
+  assert.equal(shopCountText(1, 1), "1 of 1 listing is on sale.");
+  assert.equal(shopCountText(3, 3), "3 of 3 listings are on sale.");
+  assert.equal(shopCountText(3, 2), "2 of 3 listings are on sale. 1 is not on sale at the moment.");
+  assert.equal(shopCountText(5, 2), "2 of 5 listings are on sale. 3 are not on sale at the moment.");
+});
+
+test("buying from a shop goes to the same payment link the owner's screen prints", () => {
+  assert.equal(buyHref(4), "../pay/?product=4");
+  assert.equal(new URL(buyHref(4), `${SITE_ROOT}shop/`).href, productLink(SITE_ROOT, 4));
+});
+
+test("the shop screen names no machinery in the sentences it can put on screen", () => {
+  const banned = /\b(hook|executor|registry|pool|tick|feed|calldata|hex)s?\b/i;
+  const source = readFileSync(join(APP, "assets", "shop.js"), "utf8");
+  const said = [...source.matchAll(/say\((?:"[^"]*"|[A-Za-z0-9_.$\[\]`${}\- ]+),\s*(`[^`]*`|"[^"]*")\s*\)/g)].map((m) => m[1]);
+  assert.deepEqual(said.filter((sentence) => banned.test(sentence)), []);
+  assert.ok(said.length >= 5, `only ${said.length} sentences were scanned; the scanner has stopped finding them`);
+  assert.doesNotMatch(source, /config\??\.record/); // the shop reads the chain, never a recorded run
 });
