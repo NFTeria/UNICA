@@ -28,17 +28,19 @@ labelled, that happens to answer the same question for the same reason `docs/uni
 ARCHITECTURE.md`'s Layer 1b describes three interchangeable fallback paths (a Studio/Network
 subgraph, a Substreams pipeline, or "a bounded RPC event indexer... where neither exists" —
 EVENT-SCHEMA.md §10.3) behind one `ChainClients.graph` interface: this is the third path, run
-against a local anvil node rather than a deployed chain, because there is no UNICA v4 deployment
-anywhere for a real subgraph to index yet.
+against a local anvil node rather than a deployed chain. It is not the only path any more — the
+sibling directory's manifest indexes the live Sepolia deployment — but it is the one that needs no
+Studio account, no key and no network, which is why the local loop still runs on it.
 
-## What the already-deployed V1/V3 subgraph can and cannot do
+## What the sibling subgraph can and cannot do
 
 `integrations/graph/subgraph.yaml` (the sibling, already-BUILT subgraph, one directory up) defines
-exactly two `dataSources`, each a static `kind: ethereum` source with a fixed `source.address`
-(`0x1120...0ea0c0` and `0x5d6A...93d6a0c0`, both on Sepolia) and no `templates:` section anywhere in
-that manifest. **A subgraph with no dynamic data sources and two pinned addresses can only ever
-index logs from those two contracts — it structurally cannot pick up a log from a third, unlisted
-address, however identical its topics.** That is a real property of the deployed manifest, verified
+exactly three `dataSources`, each a static `kind: ethereum` source with a fixed `source.address`
+(the v5 market hook, direct settler and product catalogue recorded in
+`deployments/unica-v4/11155111.json`, all on Sepolia) and no `templates:` section anywhere in that
+manifest. **A subgraph with no dynamic data sources and three pinned addresses can only ever index
+logs from those three contracts — it structurally cannot pick up a log from a fourth, unlisted
+address, however identical its topics.** That is a real property of that manifest, verified
 by reading it, not an inference: EVENT-SCHEMA.md §2's authentication rule ("a consumer accepts... a
 `SettlementReceipt` only when `log.address == registry.getMarket(marketId).hook`") is enforced for
 that subgraph by address-pinning at the data-source level, before any handler code runs at all — the
@@ -48,7 +50,7 @@ subgraph built the same way.
 **This repository does not claim that guarantee for anything in this directory**, because nothing
 in this directory is deployed. The pinning-based rejection described above is a property of
 `integrations/graph`'s own manifest, cited here only to be precise about what it actually proves
-(two fixed addresses, never a third) rather than overstating it as evidence about a v4 subgraph that
+(three fixed addresses, never a fourth) rather than overstating it as evidence about a v4 subgraph that
 does not exist. Whether a future v4 subgraph is built the same way (pinned data sources) or with
 `Template.create` off an authenticated `MarketProposed` (SETTLEMENT-SCHEMA.md §7's other structural
 option) is exactly the open design choice that document's §11 records — not decided here, and not
@@ -65,5 +67,5 @@ instead (its own tests include a look-alike-hook fixture that must be REFUSED).
 - `schema.test.mjs` — structural checks only (balanced braces in both files, every type a field
   refers to is defined, every field the query selects exists on its type). It does not, and cannot,
   prove a real subgraph built from this schema would compile or index correctly — that would need
-  `graph codegen`/`graph build` against an actual Graph Node toolchain, which this repository does
-  not run here because there is nothing deployed to build for.
+  `graph codegen`/`graph build` against an actual Graph Node toolchain, which is run one directory
+  up, on the deployable manifest, and never on these two files.

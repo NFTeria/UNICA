@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Indexes UNICA settlement receipts (schema v1) emitted by a V4SettlementHook on Uniswap v4. The hook address is configured per network, never hard-coded.",
+  "description": "Indexes the UNICA v5 deployment: the market hook's settlement receipts, the direct settler's receipts, and the product catalogue's sales. Every address is configured per network in networks.json, never hard-coded in a mapping.",
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build --network sepolia --network-file networks.json",
