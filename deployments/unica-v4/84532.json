@@ -1,0 +1,94 @@
+{
+  "environment": "PUBLIC_TESTNET_NO_VALUE",
+  "designation": "TEST_ONLY_NO_VALUE",
+  "chainId": 84532,
+  "commit": "bd4fa879dd439a6b732534c6a5893b52e37a894a",
+  "readAtBlock": 46732149,
+  "releaseTag": "unica-v5/base-sepolia-1",
+  "verification": {
+    "status": "not verified",
+    "note": "no read-only explorer result was supplied"
+  },
+  "contracts": {
+    "poolManager": {
+      "address": "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408",
+      "codeHash": "0x03c45db6d09b14da7c1f7239a5a49697f976d395277e6d2acb6fbed3f9e0249f",
+      "codeSize": 24009
+    },
+    "assetToken": {
+      "address": "0x4200000000000000000000000000000000000006",
+      "codeHash": "0x83f731a17e6c0cdd04bc6f60b15d3e789e215b71403087b84b48650a1e5cbb21",
+      "codeSize": 2041
+    },
+    "payoutToken": {
+      "address": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "codeHash": "0xedc5281a85c0efecd49999a1ef668390c59b88702f2d4a07029d7f5d63059d6c",
+      "codeSize": 1798
+    },
+    "factory": {
+      "address": "0x8437BcCd3Cd7c1BfbC4EC47d9766cAaEc12e5aa3",
+      "codeHash": "0xd7381cac0d5e940f86c07bbfd5e5c6769e8ba4ec20aac27cf341b955b8a118f7",
+      "codeSize": 20116
+    },
+    "registry": {
+      "address": "0xA0686c76446315182e1ac7cb3Fb844d812670C53",
+      "codeHash": "0xa725e97f5d46003a087bef62302f404bccae7944ded4ddbb1b537a0b9dec9e45",
+      "codeSize": 22257
+    },
+    "hook": {
+      "address": "0x77D1f8d20e878305b509e44a266C0F69925ca0C0",
+      "codeHash": "0xda2034d8d5af60ad52d2e54c81fb80374a761da2d434c940b823f0580fe220ba",
+      "codeSize": 18148
+    },
+    "executor": {
+      "address": "0x89BBdF3075432542CFFd0154D707ACf9ba3a56F9",
+      "codeHash": "0x763e2b91733233461997c931eef72dd3e23daa347760664d567895f262777f52",
+      "codeSize": 17280
+    }
+  },
+  "market": {
+    "marketId": "0xc620eff48202f9439a04206b2955c6abd26bfb66a5b73f1e0b7d41f4ad03e682",
+    "version": 1,
+    "status": 4,
+    "demonstrationOnly": true,
+    "poolKey": {
+      "currency0": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "currency1": "0x4200000000000000000000000000000000000006",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "hooks": "0x77D1f8d20e878305b509e44a266C0F69925ca0C0"
+    },
+    "poolId": "0x099139908ed3b7f18d455b81f38a02473c9f66685d2c4c94062a7c920523ddbf",
+    "adapter": "0x0000000000000000000000000000000000000000",
+    "feedId": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "oracle": {
+      "maxAge": 0,
+      "maxDeviationBps": 0,
+      "enabled": false
+    },
+    "caps": {
+      "maxPerTxPayout": "10000000",
+      "maxPerDayPayout": "25000000",
+      "maxSeedPayout": "5000000"
+    },
+    "rateE18": "2539408364840000000000",
+    "rateLabel": "a demonstration rate the admin sets, never a market price",
+    "initSqrtPriceX96": "1573537780843839046302126373901796",
+    "initTick": 197940,
+    "seedDepth": "331139187496",
+    "assetDecimals": 18,
+    "payoutDecimals": 6,
+    "assetIsCurrency0": false
+  },
+  "accounts": {
+    "admin": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+    "pauser": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73",
+    "deployer": "0xA121e1eF31BbF0826aa67dc01e7977e80Af58D73"
+  },
+  "identity": {
+    "note": "no identity authority configured; terminal admission is not deployed on this chain"
+  },
+  "policy": {
+    "note": "no confidential-policy receiver configured on this chain"
+  }
+}
