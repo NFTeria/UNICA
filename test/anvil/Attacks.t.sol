@@ -236,7 +236,7 @@ contract AttacksTest is Test {
         vm.expectRevert(abi.encodeWithSignature("OrderNotOpen(bytes32,uint8)", demoOrderId, uint8(3)));
         vm.prank(payer);
         executor.pay(demoOrderId);
-        _refused("REPLAY", "OrderNotOpen", "UNICA_ONCHAIN");
+        _refused("REPLAYED_ORDER", "OrderNotOpen", "UNICA_ONCHAIN");
     }
 
     function test_Order_DuplicateNonce() public {
@@ -390,7 +390,7 @@ contract AttacksTest is Test {
         _approve(payer, AMOUNT_IN);
         vm.etch(adapter, address(new FlippedRouteAdapter()).code);
         _expectHookRevert(bytes4(keccak256("OracleFeedMismatch(bytes32,bytes32,bytes32)")), payer, id);
-        _refused("CHANGED_FEED_ID_FOR", "OracleFeedMismatch", "UNICA_ONCHAIN+CHAINLINK_ORACLE");
+        _refused("CHANGED_FEED_ID", "OracleFeedMismatch", "UNICA_ONCHAIN+CHAINLINK_ORACLE");
     }
 
     function test_Market_StaleOracle() public {
@@ -715,7 +715,15 @@ contract AttacksTest is Test {
         bool result = forwarder.route(address(policy), metadata, report);
         assertFalse(result, "the receiver must have rejected");
         assertFalse(policy.admissionOf(nonce).exists, "no admission may exist after a rejected report");
-        _refused(name, "ReportProcessed(success=false), no admission", "CRE_REPORT_VERIFICATION");
+        // One case name for the whole class, because the trap is the same every time: the forwarder
+        // transaction SUCCEEDS while the receiver rejected. The sub-case is the first reason code.
+        console.log(
+            string.concat(
+                'ATTACK:{"case":"FORWARDER_SUCCESS_RECEIVER_REJECTED","decision":"REFUSED","reasonCodes":["',
+                name,
+                '","ReportProcessed(success=false), no admission"],"layer":"CRE_REPORT_VERIFICATION"}'
+            )
+        );
     }
 
     function test_Policy_Rejections() public {
@@ -775,11 +783,6 @@ contract AttacksTest is Test {
         vm.prank(workflowOwner);
         assertFalse(forwarder.route(address(policy), _meta(), LocalCreReportFixture.encodeReport(v, r6)));
         _refused("WRONG_PRIVATE_INPUT_COMMITMENT_SAME_NONCE", "NonceAlreadyUsed", "CRE_REPORT_VERIFICATION");
-        _refused(
-            "FORWARDER_SUCCEEDS_RECEIVER_REJECTS",
-            "ReportProcessed(success=false) is not delivery",
-            "CRE_REPORT_VERIFICATION"
-        );
         _refused("FIXTURE_REPORT_IS_NOT_A_DON_REPORT", "LOCAL CRE REPORT FIXTURE label asserted", "LOCAL_FIXTURE_ONLY");
         assertTrue(
             _contains(forwarder.typeAndVersion(), "NOT A DON REPORT"), "the fixture forwarder must say what it is"

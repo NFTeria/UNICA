@@ -32,7 +32,7 @@ grep -o 'ATTACK:.*' "$ATTACK_LOG" | sed 's/^ATTACK://'
 grep -E 'Suite result|tests passed' "$ATTACK_LOG" | tail -2
 
 step "B. the same refusals through an unmodified client (eth_call)"
-expect_revert REPLAY_SETTLED_ORDER 'OrderNotOpen(bytes32,uint8)' "$UNICA_EXECUTOR" 'pay(bytes32)' "$ORDER_ID" --from "$ANVIL_PAYER"
+expect_revert REPLAYED_ORDER 'OrderNotOpen(bytes32,uint8)' "$UNICA_EXECUTOR" 'pay(bytes32)' "$ORDER_ID" --from "$ANVIL_PAYER"
 expect_revert WRONG_PAYER_REPLAY 'OrderNotOpen(bytes32,uint8)' "$UNICA_EXECUTOR" 'pay(bytes32)' "$ORDER_ID" --from "$ANVIL_WRONG_PAYER"
 expect_revert UNKNOWN_ORDER 'UnknownOrder(bytes32)' "$UNICA_EXECUTOR" 'pay(bytes32)' "$(cast keccak nonexistent)" --from "$ANVIL_PAYER"
 LAYER="ENSV2_ONCHAIN+BACKEND_POLICY" expect_revert WRONG_ENS_DEPLOYMENT 'WrongEnsDeployment(bytes32,bytes32)' \
