@@ -569,7 +569,7 @@ async function renderOrder(config, orderId) {
   const expiry = document.getElementById("order-expiry");
   if (expiry) {
     const tick = () => {
-      expiry.textContent = formatCountdown(card.expiry);
+      expiry.textContent = formatCountdown(card.expiry, Math.floor(Date.now() / 1000) + chainSkew);
     };
     tick();
     setInterval(tick, 1000);
@@ -577,11 +577,23 @@ async function renderOrder(config, orderId) {
 
   let session = null;
   const payBtn = document.getElementById("co-pay");
+  // The blockers judge THIS card, whether it came from the record or from the chain by id, and they
+  // judge it by the chain's clock: a local testnet's time can sit hours from the wall clock, and an
+  // order's deadline lives on the chain, not in this browser.
+  const fromRecord = Boolean(record?.order?.id) && String(record.order.id).toLowerCase() === String(card.id ?? "").toLowerCase();
+  const judged = fromRecord ? record : { order: { id: card.id, expiry: card.expiry, payer: card.payer }, terminal: null };
+  let chainSkew = 0;
+  try {
+    const head = await rpcRequest(config.rpc, "eth_getBlockByNumber", ["latest", false]);
+    if (head?.timestamp) chainSkew = Number(BigInt(head.timestamp)) - Math.floor(Date.now() / 1000);
+  } catch {
+    chainSkew = 0;
+  }
   const refresh = () => {
-    const now = Math.floor(Date.now() / 1000);
+    const now = Math.floor(Date.now() / 1000) + chainSkew;
     const { allowed, reasons } = computeBlockers({
       config,
-      record,
+      record: judged,
       connectedAddress: session?.address ?? null,
       walletChainId: session?.chainId ?? null,
       now,
