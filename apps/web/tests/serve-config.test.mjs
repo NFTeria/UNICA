@@ -194,3 +194,14 @@ test("a manifest without known tokens serves the two payment assets as holdings 
   assert.deepEqual(c.holdings.map((h) => [h.role, h.symbol]), [["payout", null]]);
   assert.deepEqual(runtimeConfig({}, null, "http://127.0.0.1:8545").holdings, []);
 });
+
+test("a record is served only for the chain its manifest names; the practice-chain record never appears under a public manifest", () => {
+  const local = { chainId: 31337, contracts: {}, identity: {} };
+  const robinhood = { chainId: 46630, contracts: {}, identity: {} };
+  const practiceRecord = { chainId: 31337, order: { id: "x" } };
+  assert.deepEqual(runtimeConfig(local, practiceRecord, "/local/rpc").record, practiceRecord);
+  assert.equal(runtimeConfig(robinhood, practiceRecord, "/local/rpc").record, null);
+  assert.deepEqual(runtimeConfig(robinhood, { chainId: 46630, order: { id: "y" } }, "/local/rpc").record, { chainId: 46630, order: { id: "y" } });
+  assert.equal(runtimeConfig(robinhood, { order: { id: "no chain id" } }, "/local/rpc").record, null);
+  assert.equal(runtimeConfig(robinhood, null, "/local/rpc").record, null);
+});

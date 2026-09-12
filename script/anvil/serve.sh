@@ -195,6 +195,18 @@ function marketPairFrom(manifest) {
   };
 }
 
+// A record is served only when it belongs to the chain the manifest names. The practice-chain
+// record carries chainId 31337; served under a public-network manifest it would show yesterday's
+// local sale as if it had happened on that network. A record with no chainId at all is the older
+// local shape and is accepted for the local practice chain only.
+const LOCAL_PRACTICE_CHAIN_ID = 31337;
+function recordFor(manifest, record) {
+  if (!record || typeof record !== "object") return null;
+  const chain = Number(manifest?.chainId);
+  if (record.chainId === undefined || record.chainId === null) return chain === LOCAL_PRACTICE_CHAIN_ID ? record : null;
+  return Number(record.chainId) === chain ? record : null;
+}
+
 function runtimeConfig(manifest, record, rpc, tokenLabels = {}) {
   const contracts = manifest?.contracts ?? {};
   const identity = manifest?.identity ?? {};
@@ -203,7 +215,7 @@ function runtimeConfig(manifest, record, rpc, tokenLabels = {}) {
     chainId: manifest?.chainId ?? null,
     environment: manifest?.environment ?? null,
     manifest,
-    record,
+    record: recordFor(manifest, record),
     assets: assetsFrom(manifest, tokenLabels),
     holdings: holdingsFrom(manifest, tokenLabels),
     marketPair: marketPairFrom(manifest),
