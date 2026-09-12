@@ -188,3 +188,75 @@ if (chipEl) {
 }
 
 export { driveChip };
+
+// ── the colour scheme ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ONE KEY, THREE STATES, AND SYSTEM IS THE ABSENCE OF A CHOICE. "light" and "dark" are the only two
+ * values ever written; picking "system" REMOVES the key and the attribute, so a viewer who changes
+ * their mind is returned to their machine's preference rather than frozen at whatever it happened
+ * to be that afternoon. Anything else found in storage is ignored, because a page must render
+ * correctly against a key some other page, or some other version of this one, might have written.
+ *
+ * EVERY STORAGE ACCESS IS WRAPPED. A private window, cleared site data, or a browser set to block
+ * site data can make the getter itself throw, not merely return null. A colour preference is never
+ * worth a page that fails to load, so both directions fail quiet and the page falls back to the
+ * media query — which is a correct answer, not a degraded one.
+ *
+ * The attribute is stamped a second time here only because this file may run after a script-driven
+ * navigation; the FIRST stamp is the inline script in the head, which is what stops the flash.
+ */
+export const THEME_KEY = "unica.theme";
+export const THEME_STATES = Object.freeze(["system", "light", "dark"]);
+
+function themeStorage() {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The stored choice, or "system" for no choice, an unreadable store, or a value nobody wrote. */
+export function readTheme(storage = themeStorage()) {
+  try {
+    const found = storage?.getItem(THEME_KEY);
+    return found === "light" || found === "dark" ? found : "system";
+  } catch {
+    return "system";
+  }
+}
+
+/** Writes a choice, or clears it for "system". Returns what a later read will now answer. */
+export function storeTheme(value, storage = themeStorage()) {
+  const choice = THEME_STATES.includes(value) ? value : "system";
+  try {
+    if (choice === "system") storage?.removeItem(THEME_KEY);
+    else storage?.setItem(THEME_KEY, choice);
+  } catch {
+    /* a preference is never worth an exception */
+  }
+  return choice;
+}
+
+/** Stamps the choice on the document element. "system" removes the attribute; it is not a value. */
+export function applyTheme(value, root = globalThis.document?.documentElement) {
+  if (!root) return "system";
+  const choice = THEME_STATES.includes(value) ? value : "system";
+  if (choice === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", choice);
+  return choice;
+}
+
+export function driveTheme(select, { storage = themeStorage(), root = globalThis.document?.documentElement } = {}) {
+  const current = readTheme(storage);
+  select.value = current;
+  applyTheme(current, root);
+  select.addEventListener("change", () => {
+    applyTheme(storeTheme(select.value, storage), root);
+  });
+  return current;
+}
+
+const themeEl = typeof document === "undefined" ? null : document.getElementById("theme-choice");
+if (themeEl) driveTheme(themeEl);

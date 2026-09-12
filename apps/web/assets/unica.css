@@ -351,3 +351,36 @@ select.field { appearance: none; background-image: none; }
 .stepper li[data-state="current"] .step-mark { background: var(--accent); color: var(--on-accent);
   border-color: var(--accent); }
 .stepper li[data-state="todo"] .step-mark { border-style: dashed; }
+
+/* ── the viewer's own choice of scheme ────────────────────────────────────────────────────────
+   The media query above answers "what does this machine prefer". These two blocks answer "what
+   did this person pick", and a pick outranks a preference: `:root[data-theme="…"]` carries one
+   more attribute than the bare `:root` inside the media query, so it wins in BOTH directions
+   without the media block needing a guard — a light pick survives a dark machine.
+
+   They MIRROR that block exactly: the same seven fields, the same values, and nothing else.
+   Everything derived — --muted, --line, --surface, --accent-quiet — is mixed from --ink and
+   --paper at computed-value time, so redefining the four brand fields carries the whole scheme
+   with it, which is the entire reason they are derived.
+
+   The attribute is stamped on <html> by a script in the head, BEFORE the first paint, from one
+   localStorage key. No stamp means no pick, and the media query answers on its own. */
+:root[data-theme="light"] {
+  --paper: #fbfbfa;
+  --ink: #14161a;
+  --accent: #0b6e4f;
+  --on-accent: #f7faf8;
+  --bad: #8a1c1c;
+  --warn: #7a4a00;
+  --exp: #4a3a7a;
+}
+:root[data-theme="dark"] {
+  --paper: #101215;
+  --ink: #eef1ef;
+  --accent: #35b888;
+  --on-accent: #0d1411;
+  --bad: #ef9a9a;
+  --warn: #e0b050;
+  --exp: #b0a0e0;
+}
+
