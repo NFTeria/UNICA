@@ -24,10 +24,11 @@ import { POS } from "./routes/pos.mjs";
 import { PAY } from "./routes/pay.mjs";
 import { JOIN } from "./routes/join.mjs";
 import { RECEIPT } from "./routes/receipt.mjs";
+import { SHOP } from "./routes/shop.mjs";
 import { MORE } from "./routes/more.mjs";
 
 // One file per screen a builder may own; the order here is the order the site has always had.
-export const ROUTES = [...HOME, ...DOCS, ...DASHBOARD, ...PRODUCTS, ...PAYMENTS, ...POS, ...PAYMENT_DETAILS, ...CUSTOMERS, ...PAY, ...JOIN, ...RECEIPT, ...MORE];
+export const ROUTES = [...HOME, ...DOCS, ...DASHBOARD, ...PRODUCTS, ...PAYMENTS, ...POS, ...PAYMENT_DETAILS, ...CUSTOMERS, ...SHOP, ...PAY, ...JOIN, ...RECEIPT, ...MORE];
 
 export const NOT_FOUND = {
   route: "404",
