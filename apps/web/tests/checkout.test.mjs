@@ -169,6 +169,8 @@ test("the receipt route reads chain, transaction and sale out of its own link", 
   assert.equal(link.chainId, 31337);
   assert.equal(link.tx, TX_HASH);
   assert.equal(readLink(`?sale=${SALE_ID}`).saleId, SALE_ID);
+  assert.equal(readLink(`?sale=${SALE_ID}&business=0xA121e1eF31bBF0826aA67dC01e7977e80Af58D73`).business, "0xA121e1eF31bBF0826aA67dC01e7977e80Af58D73");
+  assert.equal(readLink("?business=not-a-wallet").business, null, "a malformed business is dropped, not guessed");
   assert.equal(readLink("?tx=0x00").malformed, true);
 });
 
@@ -895,4 +897,22 @@ test("an approval is mined before the purchase or the payment is sent, on both p
   assert.match(buy, /finally \{[\s\S]*payBtn\.disabled = false/, "a refused attempt leaves the button usable");
   const order = src.slice(src.indexOf("encodeApproveCalldata(settler, amountIn)") - 120, src.indexOf("encodePayCalldata(card.id)"));
   assert.match(order, /waitForReceipt\(session, await session\.send\(\{ to: assetIn/, "the order path waits the same way");
+});
+
+test("a purchase links to a receipt that names the sale, the transaction and the business, read from the catalogue's own log", async () => {
+  const { PRODUCT_SOLD_TOPIC0, receiptLinkFor, saleIdFromReceipt } = await import("../assets/local-pay.js");
+  const catalog = "0xEf837110e2A60B4940E57570E5AD05f39d8C398A";
+  const saleId = "0x530bfd99a0f1c5d17c89bbaf1da8537b0a78ef5007895e7f61cbe9869e6814ec"; // the sale id the live purchase minted
+  const word = (h) => String(h).replace(/^0x/, "").padStart(64, "0");
+  const data = "0x" + word("a121") + word("1c7d") + word("1e8480") + word("2") + word("0") + saleId.slice(2);
+  const receipt = { logs: [
+    { address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", topics: [PRODUCT_SOLD_TOPIC0], data },        // another emitter with the same topic: ignored
+    { address: catalog.toLowerCase(), topics: [PRODUCT_SOLD_TOPIC0, "0x1", "0x2", "0x3"], data },
+  ] };
+  assert.equal(saleIdFromReceipt(receipt, catalog), saleId);
+  assert.equal(saleIdFromReceipt({ logs: [] }, catalog), null);
+  assert.equal(saleIdFromReceipt(null, catalog), null);
+  const href = receiptLinkFor({ chainId: 11155111, hash: "0xabc", saleId, business: "0xA121e1eF31bBF0826aA67dC01e7977e80Af58D73" });
+  assert.equal(href, `../receipt/?chain=11155111&sale=${saleId}&tx=0xabc&business=0xA121e1eF31bBF0826aA67dC01e7977e80Af58D73`);
+  assert.equal(receiptLinkFor({ chainId: 31337, hash: "0xabc" }), "../receipt/?chain=31337&tx=0xabc");
 });

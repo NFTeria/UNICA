@@ -25,7 +25,9 @@ import { networkName, rpcRequest } from "./wallet.js";
 import { businessAccent, businessStyle } from "./brand.js";
 import { decodeString, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
+import { resolveSeller } from "./shop-resolve.js";
 import {
+  displayName,
   businessIdentity,
   explorerTxLink,
   graphPanel,
@@ -47,10 +49,13 @@ export function readLink(search) {
   const tx = params.get("tx");
   const sale = params.get("sale");
   const chain = params.get("chain");
+  const business = params.get("business");
   return {
     order: order && HASH32.test(order) ? order : null,
     tx: tx && HASH32.test(tx) ? tx : null,
     saleId: sale && HASH32.test(sale) ? sale : null,
+    // The business the payment went to, for a network whose record names none; never resolved, only validated.
+    business: business && /^0x[0-9a-fA-F]{40}$/.test(business) ? business : null,
     chainId: chain && /^\d+$/.test(chain) ? Number(chain) : null,
     malformed: Boolean((order && !HASH32.test(order)) || (tx && !HASH32.test(tx)) || (sale && !HASH32.test(sale))),
   };
@@ -100,7 +105,7 @@ async function main() {
     banner.textContent = environment.banner ? `${environment.banner} · ${environment.networkName}` : environment.networkName;
   }
 
-  const identity = await renderIdentity(config);
+  const identity = await renderIdentity(config, link.business);
   const record = config.record ?? null;
   const found = await readPayment(config, link, record);
   if (!found) {
@@ -144,9 +149,12 @@ async function main() {
   await renderGraph(config, { tx: found.transactionHash, saleId: found.kind === "product" ? found.id : null, payName: identity.payName });
 }
 
-/** Who was paid: the name, the pay name, and the badge or the business's own accent square. */
-async function renderIdentity(config) {
-  const identity = businessIdentity(config);
+/** Who was paid: the name, the pay name, and the badge or the business's own accent square. On a
+ *  public network the link names the business wallet and the chain says whose business it is. */
+async function renderIdentity(config, business = null) {
+  let identity = businessIdentity(config);
+  const resolved = business ? await resolveSeller(config, business) : null;
+  if (resolved?.name) identity = { ...identity, payName: resolved.name, label: resolved.label, display: displayName(resolved.label), address: resolved.payout, node: resolved.merchantNode };
   say("r-business", identity.display);
   say("r-payname", identity.payName ?? "No pay name");
   const square = document.getElementById("r-badge");
@@ -178,7 +186,7 @@ async function renderIdentity(config) {
  */
 async function readPayment(config, link, record) {
   if (link.saleId) {
-    const business = businessIdentity(config).address;
+    const business = link.business ?? businessIdentity(config).address;
     const row = findPayment(await loadPayments(business), { saleId: link.saleId, tx: link.tx });
     if (!row) return null;
     return { ...row, id: row.orderId ?? link.saleId, kind: row.kind ?? "product" };
@@ -203,7 +211,7 @@ async function readPayment(config, link, record) {
     };
   }
   if (link.tx) {
-    const business = businessIdentity(config).address;
+    const business = link.business ?? businessIdentity(config).address;
     const row = findPayment(await loadPayments(business), { tx: link.tx });
     if (row) return { ...row, id: row.orderId ?? null, kind: row.kind ?? "direct" };
   }

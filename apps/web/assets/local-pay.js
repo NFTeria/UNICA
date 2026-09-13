@@ -584,7 +584,7 @@ async function buyProduct({ config, card, product, catalogAddress }) {
       setText("co-status", statusText("FAILED"));
       return;
     }
-    await settleProductVerdict({ config, card, session, hash });
+    await settleProductVerdict({ config, card, session, hash, receipt, catalogAddress });
   } finally {
     // A refused or failed attempt leaves the button usable: the customer decides whether to try again.
     if (payBtn && !/Paid/.test(document.getElementById("co-status")?.textContent ?? "")) payBtn.disabled = false;
@@ -592,12 +592,35 @@ async function buyProduct({ config, card, product, catalogAddress }) {
 }
 
 /** A sale is Paid only when the business's own payments say VERIFIED, never because a hash exists. */
-async function settleProductVerdict({ config, card, session, hash }) {
+/** keccak256("ProductSold(uint256,address,address,address,address,uint256,uint8,uint64,bytes32)"); the sale id is the last data word. */
+export const PRODUCT_SOLD_TOPIC0 = "0x294e16610555e8dc08c996627006b57a336c0d42fa0d0852d582e2779c8c593c";
+
+/** The sale id a purchase receipt carries, from the catalogue's own ProductSold log; null when the receipt has none. */
+export function saleIdFromReceipt(receipt, catalogAddress) {
+  for (const log of Array.isArray(receipt?.logs) ? receipt.logs : []) {
+    if (String(log?.address ?? "").toLowerCase() !== String(catalogAddress ?? "").toLowerCase()) continue;
+    if (String(log?.topics?.[0] ?? "").toLowerCase() !== PRODUCT_SOLD_TOPIC0) continue;
+    const words = String(log.data ?? "0x").slice(2).match(/.{64}/g) ?? [];
+    if (words.length >= 6) return "0x" + words[5];
+  }
+  return null;
+}
+
+/** The receipt's own link: network, sale, transaction and the business, so the receipt page needs no memory of this screen. */
+export function receiptLinkFor({ chainId, hash, saleId = null, business = null }) {
+  const q = new URLSearchParams({ chain: String(chainId) });
+  if (saleId) q.set("sale", saleId);
+  if (hash) q.set("tx", hash);
+  if (business) q.set("business", business);
+  return `../receipt/?${q.toString()}`;
+}
+
+async function settleProductVerdict({ config, card, session, hash, receipt = null, catalogAddress = null }) {
   const recipient = card.payout ?? card.seller ?? card.identity.address;
   const spoken = verdictForTransaction(await loadPayments(recipient), hash);
   setText("co-status", spoken.word === "Paid" ? statusText("PAID") : statusText("UNKNOWN"));
   const link = document.getElementById("co-receipt-link");
-  if (link) link.setAttribute("href", `../receipt/?chain=${config.chainId}&tx=${hash}`);
+  if (link) link.setAttribute("href", receiptLinkFor({ chainId: config.chainId, hash, saleId: saleIdFromReceipt(receipt, catalogAddress), business: recipient }));
   setHidden("co-after", false);
   if (card.productKind === "recurring") {
     const text = paidThroughText(await readPaidThrough(config, card.id, session.address));
