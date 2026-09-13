@@ -17,11 +17,13 @@
  * literal address written in this file. `apps/web/build.mjs`'s FORBIDDEN_IN_OUTPUT scan enforces
  * exactly this for every file this build emits, assets included.
  *
- * ETH IS ACCEPTED WHERE THE PRICE IS IN THE WRAPPED NATIVE ASSET. An order priced in WETH can be
- * paid by a wallet that holds only ETH: the checkout wraps exactly the shortfall first, waits for
- * that to be mined, and then runs the same approve-then-pay sequence as before. The decision is
- * `wrapPlan` in assets/wrap.js, a pure function, and it refuses — in words, sending nothing — when
- * the ETH does not also cover the network fee, and when the balances could not be read at all.
+ * ETH IS ACCEPTED WHERE THE PRICE IS IN THE WRAPPED NATIVE ASSET, ON BOTH LINKS. An order or a
+ * catalogue product priced in WETH can be paid by a wallet that holds only ETH: the checkout wraps
+ * exactly the shortfall first, waits for that to be mined, and then runs the same approve-then-pay
+ * sequence as before. The decision is `wrapPlan` in assets/wrap.js, a pure function, and it refuses
+ * — in words, sending nothing — when the ETH does not also cover the network fee, and when the
+ * balances could not be read at all. Both paths run it, because the register's note about ETH is a
+ * promise about the product rather than about one of the two ways to reach it.
  *
  * SENDING GOES THROUGH apps/web/assets/wallet.js. A browser wallet, when one is installed, signs in
  * its own extension; on the local testnet with no wallet, the chain's own already-unlocked account
@@ -616,6 +618,38 @@ async function buyProduct({ config, card, product, catalogAddress }) {
   setText("co-status", statusText("SUBMITTED"));
   try {
     const price = BigInt(product.price);
+    // THE SAME WRAP STEP THE ORDER PATH RUNS, FOR THE SAME REASON AND IN THE SAME ORDER.
+    // A catalogue link and a register's order are two ways to reach one checkout, and the register
+    // tells a business owner that a price named in the wrapped native asset can be paid in plain
+    // ETH. That note is a promise about the product, not about one of the two links to it, so it
+    // has to be true on both — otherwise a customer following the shop link is refused by the very
+    // thing the counter told their seller would work.
+    //
+    // Deposit, mined, THEN the approval, THEN the purchase: each of the three depends on the state
+    // the one before it leaves behind, and a wallet that submits them together orders them by
+    // nonce but not by mining.
+    const payAsset = assetInFor(card, config);
+    if (isWrappedNative(payAsset)) {
+      const purse = await heldFor(session, product.asset);
+      const plan = wrapPlan({
+        need: price,
+        wethBalance: purse?.held ?? null,
+        ethBalance: purse?.native ?? null,
+        gasMargin: GAS_MARGIN_WEI,
+      });
+      if (!plan.ok) {
+        setText("co-status", plan.shortfall > 0n ? shortEthText(plan.shortfall, payAsset) : plan.why);
+        return;
+      }
+      if (plan.wrap > 0n) {
+        setText("co-status", wrappingText(plan.wrap, payAsset));
+        const wrapped = await waitForReceipt(session, await session.send({ to: product.asset, data: encodeDepositCalldata(), value: weiHex(plan.wrap) }));
+        if (!wrapped || Number(wrapped.status) === 0) {
+          setText("co-status", wrapped ? statusText("FAILED") : statusText("UNKNOWN"));
+          return;
+        }
+      }
+    }
     const allowance = await readAllowance(config, product.asset, session.address, catalogAddress);
     if (allowance < price) {
       // The purchase is sent only once the approval is MINED. Sent back to back, the wallet

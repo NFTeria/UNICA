@@ -310,6 +310,58 @@ test("a failed balance read reaches the planner, and is refused rather than skip
   assert.match(src.slice(refusal, refusal + 300), /refuse\(plan\.shortfall > 0n \? shortEthText\(plan\.shortfall, payAsset\) : plan\.why\)/);
 });
 
+// ── the same sequence, on the catalogue link ──────────────────────────────────────────────────────
+
+const productPath = () => {
+  const src = readFileSync(join(APP, "assets", "local-pay.js"), "utf8");
+  const from = src.indexOf("async function buyProduct({");
+  const to = src.indexOf('encodeCall("buy(uint256)"', from);
+  assert.ok(from > 0 && to > from, "the catalogue path could not be found in local-pay.js");
+  return src.slice(from, to);
+};
+
+test("the catalogue path asks the planner before it approves anything either", () => {
+  assert.equal(plannerBeforeApproval(productPath()), true);
+  // ...on the deployment's reading of the asset, not the card's own symbol.
+  assert.match(productPath(), /const payAsset = assetInFor\(card, config\);/);
+});
+
+test("its deposit is awaited to its receipt, then the approval, then the purchase", () => {
+  const src = productPath();
+  assert.match(
+    src,
+    /waitForReceipt\(session, await session\.send\(\{ to: product\.asset, data: encodeDepositCalldata\(\), value: weiHex\(plan\.wrap\) \}\)\)/,
+    "the deposit must be mined before the sequence continues",
+  );
+  // The approval that follows keeps its own wait, and the purchase is after both.
+  const deposit = src.indexOf("encodeDepositCalldata()");
+  const approve = src.indexOf("encodeApproveCalldata(catalogAddress, product.price)");
+  assert.ok(deposit > 0 && approve > deposit, "the approval follows the deposit");
+  assert.match(src.slice(approve - 120, approve + 120), /waitForReceipt\(session, await session\.send\(/);
+});
+
+test("a refusal on the catalogue path sends nothing at all", () => {
+  const src = productPath();
+  const refusal = src.indexOf("if (!plan.ok)");
+  const deposit = src.indexOf("encodeDepositCalldata()");
+  assert.ok(refusal > 0, "the refusal branch is missing");
+  assert.ok(refusal < deposit, "the refusal must be decided before the deposit is built");
+  assert.match(src.slice(refusal, deposit), /return;/, "the refusal returns rather than falling through to the send");
+  // The unread reading reaches the planner here too, rather than stepping around the wrap.
+  assert.match(src, /wethBalance: purse\?\.held \?\? null,/);
+  assert.match(src, /ethBalance: purse\?\.native \?\? null,/);
+});
+
+test("the register's note is true on both links, because both run the same decision", () => {
+  // The label promises the product can be paid in ETH. Neither link may be the one that refuses.
+  for (const path of [orderPath(), productPath()]) {
+    assert.ok(path.includes("isWrappedNative("), "each path decides with the same rule");
+    assert.ok(path.includes("wrapPlan("), "each path decides with the same planner");
+    assert.ok(path.includes("GAS_MARGIN_WEI"), "each path keeps back the same fee floor");
+    assert.ok(path.includes("shortEthText("), "each path refuses in the same words");
+  }
+});
+
 // ── what the four-second poll is not allowed to say over ──────────────────────────────────────────
 
 const payHandler = () => {
