@@ -501,7 +501,9 @@ function renderAssets(menu) {
     const sym = document.createElement("span");
     sym.className = "pos-asset-sym";
     // The wrapped native asset says so here, because the business is the one who has to know that
-    // a customer holding plain ETH can still pay. The sale itself is unchanged.
+    // a customer holding plain ETH can still pay. The sale itself is unchanged. A row with no route
+    // is listed but not payable, and says nothing of the kind: the status is on the asset, so the
+    // label reads it rather than this loop having to remember to.
     sym.textContent = payAssetLabel(asset);
     const pill = document.createElement("span");
     pill.className = "availability";
