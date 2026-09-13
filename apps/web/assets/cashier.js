@@ -39,6 +39,7 @@ import {
   fromBaseUnits,
   isAddress,
   paymentStatus,
+  openingRateOf,
   quoteOrder,
   registerDisplayName,
   validateEnvironment,
@@ -769,8 +770,22 @@ async function chargeNow() {
  */
 async function priceThisSale(minOut) {
   if (till.route.kind !== "conversion") return { amountIn: minOut, minOut };
-  const adapter = till.config.manifest?.market?.adapter ?? till.config.contracts?.oracleAdapter ?? null;
-  if (!adapter) throw new Error("This setup names no price source, so a converted sale cannot be priced.");
+  const market = till.config.manifest?.market ?? {};
+  // A market that runs without an oracle is priced from the rate it was opened with: the hook
+  // settles it with no band and says so on the receipt, and the pool was initialised at that rate.
+  const opening = openingRateOf(market);
+  if (opening) {
+    return quoteOrder({
+      invoiceUnits: minOut,
+      invoiceIn: "payout",
+      customerAsset: till.customerAsset,
+      payoutAsset: till.payout,
+      price: opening.price,
+      priceDecimals: opening.decimals,
+    });
+  }
+  const adapter = market.adapter ?? till.config.contracts?.oracleAdapter ?? null;
+  if (!adapter || /^0x0{40}$/i.test(String(adapter))) throw new Error("This setup names no price source, so a converted sale cannot be priced.");
   const answer = decodeLatestPrice(
     await till.session.call({
       to: adapter,

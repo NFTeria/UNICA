@@ -356,6 +356,25 @@ const pow10 = (n) => 10n ** BigInt(n);
  *
  * Returns { amountIn, minOut } as base units of the customer asset and the payout asset.
  */
+/**
+ * The rate a market was opened with, usable as its reference price only when the market runs
+ * WITHOUT an oracle: the hook then settles with no band and marks the receipt so, and the pool was
+ * initialised at this very rate. `rateE18` is payout units per one whole asset, scaled by 1e18,
+ * exactly the shape `quoteOrder` reads. Null for an oracle-on market (the adapter is the source
+ * there) and for a market that recorded no rate, so nothing here can invent a price.
+ */
+export function openingRateOf(market = {}) {
+  if (market?.oracle?.enabled !== false) return null;
+  let rate;
+  try {
+    rate = BigInt(market?.rateE18 ?? 0);
+  } catch {
+    return null;
+  }
+  if (rate <= 0n) return null;
+  return { price: rate, decimals: 18 };
+}
+
 export function quoteOrder({
   invoiceUnits,
   invoiceIn = "payout",
