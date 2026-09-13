@@ -92,12 +92,12 @@ export async function driveHero(
   if (known?.session) {
     const answer = await business(known.session, config).catch(() => null);
     const href = destinationFor(answer);
-    if (href) {
-      button.textContent = whereTo(answer) === "join" ? "Add your business" : "Open my business";
-      button.disabled = false;
-      button.addEventListener("click", () => go(href));
-      return config;
-    }
+    // A recognised wallet always has somewhere to go. With a business it opens that business; on a
+    // network that offers sign-up it joins; otherwise it opens the dashboard, which lists the
+    // wallet's own purchases and says plainly that no business is registered to it here.
+    button.textContent = href ? (whereTo(answer) === "join" ? "Add your business" : "Open my business") : "Open my dashboard";
+    button.disabled = false;
+    button.addEventListener("click", () => go(href ?? "business/"));
     return config;
   }
 
