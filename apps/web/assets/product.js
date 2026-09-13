@@ -363,6 +363,30 @@ const pow10 = (n) => 10n ** BigInt(n);
  * exactly the shape `quoteOrder` reads. Null for an oracle-on market (the adapter is the source
  * there) and for a market that recorded no rate, so nothing here can invent a price.
  */
+/**
+ * Two Chainlink legs crossed into one reference: the asset's USD feed over the payout's USD feed,
+ * as payout units per one whole asset scaled by 1e18, the shape `quoteOrder` reads. Each leg is
+ * { answer, decimals, updatedAt } straight from `latestRoundData()`. Null when either leg is
+ * missing or not positive, so a dead feed prices nothing rather than something.
+ */
+export function crossRateFromFeeds({ asset, quote } = {}) {
+  if (!asset || !quote) return null;
+  let a;
+  let q;
+  try {
+    a = BigInt(asset.answer ?? 0);
+    q = BigInt(quote.answer ?? 0);
+  } catch {
+    return null;
+  }
+  const ad = asset.decimals;
+  const qd = quote.decimals;
+  if (a <= 0n || q <= 0n || !Number.isInteger(ad) || !Number.isInteger(qd)) return null;
+  const price = (a * 10n ** BigInt(18 + qd)) / (q * 10n ** BigInt(ad));
+  if (price <= 0n) return null;
+  return { price, decimals: 18, updatedAt: Math.min(Number(asset.updatedAt ?? 0), Number(quote.updatedAt ?? 0)) };
+}
+
 export function openingRateOf(market = {}) {
   if (market?.oracle?.enabled !== false) return null;
   let rate;

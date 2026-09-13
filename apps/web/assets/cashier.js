@@ -27,7 +27,7 @@
  * only on a VERIFIED verification — never on a transaction hash, never on a timer, and never
  * because the customer says so. The other three words it may say are Checking, Refused and Unknown.
  */
-import { encodeCall, selectorOf, topicOf, wordsOf } from "./abi.js";
+import { decodeString, decodeUint, encodeCall, selectorOf, topicOf, wordsOf } from "./abi.js";
 import { INTEGRATIONS, businessAccent, businessStyle } from "./brand.js";
 import { fillAdvanced, loadConfig, loadEvidence, say, shortId, show } from "./local.js";
 import { listRegisters, readBusinessJoined } from "./local-join.js";
@@ -39,6 +39,7 @@ import {
   fromBaseUnits,
   isAddress,
   paymentStatus,
+  crossRateFromFeeds,
   openingRateOf,
   quoteOrder,
   registerDisplayName,
@@ -328,6 +329,15 @@ export function orderIdFromReceipt(receipt, contractAddress, topic0) {
 }
 
 /** Decode the three words `latestPrice(address,address)` returns: price, decimals, updated time. */
+/** Chainlink `latestRoundData()`: five words; the answer is word 1 and its publish time word 3. */
+export function decodeLatestRoundData(value) {
+  const words = wordsOf(value);
+  if (words.length < 5) return null;
+  const answer = BigInt("0x" + words[1]);
+  if (answer >= 2n ** 255n) return null; // a negative int256 is not a price
+  return { answer, updatedAt: Number(BigInt("0x" + words[3])) };
+}
+
 export function decodeLatestPrice(value) {
   const words = wordsOf(value);
   if (words.length < 3) return null;
@@ -759,7 +769,7 @@ async function chargeNow() {
     return;
   }
   fillAdvanced(till.config, { order: orderId, tx: hash });
-  say("sale-status", `${formatAsset(quote.minOut, till.payout)} to you. Hand this to the customer.`);
+  say("sale-status", `${formatAsset(quote.minOut, till.payout)} to you${till.priceNote ? `, priced from ${till.priceNote}` : ""}. Hand this to the customer.`);
   await handOver(orderLink(orderId, location.href), { orderId, deadline });
 }
 
@@ -771,8 +781,22 @@ async function chargeNow() {
 async function priceThisSale(minOut) {
   if (till.route.kind !== "conversion") return { amountIn: minOut, minOut };
   const market = till.config.manifest?.market ?? {};
-  // A market that runs without an oracle is priced from the rate it was opened with: the hook
-  // settles it with no band and says so on the receipt, and the pool was initialised at that rate.
+  // Price feeds first: the two Chainlink legs the deployment names, read now and crossed here,
+  // and the sale line names each feed, its raw answer and its publish time.
+  const feeds = await readFeedRate(market);
+  if (feeds) {
+    till.priceNote = feeds.note;
+    return quoteOrder({
+      invoiceUnits: minOut,
+      invoiceIn: "payout",
+      customerAsset: till.customerAsset,
+      payoutAsset: till.payout,
+      price: feeds.price,
+      priceDecimals: feeds.decimals,
+    });
+  }
+  // Otherwise a market that runs without an oracle is priced from the rate it was opened with: the
+  // hook settles it with no band and says so on the receipt, and the pool was initialised at that rate.
   const opening = openingRateOf(market);
   if (opening) {
     return quoteOrder({
@@ -801,6 +825,37 @@ async function priceThisSale(minOut) {
     price: answer.price,
     priceDecimals: answer.decimals,
   });
+}
+
+/**
+ * The deployment's two price feeds, read now. Each leg answers decimals, latestRoundData and its
+ * own description; the cross is computed here. Null when the deployment names no feeds or a leg
+ * does not answer, so the register falls through to the next source instead of guessing.
+ */
+async function readFeedRate(market) {
+  const ADDR = /^0x[0-9a-fA-F]{40}$/;
+  const assetFeed = market?.assetFeed;
+  const quoteFeed = market?.quoteFeed;
+  if (!ADDR.test(String(assetFeed)) || !ADDR.test(String(quoteFeed))) return null;
+  const read = async (feed) => {
+    try {
+      const [dec, round, desc] = await Promise.all([
+        till.session.call({ to: feed, data: encodeCall("decimals()", []) }),
+        till.session.call({ to: feed, data: encodeCall("latestRoundData()", []) }),
+        till.session.call({ to: feed, data: encodeCall("description()", []) }).catch(() => null),
+      ]);
+      const r = decodeLatestRoundData(round);
+      if (!r) return null;
+      return { ...r, decimals: Number(decodeUint(dec)), description: desc ? decodeString(desc) : feed };
+    } catch {
+      return null;
+    }
+  };
+  const [asset, quote] = await Promise.all([read(assetFeed), read(quoteFeed)]);
+  const cross = crossRateFromFeeds({ asset, quote });
+  if (!cross) return null;
+  cross.note = `${asset.description} ${asset.answer} at ${asset.updatedAt} over ${quote.description} ${quote.answer} at ${quote.updatedAt}`;
+  return cross;
 }
 
 /**
