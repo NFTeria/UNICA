@@ -307,7 +307,75 @@ test("a failed balance read reaches the planner, and is refused rather than skip
   assert.equal(src.includes("if (purse) {"), false, "a failed read no longer skips the wrap in silence");
   // ...and the sentence it refuses with is the one that reaches the status line.
   const refusal = src.indexOf("if (!plan.ok)");
-  assert.match(src.slice(refusal, refusal + 300), /setText\("co-status", plan\.shortfall > 0n \? shortEthText\(plan\.shortfall, payAsset\) : plan\.why\)/);
+  assert.match(src.slice(refusal, refusal + 300), /refuse\(plan\.shortfall > 0n \? shortEthText\(plan\.shortfall, payAsset\) : plan\.why\)/);
+});
+
+// ── what the four-second poll is not allowed to say over ──────────────────────────────────────────
+
+const payHandler = () => {
+  const src = readFileSync(join(APP, "assets", "local-pay.js"), "utf8");
+  const from = src.indexOf('payBtn.addEventListener("click", async () => {');
+  const to = src.indexOf("\n    });", from);
+  assert.ok(from > 0 && to > from, "the order path's pay handler could not be found in local-pay.js");
+  return src.slice(from, to);
+};
+
+const wholeFile = () => readFileSync(join(APP, "assets", "local-pay.js"), "utf8");
+
+test("the poll reads on every tick, and writes the word only when it is allowed to", () => {
+  const src = wholeFile();
+  assert.match(src, /const canSpeak = \(\) => !sending && !held;/);
+  assert.match(src, /const check = async \(\{ speak = canSpeak\(\) \} = \{\}\) => \{/);
+  assert.match(src, /if \(speak\) \{\n\s+setText\("co-status", spoken\.word\);/);
+  // The reading itself is unconditional: the verdict, the advanced panel and the buttons stay
+  // current through a wrap. Only the sentence on the screen is left alone.
+  assert.match(src, /polling = setInterval\(async \(\) => \{\n\s+const now = await check\(\)/);
+  assert.match(src, /\n\s+refresh\(\);\n\s+return spoken;/);
+});
+
+test("the flag is up for the whole sequence, and the poll cannot re-open the button under it", () => {
+  const src = payHandler();
+  const up = src.indexOf("sending = true;");
+  const down = src.indexOf("sending = false;");
+  assert.ok(up > 0 && down > up, "the flag is raised before the sequence and lowered after it");
+  assert.match(src, /\} finally \{\n\s+sending = false;\n\s+refresh\(\);/);
+  assert.match(wholeFile(), /payBtn\.disabled = sending \|\| !allowed \|\| done \|\| !spoken\.payable;/);
+  // control, on a planted source: the same predicate must fail on the expression this replaced, or
+  // it is asserting nothing about the flag at all.
+  assert.equal(/payBtn\.disabled = sending \|\|/.test("payBtn.disabled = !allowed || done || !spoken.payable;"), false);
+});
+
+test("every sentence the sequence refuses with holds the screen until the person acts", () => {
+  const src = payHandler();
+  assert.match(src, /const refuse = \(text\) => \{\n\s+held = true;\n\s+setText\("co-status", text\);/);
+  // The only writes to the status line that do NOT hold it are the two progress words and the wrap
+  // line, and all three of those run while the flag is up. Anything else here would be erased four
+  // seconds later — including the sentence saying nothing was sent.
+  const allowed = new Set([
+    'setText("co-status", text);',
+    'setText("co-status", statusText("SUBMITTED"));',
+    'setText("co-status", wrappingText(plan.wrap, payAsset));',
+    'setText("co-status", statusText("PENDING"));',
+  ]);
+  const speaks = src
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('setText("co-status"'));
+  for (const line of speaks) assert.ok(allowed.has(line), `${line} writes the status line without holding it`);
+  assert.equal(speaks.length, 4, "the sequence's own writes, and no others");
+  // The refusals themselves, by name: each is the helper's, not a bare write.
+  for (const held of ["refuse(plan.shortfall > 0n", "refuse(wrapped ?", "refuse(approved ?", "refuse(statusText(", "refuse(`Could not pay:"]) {
+    assert.ok(src.includes(held), held);
+  }
+});
+
+test("pressing pay, or asking for a fresh answer, is the only thing that lowers a held refusal", () => {
+  const src = wholeFile();
+  assert.match(payHandler(), /held = false;\n\s+sending = true;/);
+  assert.match(src, /held = false;\n\s+check\(\{ speak: true \}\)/);
+  // Nothing else lowers it. A poll tick must never decide on a person's behalf that they have
+  // finished reading why their payment stopped.
+  assert.equal((src.match(/(?<!let )held = false;/g) ?? []).length, 2);
 });
 
 test("a refusal from the planner sends nothing at all", () => {
