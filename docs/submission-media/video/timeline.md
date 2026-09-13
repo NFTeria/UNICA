@@ -449,8 +449,8 @@ head -9 docs/v2/RELEASE-CANDIDATE-FREEZE.md
 > An internal security review on 2026-09-08 found and reproduced a **Critical** defect in
 > `QuoteSettlementExecutor`: the payer's Permit2 witness does not bind the merchant's half of the
 > quote, so a relayer or any mempool observer can redirect a settlement to themselves in full.
-> See [`SECURITY-ADVISORY-001.md`](SECURITY-ADVISORY-001.md) and the
-> [internal security review](INTERNAL-SECURITY-REVIEW.md).
+> See [`SECURITY-ADVISORY-001.md`](../../v2/SECURITY-ADVISORY-001.md) and the
+> [internal security review](../../v2/INTERNAL-SECURITY-REVIEW.md).
 ```
 
 **Fallback for the whole of shot 6:** a single static frame listing the five statuses, cut from
