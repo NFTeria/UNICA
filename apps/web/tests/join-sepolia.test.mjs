@@ -694,6 +694,29 @@ test("the page a person is sent can only fail somewhere they can read it", () =>
   assert.ok(selfServe.includes('id="join-submit"'), "the slice is the self-serve block");
 });
 
+// The self-serve lead promises a single wallet confirmation. On a network that adds businesses to a
+// held name, that block is hidden and the flow asks for one transaction per step, so the promise
+// may only be made inside the block that keeps it. Outside it, it sits above a sentence saying the
+// opposite, and in the page's link preview it is shown to a person before they have read either.
+const ONE_CONFIRMATION = /confirm once|one (?:wallet )?confirmation/i;
+const promisedOutsideSelfServe = (html) => {
+  const start = html.indexOf('id="join-self"');
+  const end = html.indexOf('id="join-name"');
+  if (start < 0 || end <= start) return null;
+  return ONE_CONFIRMATION.test(html.slice(0, start) + html.slice(end));
+};
+
+test("the one-confirmation promise is made only inside the flow that keeps it", () => {
+  const page = builtJoinPage();
+  assert.equal(promisedOutsideSelfServe(page), false, "no one-confirmation promise outside the self-serve block, preview included");
+  const selfServe = page.slice(page.indexOf('id="join-self"'), page.indexOf('id="join-name"'));
+  assert.ok(ONE_CONFIRMATION.test(selfServe), "the promise is still made to the flow it describes, not deleted");
+  // control: the same promise planted above the block must be caught, or the row above proves nothing.
+  const planted = page.replace('<div id="join-self"', '<p>Your wallet asks you to confirm once.</p><div id="join-self"');
+  assert.notEqual(planted, page, "the plant landed");
+  assert.equal(promisedOutsideSelfServe(planted), true, "a promise above the block is detected");
+});
+
 test("the second flow never reuses the first flow's ids", () => {
   // Two forms in one document sharing an id is a form that writes into the other one's field. This
   // reads the BUILT page: ids reached through a component never appear as id="..." in the route

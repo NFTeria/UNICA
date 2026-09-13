@@ -12,15 +12,15 @@ export const JOIN = [
     description:
       "Set your business up from your own wallet: a pay name, the wallet that gets paid, the asset you want to receive, the assets you accept, and your first register.",
     ogTitle: "Set up my business on UNICA",
-    ogDescription: "One wallet confirmation sets up a pay name, a payout and a first register.",
+    ogDescription: "Set up a pay name, a payout wallet and a first register from your own wallet.",
     ogImage: "og-merchant.svg",
     body: h`
 <section id="join">
+  ${C.banner("info", "Testnet. No real money.", raw(`Nothing on <span id="join-network">this network</span> has value.`))}
+  <div id="join-self">
   <p class="lead">Answer seven questions and press one button. Your wallet asks you to confirm once.
   When it is done you have a pay name, a wallet that gets paid, a first register and a business
   badge.</p>
-  ${C.banner("info", "Testnet. No real money.", raw(`Nothing on <span id="join-network">this network</span> has value.`))}
-  <div id="join-self">
   <ol class="steps" id="form">
     <li>
       <h2>Connect your wallet</h2>
