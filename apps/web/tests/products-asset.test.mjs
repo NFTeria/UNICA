@@ -40,6 +40,7 @@ import {
   paidInOptions,
   priceHint,
   priceText,
+  symbolAnswer,
 } from "../assets/products.js";
 import { productCard } from "../assets/storefront.js";
 
@@ -201,6 +202,11 @@ const REFUSALS = [
   ["a decimal count nothing could hold", { answer: { ...GOOD, decimals: 77 } }, /how many decimal places/],
   ["no name answered", { answer: { ...GOOD, symbol: null } }, /did not say what it is called/],
   ["a name of only spaces", { answer: { ...GOOD, symbol: "   " } }, /did not say what it is called/],
+  [
+    "a name in an encoding this screen cannot read",
+    { answer: { ...GOOD, symbol: null, symbolUnreadable: true } },
+    /encoding this screen does not read/,
+  ],
   ["the network could not be reached", { throws: "connection refused" }, /could not be read just now/],
   ["no way to reach the network", { noReader: true }, /cannot reach the network/],
 ];
@@ -230,8 +236,16 @@ for (const [what, spoil, expected] of REFUSALS) {
   });
 }
 
-test("twelve refusals are asserted, stated as a number rather than counted by eye", () => {
-  assert.equal(REFUSALS.length, 12);
+test("thirteen refusals are asserted, stated as a number rather than counted by eye", () => {
+  assert.equal(REFUSALS.length, 13);
+});
+
+test("control: an unread name and an unreadable one are refused in two different sentences", async () => {
+  // Both end with no symbol, so a single sentence would be indistinguishable from a working pair.
+  const silent = await assetChoice(refusalCall({ answer: { ...GOOD, symbol: null } }));
+  const garbled = await assetChoice(refusalCall({ answer: { ...GOOD, symbol: null, symbolUnreadable: true } }));
+  assert.notEqual(silent.error, garbled.error);
+  assert.equal(/encoding this screen does not read/.test(silent.error), false);
 });
 
 test("control: the unspoiled answer, through the same call, is accepted", async () => {
@@ -274,10 +288,62 @@ function stubSession({ code = "0x60806040", symbol = SYMBOL_RETURN, decimals = D
   };
 }
 
+// ---- the two shapes a token answers its own name in ------------------------------------------------
+
+// Produced with `cast format-bytes32-string MKR` and `cast abi-encode "f(string)" MKR`, 1.3.5. The
+// two are the SAME NAME in the two encodings tokens actually use, which is the whole point of the
+// rows below: one word, or an offset and a length and the bytes.
+const MKR_BYTES32 = "0x4d4b520000000000000000000000000000000000000000000000000000000000"; // cast format-bytes32-string vector
+const MKR_STRING =
+  "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000034d4b520000000000000000000000000000000000000000000000000000000000"; // cast abi-encode vector
+
+test("a name answered in one word is a name, not a token with no name", () => {
+  assert.deepEqual(symbolAnswer(MKR_BYTES32), { symbol: "MKR", unreadable: false });
+});
+
+test("the same name answered the ABI's way reads identically", () => {
+  assert.deepEqual(symbolAnswer(MKR_STRING), { symbol: "MKR", unreadable: false });
+  // Control: the two encodings are genuinely different bytes, so the row above is not reading one
+  // path twice. If they were equal this pair would prove nothing about either shape.
+  assert.notEqual(MKR_BYTES32, MKR_STRING);
+});
+
+test("a token that answered nothing at all is unanswered, and never unreadable", () => {
+  for (const nothing of [null, undefined, "", "0x"]) {
+    assert.deepEqual(symbolAnswer(nothing), { symbol: null, unreadable: false }, String(nothing));
+  }
+  // A whole word of zeros names nothing either, and is the token's answer rather than a bad encoding.
+  assert.deepEqual(symbolAnswer("0x" + "0".repeat(64)), { symbol: null, unreadable: false }); // bytes32 of zeros
+});
+
+test("a word that is not text is called unreadable, which is not the same as unanswered", () => {
+  const notText = "0xff01020300000000000000000000000000000000000000000000000000000000"; // bytes32 of raw bytes
+  assert.equal(notText.length, 66, "the row below only means anything if this really is one word");
+  assert.deepEqual(symbolAnswer(notText), { symbol: null, unreadable: true });
+  assert.deepEqual(symbolAnswer("0xabc"), { symbol: null, unreadable: true }); // neither shape's length
+});
+
+test("a token that says its name in one word can be priced in, which is the defect this row names", async () => {
+  const chosen = await assetChoice({
+    choice: OTHER_ASSET,
+    address: WETH,
+    read: readerFor({ code: "0x60806040", symbol: "MKR", symbolUnreadable: false, decimals: 18 }),
+  });
+  assert.equal(chosen.ok, true);
+  assert.equal(chosen.asset.symbol, "MKR");
+});
+
+test("the reader turns a one-word answer into that name, through the same session it always used", async () => {
+  const answered = await assetReaderFor(stubSession({ symbol: MKR_BYTES32 }))(WETH);
+  assert.equal(answered.symbol, "MKR");
+  assert.equal(answered.symbolUnreadable, false);
+  assert.equal(answered.decimals, 18);
+});
+
 test("the reader asks for the code and for the two things an ERC-20 says about itself", async () => {
   const session = stubSession();
   const answered = await assetReaderFor(session)(WETH);
-  assert.deepEqual(answered, { code: "0x60806040", symbol: "WETH", decimals: 18 });
+  assert.deepEqual(answered, { code: "0x60806040", symbol: "WETH", symbolUnreadable: false, decimals: 18 });
   assert.deepEqual(session.asked, [
     ["eth_getCode", WETH, "latest"],
     ["eth_call", WETH, SYMBOL_CALL],
