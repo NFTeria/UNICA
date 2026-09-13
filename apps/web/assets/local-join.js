@@ -753,19 +753,26 @@ async function main() {
 /**
  * The same screen, on a network where a business cannot sign itself up.
  *
- * WHO MAY USE IT. Only the wallet the parent name's own access control lets write its records. The
- * companion answers that question from the chain, and a wallet that is not it gets a sentence
- * saying so rather than a form that would fail at the first confirmation. A server that did not
- * answer is a THIRD answer, never folded into "no": a controller told they are not one because
- * something was restarting would go and change a record by hand for no reason.
+ * WHO MAY USE IT. Only the wallet the parent name's own access control lets write its records, and
+ * the CHAIN is asked that question — `isNamespaceController` on the name authority, through this
+ * session's own read. The companion is not asked it: a server can be restarted, misconfigured or
+ * pointed at another deployment, and none of that is a fact about who holds a name. The companion
+ * is still asked which businesses the name already lists, which is a list and nothing more.
+ *
+ * A READ THAT DID NOT ANSWER IS A THIRD ANSWER, never folded into "not the holder". Somebody told
+ * they do not hold a name they do hold would go and change a record by hand for no reason.
  *
  * WHAT IT SHOWS BEFORE ANYTHING IS SIGNED. The plan, in order, as sentences. The transactions are
  * read out of `join-sepolia.js`, which reads the chain first so a row the chain already has is
  * dropped from the list rather than confirmed again. Nothing is sent until the button is pressed,
  * and the button is disabled until there is a plan to send.
+ *
+ * WHAT HAPPENS WHEN ONE IS DECLINED. The list stays on the screen and the button comes back. The
+ * steps that confirmed are on the chain, so the next read of the name finds them and the next list
+ * leaves them out — which is why a stopped sequence is carried on rather than started again.
  */
 async function controllerJoin(config, planner) {
-  const { DEFAULT_REGISTER_LABEL, labelTaken, nameSettings, nodesFor, planBusiness, readNameState, readNamespace, sendPlan } = planner;
+  const { DEFAULT_REGISTER_LABEL, labelTaken, nameSettings, nodesFor, planBusiness, readBusinesses, readController, readNameState, sendPlan } = planner;
   const settings = nameSettings(config);
 
   hide("join-self");
@@ -775,16 +782,21 @@ async function controllerJoin(config, planner) {
   const labelInput = document.getElementById("name-label");
   const payoutInput = document.getElementById("name-payout");
   const registerInput = document.getElementById("name-register");
+  const operatorInput = document.getElementById("name-operator");
   const submit = document.getElementById("name-submit");
 
   let session = null;
-  let namespace = { controller: false, reachable: false, businesses: [] };
+  /** The chain's answer about this wallet, and whether the chain answered at all. */
+  let holder = { controller: false, reachable: false };
+  /** The companion's list of businesses already under the name. Never an authority claim. */
+  let listing = { reachable: false, businesses: [] };
   let plan = null;
 
   const answers = () => ({
     label: String(labelInput?.value ?? "").trim().toLowerCase(),
     payout: String(payoutInput?.value ?? "").trim(),
     registerLabel: slugify(registerInput?.value ?? "") || DEFAULT_REGISTER_LABEL,
+    operator: String(operatorInput?.value ?? "").trim(),
   });
 
   const heldName = settings.parentName ?? "the name";
@@ -792,13 +804,14 @@ async function controllerJoin(config, planner) {
   /** The first unmet condition in reading order, because that is the next thing to do about it. */
   const why = () => {
     if (!session) return "Connect the wallet that holds the name.";
-    if (!namespace.reachable) return "This network could not be read just now, so nothing can be added from here. Try again in a moment.";
-    if (!namespace.controller) return `This wallet does not hold ${heldName}, so it cannot add a business under it.`;
+    if (!holder.reachable) return "This network could not be read just now, so nothing can be added from here. Try again in a moment.";
+    if (!holder.controller) return `This wallet does not hold ${heldName}, so it cannot add a business under it.`;
     const a = answers();
     if (!isValidLabelLocal(a.label)) return LABEL_RULE_SENTENCE;
-    if (labelTaken(namespace, a.label)) return `${payNameFor(a.label, settings.parentName)} is already taken. Try another name.`;
+    if (labelTaken(listing, a.label)) return `${payNameFor(a.label, settings.parentName)} is already taken. Try another name.`;
     if (!isAddress(a.payout)) return "The payout wallet must be a full address starting with 0x.";
     if (!isValidLabelLocal(a.registerLabel)) return `Give the first register a name. ${LABEL_RULE_SENTENCE}`;
+    if (a.operator && !isAddress(a.operator)) return "The operator wallet must be a full address starting with 0x, or left empty.";
     if (!plan) return "Reading this name on the network...";
     return plan.ok ? plan.sentence : plan.refusal;
   };
@@ -828,9 +841,14 @@ async function controllerJoin(config, planner) {
   const refresh = () => {
     const a = answers();
     say("name-register-hint", isValidLabelLocal(a.registerLabel) ? `Saved as ${a.registerLabel}.` : LABEL_RULE_SENTENCE);
+    say("name-operator-hint", !a.operator
+      ? `Leave this empty and only ${heldName}'s own wallet can switch the register on and off.`
+      : isAddress(a.operator)
+        ? "That wallet will be allowed to switch this one register on and off, and nothing else."
+        : "The operator wallet must be a full address starting with 0x, or left empty.");
     if (!a.label) say("name-free", "Type the name customers will pay. Lowercase letters, numbers and hyphens.");
     else if (!isValidLabelLocal(a.label)) say("name-free", LABEL_RULE_SENTENCE);
-    else if (labelTaken(namespace, a.label)) say("name-free", `${payNameFor(a.label, settings.parentName)} is already taken. Try another name.`);
+    else if (labelTaken(listing, a.label)) say("name-free", `${payNameFor(a.label, settings.parentName)} is already taken. Try another name.`);
     else say("name-free", `Your pay name will be ${payNameFor(a.label, settings.parentName)}.`);
     say("name-why", why());
     if (submit) submit.disabled = !plan?.ok;
@@ -839,25 +857,42 @@ async function controllerJoin(config, planner) {
   // A newer keystroke supersedes an older read, so a slow answer for a name nobody is typing any
   // more can never enable the button for a name that is on screen.
   let seq = 0;
-  const rebuild = async () => {
+  /**
+   * Read the name and plan again. `keepOnRefusal` holds on to the list that is already on screen
+   * when the new read refuses — the state a stopped sequence leaves behind — because every step in
+   * that list is safe to send again and throwing it away is what would strand the person.
+   */
+  const rebuild = async ({ keepOnRefusal = false } = {}) => {
     const mine = ++seq;
+    const standing = plan;
     plan = null;
-    renderPlan();
+    if (!keepOnRefusal) renderPlan();
     refresh();
     const a = answers();
-    if (!session || !namespace.controller) return;
-    if (!isValidLabelLocal(a.label) || !isValidLabelLocal(a.registerLabel) || !isAddress(a.payout)) return;
-    if (labelTaken(namespace, a.label)) return;
+    const restore = () => {
+      if (!keepOnRefusal || !standing?.ok) return;
+      plan = standing;
+      renderPlan();
+      refresh();
+    };
+    if (!session || !holder.controller) return restore();
+    if (!isValidLabelLocal(a.label) || !isValidLabelLocal(a.registerLabel) || !isAddress(a.payout)) return restore();
+    if (a.operator && !isAddress(a.operator)) return restore();
+    if (!keepOnRefusal && labelTaken(listing, a.label)) return;
     const nodes = nodesFor(settings.parentNode, a.label, a.registerLabel);
     let existing = null;
     try {
-      existing = await readNameState(session, { authority: settings.authority, nodes, terminalStatusKey: settings.terminalStatusKey });
+      existing = await readNameState(session, { authority: settings.authority, nodes, terminalStatusKey: settings.terminalStatusKey, operator: a.operator || null });
     } catch (e) {
-      if (mine === seq) say("name-plan-said", `This name could not be read right now: ${e.message}`);
+      if (mine === seq) {
+        say("name-plan-said", `This name could not be read right now: ${e.message}`);
+        restore();
+      }
       return;
     }
     if (mine !== seq) return;
-    plan = planBusiness({ ...a, parentNode: settings.parentNode, parentName: settings.parentName, resolver: settings.resolver, authority: settings.authority, terminalStatusKey: settings.terminalStatusKey, existing });
+    plan = planBusiness({ ...a, operator: a.operator || null, parentNode: settings.parentNode, parentName: settings.parentName, resolver: settings.resolver, authority: settings.authority, terminalStatusKey: settings.terminalStatusKey, existing });
+    if (!plan.ok && keepOnRefusal && standing?.ok) return restore();
     renderPlan();
     refresh();
   };
@@ -872,10 +907,11 @@ async function controllerJoin(config, planner) {
       }
       session = result.session;
       if (payoutInput && !payoutInput.value.trim()) payoutInput.value = session.address;
-      namespace = await readNamespace(config, session.address);
+      holder = await readController(session, { authority: settings.authority, parentNode: settings.parentNode, account: session.address });
+      listing = await readBusinesses(config, session.address);
       const who = `Connected: ${shortId(session.address)} on ${session.networkName}.`;
-      if (!namespace.reachable) say("name-said", `${who} This network could not be read just now.`);
-      else if (!namespace.controller) say("name-said", `${who} This wallet does not hold ${heldName}.`);
+      if (!holder.reachable) say("name-said", `${who} This network could not be read just now.`);
+      else if (!holder.controller) say("name-said", `${who} This wallet does not hold ${heldName}.`);
       else say("name-said", `${who} This wallet holds ${heldName}, so it may add a business under it.`);
       await rebuild();
     } catch (e) {
@@ -884,7 +920,7 @@ async function controllerJoin(config, planner) {
     refresh();
   });
 
-  for (const el of [labelInput, payoutInput, registerInput]) {
+  for (const el of [labelInput, payoutInput, registerInput, operatorInput]) {
     el?.addEventListener("input", () => {
       rebuild().catch((e) => say("name-plan-said", `Could not read this name: ${e.message}`));
     });
@@ -892,25 +928,39 @@ async function controllerJoin(config, planner) {
 
   submit?.addEventListener("click", async () => {
     if (!plan?.ok || !session) return;
+    const attempted = plan; // the list as it stood when the button was pressed
     submit.disabled = true;
-    const total = plan.steps.length;
+    const total = attempted.steps.length;
     try {
-      say("name-status", total === 1
+      say("join-status", total === 1
         ? "Confirm one transaction in your wallet. Nothing exists until the network confirms it."
         : `Confirm ${total} transactions in your wallet, one after another. Each is waited for before the next is asked for.`);
-      await sendPlan({ session, plan, onStep: (n, t, sentence) => say("name-status", sentence) });
-      say("name-status", "Done. Opening your business...");
+      await sendPlan({ session, plan: attempted, onStep: (n, t, sentence) => say("join-status", sentence) });
+      say("join-status", "Done. Opening your business...");
       window.location.href = "../business/";
     } catch (e) {
-      // Whatever confirmed before the stop is on the chain. Re-reading is how the next plan skips
-      // it, which is why this re-reads rather than offering the same list again.
-      say("name-status", e.message);
+      // A stop is not an ending. Whatever confirmed is on the chain, so the name is read again and
+      // the next list leaves those steps out; if that read does not answer, the list that was being
+      // sent stays on screen, because every step in it is safe to send again.
+      say("join-status", `${e.message} Press "Add this business" again to carry on: the steps that confirmed are recorded and the list is read from the network first, so they are left out.`);
       try {
-        namespace = await readNamespace(config, session.address);
-        await rebuild();
+        listing = await readBusinesses(config, session.address);
       } catch {
+        // the list of existing names is a courtesy; it never decides whether this can continue
+      }
+      try {
+        await rebuild({ keepOnRefusal: true });
+      } catch {
+        plan = attempted;
+        renderPlan();
         refresh();
       }
+      if (!plan?.ok) {
+        plan = attempted;
+        renderPlan();
+        refresh();
+      }
+      if (submit) submit.disabled = false;
     }
   });
 
