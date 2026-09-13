@@ -20,6 +20,12 @@
  * its own refusal; this only stops the app from proposing a sequence it can already see will end
  * with a customer holding WETH they cannot spend.
  *
+ * AND A FLOOR THAT CANNOT BE READ IS NOT A FLOOR. A margin handed in as null, as an empty string,
+ * as a negative number or as anything else this file cannot turn into wei is refused outright, and
+ * never quietly read as zero. Zero is the one value that makes the whole guard vanish — the plan
+ * would then hand a wallet's last wei to the wrap and call it fine — so the failure mode of an
+ * unreadable margin is a refusal a person can read, not a silently disarmed guard.
+ *
  * NOTHING HERE NAMES AN ADDRESS. Which asset is wrapped native is decided from the symbol and the
  * decimal count the chain itself answered with, carried in on the configuration object, never from
  * a literal written into this file.
@@ -81,13 +87,24 @@ function units(value) {
  * a customer's ETH on an asset they did not ask for and cannot spend anywhere else in this product.
  *
  * A balance that could not be read arrives as null and is refused rather than read as zero: an
- * unread balance and an empty one look the same on a screen and mean opposite things here.
+ * unread balance and an empty one look the same on a screen and mean opposite things here. The
+ * margin is held to the same standard, and for a sharper reason — reading an unusable margin as
+ * zero does not refuse one payment, it deletes the guard for every payment after it. A caller that
+ * passes nothing at all is a different case, and gets the floor this file ships.
  */
 export function wrapPlan({ need, wethBalance, ethBalance, gasMargin = GAS_MARGIN_WEI } = {}) {
   const required = units(need);
   const held = units(wethBalance);
   const native = units(ethBalance);
-  const margin = units(gasMargin) ?? 0n;
+  const margin = units(gasMargin);
+  if (margin === null) {
+    return {
+      ok: false,
+      wrap: 0n,
+      shortfall: 0n,
+      why: "The network-fee margin this payment holds back could not be read as an amount, so nothing was sent.",
+    };
+  }
   if (required === null || held === null || native === null) {
     return { ok: false, wrap: 0n, shortfall: 0n, why: "What this wallet holds could not be read, so nothing was sent." };
   }
