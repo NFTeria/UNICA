@@ -363,10 +363,35 @@ test("a wallet that owns no business stays an address in the chip, and so does o
       login: never,
       accounts: never,
       business,
+      named: async () => null,
     });
     assert.match(chip.textContent, /0x001122…2233/);
     assert.doesNotMatch(chip.textContent, /freshcuts/);
   }
+});
+
+test("a wallet with no business but a verified ENS name is shown by that name; a business name still wins", async () => {
+  const chip = newChip();
+  await driveChip(chip, {
+    load: async () => ({ chainId: 11155111 }),
+    reconnect: async () => ({ session: { ...SESSION, chainId: 11155111 } }),
+    login: never,
+    accounts: never,
+    business: async () => ({ available: true, joined: false }),
+    named: async () => "consumer.eth",
+  });
+  const who = chip.find((n) => n.attributes.title === SESSION.address);
+  assert.equal(who.textContent, "consumer.eth");
+  const owner = newChip();
+  await driveChip(owner, {
+    load: async () => ({ chainId: 11155111 }),
+    reconnect: async () => ({ session: { ...SESSION, chainId: 11155111 } }),
+    login: never,
+    accounts: never,
+    business: async () => ({ available: true, joined: true, name: "freshcuts.unica.eth" }),
+    named: async () => { throw new Error("must not be asked when the chain already named a business"); },
+  });
+  assert.equal(owner.find((n) => n.attributes.title === SESSION.address).textContent, "freshcuts.unica.eth");
 });
 
 test("on the testnet the accounts that network unlocks are offered before logging in", async () => {

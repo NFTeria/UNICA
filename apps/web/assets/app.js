@@ -28,6 +28,7 @@ import {
   whereTo,
 } from "./session.js";
 import { networkName } from "./wallet.js";
+import { primaryName } from "./ens-profile.js";
 
 const q = new URLSearchParams(location.search);
 
@@ -99,7 +100,7 @@ function line(chip, text) {
   fill(chip, [el("span", "wchip-line", text)]);
 }
 
-async function driveChip(chip, { load = loadConfig, reconnect = silentReconnect, login = loginWithWallet, accounts = practiceAccounts, business = readBusiness, go = (href) => location.assign(href) } = {}) {
+async function driveChip(chip, { load = loadConfig, reconnect = silentReconnect, login = loginWithWallet, accounts = practiceAccounts, business = readBusiness, named = primaryName, go = (href) => location.assign(href) } = {}) {
   const prefix = chip.dataset.prefix || "./";
   const config = await load();
   if (!config) {
@@ -128,6 +129,11 @@ async function driveChip(chip, { load = loadConfig, reconnect = silentReconnect,
     const who = signedIn(known.session);
     const answer = await business(known.session, config).catch(() => null);
     if (answer?.joined && answer.name) who.textContent = answer.name;
+    else {
+      // No business: a wallet that has claimed a name, and whose name points back, is shown by it.
+      const name = await named(config, known.session.address).catch(() => null);
+      if (name) who.textContent = name;
+    }
     const name = document.getElementById("topbar-business");
     if (name) {
       if (answer?.joined && answer.name) name.textContent = answer.name;
@@ -173,6 +179,10 @@ async function driveChip(chip, { load = loadConfig, reconnect = silentReconnect,
     const who = signedIn(result.session);
     const answer = await business(result.session, config).catch(() => null);
     if (answer?.joined && answer.name) who.textContent = answer.name;
+    else {
+      const name = await named(config, result.session.address).catch(() => null);
+      if (name) who.textContent = name;
+    }
     if (!answer) {
       const said = el("span", "wchip-line", "You are signed in. Your business could not be read just now.");
       chip.append(said);

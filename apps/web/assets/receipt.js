@@ -26,6 +26,7 @@ import { businessAccent, businessStyle } from "./brand.js";
 import { decodeString, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
 import { resolveSeller } from "./shop-resolve.js";
+import { customerProfile } from "./ens-profile.js";
 import {
   displayName,
   businessIdentity,
@@ -124,6 +125,7 @@ async function main() {
   say("r-asset", asset?.symbol ?? shortAddress(found.asset));
   say("r-when", whenText(found.settledAt));
   say("r-network", network);
+  await renderPayer(config, found.payer ?? null);
   say("r-tx", found.transactionHash ? shortId(found.transactionHash) : "Not recorded");
   say("receipt", `This payment was checked. The check says ${spoken.word}.`);
   fillAdvanced(config, { order: found.id, tx: found.transactionHash, reasons: found.reasonCodes ?? null });
@@ -147,6 +149,26 @@ async function main() {
   };
   wireKeeping(lines, spoken);
   await renderGraph(config, { tx: found.transactionHash, saleId: found.kind === "product" ? found.id : null, payName: identity.payName });
+}
+
+/** Who paid: the wallet, and its own ENS name and avatar once the chain has confirmed the claim. */
+async function renderPayer(config, payer) {
+  if (!payer) {
+    say("r-payer-name", "Not recorded");
+    return;
+  }
+  say("r-payer-name", shortAddress(payer));
+  const profile = await customerProfile(config, payer);
+  if (!profile.name) return;
+  say("r-payer-name", `${profile.name} (${shortAddress(payer)})`);
+  const square = document.getElementById("r-payer-avatar");
+  if (square && profile.avatar) {
+    const img = document.createElement("img");
+    img.src = profile.avatar;
+    img.alt = "";
+    square.replaceChildren(img);
+    square.hidden = false;
+  }
 }
 
 /** Who was paid: the name, the pay name, and the badge or the business's own accent square. On a

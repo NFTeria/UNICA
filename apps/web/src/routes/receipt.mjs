@@ -44,6 +44,7 @@ export const RECEIPT = [
     <dl class="rc-rows">
       <dt>Amount</dt><dd id="r-paid">—</dd>
       <dt>Asset</dt><dd id="r-asset">—</dd>
+      <dt>From</dt><dd id="r-payer"><span class="r-avatar" id="r-payer-avatar" hidden></span><span id="r-payer-name">—</span></dd>
       <dt>When</dt><dd id="r-when">—</dd>
       <dt>Network</dt><dd id="r-network">—</dd>
       <dt>Transaction</dt><dd id="r-tx" class="hex">—</dd>

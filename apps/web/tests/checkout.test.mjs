@@ -916,3 +916,15 @@ test("a purchase links to a receipt that names the sale, the transaction and the
   assert.equal(href, `../receipt/?chain=11155111&sale=${saleId}&tx=0xabc&business=0xA121e1eF31bBF0826aA67dC01e7977e80Af58D73`);
   assert.equal(receiptLinkFor({ chainId: 31337, hash: "0xabc" }), "../receipt/?chain=31337&tx=0xabc");
 });
+
+test("the customer is named on the checkout and on the receipt only through the verified profile, and every receipt link names the business", () => {
+  const pay = readFileSync(new URL("../assets/local-pay.js", import.meta.url), "utf8");
+  assert.match(pay, /customerProfile\(config, result\.session\.address\)/, "the connection line asks the chain for the customer's name");
+  assert.doesNotMatch(pay, /`\.\.\/receipt\/\?chain=\$\{config\.chainId\}&tx=\$\{hash\}`/, "no receipt link is built without the business any more");
+  const receipt = readFileSync(new URL("../assets/receipt.js", import.meta.url), "utf8");
+  assert.match(receipt, /async function renderPayer\(config, payer\)/);
+  assert.match(receipt, /customerProfile\(config, payer\)/);
+  const markup = readFileSync(new URL("../src/routes/receipt.mjs", import.meta.url), "utf8");
+  assert.match(markup, /id="r-payer-name"/);
+  assert.match(markup, /id="r-payer-avatar"/);
+});

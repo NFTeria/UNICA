@@ -44,6 +44,7 @@ import { decodeString, decodeUint, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
 import { businessAccent, businessStyle } from "./brand.js";
 import { resolveSeller } from "./shop-resolve.js";
+import { customerProfile } from "./ens-profile.js";
 import {
   NOT_FOUND_TEXT,
   businessIdentity,
@@ -841,7 +842,7 @@ async function renderOrder(config, orderId) {
           return;
         }
         const link = document.getElementById("co-receipt-link");
-        if (link) link.setAttribute("href", `../receipt/?chain=${config.chainId}&tx=${hash}`);
+        if (link) link.setAttribute("href", receiptLinkFor({ chainId: config.chainId, hash, business: card.payout ?? card.identity?.address ?? null }));
         setHidden("co-after", false);
         await check();
       } catch (e) {
@@ -866,6 +867,10 @@ async function connect(config, preferred = null) {
       return null;
     }
     setText("wallet", `Connected ${shortAddress(result.session.address)}.`);
+    // The customer's own name, once the chain has confirmed the claim; the address stays beside it.
+    customerProfile(config, result.session.address)
+      .then((profile) => { if (profile.name) setText("wallet", `Connected ${profile.name} (${shortAddress(result.session.address)}).`); })
+      .catch(() => {});
     setText("network", result.session.networkName);
     return result.session;
   } catch (e) {
