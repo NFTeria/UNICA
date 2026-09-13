@@ -21,7 +21,7 @@ import { fetchCatalog, fetchPayments, noSignupLine, openAdmin, readOnlySession, 
 import { encodeCall, decodeUint } from "./abi.js";
 import { say, shortId } from "./local.js";
 import { formatAmountFor } from "./product.js";
-import { customerProfile } from "./ens-profile.js";
+import { avatarFallback, customerProfile } from "./ens-profile.js";
 import { customerLabel } from "./purchases.js";
 
 /**
@@ -95,7 +95,7 @@ async function main() {
       .then((profile) => {
         if (!profile.name) return;
         const cell = body.querySelector(`[data-payer="${row.payer.toLowerCase()}"]`);
-        if (cell) cell.textContent = customerLabel(profile.name, shortId(row.payer));
+        if (cell) drawCustomer(cell, profile, row.payer);
       })
       .catch(() => {});
   }
@@ -110,6 +110,26 @@ async function main() {
   }
   const unchecked = rows.reduce((n, r) => n + r.unchecked, 0);
   say("customers-said", withReason(`${rows.length} customer${rows.length === 1 ? "" : "s"} from ${answered.payments.length} payment${answered.payments.length === 1 ? "" : "s"}.${unchecked ? ` ${unchecked} payment${unchecked === 1 ? " is" : "s are"} not checked and ${unchecked === 1 ? "is" : "are"} not in a total.` : ""}`));
+}
+
+/**
+ * A named customer gets their face beside their name, the way the receipt draws its payer: the
+ * name's gradient first, so a picture that never loads still leaves a named circle, and the ENS
+ * avatar record over it when the chain has one. The rows come from The Graph; the name and the
+ * picture come from ENS. Nothing here is typed in.
+ */
+function drawCustomer(cell, profile, payer) {
+  const circle = document.createElement("span");
+  circle.className = "adm-avatar";
+  circle.setAttribute("style", `background: ${avatarFallback(profile.name)}`);
+  if (profile.avatar) {
+    const img = document.createElement("img");
+    img.src = profile.avatar;
+    img.alt = "";
+    img.addEventListener("error", () => img.remove());
+    circle.appendChild(img);
+  }
+  cell.replaceChildren(circle, document.createTextNode(customerLabel(profile.name, shortId(payer))));
 }
 
 /** Cover per customer, for every recurring product this seller lists. One read each; never a guess. */

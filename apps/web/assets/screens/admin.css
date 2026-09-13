@@ -98,3 +98,7 @@
   margin-top: var(--s3); }
 .shop-offer-foot .qr { width: 96px; height: 96px; }
 .shop-offer-foot .qr svg { display: block; width: 100%; height: 100%; }
+
+/* A customer's ENS avatar beside their name in the Customers table: the receipt's circle, at table scale. */
+.adm-avatar { display: inline-block; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; vertical-align: middle; margin-right: var(--s2); background: var(--line); }
+.adm-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
