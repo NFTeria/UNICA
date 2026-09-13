@@ -253,6 +253,35 @@ export function priceHint(asset) {
 }
 
 /**
+ * The three lines under the chooser after it has settled: the address box's error, that box's help,
+ * and the sentence under the price.
+ *
+ * WHERE A REFUSAL GOES DEPENDS ON WHAT IT IS ABOUT. A refusal about a TYPED address belongs to the
+ * address box and lands in its error, which is on screen precisely because that box is. A refusal
+ * about an asset the CHOOSER offered has no address box on screen at all — that field is hidden
+ * unless "another asset" is the choice — so writing it there put the sentence in a node nobody could
+ * see, and the screen simply went quiet. It goes under the price instead, which is never hidden.
+ *
+ * Pure on purpose: apps/web/tests/products-asset.test.mjs reads each branch directly rather than
+ * inferring it from a page.
+ */
+export function assetSaid(chosen, { pasting = false, help = "" } = {}) {
+  if (chosen?.ok) {
+    return {
+      error: "",
+      help: pasting ? `${chosen.asset.symbol}, ${chosen.asset.decimals} decimal places, read from the network.` : help,
+      price: priceHint(chosen.asset),
+    };
+  }
+  const refusal = String(chosen?.error ?? "");
+  return {
+    error: pasting ? refusal : "",
+    help,
+    price: pasting ? priceHint(null) : refusal,
+  };
+}
+
+/**
  * What a filled-in form means, or the one sentence saying why it means nothing yet.
  *
  * Each refusal is the contract's own rule, checked here so a person is told at the keyboard rather
@@ -538,14 +567,10 @@ async function settleAsset() {
   if (token !== assetReadToken) return;
 
   state.asset = chosen.ok ? chosen.asset : null;
-  say("product-asset-address-error", chosen.ok ? "" : chosen.error);
-  if (pasting) {
-    say(
-      "product-asset-address-help",
-      chosen.ok ? `${chosen.asset.symbol}, ${chosen.asset.decimals} decimal places, read from the network.` : assetAddressHelp,
-    );
-  }
-  say("product-price-help", priceHint(state.asset));
+  const said = assetSaid(chosen, { pasting, help: assetAddressHelp });
+  say("product-asset-address-error", said.error);
+  say("product-asset-address-help", said.help);
+  say("product-price-help", said.price);
 }
 
 function wireForm() {
