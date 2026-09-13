@@ -8,13 +8,14 @@ import { driveHero } from "../assets/home.js";
 function fakeRoot() {
   const button = { disabled: true, textContent: "Log in with wallet", handlers: [], addEventListener(_, fn) { this.handlers.push(fn); } };
   const swap = { href: "" };
-  return { button, swap, root: { getElementById: (id) => (id === "hero-login" ? button : id === "hero-swap" ? swap : null) } };
+  const why = { hidden: false };
+  return { button, swap, why, root: { getElementById: (id) => (id === "hero-login" ? button : id === "hero-swap" ? swap : id === "hero-login-why" ? why : null) } };
 }
 
 const CONFIG = { chainId: 11155111, assets: [] };
 
 async function drive({ session = { address: "0x19e5" }, answer = null, config = CONFIG } = {}) {
-  const { button, root } = fakeRoot();
+  const { button, why, root } = fakeRoot();
   const gone = [];
   await driveHero(root, {
     load: async () => config,
@@ -24,7 +25,7 @@ async function drive({ session = { address: "0x19e5" }, answer = null, config = 
     go: (href) => gone.push(href),
   });
   for (const fn of button.handlers) await fn();
-  return { button, gone };
+  return { button, why, gone };
 }
 
 test("a wallet with a business opens that business", async () => {
@@ -36,14 +37,15 @@ test("a wallet with a business opens that business", async () => {
 
 test("a wallet on a network with sign-up, not yet joined, is sent to join", async () => {
   const { button, gone } = await drive({ answer: { available: true, joined: false } });
-  assert.equal(button.textContent, "Add your business");
+  assert.equal(button.textContent, "Set up my business");
   assert.deepEqual(gone, ["join/"]);
 });
 
 test("a recognised wallet with no business here opens the dashboard, which lists its purchases", async () => {
-  const { button, gone } = await drive({ answer: { available: false, joined: false, reason: "No business is registered to this wallet on this network yet." } });
+  const { button, why, gone } = await drive({ answer: { available: false, joined: false, reason: "No business is registered to this wallet on this network yet." } });
   assert.equal(button.disabled, false, "the button stayed disabled beside a chip that says who the wallet is");
-  assert.equal(button.textContent, "Open my dashboard");
+  assert.equal(button.textContent, "My dashboard");
+  assert.equal(why.hidden, true, "an enabled button still showed the sentence explaining why it was disabled");
   assert.deepEqual(gone, ["business/"]);
 });
 
@@ -51,12 +53,13 @@ test("a business read that fails still gives the wallet the dashboard", async ()
   const { button, root } = fakeRoot();
   await driveHero(root, { load: async () => CONFIG, reconnect: async () => ({ session: { address: "0x19e5" } }), business: async () => { throw new Error("node away"); }, chipLogin: async () => null, go: () => {} });
   assert.equal(button.disabled, false);
-  assert.equal(button.textContent, "Open my dashboard");
+  assert.equal(button.textContent, "My dashboard");
 });
 
 test("control: with no companion answering, the served button stays disabled and keeps its reason", async () => {
-  const { button } = await drive({ config: null });
+  const { button, why } = await drive({ config: null });
   assert.equal(button.disabled, true);
+  assert.equal(why.hidden, false, "the reason must stay while the button is disabled");
   assert.equal(button.textContent, "Log in with wallet");
 });
 

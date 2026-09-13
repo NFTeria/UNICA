@@ -66,6 +66,13 @@ export function destinationFor(business) {
   return null;
 }
 
+/** An enabled primary no longer needs the sentence that explained why it was disabled. */
+function enable(button, root) {
+  button.disabled = false;
+  const why = root.getElementById("hero-login-why");
+  if (why) why.hidden = true;
+}
+
 export async function driveHero(
   root,
   {
@@ -95,13 +102,13 @@ export async function driveHero(
     // A recognised wallet always has somewhere to go. With a business it opens that business; on a
     // network that offers sign-up it joins; otherwise it opens the dashboard, which lists the
     // wallet's own purchases and says plainly that no business is registered to it here.
-    button.textContent = href ? (whereTo(answer) === "join" ? "Add your business" : "Open my business") : "Open my dashboard";
-    button.disabled = false;
+    button.textContent = href ? (whereTo(answer) === "join" ? "Set up my business" : "Open my business") : "My dashboard";
+    enable(button, root);
     button.addEventListener("click", () => go(href ?? "business/"));
     return config;
   }
 
-  button.disabled = false;
+  enable(button, root);
   button.addEventListener("click", async () => {
     const chip = await chipLogin();
     if (!chip) return;
