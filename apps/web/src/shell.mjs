@@ -121,7 +121,7 @@ export function layoutFor(routePath) {
 const NAV = [
   ["", "Home"],
   ["business/", "My business"],
-  ["join/", "Add your business"],
+  ["join/", "Set up my business"],
   ["how-it-works/", "How it works"],
   ["supported-assets/", "Payment assets"],
   ["networks/", "Networks"],

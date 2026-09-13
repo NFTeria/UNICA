@@ -7,11 +7,11 @@ const P = (id) => raw(` data-parity="${id}"`);
 export const JOIN = [
   {
     route: "join",
-    h1: "Add your business",
-    title: "Add your business — UNICA",
+    h1: "Set up my business",
+    title: "Set up my business — UNICA",
     description:
       "Set your business up from your own wallet: a pay name, the wallet that gets paid, the asset you want to receive, the assets you accept, and your first register.",
-    ogTitle: "Add your business to UNICA",
+    ogTitle: "Set up my business on UNICA",
     ogDescription: "One wallet confirmation sets up a pay name, a payout and a first register.",
     ogImage: "og-merchant.svg",
     body: h`
@@ -107,6 +107,7 @@ export const JOIN = [
         <input id="name-payout" class="field" type="text" spellcheck="false" placeholder="0x…" aria-describedby="name-payout-hint"></p>
         <p class="sub" id="name-payout-hint">The wallet you connect is filled in here. Change it if
         the money should go somewhere else.</p>
+        ${C.statusRegion("name-assets", "What it is paid in is read from the network.")}
       </li>
       <li>
         <h3>First register</h3>

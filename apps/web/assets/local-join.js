@@ -1,5 +1,5 @@
 /**
- * The join screen (/join/): "Add your business", in plain language, from the owner's own wallet.
+ * The join screen (/join/): "Set up my business", in plain language, from the owner's own wallet.
  *
  * WHAT ONE PRESS DOES. `join(label, payout, firstTerminalLabel)` on the onboarding contract
  * (src/identity/IMerchantOnboarding.sol, frozen) creates the business name under the practice
@@ -772,6 +772,7 @@ async function main() {
  * leaves them out — which is why a stopped sequence is carried on rather than started again.
  */
 async function controllerJoin(config, planner) {
+  say("name-assets", planner.assetsSentence(config) || "This network names no payout asset.");
   const { DEFAULT_REGISTER_LABEL, labelTaken, nameSettings, nodesFor, planBusiness, readBusinesses, readController, readNameState, sendPlan } = planner;
   const settings = nameSettings(config);
 
