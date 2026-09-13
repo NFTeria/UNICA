@@ -215,9 +215,12 @@ The claims this product may make in public, with their evidence and their limits
   --network-file networks.json && npx graph test` builds the manifest and runs the matchstick
   rows offline; `integrations/graph/README.md` names the three sources, their blocks and the deploy.
 - Tests: `integrations/graph/tests`
-- Deployment: none. Deploying to Subgraph Studio is an owner action and has not been taken.
-- Limitations: not deployed; Sepolia only. **Not audited.**
-- Sponsor relevance: The Graph. No claim is made that it qualifies until it is deployed and queried.
+- Deployment: Subgraph Studio, version `v5-sepolia-0.2.0` of the owner's `unica-settlements` subgraph,
+  deployed 2026-09-13 with the CLI's stored login; synced, `hasIndexingErrors: false`; the first
+  catalogue sale is indexed. Query URL (public):
+  `https://api.studio.thegraph.com/query/1755384/unica-settlements/v5-sepolia-0.2.0`.
+- Limitations: Sepolia only. **Not audited.**
+- Sponsor relevance: The Graph. Deployed and queried; the receipt's index panel reads it.
 - Last verified commit: `b2f3da15351c`
 
 ---

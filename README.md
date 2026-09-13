@@ -62,8 +62,9 @@ browser talks to the chain through the host's same-origin pipe, never through a 
 Run it against any network above with `make business-live NET=<alias>`.
 
 Honest limits: self-serve sign-up of a new name runs on the practice chain only (the Sepolia identity adapter is read-only over the
-real ENSv2 resolver; a new business's records are written by the unica.eth owner); the receipt's index panel says "Not indexed yet"
-until the subgraph is deployed to Studio; every market is a labelled demonstration market until the per-feed heartbeats are validated.
+real ENSv2 resolver; a new business's records are written by the unica.eth owner); the receipt's index panel reads the v5 subgraph at
+<https://api.studio.thegraph.com/query/1755384/unica-settlements/v5-sepolia-0.2.0> (Sepolia only; the other four networks are not
+indexed); every market is a labelled demonstration market until the per-feed heartbeats are validated.
 
 ## Sponsors — start here
 

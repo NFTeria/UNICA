@@ -172,7 +172,7 @@
         {"kind": "artifact", "value": "integrations/graph/README.md"}
       ],
       "limitations": [
-        "not deployed to Subgraph Studio; that is an owner action and has not been taken",
+        "deployed to Subgraph Studio as version v5-sepolia-0.2.0 of the owner's unica-settlements subgraph on 2026-09-13; synced with no indexing errors; the query URL is public and configured on the public host",
         "indexes three pinned Sepolia contracts only: the market hook, the direct settler and the product catalogue; the other four networks are not indexed"
       ],
       "sponsorRoles": [
