@@ -56,6 +56,11 @@ ${gate}
 </dl>
 ${C.statusRegion("business-status", "Today's figures have not been read yet.")}
 
+<section class="purchases" id="purchases" hidden>
+<h2>Your purchases</h2>
+<ul class="orders" id="purchase-list"></ul>
+<p class="sub" id="purchases-said">Not read yet.</p>
+</section>
 <h2>Your shop</h2>
 <p class="sub">One page for everything you sell, at your own name.</p>
 <div class="adm-share" id="shop-share">

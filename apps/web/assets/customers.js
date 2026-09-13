@@ -21,6 +21,8 @@ import { fetchCatalog, fetchPayments, noSignupLine, openAdmin, readOnlySession, 
 import { encodeCall, decodeUint } from "./abi.js";
 import { say, shortId } from "./local.js";
 import { formatAmountFor } from "./product.js";
+import { customerProfile } from "./ens-profile.js";
+import { customerLabel } from "./purchases.js";
 
 /**
  * One line per wallet that has paid: how many times, how much of each asset, and when they last
@@ -86,6 +88,17 @@ async function main() {
   const body = document.getElementById("customer-rows");
   body.replaceChildren();
   for (const row of rows) body.appendChild(rowElement(row, config, cover, now));
+  // The chain names a customer when it can: a verified ENS name replaces the short address, and
+  // the address stays beside it. Read after the table stands, so an unnamed customer costs nothing.
+  for (const row of rows) {
+    customerProfile(config, row.payer)
+      .then((profile) => {
+        if (!profile.name) return;
+        const cell = body.querySelector(`[data-payer="${row.payer.toLowerCase()}"]`);
+        if (cell) cell.textContent = customerLabel(profile.name, shortId(row.payer));
+      })
+      .catch(() => {});
+  }
   if (rows.length === 0) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
@@ -131,7 +144,9 @@ function rowElement(row, config, cover, now) {
     td.textContent = text;
     return td;
   };
-  tr.append(cell(shortId(row.payer), "adm-who"));
+  const who = cell(shortId(row.payer), "adm-who");
+  who.dataset.payer = row.payer.toLowerCase();
+  tr.append(who);
   tr.append(cell(String(row.payments), "adm-num"));
   tr.append(cell(row.totals.length ? row.totals.map((t) => formatAmountFor(t.units, t.asset, config)).join(" · ") : "Nothing checked yet", "adm-num"));
   tr.append(cell(whenText(row.lastAt, now)));

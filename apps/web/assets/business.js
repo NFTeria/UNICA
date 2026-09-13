@@ -27,7 +27,9 @@ import { assetMenu, businessDisplayName, formatAmountFor, holdingsRows, isAddres
 import { fillAdvanced, loadConfig, say, shortId } from "./local.js";
 import { listRegisters, registerStatusText, revokeRegisterOnChain } from "./local-join.js";
 import { readBusiness, silentReconnect } from "./session.js";
-import { shopPath } from "./shop-resolve.js";
+import { resolveSeller, shopPath } from "./shop-resolve.js";
+import { customerProfile } from "./ens-profile.js";
+import { customerLabel, purchaseReceiptHref, readPurchases } from "./purchases.js";
 import { rpcRequest } from "./wallet.js";
 import { encodeCall } from "./abi.js";
 
@@ -481,6 +483,7 @@ async function overview(config, session, business, wallet, prefix) {
   const accent = businessAccent(business.merchantNode ?? null, currentScheme());
   say("set-accent", accent ? `Hue ${accent.hue}` : "None yet");
 
+  if (!business.joined) await renderPurchases(config, session, prefix);
   await renderShopShare(business, session, prefix);
   await renderKpis(config, wallet, payout);
   await renderHoldings(config, readOnlySession(config), wallet);
@@ -489,6 +492,66 @@ async function overview(config, session, business, wallet, prefix) {
   const registers = await renderRegisters(config, business);
   wireRevoke(config, session, registers);
   fillAdvanced(config, {});
+}
+
+/**
+ * A wallet with no business is a customer. The chain says who they are (their verified ENS name,
+ * when they have one) and the index says what they bought; each purchase is the same receipt the
+ * business holds. Nothing here is remembered, and a wallet with no index on its network is told so.
+ */
+async function renderPurchases(config, session, prefix) {
+  const section = document.getElementById("purchases");
+  const list = document.getElementById("purchase-list");
+  if (!section || !list || !session?.address) return;
+  section.hidden = false;
+  const profile = await customerProfile(config, session.address).catch(() => ({ name: null, avatar: null }));
+  if (profile.name) {
+    say("business-title", profile.name);
+    say("business-payname", "This wallet has no business. Its purchases are below, read from the index.");
+  }
+  const indexUrl = config.graph?.url ?? null;
+  if (!indexUrl) {
+    say("purchases-said", "No index is configured on this network, so purchases cannot be listed here.");
+    return;
+  }
+  say("purchases-said", "Reading the index…");
+  const rows = await readPurchases(indexUrl, session.address);
+  if (rows === null) {
+    say("purchases-said", "The index did not answer, so nothing is listed rather than a partial list.");
+    return;
+  }
+  if (rows.length === 0) {
+    say("purchases-said", "Nothing bought from this wallet yet.");
+    return;
+  }
+  list.replaceChildren();
+  for (const row of rows) {
+    const li = document.createElement("li");
+    li.className = "order-row";
+    const what = document.createElement("span");
+    what.textContent = row.kind === "product" ? `Product #${row.productId ?? "?"}` : "Payment";
+    const amount = document.createElement("span");
+    amount.className = "adm-num";
+    amount.textContent = row.amount ? formatAmountFor(row.amount, row.asset, config) : "—";
+    const when = document.createElement("span");
+    when.className = "sub";
+    when.textContent = row.settledAt ? new Date(row.settledAt * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "—";
+    const from = document.createElement("span");
+    from.className = "sub";
+    from.textContent = row.seller ? `from ${shortId(row.seller)}` : "";
+    const link = document.createElement("a");
+    link.href = purchaseReceiptHref(prefix, config.chainId, row);
+    link.textContent = "View the receipt";
+    li.append(what, amount, when, from, link);
+    list.appendChild(li);
+    if (row.kind === "product" && row.productId) {
+      fetchCatalog({ product: row.productId }).then((answer) => { if (answer?.product?.name) what.textContent = answer.product.name; }).catch(() => {});
+    }
+    if (row.seller) {
+      resolveSeller(config, row.seller).then((b) => { if (b?.name) from.textContent = `from ${b.name}`; }).catch(() => {});
+    }
+  }
+  say("purchases-said", `${rows.length} purchase${rows.length === 1 ? "" : "s"}, read from the index. Each opens the same receipt the business holds.`);
 }
 
 /** The business's own page, its code, and the two ways to hand either on. */
