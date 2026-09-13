@@ -20,6 +20,7 @@ import {
   GAS_MARGIN_WEI,
   NATIVE_DECIMALS,
   WRAPPED_NATIVE_NOTE,
+  assetInFor,
   isPayableAsset,
   isWrappedNative,
   payAssetLabel,
@@ -132,6 +133,41 @@ test("only an 18-place asset that names itself WETH is treated as wrapped ETH", 
   // An asset whose label could not be read is never wrapped on a guess.
   assert.equal(isWrappedNative({ symbol: null, decimals: null }), false);
   assert.equal(isWrappedNative(null), false);
+});
+
+// ── which record describes that asset ─────────────────────────────────────────────────────────────
+
+const ADDR = "0x" + "1".repeat(40); // asset address, the same one under both spellings below
+
+test("the asset is identified by address against the deployment, not by the card's own symbol", () => {
+  // The shape the companion hands over for a token it could not label: the address is right, the
+  // name and the places are gone. The deployment has always known both.
+  const card = { assetIn: { address: ADDR.toUpperCase(), symbol: null, decimals: null } };
+  const config = { assets: [{ address: ADDR, symbol: "WETH", decimals: 18, status: ASSET_STATUS.DIRECT }] };
+  assert.equal(assetInFor(card, config).symbol, "WETH");
+  assert.equal(isWrappedNative(assetInFor(card, config)), true);
+  // control: the card alone is exactly the refusal this lookup exists to prevent.
+  assert.equal(isWrappedNative(card.assetIn), false);
+});
+
+test("the card is the fallback, and only when the deployment holds nothing for that address", () => {
+  const card = { assetIn: { address: ADDR, symbol: "WETH", decimals: 18 } };
+  assert.equal(assetInFor(card, { assets: [] }), card.assetIn);
+  assert.equal(assetInFor(card, {}), card.assetIn);
+  assert.equal(assetInFor(card, { assets: [{ address: "0x" + "2".repeat(40), symbol: "uUSD", decimals: 6 }] }), card.assetIn);
+  // A catalogue card names its asset under pay.asset; the same lookup answers for both links.
+  const product = { pay: { asset: { address: ADDR, symbol: null, decimals: null } } };
+  assert.equal(assetInFor(product, { assets: [{ address: ADDR, symbol: "WETH", decimals: 18 }] }).symbol, "WETH");
+  // Nothing to go on at all is null, never a guess.
+  assert.equal(assetInFor(null, {}), null);
+  assert.equal(assetInFor({ assetIn: { address: null } }, { assets: [{ address: ADDR, symbol: "WETH", decimals: 18 }] })?.symbol ?? null, null);
+});
+
+test("the checkout reads the asset through that lookup before it decides to wrap", () => {
+  const src = readFileSync(join(APP, "assets", "local-pay.js"), "utf8");
+  assert.match(src, /const payAsset = assetInFor\(card, config\);/);
+  assert.match(src, /if \(isWrappedNative\(payAsset\)\) \{/);
+  assert.equal(src.includes("isWrappedNative(card.assetIn)"), false, "the card's own symbol is no longer what decides");
 });
 
 // ── the words, and the value on the transaction ───────────────────────────────────────────────────
