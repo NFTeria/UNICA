@@ -20,6 +20,7 @@ export const JOIN = [
   When it is done you have a pay name, a wallet that gets paid, a first register and a business
   badge.</p>
   ${C.banner("info", "Testnet. No real money.", raw(`Nothing on <span id="join-network">this network</span> has value.`))}
+  <div id="join-self">
   <ol class="steps" id="form">
     <li>
       <h2>Connect your wallet</h2>
@@ -85,6 +86,45 @@ export const JOIN = [
   <p class="sub" id="preferences-note">Your payout asset, the assets you accept and any transaction
   limit are settings this browser keeps for your register. The one confirmation your wallet asks
   for creates the business, the pay name, the payout wallet and the first register.</p>
+  </div>
+
+  <section id="join-name" hidden>
+    <h2>Add a business under <span id="name-parent">this name</span></h2>
+    <p>On this network a business is a name under one you hold, so the wallet that holds it is the
+    one that adds the business. Answer three questions and your wallet asks you to confirm each
+    transaction in turn.</p>
+    ${C.statusRegion("name-said", "No wallet has been connected.")}
+    <p><button type="button" class="cta" id="name-connect">Connect wallet</button></p>
+    <ol class="steps">
+      <li>
+        <h3>Business name</h3>
+        <p><label for="name-label">Business name</label><br>
+        <input id="name-label" class="field" type="text" autocomplete="organization" spellcheck="false" maxlength="32" placeholder="freshcuts" aria-describedby="name-free"></p>
+        ${C.statusRegion("name-free", "Type the name customers will pay. Lowercase letters, numbers and hyphens.")}
+      </li>
+      <li>
+        <h3>Payout wallet</h3>
+        <p><label for="name-payout">The wallet that gets paid</label><br>
+        <input id="name-payout" class="field" type="text" spellcheck="false" placeholder="0x…" aria-describedby="name-payout-hint"></p>
+        <p class="sub" id="name-payout-hint">The wallet you connect is filled in here. Change it if
+        the money should go somewhere else.</p>
+      </li>
+      <li>
+        <h3>First register</h3>
+        <p><label for="name-register">First register</label><br>
+        <input id="name-register" class="field" type="text" value="chair-1" maxlength="40" aria-describedby="name-register-hint"></p>
+        ${C.statusRegion("name-register-hint", "Saved as chair-1.")}
+      </li>
+    </ol>
+    <h3>What your wallet will ask you to confirm</h3>
+    <ol id="name-plan" class="registers"></ol>
+    ${C.statusRegion("name-plan-said", "The list is read from the network once a name is typed.")}
+    <p><button type="button" class="cta" id="name-submit" disabled aria-describedby="name-why">Add this business</button></p>
+    <p class="sub" id="name-why">Connect the wallet that holds the name.</p>
+    ${C.statusRegion("name-status", "Nothing has been sent.")}
+    <p class="sub">Each transaction is signed in your own wallet and waited for before the next one
+    is asked for. If one is declined, the ones before it stand and this page says which stopped.</p>
+  </section>
 
   <div id="success" hidden>
     <h2>Your business is set up</h2>
