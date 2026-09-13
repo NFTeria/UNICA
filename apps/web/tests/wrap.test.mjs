@@ -1,0 +1,192 @@
+// apps/web/tests/wrap.test.mjs — the wrap step, decided before any of a customer's money moves.
+//
+// Two halves. The first exercises the pure functions in apps/web/assets/wrap.js directly: no DOM,
+// no network, no chain. The second reads apps/web/assets/local-pay.js as text and asserts the order
+// the checkout runs them in, because "the deposit is mined before the approval" is a claim about a
+// sequence, and a sequence cannot be asserted by calling a function.
+//
+// Every guard here has a control beside it. A test that would still pass with the guard deleted is
+// decoration, and the margin below is exactly the kind of guard that is easy to drop by accident.
+
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { test } from "node:test";
+
+import { encodeDepositCalldata } from "../assets/local-pay.js";
+import {
+  GAS_MARGIN_WEI,
+  NATIVE_DECIMALS,
+  isWrappedNative,
+  shortEthText,
+  weiHex,
+  wrapPlan,
+  wrappingText,
+} from "../assets/wrap.js";
+
+const APP = join(dirname(fileURLToPath(import.meta.url)), "..");
+const WETH = { symbol: "WETH", decimals: 18 };
+const ETH = 10n ** 18n;
+const CENT = ETH / 100n; // 0.01
+
+// ── what the plan decides ─────────────────────────────────────────────────────────────────────────
+
+test("a wallet that already holds enough wrapped asset wraps nothing", () => {
+  const plan = wrapPlan({ need: CENT, wethBalance: CENT, ethBalance: 0n, gasMargin: GAS_MARGIN_WEI });
+  assert.equal(plan.ok, true);
+  assert.equal(plan.wrap, 0n);
+  assert.equal(plan.shortfall, 0n);
+  // ...and holding more than the price is still nothing to wrap.
+  assert.equal(wrapPlan({ need: CENT, wethBalance: ETH, ethBalance: 0n }).wrap, 0n);
+});
+
+test("a short wallet with enough ETH wraps the shortfall exactly, never a round number above it", () => {
+  const plan = wrapPlan({ need: CENT, wethBalance: CENT / 4n, ethBalance: ETH, gasMargin: GAS_MARGIN_WEI });
+  assert.equal(plan.ok, true);
+  assert.equal(plan.wrap, CENT - CENT / 4n);
+  assert.equal(plan.shortfall, plan.wrap);
+  // The whole price, when the wallet holds none of the wrapped asset at all.
+  assert.equal(wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: ETH, gasMargin: GAS_MARGIN_WEI }).wrap, CENT);
+});
+
+test("a wallet short of both refuses, says the ETH is short too, and wraps nothing", () => {
+  const plan = wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: CENT / 2n, gasMargin: GAS_MARGIN_WEI });
+  assert.equal(plan.ok, false);
+  assert.equal(plan.wrap, 0n);
+  assert.equal(plan.shortfall, CENT);
+  assert.match(plan.why, /ETH does not cover/);
+  assert.match(plan.why, /Nothing was sent/);
+});
+
+test("a balance that could not be read is refused, never read as zero", () => {
+  for (const missing of [{ wethBalance: null }, { ethBalance: null }, { need: null }, { wethBalance: undefined }]) {
+    const plan = wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: ETH, ...missing });
+    assert.equal(plan.ok, false, JSON.stringify(missing));
+    assert.equal(plan.wrap, 0n);
+  }
+  // control: the same call with all three present is the one that goes through, so the rows above
+  // are refusing for the missing value and not because this shape never passes.
+  assert.equal(wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: ETH }).ok, true);
+});
+
+test("the margin refuses a wallet whose ETH covers the shortfall and nothing more", () => {
+  // Exactly the shortfall, to the wei: enough to wrap, nothing left for the approval and the payment.
+  const borderline = { need: CENT, wethBalance: 0n, ethBalance: CENT };
+  assert.equal(wrapPlan({ ...borderline, gasMargin: GAS_MARGIN_WEI }).ok, false);
+  // ...and one wei short of the margin is still refused, while the margin itself passes.
+  assert.equal(wrapPlan({ ...borderline, ethBalance: CENT + GAS_MARGIN_WEI - 1n, gasMargin: GAS_MARGIN_WEI }).ok, false);
+  assert.equal(wrapPlan({ ...borderline, ethBalance: CENT + GAS_MARGIN_WEI, gasMargin: GAS_MARGIN_WEI }).ok, true);
+});
+
+test("control: with the margin removed, that same borderline wallet wrongly passes", () => {
+  // This is the sabotage. If the `+ margin` were dropped from the comparison in wrapPlan, the row
+  // above would read exactly like this one and the test file would stay green while the app sent a
+  // customer's last wei into a wrap they could no longer spend.
+  const plan = wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: CENT, gasMargin: 0n });
+  assert.equal(plan.ok, true);
+  assert.equal(plan.wrap, CENT);
+});
+
+test("the default margin is the one the checkout uses, so the tested rule is the shipped rule", () => {
+  assert.equal(wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: CENT }).ok, false);
+  assert.ok(GAS_MARGIN_WEI > 0n);
+});
+
+// ── which asset this step is allowed to touch ─────────────────────────────────────────────────────
+
+test("only an 18-place asset that names itself WETH is treated as wrapped ETH", () => {
+  assert.equal(isWrappedNative(WETH), true);
+  assert.equal(isWrappedNative({ symbol: "weth", decimals: 18 }), true);
+  assert.equal(isWrappedNative({ symbol: "uUSD", decimals: 6 }), false);
+  // control: the decimal count is load-bearing. A token that borrows the name but not the shape is
+  // not the one-to-one contract this step assumes, and sending it ETH would buy an unknown amount.
+  assert.equal(isWrappedNative({ symbol: "WETH", decimals: 6 }), false);
+  // An asset whose label could not be read is never wrapped on a guess.
+  assert.equal(isWrappedNative({ symbol: null, decimals: null }), false);
+  assert.equal(isWrappedNative(null), false);
+});
+
+// ── the words, and the value on the transaction ───────────────────────────────────────────────────
+
+test("the status line says what is happening, with the amount at the asset's own places", () => {
+  assert.equal(wrappingText(CENT, WETH), "Wrapping 0.01 ETH to WETH…");
+  assert.equal(wrappingText(ETH, WETH), "Wrapping 1 ETH to WETH…");
+  assert.equal(NATIVE_DECIMALS, 18);
+});
+
+test("the refusal names the shortfall and says nothing was sent", () => {
+  assert.equal(
+    shortEthText(CENT, WETH),
+    "This payment needs 0.01 WETH more than this wallet holds, and its ETH does not cover the difference and the network fee. Nothing was sent.",
+  );
+});
+
+test("no screen text from this step uses a word the product does not say", () => {
+  const said = [wrappingText(CENT, WETH), shortEthText(CENT, WETH), wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: 0n }).why];
+  for (const line of said) {
+    assert.doesNotMatch(line, /\b(demo|practice|fixture|mock|till)\b/i, line);
+  }
+});
+
+test("a transaction value is a bare hex quantity, and a negative one is refused", () => {
+  assert.equal(weiHex(0n), "0x0");
+  assert.equal(weiHex(CENT), "0x" + CENT.toString(16));
+  assert.equal(weiHex(255n), "0xff");
+  assert.throws(() => weiHex(-1n));
+  assert.throws(() => weiHex(null));
+});
+
+// ── the calldata the wrap is sent as ──────────────────────────────────────────────────────────────
+
+test("deposit() encodes to the published four bytes, and to nothing else", () => {
+  // The instrument, checked against the value WETH9's own interface has carried since it was
+  // deployed: if selectorOf ever computed a different keccak, this row fails rather than the app
+  // sending ETH to a function that does not exist.
+  assert.equal(encodeDepositCalldata(), "0xd0e30db0");
+  assert.equal(encodeDepositCalldata().length, 10, "a no-argument call is the selector and nothing after it");
+});
+
+// ── the sequence the checkout runs, asserted in the source ────────────────────────────────────────
+
+const orderPath = () => {
+  const src = readFileSync(join(APP, "assets", "local-pay.js"), "utf8");
+  const from = src.indexOf("const { settler, assetIn, amountIn } = settlementTarget(card, config);");
+  const to = src.indexOf("encodePayCalldata(card.id)", from);
+  assert.ok(from > 0 && to > from, "the order path could not be found in local-pay.js");
+  return src.slice(from, to);
+};
+
+const plannerBeforeApproval = (src) => {
+  const planned = src.indexOf("wrapPlan(");
+  const approved = src.indexOf("encodeApproveCalldata(");
+  return planned !== -1 && approved !== -1 && planned < approved;
+};
+
+test("the checkout asks the planner before it approves anything", () => {
+  assert.equal(plannerBeforeApproval(orderPath()), true);
+  // control, on a planted source: the same predicate must fail when the two are the other way
+  // round, or it is asserting nothing about order at all.
+  assert.equal(plannerBeforeApproval("encodeApproveCalldata(settler, amountIn); wrapPlan({});"), false);
+  assert.equal(plannerBeforeApproval("wrapPlan({});"), false);
+});
+
+test("the deposit is awaited to its receipt, and carries the wrapped amount as the value", () => {
+  const src = orderPath();
+  assert.match(
+    src,
+    /waitForReceipt\(session, await session\.send\(\{ to: assetIn, data: encodeDepositCalldata\(\), value: weiHex\(plan\.wrap\) \}\)\)/,
+    "the deposit must be mined before the sequence continues",
+  );
+  // The approval that follows keeps its own wait — this step must not have replaced it.
+  assert.match(src, /waitForReceipt\(session, await session\.send\(\{ to: assetIn, data: encodeApproveCalldata\(settler, amountIn\) \}\)\)/);
+});
+
+test("a refusal from the planner sends nothing at all", () => {
+  const src = orderPath();
+  const refusal = src.indexOf("if (!plan.ok)");
+  const deposit = src.indexOf("encodeDepositCalldata()");
+  assert.ok(refusal > 0, "the refusal branch is missing");
+  assert.ok(refusal < deposit, "the refusal must be decided before the deposit is built");
+  assert.match(src.slice(refusal, deposit), /return;/, "the refusal returns rather than falling through to the send");
+});

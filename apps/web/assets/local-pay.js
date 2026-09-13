@@ -17,6 +17,12 @@
  * literal address written in this file. `apps/web/build.mjs`'s FORBIDDEN_IN_OUTPUT scan enforces
  * exactly this for every file this build emits, assets included.
  *
+ * ETH IS ACCEPTED WHERE THE PRICE IS IN THE WRAPPED NATIVE ASSET. An order priced in WETH can be
+ * paid by a wallet that holds only ETH: the checkout wraps exactly the shortfall first, waits for
+ * that to be mined, and then runs the same approve-then-pay sequence as before. The decision is
+ * `wrapPlan` in assets/wrap.js, a pure function, and it refuses — in words, sending nothing — when
+ * the ETH does not also cover the network fee.
+ *
  * SENDING GOES THROUGH apps/web/assets/wallet.js. A browser wallet, when one is installed, signs in
  * its own extension; on the local testnet with no wallet, the chain's own already-unlocked account
  * executes `eth_sendTransaction({from})` with no key anywhere. This file never sees either.
@@ -41,6 +47,7 @@ import { PRACTICE_MODE_LABEL, connectWallet, discoverProviders, networkName, rpc
 import { fillAdvanced, loadConfig, loadEvidence, say as setText } from "./local.js";
 import { chooseSettlementRoute, routeLabel, validateEnvironment } from "./product.js";
 import { decodeString, decodeUint, encodeCall } from "./abi.js";
+import { GAS_MARGIN_WEI, isWrappedNative, shortEthText, weiHex, wrapPlan, wrappingText } from "./wrap.js";
 import { parseTokenUri } from "./local-join.js";
 import { businessAccent, businessStyle } from "./brand.js";
 import { resolveSeller } from "./shop-resolve.js";
@@ -127,6 +134,24 @@ async function allowanceShort(config, asset, owner, spender, amount) {
     // The allowance could not be read. Approve rather than assume, so the payment is not refused
     // by a spender that was never permitted.
     return true;
+  }
+}
+
+/**
+ * What this wallet holds of one asset, and of the chain's own ETH, at this moment.
+ *
+ * Both readings go through the session, so they come from the same endpoint the rest of the screen
+ * reads. `null` means a reading failed — never zero. A caller that treated a failed read as an empty
+ * wallet would tell a customer they are out of money when the truth is that nobody answered.
+ */
+async function heldFor(session, asset) {
+  try {
+    const data = encodeCall("balanceOf(address)", [session.address]);
+    const held = BigInt(decodeUint(await session.call({ to: asset, data })));
+    const native = BigInt(await session.request("eth_getBalance", [session.address, "latest"]));
+    return { held, native };
+  } catch {
+    return null;
   }
 }
 
@@ -277,6 +302,16 @@ export function encodeApproveCalldata(spender, amount) {
 
 export function encodePayCalldata(orderId) {
   return selectorOf("pay(bytes32)") + wordFromBytes32(orderId);
+}
+
+/**
+ * `deposit()` on the wrapped native asset: no arguments, so the calldata is the selector alone and
+ * the ETH rides in the transaction's `value`. Computed here like every other selector in this file
+ * rather than copied from a table; apps/web/tests/wrap.test.mjs checks the four bytes it produces
+ * against the published one, so a wrong keccak would be caught rather than sent.
+ */
+export function encodeDepositCalldata() {
+  return selectorOf("deposit()");
 }
 
 // ---- small formatting helpers, also pure and tested -----------------------------------------------
@@ -830,6 +865,37 @@ async function renderOrder(config, orderId) {
         const { settler, assetIn, amountIn } = settlementTarget(card, config);
         if (!settler || !assetIn || amountIn === null || amountIn === undefined) {
           throw new Error("This payment does not say where it is paid or in what.");
+        }
+        // WRAP FIRST, WHEN THE PRICE IS IN THE WRAPPED NATIVE ASSET AND THE WALLET HOLDS ETH.
+        // A customer with ETH and no WETH could not pay this order at all: the approval would be
+        // for an amount they do not have and the payment would revert on them. The wrap is one
+        // call to the asset's own contract at one-to-one, and it is mined before the approval for
+        // the same reason the approval is mined before the payment — the next transaction's
+        // success depends on this one's state, and a wallet that submits both at once orders them
+        // by nonce but not by mining.
+        //
+        // A FAILED READ CHANGES NOTHING. If the two balances could not be read, the sequence
+        // continues exactly as it did before this step existed, rather than refusing a customer who
+        // may well hold enough already; what is never done is to send a deposit on a guess.
+        if (isWrappedNative(card.assetIn)) {
+          const purse = await heldFor(session, assetIn);
+          if (purse) {
+            const plan = wrapPlan({ need: amountIn, wethBalance: purse.held, ethBalance: purse.native, gasMargin: GAS_MARGIN_WEI });
+            if (!plan.ok) {
+              setText("co-status", plan.shortfall > 0n ? shortEthText(plan.shortfall, card.assetIn) : plan.why);
+              payBtn.disabled = false;
+              return;
+            }
+            if (plan.wrap > 0n) {
+              setText("co-status", wrappingText(plan.wrap, card.assetIn));
+              const wrapped = await waitForReceipt(session, await session.send({ to: assetIn, data: encodeDepositCalldata(), value: weiHex(plan.wrap) }));
+              if (!wrapped || Number(wrapped.status) === 0) {
+                setText("co-status", wrapped ? statusText("FAILED") : statusText("UNKNOWN"));
+                payBtn.disabled = false;
+                return;
+              }
+            }
+          }
         }
         // Approve only when the allowance is actually short. A second approval of an amount the
         // spender already has costs the customer a confirmation and a fee for nothing.
