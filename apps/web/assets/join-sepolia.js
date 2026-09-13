@@ -17,6 +17,14 @@
  *   4. the `terminals` branch under the business     — `registerLineage(bytes32,string)`
  *   5. the first register under `terminals`          — `registerLineage(bytes32,string)`
  *
+ * and one more, only when the person names an operator wallet for that first register:
+ *
+ *   6. that wallet may write the register's status  — `authorizeTextRoles(bytes,string,address,bool)`
+ *
+ * It is sent between the two record writes and the parentage rows, because it is a record-store
+ * write like them. Leave the field empty and it is not planned at all — and then the register can be
+ * switched on and off only by the wallet that holds the name.
+ *
  * Records first, parentage last, because those are what a reader of this name tree walks: a
  * business is listed by the parentage row that names it, so a business whose parentage lands BEFORE
  * its payout record would be listed for as long as it takes the person to confirm the next
@@ -47,7 +55,7 @@
  * carries, in the plan's order, waiting for each receipt and stopping on the first one the network
  * declined.
  */
-import { childNode, decodeAddress, decodeBool, decodeString, encodeCall, selectorOf } from "./abi.js";
+import { childNode, decodeAddress, decodeBool, decodeString, encodeCall, selectorOf, textResource } from "./abi.js";
 import { LABEL_RULE_SENTENCE, ZERO_ADDRESS, isAddress, isValidLabelLocal, payNameFor } from "./local-join.js";
 import { waitForReceipt } from "./wallet.js";
 
@@ -60,7 +68,36 @@ export const SIGNATURES = Object.freeze({
   text: "text(bytes32,string)",
   lineageKnown: "lineageKnown(bytes32)",
   parentOf: "parentOf(bytes32)",
+  isNamespaceController: "isNamespaceController(bytes32,address)",
+  authorizeTextRoles: "authorizeTextRoles(bytes,string,address,bool)",
+  hasRoles: "hasRoles(uint256,uint256,address)",
 });
+
+/**
+ * The one role an operator wallet is given: permission to write THIS register's status key, at that
+ * key's own resource, and nothing else. `src/identity/EnsV2ResolverAuthority.sol` names it
+ * `ROLE_SET_TEXT = 1 << 4`; the same number is what the readback in `script/ensv2/freshcuts-plan.mjs`
+ * asks `hasRoles` about.
+ */
+export const ROLE_SET_TEXT = 1 << 4;
+
+/**
+ * A name in the length-prefixed wire form `authorizeTextRoles` takes: each label preceded by its
+ * length in one byte, the whole thing terminated by a zero byte. Written from that description —
+ * `script/ensv2/freshcuts-plan.mjs` derives the same bytes for the same names and the tests compare
+ * this against the vector that plan put on chain.
+ */
+export function dnsEncode(name) {
+  const labels = String(name ?? "").split(".").filter((l) => l.length > 0);
+  const bytes = [];
+  for (const label of labels) {
+    const utf8 = new TextEncoder().encode(label);
+    if (utf8.length === 0 || utf8.length > 255) throw new Error(`a name label must be 1 to 255 bytes: ${label}`);
+    bytes.push(utf8.length, ...utf8);
+  }
+  bytes.push(0);
+  return "0x" + bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 /** The branch every register of a business hangs under. Fixed by the admission contract, not a choice. */
 export const TERMINALS_LABEL = "terminals";
@@ -122,6 +159,7 @@ export function planBusiness({
   label,
   payout,
   registerLabel = DEFAULT_REGISTER_LABEL,
+  operator = null,
   parentNode,
   parentName,
   resolver,
@@ -136,6 +174,10 @@ export function planBusiness({
   if (!isValidLabelLocal(registerLabel)) return refuse(`Give the first register a name. ${LABEL_RULE_SENTENCE}`);
   if (!isAddress(payout)) return refuse("The payout wallet must be a full address starting with 0x.");
   if (lower(payout) === ZERO_ADDRESS) return refuse("Choose the wallet that gets paid. It cannot be the empty address.");
+  const wantsOperator = String(operator ?? "").trim() !== "";
+  if (wantsOperator && !isAddress(operator)) return refuse("The operator wallet must be a full address starting with 0x, or left empty.");
+  if (wantsOperator && lower(operator) === ZERO_ADDRESS) return refuse("Leave the operator wallet empty rather than giving the empty address.");
+  if (wantsOperator && !String(parentName ?? "")) return refuse("This network's settings do not name the parent, so an operator cannot be given a register to run.");
 
   const nodes = nodesFor(parentNode, label, registerLabel);
   const payName = payNameFor(label, parentName);
@@ -149,7 +191,8 @@ export function planBusiness({
   if (!isAddress(existing?.addr)) {
     return refuse("That name could not be read on this network just now, so nothing was planned. Try again in a moment.");
   }
-  if (lower(existing.addr) !== ZERO_ADDRESS) {
+  const payoutRecorded = lower(existing.addr) !== ZERO_ADDRESS;
+  if (payoutRecorded && lower(existing.addr) !== lower(payout)) {
     return refuse(`${payName} already belongs to a business, so it cannot be added again. Choose another name.`);
   }
 
@@ -162,9 +205,16 @@ export function planBusiness({
   const steps = [];
   const skipped = [];
 
-  steps.push(step("N1", "records", resolver, SIGNATURES.setAddr, [nodes.businessNode, payout],
-    `Send payments for ${payName} to the wallet you chose.`,
-    `${payName} pays out to ${payout}`));
+  // A payout record that is ALREADY the wallet on this screen is not another business — it is the
+  // first step of a sequence that stopped part way, which is exactly what a retry has to be able to
+  // carry on from. Anything else at that record is somebody's business and is refused above.
+  if (payoutRecorded) {
+    skipped.push({ id: "N1", sentence: `${payName} already pays out to that wallet, so that step is not needed.` });
+  } else {
+    steps.push(step("N1", "records", resolver, SIGNATURES.setAddr, [nodes.businessNode, payout],
+      `Send payments for ${payName} to the wallet you chose.`,
+      `${payName} pays out to ${payout}`));
+  }
 
   if (lower(existing?.registerStatus) === ACTIVE) {
     skipped.push({ id: "N2", sentence: `"${registerLabel}" is already switched on, so that step is not needed.` });
@@ -172,6 +222,22 @@ export function planBusiness({
     steps.push(step("N2", "records", resolver, SIGNATURES.setText, [nodes.registerNode, terminalStatusKey, ACTIVE],
       `Switch the register "${registerLabel}" on.`,
       `${registerLabel}.${TERMINALS_LABEL}.${payName} is ${ACTIVE}`));
+  }
+
+  // The sixth transaction, and the only optional one. It gives ONE other wallet permission to write
+  // THIS register's status key — the grant `script/ensv2/freshcuts-plan.mjs` made for the first
+  // business's tablet — and nothing else: not the payout address, not any other key, not any other
+  // register. Without it the register can be switched on and off only by the wallet that holds the
+  // name. It is sent to the record store, because that is where the permission is kept.
+  const registerName = `${registerLabel}.${TERMINALS_LABEL}.${payName}`;
+  if (wantsOperator) {
+    if (existing?.grant === true) {
+      skipped.push({ id: "N6", sentence: `That wallet may already switch "${registerLabel}" on and off, so that step is not needed.` });
+    } else {
+      steps.push(step("N6", "records", resolver, SIGNATURES.authorizeTextRoles, [dnsEncode(registerName), terminalStatusKey, operator, true],
+        `Let ${operator} switch the register "${registerLabel}" on and off.`,
+        `${operator} may set the status of ${registerName} and nothing else`));
+    }
   }
 
   const parentage = [
@@ -184,11 +250,17 @@ export function planBusiness({
     else steps.push(step(id, "names", authority, SIGNATURES.registerLineage, [parent, childLabel], sentence, expected));
   }
 
+  if (steps.length === 0) {
+    return { ok: false, refusal: `${payName} is already set up on this network, so there is nothing left to send.`, steps: [], skipped, sentence: `${payName} is already set up on this network, so there is nothing left to send.` };
+  }
+
   return {
     ok: true,
     refusal: null,
     label,
     registerLabel,
+    operator: wantsOperator ? operator : null,
+    registerName,
     payName,
     payout,
     nodes,
@@ -211,7 +283,7 @@ export function planBusiness({
  * reads back as — answering it for a read that never happened would let a plan be made against a
  * name somebody else already uses. The planner refuses on `null`; it cannot refuse on a lie.
  */
-export async function readNameState(session, { authority, nodes, terminalStatusKey }) {
+export async function readNameState(session, { authority, nodes, terminalStatusKey, operator = null }) {
   const call = (signature, args) => session.call({ to: authority, data: encodeCall(signature, args) });
   const lineage = {};
   for (const node of [nodes.businessNode, nodes.terminalsNode, nodes.registerNode]) {
@@ -233,28 +305,64 @@ export async function readNameState(session, { authority, nodes, terminalStatusK
   } catch {
     registerStatus = null;
   }
-  return { addr, lineage, registerStatus };
+  // The operator's grant, when there is an operator to ask about. It fails the forgiving way, like
+  // parentage: a read that did not answer plans the grant again, and granting the same permission
+  // twice changes nothing.
+  let grant = false;
+  if (isAddress(operator)) {
+    try {
+      grant = decodeBool(await call(SIGNATURES.hasRoles, [textResource(nodes.registerNode, terminalStatusKey), ROLE_SET_TEXT, operator]));
+    } catch {
+      grant = false;
+    }
+  }
+  return { addr, lineage, registerStatus, grant };
 }
 
 /**
- * Who this wallet is under the parent name, as the companion reads it from the chain: `controller`
- * is true only for the account the name's own access control lets write its records.
+ * Whether this wallet may write the records under the parent name, asked of the CHAIN.
  *
- * This asks the endpoint itself rather than going through `readBusiness`, which drops the
- * controller flag when the parent has no businesses listed yet — and no businesses listed yet is
- * exactly the state the first one is added from. `reachable` separates "answered no" from "did not
- * answer", so a screen never reports a controller as an impostor because a server was restarting.
+ * `isNamespaceController(bytes32,address)` on the name authority is the same question the records
+ * themselves answer at write time, so a yes here and a revert at the first confirmation cannot
+ * disagree for any reason other than the chain changing underneath. It is deliberately not the
+ * companion's answer: a server can be restarted, misconfigured, or pointed at another deployment,
+ * and none of those are facts about who holds a name.
+ *
+ * THREE ANSWERS, AND THE THIRD IS NOT THE SECOND. `{ reachable: false }` is "the chain did not
+ * answer", which is never folded into "not the holder" — a holder told they are not one would go
+ * and change a record by hand for no reason.
  */
-export async function readNamespace(config, wallet, fetchImpl = globalThis.fetch) {
+export async function readController(session, { authority, parentNode, account }) {
+  if (!isAddress(authority) || !NODE32.test(String(parentNode ?? "")) || !isAddress(account)) {
+    return { controller: false, reachable: false };
+  }
+  try {
+    const answer = await session.call({ to: authority, data: encodeCall(SIGNATURES.isNamespaceController, [parentNode, account]) });
+    if (typeof answer !== "string" || !/^0x[0-9a-fA-F]{64,}$/.test(answer)) return { controller: false, reachable: false };
+    return { controller: decodeBool(answer), reachable: true };
+  } catch {
+    return { controller: false, reachable: false };
+  }
+}
+
+/**
+ * The businesses the parent name already lists, as the companion reads them from the chain.
+ *
+ * LISTING IS ALL IT IS ASKED. Whether this wallet may write the parent's records is a question for
+ * the chain — `readController` — and not for a server: an endpoint that answers "you are the
+ * holder" is a server claiming an authority it does not hold, and one that fails to answer would
+ * otherwise read as "you are not". This function is about which labels are taken, which is a list,
+ * and a list that did not arrive says so with `reachable`.
+ */
+export async function readBusinesses(config, wallet, fetchImpl = globalThis.fetch) {
   const settings = nameSettings(config);
-  const blank = { controller: false, reachable: false, parentName: settings.parentName, businesses: [] };
+  const blank = { reachable: false, parentName: settings.parentName, businesses: [] };
   if (!isAddress(wallet)) return blank;
   try {
     const res = await fetchImpl(`/local/businesses?wallet=${encodeURIComponent(wallet)}`);
     if (!res || !res.ok) return blank;
     const body = await res.json();
     return {
-      controller: body?.controller === true,
       reachable: true,
       parentName: body?.parentName ?? settings.parentName,
       businesses: Array.isArray(body?.businesses) ? body.businesses : [],
@@ -265,12 +373,12 @@ export async function readNamespace(config, wallet, fetchImpl = globalThis.fetch
 }
 
 /**
- * Whether the parent name already lists this label. Trustworthy only for the controller, because
- * the endpoint lists every business for them and only the asking wallet's own for anybody else —
- * and the controller is the only person this screen's flow is open to.
+ * Whether the parent name already lists this label. Trustworthy only for the holder of the name,
+ * because the endpoint lists every business for them and only the asking wallet's own for anybody
+ * else — and the holder is the only person this screen's flow is open to.
  */
-export function labelTaken(namespace, label) {
-  return (namespace?.businesses ?? []).some((b) => lower(b?.label) === lower(label));
+export function labelTaken(listing, label) {
+  return (listing?.businesses ?? []).some((b) => lower(b?.label) === lower(label));
 }
 
 /**
