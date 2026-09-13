@@ -485,6 +485,43 @@ test("the Sepolia manifest in this repository carries what this flow needs", () 
   assert.equal(settings.selfServe, false, "Sepolia has no sign-up contract, which is why this flow exists");
 });
 
+// ---- wiring: the screen reaches this module, and the page has somewhere to put it ------------------
+
+test("the join screen loads this planner, and not in a way that makes a cycle", () => {
+  const screen = readFileSync(join(HERE, "..", "assets", "local-join.js"), "utf8");
+  assert.ok(screen.includes('import("./join-sepolia.js")'), "the screen loads the planner on the network that needs it");
+  assert.equal(/^import[^(]*join-sepolia/m.test(screen), false, "a static import here would be a cycle: the planner imports this file");
+});
+
+test("the screen takes the branch only on a network with a name but no sign-up contract", () => {
+  const screen = readFileSync(join(HERE, "..", "assets", "local-join.js"), "utf8");
+  assert.match(screen, /if \(!onboarding && identity && config\.parentNode\) \{/);
+  // control: the self-serve path must still exist for the network that has one, or this branch
+  // would have replaced the flow rather than joined it.
+  assert.match(screen, /encodeCall\("join\(string,address,string\)"/);
+});
+
+test("the join route carries every control this flow drives", () => {
+  const route = readFileSync(join(HERE, "..", "src", "routes", "join.mjs"), "utf8");
+  const screen = readFileSync(join(HERE, "..", "assets", "local-join.js"), "utf8");
+  for (const id of ["join-self", "join-name", "name-parent", "name-connect", "name-label", "name-payout", "name-register", "name-register-hint", "name-free", "name-plan", "name-plan-said", "name-submit", "name-why", "name-status", "name-said"]) {
+    assert.ok(route.includes(`"${id}"`), `the route has no ${id}`);
+    assert.ok(screen.includes(`"${id}"`), `the screen never touches ${id}`);
+  }
+  // control: an id the screen does not drive is not in the route either, so the row above is
+  // asserting a real pairing rather than matching any string that happens to appear twice.
+  assert.equal(route.includes('"name-nonexistent"'), false);
+});
+
+test("the second flow never reuses the first flow's ids", () => {
+  // Two forms in one document sharing an id is a form that writes into the other one's field.
+  const route = readFileSync(join(HERE, "..", "src", "routes", "join.mjs"), "utf8");
+  const ids = [...route.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+  const twice = ids.filter((id, i) => ids.indexOf(id) !== i);
+  assert.deepEqual(twice, [], `these ids appear more than once: ${twice.join(", ")}`);
+  assert.ok(ids.includes("name-label") && ids.includes("business-name"), "both flows have their own name field");
+});
+
 test("the planner sends to two addresses and reads from one, as the module says it does", () => {
   const plan = planBusiness(request());
   assert.deepEqual([...new Set(plan.steps.filter((s) => s.where === "records").map((s) => s.to))], [RESOLVER]);
