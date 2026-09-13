@@ -146,6 +146,45 @@ test("an empty link is not malformed: it is simply a page nobody asked anything 
   assert.equal(readPayTarget("").malformed, false);
 });
 
+test("an id that was never given is not a lookup the chain answered", async () => {
+  const answer = await readOrder(null, () => {
+    throw new Error("an absent id must not be asked of the companion");
+  });
+  assert.equal(answer.read, null);
+  assert.equal(answer.found, false);
+  // `reachable: true` here means NOTHING WAS ASKED, not "the chain looked and has no such order".
+  // The two are indistinguishable in this shape, which is why the caller has to know the difference
+  // before it turns this answer into a sentence a person reads.
+  assert.equal(answer.reachable, true);
+});
+
+// ── the link that named nothing ──────────────────────────────────────────────────────────────────
+
+const dispatchPath = () => {
+  const src = readFileSync(join(APP, "assets", "local-pay.js"), "utf8");
+  const from = src.indexOf("const target = readPayTarget(location.search);");
+  const to = src.indexOf("return renderOrder(config, orderId);", from);
+  assert.ok(from > 0 && to > from, "the checkout's dispatch could not be found in local-pay.js");
+  return src.slice(from, to);
+};
+
+const refusesBeforeLookup = (src) => {
+  const guard = src.indexOf("if (!orderId)");
+  const lookup = src.indexOf("renderOrder(config, orderId)");
+  return guard !== -1 && (lookup === -1 || guard < lookup);
+};
+
+test("a link that named no order is never reported as an order that could not be found", () => {
+  const src = dispatchPath();
+  assert.equal(refusesBeforeLookup(src), true);
+  assert.match(src, /nothing was looked up/, "the person is told the link named nothing, not that a sale is missing");
+  assert.ok(!src.includes("NOT_FOUND_TEXT"), "the not-found sentence belongs to a lookup that actually happened");
+  // control, on a planted source: the predicate must fail when the guard is absent or comes after
+  // the lookup, or it is asserting nothing about which of the two runs first.
+  assert.equal(refusesBeforeLookup("return renderOrder(config, orderId);"), false);
+  assert.equal(refusesBeforeLookup("renderOrder(config, orderId); if (!orderId) return;"), false);
+});
+
 test("payLink writes exactly the three shapes the product publishes", () => {
   assert.equal(payLink("https://unica.example", { order: ORDER_ID }), `https://unica.example/pay/?order=${ORDER_ID}`);
   assert.equal(payLink("https://unica.example/", { product: 12 }), "https://unica.example/pay/?product=12");

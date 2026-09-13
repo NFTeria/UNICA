@@ -500,7 +500,16 @@ async function main() {
   }
   if (target.kind === "business") return renderShop(config, target.business);
   if (target.kind === "product") return renderProduct(config, target.product);
-  return renderOrder(config, target.order ?? config.record?.order?.id ?? null);
+  const orderId = target.order ?? config.record?.order?.id ?? null;
+  // A link that named no order was never looked up, so it cannot have come back missing. Reporting
+  // "This payment could not be found" here blames an order for a link that never carried one, and
+  // sends a person hunting for a sale that was never asked about.
+  if (!orderId) {
+    setText("co-status", "That link does not name a payment, so nothing was looked up.");
+    setText("co-why", "This link carries no order, no product and no shop.");
+    return;
+  }
+  return renderOrder(config, orderId);
 }
 
 // ---- a shop ---------------------------------------------------------------------------------------
