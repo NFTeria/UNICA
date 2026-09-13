@@ -175,9 +175,43 @@ export async function assetChoice({ choice, assets = [], address = null, read = 
   }
   const symbol = String(answered?.symbol ?? "").trim();
   if (!symbol) {
-    return { ok: false, error: "That address did not say what it is called, so a customer would be shown a price with no name on it." };
+    return {
+      ok: false,
+      error: answered?.symbolUnreadable
+        ? "That address answered its name in an encoding this screen does not read, so a customer would be shown a price with no name on it."
+        : "That address did not say what it is called, so a customer would be shown a price with no name on it.",
+    };
   }
   return { ok: true, asset: { address: pasted, symbol, decimals, known: false } };
+}
+
+/**
+ * What a token answered when it was asked its name, and whether the answer was in an encoding this
+ * screen can read at all.
+ *
+ * TWO SHAPES ARE IN THE WILD AND BOTH ARE REAL TOKENS. The ABI's `string` is an offset, a length and
+ * then the bytes, so it is never shorter than two words. The pre-standard `bytes32`, which several
+ * long-lived tokens still answer with, is ONE word of right-padded ASCII. Reading the second kind as
+ * a token with no name is this screen's mistake and not the token's, and the business would be told
+ * its asset is nameless when the asset said its name perfectly clearly.
+ *
+ * A word that is neither — bytes no text can be made of — is reported as unreadable rather than as
+ * unanswered, because those are two different things and only one of them is the token's doing.
+ */
+export function symbolAnswer(hex) {
+  const h = String(hex ?? "").trim().replace(/^0[xX]/, "");
+  if (h === "") return { symbol: null, unreadable: false }; // the call reverted: no answer at all
+  if (!/^[0-9a-fA-F]+$/.test(h) || h.length % 64 !== 0) return { symbol: null, unreadable: true };
+  if (h.length === 64) {
+    const bytes = [];
+    for (let i = 0; i < 64; i += 2) bytes.push(parseInt(h.slice(i, i + 2), 16));
+    while (bytes.length > 0 && bytes.at(-1) === 0) bytes.pop();
+    if (bytes.length === 0) return { symbol: null, unreadable: false }; // a word of zeros names nothing
+    if (bytes.some((b) => b < 0x20 || b > 0x7e)) return { symbol: null, unreadable: true };
+    return { symbol: String.fromCharCode(...bytes), unreadable: false };
+  }
+  const text = decodeString("0x" + h).trim();
+  return text === "" ? { symbol: null, unreadable: false } : { symbol: text, unreadable: false };
 }
 
 /**
@@ -202,9 +236,11 @@ export function assetReaderFor(session) {
     const symbolHex = await quiet(() => session.call({ to: address, data: encodeCall("symbol()", []) }));
     const decimalsHex = await quiet(() => session.call({ to: address, data: encodeCall("decimals()", []) }));
     const places = decimalsHex ? decodeUint(decimalsHex) : null;
+    const named = symbolAnswer(symbolHex);
     return {
       code,
-      symbol: symbolHex ? decodeString(symbolHex) : null,
+      symbol: named.symbol,
+      symbolUnreadable: named.unreadable,
       decimals: places === null || places === undefined ? null : Number(places),
     };
   };
