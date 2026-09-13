@@ -763,6 +763,22 @@ async function renderOrder(config, orderId) {
   }
 
   let session = null;
+  // WHAT THE POLL IS NOT ALLOWED TO SPEAK OVER.
+  //
+  // This screen asks the companion for a verdict every four seconds, and writes the one word it
+  // gets back into the same line the payment sequence writes into. Left alone, that poll erases
+  // "Wrapping 0.01 ETH to WETH…" while the wallet is open, and erases the sentence saying nothing
+  // was sent about four seconds after a person is told it — long before most people have finished
+  // reading it, and never long enough for them to know why their payment stopped.
+  //
+  // `sending` is up while a send sequence is in flight. `held` is up while a sentence the person
+  // has not acted on is on the screen. Neither stops the reading, which keeps happening on time and
+  // keeps the buttons and blockers correct; they stop the WRITING, which is the part that lies.
+  // `held` comes down when the person acts — presses pay again, or presses check again — because
+  // the only thing that should clear a refusal is the person who read it.
+  let sending = false;
+  let held = false;
+  const canSpeak = () => !sending && !held;
   // The verdict is judged by the chain's clock, exactly as the blockers and the countdown are: on a
   // drifting testnet the status line would otherwise say Expired while the blockers still said open.
   let spoken = checkoutVerdict({ evidence: null, expiry: card.expiry, now: Math.floor(Date.now() / 1000) + chainSkew });
@@ -795,8 +811,9 @@ async function renderOrder(config, orderId) {
     if (done) setText("co-settled", "This payment has already been made.");
     if (payBtn) {
       // One button. It opens only for the order's own payer, on the right network, while the
-      // chain still says the order is open.
-      payBtn.disabled = !allowed || done || !spoken.payable;
+      // chain still says the order is open — and never while a sequence of this customer's own is
+      // already running, which the poll would otherwise re-open mid-wrap.
+      payBtn.disabled = sending || !allowed || done || !spoken.payable;
       setText(
         "co-why",
         done
@@ -816,14 +833,23 @@ async function renderOrder(config, orderId) {
   };
   refresh();
 
-  /** One reading of the payment check, turned into the one word this screen is allowed to say. */
-  const check = async () => {
+  /**
+   * One reading of the payment check, turned into the one word this screen is allowed to say.
+   *
+   * `speak` is what the flags above decide. The reading always happens and the screen is always
+   * refreshed from it; only the sentence is left alone, and only while a sequence is running or a
+   * refusal is waiting to be read. The sequence's own last call passes `speak: true`, because by
+   * then the verdict IS what the person is waiting for.
+   */
+  const check = async ({ speak = canSpeak() } = {}) => {
     const evidence = await loadEvidence(card.id);
     fillAdvanced(config, { order: card.id, tx: card.settledTx, reasons: evidence?.reasonCodes ?? null });
     spoken = checkoutVerdict({ evidence, expiry: card.expiry, now: Math.floor(Date.now() / 1000) + chainSkew });
-    setText("co-status", spoken.word);
-    const pill = document.getElementById("co-status");
-    if (pill) pill.dataset.status = spoken.status;
+    if (speak) {
+      setText("co-status", spoken.word);
+      const pill = document.getElementById("co-status");
+      if (pill) pill.dataset.status = spoken.status;
+    }
     refresh();
     return spoken;
   };
@@ -851,12 +877,30 @@ async function renderOrder(config, orderId) {
     setHidden("co-after", false);
   }
   const recheck = document.getElementById("co-recheck");
-  if (recheck) recheck.addEventListener("click", () => check().catch((e) => setText("co-status", `Could not check again: ${e.message}`)));
+  if (recheck) {
+    recheck.addEventListener("click", () => {
+      // The person has read the refusal and asked for a fresh answer: the screen may speak again.
+      held = false;
+      check({ speak: true }).catch((e) => {
+        held = true;
+        setText("co-status", `Could not check again: ${e.message}`);
+      });
+    });
+  }
 
   if (payBtn) {
     payBtn.addEventListener("click", async () => {
       if (!refresh()) return;
+      // Pressing pay IS the person acting on whatever the last attempt said, so the screen is
+      // released and then held again for this attempt's own duration.
+      held = false;
+      sending = true;
       payBtn.disabled = true;
+      /** A sentence the person has to read. It stays on the screen until they press something. */
+      const refuse = (text) => {
+        held = true;
+        setText("co-status", text);
+      };
       try {
         if (!session) {
           session = await connect(config, card.payer);
@@ -900,16 +944,14 @@ async function renderOrder(config, orderId) {
             gasMargin: GAS_MARGIN_WEI,
           });
           if (!plan.ok) {
-            setText("co-status", plan.shortfall > 0n ? shortEthText(plan.shortfall, payAsset) : plan.why);
-            payBtn.disabled = false;
+            refuse(plan.shortfall > 0n ? shortEthText(plan.shortfall, payAsset) : plan.why);
             return;
           }
           if (plan.wrap > 0n) {
             setText("co-status", wrappingText(plan.wrap, payAsset));
             const wrapped = await waitForReceipt(session, await session.send({ to: assetIn, data: encodeDepositCalldata(), value: weiHex(plan.wrap) }));
             if (!wrapped || Number(wrapped.status) === 0) {
-              setText("co-status", wrapped ? statusText("FAILED") : statusText("UNKNOWN"));
-              payBtn.disabled = false;
+              refuse(wrapped ? statusText("FAILED") : statusText("UNKNOWN"));
               return;
             }
           }
@@ -920,8 +962,7 @@ async function renderOrder(config, orderId) {
           // Mined before the payment is sent, for the reason buyProduct gives.
           const approved = await waitForReceipt(session, await session.send({ to: assetIn, data: encodeApproveCalldata(settler, amountIn) }));
           if (!approved || Number(approved.status) === 0) {
-            setText("co-status", approved ? statusText("FAILED") : statusText("UNKNOWN"));
-            payBtn.disabled = false;
+            refuse(approved ? statusText("FAILED") : statusText("UNKNOWN"));
             return;
           }
         }
@@ -929,20 +970,23 @@ async function renderOrder(config, orderId) {
         setText("co-status", statusText("PENDING"));
         const receipt = await waitForReceipt(session, hash);
         if (!receipt) {
-          setText("co-status", statusText("UNKNOWN"));
+          refuse(statusText("UNKNOWN"));
           return;
         }
         if (Number(receipt.status) === 0) {
-          setText("co-status", statusText("FAILED"));
+          refuse(statusText("FAILED"));
           return;
         }
         const link = document.getElementById("co-receipt-link");
         if (link) link.setAttribute("href", receiptLinkFor({ chainId: config.chainId, hash, business: card.payout ?? card.identity?.address ?? null }));
         setHidden("co-after", false);
-        await check();
+        // The sequence's own conclusion: this call speaks, because the verdict is the thing the
+        // person has been waiting through three transactions to read.
+        await check({ speak: true });
       } catch (e) {
-        setText("co-status", `Could not pay: ${e.message}`);
+        refuse(`Could not pay: ${e.message}`);
       } finally {
+        sending = false;
         refresh();
       }
     });
