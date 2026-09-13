@@ -181,42 +181,62 @@ test("a decimal count that arrives as a string or as a big integer is still a co
   }
 });
 
-test("every way a pasted address can fail is refused, once, in words a person can act on", async () => {
-  const rows = [
-    ["not an address at all", { address: "not-an-address" }, /forty letters or digits/],
-    ["forty digits with no 0x", { address: WETH.slice(2) }, /forty letters or digits/],
-    ["nothing typed yet", { address: "" }, /forty letters or digits/],
-    ["nothing deployed there", { answer: { ...GOOD, code: "0x" } }, /Nothing is deployed/],
-    ["an answer of only zeros", { answer: { ...GOOD, code: "0x0000" } }, /Nothing is deployed/],
-    ["no decimals answered", { answer: { ...GOOD, decimals: null } }, /how many decimal places/],
-    ["a decimal count that is not one", { answer: { ...GOOD, decimals: "many" } }, /how many decimal places/],
-    ["a decimal count nothing could hold", { answer: { ...GOOD, decimals: 77 } }, /how many decimal places/],
-    ["no name answered", { answer: { ...GOOD, symbol: null } }, /did not say what it is called/],
-    ["a name of only spaces", { answer: { ...GOOD, symbol: "   " } }, /did not say what it is called/],
-    ["the network could not be reached", { throws: "connection refused" }, /could not be read just now/],
-    ["no way to reach the network", { noReader: true }, /cannot reach the network/],
-  ];
-  for (const [what, spoil, expected] of rows) {
-    const read = spoil.noReader
-      ? null
-      : spoil.throws
-        ? () => {
-            throw new Error(spoil.throws);
-          }
-        : readerFor(spoil.answer ?? GOOD);
-    const chosen = await assetChoice({
-      choice: OTHER_ASSET,
-      assets: CONFIG.assets,
-      address: "address" in spoil ? spoil.address : WETH,
-      read,
-    });
+/**
+ * Every way a pasted address can fail, and the sentence a person is given for it.
+ *
+ * ONE ROW PER GUARD, DELIBERATELY. These twelve were a single loop inside a single test until a red
+ * line proved useless: the runner printed one failure naming the whole set, and which guard had
+ * actually broken had to be found by reading the assertion message underneath it. Split like this
+ * the TAP line IS the diagnosis — "no decimals answered" fails by name and the other eleven stay
+ * green beside it, which is also what says the breakage is one guard and not the call itself.
+ */
+const REFUSALS = [
+  ["not an address at all", { address: "not-an-address" }, /forty letters or digits/],
+  ["forty digits with no 0x", { address: WETH.slice(2) }, /forty letters or digits/],
+  ["nothing typed yet", { address: "" }, /forty letters or digits/],
+  ["nothing deployed there", { answer: { ...GOOD, code: "0x" } }, /Nothing is deployed/],
+  ["an answer of only zeros", { answer: { ...GOOD, code: "0x0000" } }, /Nothing is deployed/],
+  ["no decimals answered", { answer: { ...GOOD, decimals: null } }, /how many decimal places/],
+  ["a decimal count that is not one", { answer: { ...GOOD, decimals: "many" } }, /how many decimal places/],
+  ["a decimal count nothing could hold", { answer: { ...GOOD, decimals: 77 } }, /how many decimal places/],
+  ["no name answered", { answer: { ...GOOD, symbol: null } }, /did not say what it is called/],
+  ["a name of only spaces", { answer: { ...GOOD, symbol: "   " } }, /did not say what it is called/],
+  ["the network could not be reached", { throws: "connection refused" }, /could not be read just now/],
+  ["no way to reach the network", { noReader: true }, /cannot reach the network/],
+];
+
+/** The one call every row above makes, with only the field that row spoils changed. */
+function refusalCall(spoil) {
+  const read = spoil.noReader
+    ? null
+    : spoil.throws
+      ? () => {
+          throw new Error(spoil.throws);
+        }
+      : readerFor(spoil.answer ?? GOOD);
+  return {
+    choice: OTHER_ASSET,
+    assets: CONFIG.assets,
+    address: "address" in spoil ? spoil.address : WETH,
+    read,
+  };
+}
+
+for (const [what, spoil, expected] of REFUSALS) {
+  test(`a pasted address is refused when there is ${what}`, async () => {
+    const chosen = await assetChoice(refusalCall(spoil));
     assert.equal(chosen.ok, false, `${what} should have been refused`);
     assert.match(chosen.error, expected, what);
-  }
-  assert.equal(rows.length, 12); // a stated count: twelve refusals asserted, none skipped
+  });
+}
 
-  // THE CONTROL for all of them. The unspoiled answer, through the same call, must be accepted —
-  // otherwise every row above could be passing for a reason that has nothing to do with its guard.
+test("twelve refusals are asserted, stated as a number rather than counted by eye", () => {
+  assert.equal(REFUSALS.length, 12);
+});
+
+test("control: the unspoiled answer, through the same call, is accepted", async () => {
+  // Without this row every refusal above could be passing for a reason that has nothing to do with
+  // the guard it names — a call that refused everything would look identical to twelve working guards.
   const good = await assetChoice({ choice: OTHER_ASSET, assets: CONFIG.assets, address: WETH, read: readerFor(GOOD) });
   assert.equal(good.ok, true);
 });
