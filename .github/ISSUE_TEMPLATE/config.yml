@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/NFTeria/UNICA/blob/main/SECURITY.md
+    about: Please follow the disclosure process rather than opening a public issue.

@@ -27,7 +27,7 @@ git clone --recurse-submodules git@github.com:NFTeria/UNICA.git
 cd UNICA
 cp .env.example .env      # names only — never a value
 make deps                 # vendored Foundry submodules, pinned
-npm install               # the workspace application tree
+npm ci                    # the workspace application tree, exactly as the lockfile pins it
 ```
 
 Two toolchains, deliberately separate:
