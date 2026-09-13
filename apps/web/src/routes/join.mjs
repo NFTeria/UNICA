@@ -127,7 +127,7 @@ export const JOIN = [
     </ol>
     <h3>What your wallet will ask you to confirm</h3>
     <ol id="name-plan" class="registers"></ol>
-    ${C.statusRegion("name-plan-said", "The list is read from the network once a name is typed.")}
+    ${C.statusRegion("name-plan-said", "The list is read from the network once the wallet that holds the name is connected and a name is typed.")}
     <p><button type="button" class="cta" id="name-submit" disabled aria-describedby="name-why">Add this business</button></p>
     <p class="sub" id="name-why">Connect the wallet that holds the name.</p>
     <p class="sub">Each transaction is signed in your own wallet and waited for before the next one

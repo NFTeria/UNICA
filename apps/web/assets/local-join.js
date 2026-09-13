@@ -822,7 +822,7 @@ async function controllerJoin(config, planner) {
     if (!list) return;
     list.innerHTML = "";
     if (!plan?.ok) {
-      say("name-plan-said", plan?.refusal ?? "The list is read from the network once a name is typed.");
+      say("name-plan-said", plan?.refusal ?? "The list is read from the network once the wallet that holds the name is connected and a name is typed.");
       return;
     }
     for (const s of plan.steps) {

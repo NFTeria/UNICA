@@ -717,6 +717,22 @@ test("the one-confirmation promise is made only inside the flow that keeps it", 
   assert.equal(promisedOutsideSelfServe(planted), true, "a promise above the block is detected");
 });
 
+test("the plan list says what it waits for: the wallet that holds the name, then a name", () => {
+  // The list is built only once a connected wallet is shown to hold the name and a name is typed.
+  // The screen writes its fallback back into the region the page served, so the two must be one
+  // sentence, or the words would change under a person halfway through reading them.
+  const route = readFileSync(join(HERE, "..", "src", "routes", "join.mjs"), "utf8");
+  const screen = readFileSync(join(HERE, "..", "assets", "local-join.js"), "utf8");
+  const served = route.match(/statusRegion\("name-plan-said", "([^"]+)"\)/)?.[1] ?? null;
+  const fallback = screen.match(/say\("name-plan-said", plan\?\.refusal \?\? "([^"]+)"\)/)?.[1] ?? null;
+  assert.ok(served && fallback, "both the served sentence and the screen's fallback were found");
+  assert.equal(fallback, served, "the screen falls back to exactly what the page served");
+  const waitsForWallet = (sentence) => /wallet that holds the name/i.test(sentence);
+  assert.equal(waitsForWallet(served), true, "the sentence names the wallet the list waits for");
+  // control: the wording this replaced promised the list on a typed name alone.
+  assert.equal(waitsForWallet("The list is read from the network once a name is typed."), false);
+});
+
 test("the second flow never reuses the first flow's ids", () => {
   // Two forms in one document sharing an id is a form that writes into the other one's field. This
   // reads the BUILT page: ids reached through a component never appear as id="..." in the route
