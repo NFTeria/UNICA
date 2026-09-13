@@ -390,8 +390,10 @@ async function main() {
     readAsset: assetReaderFor(session),
   };
 
-  await renderList(session.address);
+  // WIRED BEFORE THE CATALOGUE IS READ, deliberately. The list is a network round trip; the form is
+  // not, and every control in it is either inert or saying the wrong thing until this has run.
   wireForm();
+  await renderList(session.address);
 }
 
 

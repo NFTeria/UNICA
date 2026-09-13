@@ -44,6 +44,7 @@ import {
   priceText,
   symbolAnswer,
 } from "../assets/products.js";
+import { PRODUCTS } from "../src/routes/admin.mjs";
 import { productCard } from "../assets/storefront.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -624,6 +625,43 @@ test("control: the asset is cleared in the same list as every other field, not a
     script,
     /for \(const id of \["product-name", "product-price", "product-days", "product-buyer", "product-asset-address"\]\)/,
   );
+});
+
+// ---- what the document SHIPS, before a line of script has run ---------------------------------------
+
+// The rendered markup of the Products screen, not the source that writes it. What a reader gets on
+// the first frame is the only thing these rows are about, and the source could satisfy a regex while
+// the markup did something else.
+const SHIPPED = PRODUCTS[0].body;
+
+/** The `<p class="formfield"...>` tag that opens the field carrying this label, and only that tag. */
+function fieldTag(id) {
+  const before = SHIPPED.slice(0, SHIPPED.indexOf(`for="${id}"`));
+  return before.slice(before.lastIndexOf('<p class="formfield'));
+}
+
+test("the address field ships hidden, because only script ever reveals it", () => {
+  assert.match(fieldTag("product-asset-address"), /^<p class="formfield" hidden>/);
+  // Control: the price field, read exactly the same way, is NOT hidden — so the row above is
+  // reading this field's own opening tag and not something true of every field on the screen.
+  assert.match(fieldTag("product-price"), /^<p class="formfield">/);
+});
+
+test("the chooser ships saying it is being read, rather than shipping empty", () => {
+  assert.match(SHIPPED, /<select class="field" id="product-asset"[^>]*><option value="">Reading assets…<\/option><\/select>/);
+  // An empty chooser is a control with nothing to say for itself. It must not ship that way again.
+  assert.equal(/id="product-asset"[^>]*><\/select>/.test(SHIPPED), false);
+});
+
+test("the shipped chooser option is held to the same wording rule as every other sentence", () => {
+  // "Reading assets…" is a sentence a business reads on a real screen, so it may not describe the
+  // screen as a rehearsal or a stand-in, any more than the rest of the document may.
+  assert.equal(/\b(demo|demonstration|practice|fixture|mock|dummy)\b/i.test(SHIPPED), false);
+});
+
+test("the form is wired before the catalogue is read, not after a network round trip", () => {
+  const main = script.slice(script.indexOf("async function main()"), script.indexOf("async function renderList"));
+  assert.ok(main.indexOf("wireForm();") < main.indexOf("await renderList("), "the catalogue read still runs before the form is wired");
 });
 
 test("control: an id this screen does not have is found in neither file", () => {
