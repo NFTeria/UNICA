@@ -95,6 +95,27 @@ test("the default margin is the one the checkout uses, so the tested rule is the
   assert.ok(GAS_MARGIN_WEI > 0n);
 });
 
+test("a margin that cannot be read as an amount refuses, and is never read as zero", () => {
+  // Every row is the wallet the margin exists for: exactly the shortfall in ETH, nothing over. Read
+  // as zero, each of these would pass and send that wallet's last wei into a wrap it could not then
+  // spend, which is precisely the sabotage the control two tests above describes.
+  const borderline = { need: CENT, wethBalance: 0n, ethBalance: CENT };
+  for (const unreadable of [null, "", NaN, -1, -1n, "abc", {}, "0.5"]) {
+    const plan = wrapPlan({ ...borderline, gasMargin: unreadable });
+    assert.equal(plan.ok, false, String(unreadable));
+    assert.equal(plan.wrap, 0n, String(unreadable));
+    assert.match(plan.why, /margin/, String(unreadable));
+  }
+  // control: a margin nobody passed is not an unreadable one. It takes the floor this file ships,
+  // and refuses this same wallet for the margin's own reason rather than for an unread argument.
+  const missing = wrapPlan(borderline);
+  assert.equal(missing.ok, false);
+  assert.doesNotMatch(missing.why, /margin/);
+  // control: these rows refuse for the margin and not because this shape never passes — the same
+  // wallet with the margin to spare, and a margin that reads, goes through.
+  assert.equal(wrapPlan({ ...borderline, ethBalance: CENT + GAS_MARGIN_WEI, gasMargin: GAS_MARGIN_WEI }).ok, true);
+});
+
 // ── which asset this step is allowed to touch ─────────────────────────────────────────────────────
 
 test("only an 18-place asset that names itself WETH is treated as wrapped ETH", () => {
@@ -125,7 +146,13 @@ test("the refusal names the shortfall and says nothing was sent", () => {
 });
 
 test("no screen text from this step uses a word the product does not say", () => {
-  const said = [wrappingText(CENT, WETH), shortEthText(CENT, WETH), wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: 0n }).why];
+  const said = [
+    wrappingText(CENT, WETH),
+    shortEthText(CENT, WETH),
+    wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: 0n }).why,
+    wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: 0n, gasMargin: null }).why,
+    wrapPlan({ need: CENT, wethBalance: null, ethBalance: 0n }).why,
+  ];
   for (const line of said) {
     assert.doesNotMatch(line, /\b(demo|practice|fixture|mock|till)\b/i, line);
   }
