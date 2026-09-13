@@ -18,7 +18,9 @@ import { encodeDepositCalldata } from "../assets/local-pay.js";
 import {
   GAS_MARGIN_WEI,
   NATIVE_DECIMALS,
+  WRAPPED_NATIVE_NOTE,
   isWrappedNative,
+  payAssetLabel,
   shortEthText,
   weiHex,
   wrapPlan,
@@ -135,6 +137,30 @@ test("a transaction value is a bare hex quantity, and a negative one is refused"
   assert.equal(weiHex(255n), "0xff");
   assert.throws(() => weiHex(-1n));
   assert.throws(() => weiHex(null));
+});
+
+// ── what the register calls the asset ─────────────────────────────────────────────────────────────
+
+test("the register's WETH row says a customer may hold plain ETH instead", () => {
+  assert.equal(payAssetLabel(WETH), "WETH — or ETH, wrapped at payment");
+});
+
+test("no other asset carries that note, because no other asset can do it", () => {
+  assert.equal(payAssetLabel({ symbol: "uUSD", decimals: 6 }), "uUSD");
+  assert.equal(payAssetLabel({ symbol: "tAST", decimals: 18 }), "tAST");
+  // control: the note follows the same rule the wrap itself does. A token borrowing the name
+  // without the shape is not wrapped, so it must not be advertised as though it were.
+  assert.equal(payAssetLabel({ symbol: "WETH", decimals: 6 }), "WETH");
+  assert.equal(payAssetLabel({ symbol: "WETH", decimals: 6 }).includes(WRAPPED_NATIVE_NOTE), false);
+  // An unreadable label still falls back to the shortened address the register showed before.
+  assert.equal(payAssetLabel({ symbol: null, address: "0x" + "a".repeat(40) }), "0xaaaaaa…aaaa");
+});
+
+test("the register builds its list with that label, not the bare symbol", () => {
+  const src = readFileSync(join(APP, "assets", "cashier.js"), "utf8");
+  assert.match(src, /sym\.textContent = payAssetLabel\(asset\);/);
+  assert.equal(src.includes("sym.textContent = assetLabel(asset);"), false, "the bare symbol is no longer what the row says");
+  assert.match(src, /import \{ payAssetLabel \} from "\.\/wrap\.js";/);
 });
 
 // ── the calldata the wrap is sent as ──────────────────────────────────────────────────────────────
