@@ -15,10 +15,12 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 import { encodeDepositCalldata } from "../assets/local-pay.js";
+import { ASSET_STATUS } from "../assets/product.js";
 import {
   GAS_MARGIN_WEI,
   NATIVE_DECIMALS,
   WRAPPED_NATIVE_NOTE,
+  isPayableAsset,
   isWrappedNative,
   payAssetLabel,
   shortEthText,
@@ -29,6 +31,8 @@ import {
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), "..");
 const WETH = { symbol: "WETH", decimals: 18 };
+/** The same asset as the register carries it: one a customer can actually pay with. */
+const WETH_ROW = { ...WETH, status: ASSET_STATUS.DIRECT };
 const ETH = 10n ** 18n;
 const CENT = ETH / 100n; // 0.01
 
@@ -169,18 +173,32 @@ test("a transaction value is a bare hex quantity, and a negative one is refused"
 // ── what the register calls the asset ─────────────────────────────────────────────────────────────
 
 test("the register's WETH row says a customer may hold plain ETH instead", () => {
-  assert.equal(payAssetLabel(WETH), "WETH — or ETH, wrapped at payment");
+  assert.equal(payAssetLabel(WETH_ROW), "WETH · or ETH, wrapped at payment");
+  assert.equal(payAssetLabel({ ...WETH, status: ASSET_STATUS.CONVERSION }), "WETH · or ETH, wrapped at payment");
+});
+
+test("a row with no route promises nothing, whatever asset it names", () => {
+  // There is no settler and no market pair behind this row, so nobody is paying this price in ETH
+  // or in anything else. It reads exactly as it did before the note existed.
+  assert.equal(payAssetLabel({ ...WETH, status: ASSET_STATUS.UNAVAILABLE }), "WETH");
+  // A row carrying no status at all is not assumed to have a route either.
+  assert.equal(payAssetLabel(WETH), "WETH");
+  assert.equal(isPayableAsset({ status: ASSET_STATUS.UNAVAILABLE }), false);
+  assert.equal(isPayableAsset({}), false);
+  // control: the two rows above refuse the note for the route and not because this shape never
+  // carries it — the same asset, marked payable, still says what a customer may hold.
+  assert.ok(payAssetLabel(WETH_ROW).includes(WRAPPED_NATIVE_NOTE));
 });
 
 test("no other asset carries that note, because no other asset can do it", () => {
-  assert.equal(payAssetLabel({ symbol: "uUSD", decimals: 6 }), "uUSD");
-  assert.equal(payAssetLabel({ symbol: "tAST", decimals: 18 }), "tAST");
+  assert.equal(payAssetLabel({ symbol: "uUSD", decimals: 6, status: ASSET_STATUS.DIRECT }), "uUSD");
+  assert.equal(payAssetLabel({ symbol: "tAST", decimals: 18, status: ASSET_STATUS.CONVERSION }), "tAST");
   // control: the note follows the same rule the wrap itself does. A token borrowing the name
   // without the shape is not wrapped, so it must not be advertised as though it were.
-  assert.equal(payAssetLabel({ symbol: "WETH", decimals: 6 }), "WETH");
-  assert.equal(payAssetLabel({ symbol: "WETH", decimals: 6 }).includes(WRAPPED_NATIVE_NOTE), false);
+  assert.equal(payAssetLabel({ symbol: "WETH", decimals: 6, status: ASSET_STATUS.DIRECT }), "WETH");
+  assert.equal(payAssetLabel({ symbol: "WETH", decimals: 6, status: ASSET_STATUS.DIRECT }).includes(WRAPPED_NATIVE_NOTE), false);
   // An unreadable label still falls back to the shortened address the register showed before.
-  assert.equal(payAssetLabel({ symbol: null, address: "0x" + "a".repeat(40) }), "0xaaaaaa…aaaa");
+  assert.equal(payAssetLabel({ symbol: null, address: "0x" + "a".repeat(40), status: ASSET_STATUS.DIRECT }), "0xaaaaaa…aaaa");
 });
 
 test("the register builds its list with that label, not the bare symbol", () => {

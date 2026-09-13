@@ -30,7 +30,7 @@
  * decimal count the chain itself answered with, carried in on the configuration object, never from
  * a literal written into this file.
  */
-import { assetLabel, fromBaseUnits } from "./product.js";
+import { ASSET_STATUS, assetLabel, fromBaseUnits } from "./product.js";
 
 /** The name a person reads for the chain's own asset — the one their wallet shows a balance of. */
 export const NATIVE_SYMBOL = "ETH";
@@ -132,12 +132,25 @@ export function wrapPlan({ need, wethBalance, ethBalance, gasMargin = GAS_MARGIN
  * the wrap happens in the customer's own wallet at the moment they pay. Every other asset reads
  * exactly as it did, because a note like this on an asset that cannot do it would be a promise the
  * checkout could not keep.
+ *
+ * AND A ROW WITH NO ROUTE PROMISES NOTHING. The register lists assets it cannot take as well as
+ * the ones it can, greyed out and marked temporarily unavailable. Being the wrapped native asset
+ * does not make such a row payable: there is no settler for it, or no market pair, so no customer
+ * is paying that price in ETH or in anything else. Telling a business owner otherwise is the same
+ * broken promise as putting the note on a token that only borrows the name — the note follows the
+ * route as well as the shape, and an asset carrying no status at all is not assumed to have one.
  */
 export const WRAPPED_NATIVE_NOTE = `or ${NATIVE_SYMBOL}, wrapped at payment`;
 
+/** True when this register row is one a customer can actually pay with, directly or converted. */
+export function isPayableAsset(asset) {
+  const status = String(asset?.status ?? "");
+  return status === ASSET_STATUS.DIRECT || status === ASSET_STATUS.CONVERSION;
+}
+
 export function payAssetLabel(asset) {
   const label = assetLabel(asset);
-  return isWrappedNative(asset) ? `${label} — ${WRAPPED_NATIVE_NOTE}` : label;
+  return isWrappedNative(asset) && isPayableAsset(asset) ? `${label} · ${WRAPPED_NATIVE_NOTE}` : label;
 }
 
 /** `0x…`, the hex quantity a transaction's `value` is given as. Never negative, never padded. */
