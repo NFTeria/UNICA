@@ -555,6 +555,50 @@ test("the script fills the chooser from the deployment and prices against what i
   assert.equal(/payoutAsset/.test(script), false, "the payout asset is still pinned somewhere in this screen");
 });
 
+/**
+ * The blocker these rows exist for.
+ *
+ * `state.asset` is only ever assigned after an awaited read. Pressing Add blurs the address box,
+ * which is what started that read — so a handler that read `state.asset` on the same tick read
+ * whatever the PREVIOUS address had settled to, or nothing. A product would have been listed priced
+ * in an asset the business had already replaced, and a listing's terms never move once it exists.
+ *
+ * These are assertions about the wiring in the file, not about a browser, and they are honest about
+ * that: nothing here presses a real button. What they can prove is that the four things the fix is
+ * made of are present and that the shape that raced is gone rather than merely shadowed.
+ */
+test("the Add handler waits for the read before it reads what the product is priced in", () => {
+  assert.match(script, /await assetSettled\(\); \/\/ never read `state\.asset`/);
+  // The wait must come FIRST in that handler. After the plan is built it would prove nothing.
+  const handler = script.slice(script.indexOf('button.addEventListener("click"'));
+  assert.ok(
+    handler.indexOf("await assetSettled()") < handler.indexOf("newProductPlan({"),
+    "the asset is read before the read it depends on has been waited for",
+  );
+});
+
+test("a read still counting down is brought forward rather than waited out or skipped", () => {
+  assert.match(script, /async function assetSettled\(\) \{[\s\S]*clearTimeout\(assetDebounce\)[\s\S]*beginSettle\(\)[\s\S]*await state\?\.settling;/);
+  assert.match(script, /state\.settling = running/);
+});
+
+test("the address box is listened to on every keystroke, not only when it is left", () => {
+  assert.match(script, /assetAddress\?\.addEventListener\("input"/);
+  assert.match(script, /assetAddress\?\.addEventListener\("change"/);
+  assert.match(script, /const ASSET_READ_DELAY = 300;/);
+  // Typing drops the settled asset and closes Add, so the two can never disagree while a key is down.
+  const typing = script.slice(script.indexOf('assetAddress?.addEventListener("input"'));
+  assert.match(typing.slice(0, 600), /state\.asset = null/);
+  assert.match(typing.slice(0, 600), /setAddReady\(false\)/);
+});
+
+test("control: the shape that raced is gone from the file, not merely shadowed by the new one", () => {
+  // A leftover `void settleAsset()` on a listener would start a read nothing holds a promise to,
+  // and Add would have nothing to wait for on exactly the path this fix is about.
+  assert.equal(/addEventListener\("(change|input)", \(\) => void settleAsset\(\)\)/.test(script), false);
+  assert.equal(/^\s*void settleAsset\(\);\s*$/m.test(script), false);
+});
+
 test("control: an id this screen does not have is found in neither file", () => {
   assert.equal(route.includes("product-asset-currency"), false);
   assert.equal(script.includes("product-asset-currency"), false);
