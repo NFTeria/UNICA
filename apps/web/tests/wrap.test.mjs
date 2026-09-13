@@ -66,6 +66,15 @@ test("a wallet short of both refuses, says the ETH is short too, and wraps nothi
   assert.match(plan.why, /Nothing was sent/);
 });
 
+test("an unread balance is refused in a sentence a customer can act on", () => {
+  const plan = wrapPlan({ need: CENT, wethBalance: null, ethBalance: null });
+  assert.equal(plan.ok, false);
+  assert.equal(plan.why, "Your balances could not be read, so nothing was sent.");
+  // The shortfall stays zero, so the caller shows this sentence rather than one naming an amount
+  // it never established: an unread balance has no shortfall to name.
+  assert.equal(plan.shortfall, 0n);
+});
+
 test("a balance that could not be read is refused, never read as zero", () => {
   for (const missing of [{ wethBalance: null }, { ethBalance: null }, { need: null }, { wethBalance: undefined }]) {
     const plan = wrapPlan({ need: CENT, wethBalance: 0n, ethBalance: ETH, ...missing });
@@ -287,6 +296,18 @@ test("the deposit is awaited to its receipt, and carries the wrapped amount as t
   );
   // The approval that follows keeps its own wait — this step must not have replaced it.
   assert.match(src, /waitForReceipt\(session, await session\.send\(\{ to: assetIn, data: encodeApproveCalldata\(settler, amountIn\) \}\)\)/);
+});
+
+test("a failed balance read reaches the planner, and is refused rather than skipped", () => {
+  const src = orderPath();
+  // The reading is handed over as it came — null and all — so the refusal is the planner's, in its
+  // own words, on the screen. There is no branch that steps around the wrap when the read fails.
+  assert.match(src, /wethBalance: purse\?\.held \?\? null,/);
+  assert.match(src, /ethBalance: purse\?\.native \?\? null,/);
+  assert.equal(src.includes("if (purse) {"), false, "a failed read no longer skips the wrap in silence");
+  // ...and the sentence it refuses with is the one that reaches the status line.
+  const refusal = src.indexOf("if (!plan.ok)");
+  assert.match(src.slice(refusal, refusal + 300), /setText\("co-status", plan\.shortfall > 0n \? shortEthText\(plan\.shortfall, payAsset\) : plan\.why\)/);
 });
 
 test("a refusal from the planner sends nothing at all", () => {

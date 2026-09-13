@@ -21,7 +21,7 @@
  * paid by a wallet that holds only ETH: the checkout wraps exactly the shortfall first, waits for
  * that to be mined, and then runs the same approve-then-pay sequence as before. The decision is
  * `wrapPlan` in assets/wrap.js, a pure function, and it refuses — in words, sending nothing — when
- * the ETH does not also cover the network fee.
+ * the ETH does not also cover the network fee, and when the balances could not be read at all.
  *
  * SENDING GOES THROUGH apps/web/assets/wallet.js. A browser wallet, when one is installed, signs in
  * its own extension; on the local testnet with no wallet, the chain's own already-unlocked account
@@ -143,6 +143,12 @@ async function allowanceShort(config, asset, owner, spender, amount) {
  * Both readings go through the session, so they come from the same endpoint the rest of the screen
  * reads. `null` means a reading failed — never zero. A caller that treated a failed read as an empty
  * wallet would tell a customer they are out of money when the truth is that nobody answered.
+ *
+ * NULL IS NOT A SHRUG. The one caller hands that null straight to `wrapPlan`, which refuses in
+ * words. Swallowing it and carrying on was worse than it looked: the checkout would skip the wrap
+ * entirely and send an approval for an amount the wallet does not hold, so the customer signed a
+ * confirmation, paid a fee, and watched the payment revert — after a screen that said nothing at
+ * all about a failed reading.
  */
 async function heldFor(session, asset) {
   try {
@@ -874,9 +880,10 @@ async function renderOrder(config, orderId) {
         // success depends on this one's state, and a wallet that submits both at once orders them
         // by nonce but not by mining.
         //
-        // A FAILED READ CHANGES NOTHING. If the two balances could not be read, the sequence
-        // continues exactly as it did before this step existed, rather than refusing a customer who
-        // may well hold enough already; what is never done is to send a deposit on a guess.
+        // A FAILED READ IS SAID OUT LOUD. If the two balances could not be read, the planner is
+        // still the one that answers — with nulls, which it refuses — and the customer reads that
+        // refusal. Carrying on instead would send an approval for an amount nobody confirmed the
+        // wallet holds, which costs them a confirmation and a fee to watch the payment revert.
         //
         // WHICH ASSET THIS IS, IS THE DEPLOYMENT'S ANSWER AND NOT THE CARD'S. `assetInFor` matches
         // the order's asset by address against the configuration's own list, and falls back to the
@@ -886,21 +893,24 @@ async function renderOrder(config, orderId) {
         const payAsset = assetInFor(card, config);
         if (isWrappedNative(payAsset)) {
           const purse = await heldFor(session, assetIn);
-          if (purse) {
-            const plan = wrapPlan({ need: amountIn, wethBalance: purse.held, ethBalance: purse.native, gasMargin: GAS_MARGIN_WEI });
-            if (!plan.ok) {
-              setText("co-status", plan.shortfall > 0n ? shortEthText(plan.shortfall, payAsset) : plan.why);
+          const plan = wrapPlan({
+            need: amountIn,
+            wethBalance: purse?.held ?? null,
+            ethBalance: purse?.native ?? null,
+            gasMargin: GAS_MARGIN_WEI,
+          });
+          if (!plan.ok) {
+            setText("co-status", plan.shortfall > 0n ? shortEthText(plan.shortfall, payAsset) : plan.why);
+            payBtn.disabled = false;
+            return;
+          }
+          if (plan.wrap > 0n) {
+            setText("co-status", wrappingText(plan.wrap, payAsset));
+            const wrapped = await waitForReceipt(session, await session.send({ to: assetIn, data: encodeDepositCalldata(), value: weiHex(plan.wrap) }));
+            if (!wrapped || Number(wrapped.status) === 0) {
+              setText("co-status", wrapped ? statusText("FAILED") : statusText("UNKNOWN"));
               payBtn.disabled = false;
               return;
-            }
-            if (plan.wrap > 0n) {
-              setText("co-status", wrappingText(plan.wrap, payAsset));
-              const wrapped = await waitForReceipt(session, await session.send({ to: assetIn, data: encodeDepositCalldata(), value: weiHex(plan.wrap) }));
-              if (!wrapped || Number(wrapped.status) === 0) {
-                setText("co-status", wrapped ? statusText("FAILED") : statusText("UNKNOWN"));
-                payBtn.disabled = false;
-                return;
-              }
             }
           }
         }

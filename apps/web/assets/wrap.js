@@ -129,7 +129,7 @@ export function wrapPlan({ need, wethBalance, ethBalance, gasMargin = GAS_MARGIN
     };
   }
   if (required === null || held === null || native === null) {
-    return { ok: false, wrap: 0n, shortfall: 0n, why: "What this wallet holds could not be read, so nothing was sent." };
+    return { ok: false, wrap: 0n, shortfall: 0n, why: "Your balances could not be read, so nothing was sent." };
   }
   if (held >= required) {
     return { ok: true, wrap: 0n, shortfall: 0n, why: "This wallet already holds enough to pay, so nothing is wrapped." };
