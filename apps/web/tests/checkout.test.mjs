@@ -185,6 +185,17 @@ test("a link that named no order is never reported as an order that could not be
   assert.equal(refusesBeforeLookup("renderOrder(config, orderId); if (!orderId) return;"), false);
 });
 
+test("the wallet line is written by the read, never left as the assumption the page was served with", () => {
+  const src = readFileSync(join(APP, "assets", "local-pay.js"), "utf8");
+  const from = src.indexOf("async function announceSession(config)");
+  assert.ok(from > 0, "announceSession could not be found in local-pay.js");
+  const body = src.slice(from, from + 900);
+  assert.match(body, /setText\("wallet", "No wallet is connected\."\)/, "the negative has to be written once the read comes back");
+  // control: the shape this replaced. A bare return leaves the served sentence standing, which is
+  // an assumption on screen rather than an answer, and is what contradicted the header chip.
+  assert.ok(!/if \(!found\?\.session\?\.address\) return;/.test(body), "a bare return leaves the served assumption standing");
+});
+
 test("payLink writes exactly the three shapes the product publishes", () => {
   assert.equal(payLink("https://unica.example", { order: ORDER_ID }), `https://unica.example/pay/?order=${ORDER_ID}`);
   assert.equal(payLink("https://unica.example/", { product: 12 }), "https://unica.example/pay/?product=12");

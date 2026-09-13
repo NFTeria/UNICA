@@ -490,6 +490,9 @@ async function main() {
     banner.textContent = environment.banner ? `${environment.banner} · ${environment.networkName}` : environment.networkName;
   }
   setText("order-network", networkName(config.chainId));
+  // The network is known the moment the config answers. Leaving "has not been read" on screen past
+  // this point states an absence the page no longer has, whatever the wallet turns out to be.
+  setText("network", networkName(config.chainId));
   await renderIdentity(config);
   announceSession(config).catch(() => {});
 
@@ -1046,7 +1049,12 @@ async function renderOrder(config, orderId) {
  */
 async function announceSession(config) {
   const found = await silentReconnect(config);
-  if (!found?.session?.address) return;
+  // The read has happened. Either it names a wallet, or the negative on screen is now an answer
+  // rather than the assumption the page was served with.
+  if (!found?.session?.address) {
+    setText("wallet", "No wallet is connected.");
+    return;
+  }
   const { address } = found.session;
   setText("wallet", `Connected ${shortAddress(address)}.`);
   setText("network", networkName(config.chainId));
