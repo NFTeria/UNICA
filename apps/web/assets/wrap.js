@@ -63,6 +63,29 @@ export function isWrappedNative(asset) {
   return Number(asset?.decimals) === NATIVE_DECIMALS;
 }
 
+/**
+ * The record for the asset a payment is made in, read from the deployment before the card.
+ *
+ * WHY NOT JUST THE CARD. `isWrappedNative` decides from a symbol and a decimal count, and the card
+ * carries whichever ones the companion had at the moment it built the card. The companion nulls out
+ * a token it could not label, and a card whose symbol is null is a card this step would refuse —
+ * refusing a customer holding ETH for a price named in WETH, on an asset the deployment itself has
+ * always known the name of. The deployment's `assets` list is the reading that came from the chain,
+ * so the address is what identifies the asset and the list is what describes it.
+ *
+ * The card is the fallback, never the first answer, and only when the configuration holds nothing
+ * for this address at all. Matching is by address, lowercased on both sides, because an address is
+ * the one part of an asset nobody can relabel.
+ */
+export function assetInFor(card, config = {}) {
+  const carried = card?.assetIn ?? card?.pay?.asset ?? null;
+  const address = carried?.address ?? null;
+  if (!address) return carried;
+  const listed = Array.isArray(config?.assets) ? config.assets : [];
+  const wanted = String(address).toLowerCase();
+  return listed.find((a) => String(a?.address ?? "").toLowerCase() === wanted) ?? carried;
+}
+
 /** A bigint, or null when the value is missing or is not a whole number of base units. */
 function units(value) {
   if (value === null || value === undefined || value === "") return null;

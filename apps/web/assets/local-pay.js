@@ -47,7 +47,7 @@ import { PRACTICE_MODE_LABEL, connectWallet, discoverProviders, networkName, rpc
 import { fillAdvanced, loadConfig, loadEvidence, say as setText } from "./local.js";
 import { chooseSettlementRoute, routeLabel, validateEnvironment } from "./product.js";
 import { decodeString, decodeUint, encodeCall } from "./abi.js";
-import { GAS_MARGIN_WEI, isWrappedNative, shortEthText, weiHex, wrapPlan, wrappingText } from "./wrap.js";
+import { GAS_MARGIN_WEI, assetInFor, isWrappedNative, shortEthText, weiHex, wrapPlan, wrappingText } from "./wrap.js";
 import { parseTokenUri } from "./local-join.js";
 import { businessAccent, businessStyle } from "./brand.js";
 import { resolveSeller } from "./shop-resolve.js";
@@ -877,17 +877,24 @@ async function renderOrder(config, orderId) {
         // A FAILED READ CHANGES NOTHING. If the two balances could not be read, the sequence
         // continues exactly as it did before this step existed, rather than refusing a customer who
         // may well hold enough already; what is never done is to send a deposit on a guess.
-        if (isWrappedNative(card.assetIn)) {
+        //
+        // WHICH ASSET THIS IS, IS THE DEPLOYMENT'S ANSWER AND NOT THE CARD'S. `assetInFor` matches
+        // the order's asset by address against the configuration's own list, and falls back to the
+        // card only when the configuration holds nothing for that address. The card's symbol comes
+        // from whatever the companion could read when it built the card, and a null symbol there
+        // would refuse a customer over a name the deployment has always known.
+        const payAsset = assetInFor(card, config);
+        if (isWrappedNative(payAsset)) {
           const purse = await heldFor(session, assetIn);
           if (purse) {
             const plan = wrapPlan({ need: amountIn, wethBalance: purse.held, ethBalance: purse.native, gasMargin: GAS_MARGIN_WEI });
             if (!plan.ok) {
-              setText("co-status", plan.shortfall > 0n ? shortEthText(plan.shortfall, card.assetIn) : plan.why);
+              setText("co-status", plan.shortfall > 0n ? shortEthText(plan.shortfall, payAsset) : plan.why);
               payBtn.disabled = false;
               return;
             }
             if (plan.wrap > 0n) {
-              setText("co-status", wrappingText(plan.wrap, card.assetIn));
+              setText("co-status", wrappingText(plan.wrap, payAsset));
               const wrapped = await waitForReceipt(session, await session.send({ to: assetIn, data: encodeDepositCalldata(), value: weiHex(plan.wrap) }));
               if (!wrapped || Number(wrapped.status) === 0) {
                 setText("co-status", wrapped ? statusText("FAILED") : statusText("UNKNOWN"));
