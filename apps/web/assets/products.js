@@ -376,6 +376,8 @@ async function main() {
     wallet,
     catalog: config.contracts?.productCatalog ?? null,
     asset: null, // what the next product is priced in; nothing until the chooser has settled one
+    settling: null, // the read still deciding that, which Add waits for rather than races
+    sending: false,
     readAsset: assetReaderFor(session),
   };
 
@@ -521,6 +523,15 @@ function wireToggle(root, product) {
 let assetReadToken = 0;
 
 /**
+ * How long the address box is left alone before it is read. Long enough that a pasted address is
+ * read once rather than forty times, short enough that it has usually settled before a hand has
+ * moved from the keyboard to the Add button.
+ */
+const ASSET_READ_DELAY = 300;
+let assetDebounce = null;
+let addButton = null;
+
+/**
  * The sentence the DOCUMENT shipped under the address box, captured once and put back after every
  * transient line this screen writes there. Taking it from the page rather than repeating it here
  * is what stops the served HTML and this script from drifting into saying two different things.
@@ -573,6 +584,50 @@ async function settleAsset() {
   say("product-price-help", said.price);
 }
 
+/**
+ * Whether the Add button may be pressed at all.
+ *
+ * It is NOT disabled while a read is merely in flight. The blur that a press on Add causes is what
+ * starts that read, and a button that goes disabled between mousedown and mouseup never fires its
+ * click at all — the press would land on nothing and the business would be left pressing it again.
+ * Add stays pressable and waits, which is `assetSettled`'s job below.
+ */
+function setAddReady(ready) {
+  if (addButton) addButton.disabled = !ready || !state?.catalog || state?.sending === true;
+}
+
+/**
+ * Start reading whatever the chooser and the address box currently say, and keep the promise where
+ * Add can wait for it.
+ */
+function beginSettle() {
+  const running = settleAsset().finally(() => {
+    if (state && state.settling === running) state.settling = null;
+    setAddReady(true);
+  });
+  if (state) state.settling = running;
+  return running;
+}
+
+/**
+ * Everything the address box is still deciding, brought forward and waited for.
+ *
+ * THIS IS WHAT STOPS A STALE ASSET BEING LISTED. `state.asset` is only ever assigned after an
+ * awaited read, and pressing Add blurs the address box, which starts that read — so the Add handler
+ * reading `state.asset` on the same tick read whatever the PREVIOUS address had settled, or nothing
+ * at all. A product would have been listed priced in an asset the business had just replaced, and
+ * a listing's terms never move once it exists. Add waits for the read instead: any debounce still
+ * counting down is brought forward, and the promise it produces is awaited before the asset is read.
+ */
+async function assetSettled() {
+  if (assetDebounce !== null) {
+    clearTimeout(assetDebounce);
+    assetDebounce = null;
+    beginSettle();
+  }
+  await state?.settling;
+}
+
 function wireForm() {
   const button = document.getElementById("product-add");
   const kind = document.getElementById("product-kind");
@@ -580,13 +635,34 @@ function wireForm() {
   const buyer = document.getElementById("product-buyer");
   if (!button) return;
 
+  addButton = button;
   const chooser = document.getElementById("product-asset");
   const assetAddress = document.getElementById("product-asset-address");
   assetAddressHelp = document.getElementById("product-asset-address-help")?.textContent ?? "";
   fillAssetChooser(chooser);
-  chooser?.addEventListener("change", () => void settleAsset());
-  assetAddress?.addEventListener("change", () => void settleAsset());
-  void settleAsset();
+  chooser?.addEventListener("change", () => void beginSettle());
+
+  // ON EVERY KEYSTROKE, not only on blur. What is typed now is not what was read a moment ago, so
+  // the settled asset is dropped the instant the text changes and Add is closed until a read has
+  // agreed with what is on screen. `change` alone fires on blur, which is the same event that
+  // pressing Add causes — far too late to be the thing that keeps the two in step.
+  assetAddress?.addEventListener("input", () => {
+    if (state) state.asset = null;
+    assetReadToken++; // an answer still in flight belongs to text that is no longer typed
+    setAddReady(false);
+    say("product-price-help", priceHint(null));
+    if (assetDebounce !== null) clearTimeout(assetDebounce);
+    assetDebounce = setTimeout(() => {
+      assetDebounce = null;
+      void beginSettle();
+    }, ASSET_READ_DELAY);
+  });
+  assetAddress?.addEventListener("change", () => {
+    if (assetDebounce !== null) clearTimeout(assetDebounce);
+    assetDebounce = null;
+    void beginSettle();
+  });
+  void beginSettle();
 
   const follow = () => {
     const chosen = kind?.value ?? "one-off";
@@ -604,6 +680,7 @@ function wireForm() {
   say("product-add-why", "Adding it asks your wallet to confirm one transaction. Its terms never change afterwards.");
 
   button.addEventListener("click", async () => {
+    await assetSettled(); // never read `state.asset` while the box that decides it is still reading
     const plan = newProductPlan({
       name: document.getElementById("product-name")?.value,
       price: document.getElementById("product-price")?.value,
@@ -618,6 +695,7 @@ function wireForm() {
       say("product-add-said", plan.error);
       return;
     }
+    state.sending = true;
     button.disabled = true;
     try {
       say("product-add-said", "Confirm it in your wallet…");
@@ -637,6 +715,7 @@ function wireForm() {
     } catch (e) {
       say("product-add-said", `That did not go through: ${e.message}`);
     } finally {
+      state.sending = false;
       button.disabled = false;
     }
   });
