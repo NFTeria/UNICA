@@ -68,3 +68,19 @@ test("the dashboard lists purchases for a wallet with no business, and the custo
   assert.match(customers, /customerProfile\(config, row\.payer\)/);
   assert.match(customers, /customerLabel\(/);
 });
+
+test("the dashboard writes a wallet as its verified ENS name beside the address, else the address alone, one read per wallet", async () => {
+  const { walletLabel } = await import("../assets/business.js");
+  const config = { chainId: 11155111, rpc: "/local/rpc" };
+  let reads = 0;
+  const named = async (_config, wallet) => { reads += 1; return wallet.toLowerCase().startsWith("0xa121") ? "nfteria.eth" : null; };
+  assert.equal(await walletLabel(config, "0xa121e1ef31bbf0826aa67dc01e7977e80af58d73", named), "nfteria.eth (0xa121e1…8d73)");
+  assert.equal(await walletLabel(config, "0xA121e1eF31bBF0826aA67dC01e7977e80Af58D73", named), "nfteria.eth (0xa121e1…8d73)", "the same wallet in another case is the same read and the same label");
+  assert.equal(reads, 1, "the second ask is answered from the first read");
+  assert.equal(await walletLabel(config, "0x19e56831a10d43cff5d77f886c799c6b916da7ae", async () => null), "0x19e568…a7ae");
+  assert.equal(await walletLabel(config, "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc", async () => { throw new Error("away"); }), "0x3c44cd…93bc", "a failed read is the address, never a wrong name");
+  assert.equal(await walletLabel(config, "nope", named), "Not known yet");
+  const src = readFileSync(new URL("../assets/business.js", import.meta.url), "utf8");
+  assert.match(src, /walletLabel\(config, wallet\)\.then\(\(label\) => say\("set-payout", label\)\)/, "the settings row is named");
+  assert.equal((src.match(/read for \$\{await walletLabel\(config, wallet\)\}/g) || []).length, 2, "both 'read for' lines are named");
+});

@@ -28,7 +28,7 @@ import { fillAdvanced, loadConfig, say, shortId } from "./local.js";
 import { listRegisters, registerStatusText, revokeRegisterOnChain } from "./local-join.js";
 import { readBusiness, silentReconnect } from "./session.js";
 import { resolveSeller, shopPath } from "./shop-resolve.js";
-import { customerProfile } from "./ens-profile.js";
+import { customerProfile, primaryName } from "./ens-profile.js";
 import { customerLabel, purchaseReceiptHref, readPurchases } from "./purchases.js";
 import { rpcRequest } from "./wallet.js";
 import { encodeCall } from "./abi.js";
@@ -388,6 +388,19 @@ export async function openAdmin(prefix) {
   return { config, session: known.session, business, wallet: payoutWalletFor(business, known.session) };
 }
 
+/**
+ * How a wallet is written on the dashboard: its verified ENS primary name beside the short address
+ * when the chain has one (nfteria.eth (0xa121…8d73)), else the short address alone. One read per
+ * wallet per page; a failed read is the short address, never a wrong name.
+ */
+const walletLabels = new Map();
+export async function walletLabel(config, wallet, named = primaryName) {
+  if (!isAddress(wallet)) return "Not known yet";
+  const key = String(wallet).toLowerCase();
+  if (!walletLabels.has(key)) walletLabels.set(key, named(config, wallet).then((name) => (name ? `${name} (${shortId(wallet)})` : shortId(wallet))).catch(() => shortId(wallet)));
+  return walletLabels.get(key);
+}
+
 /** Which wallet the money arrives at: the business's payout wallet, or this wallet on its own. */
 export function payoutWalletFor(business, session) {
   if (business?.joined && isAddress(business.payout)) return business.payout;
@@ -465,6 +478,7 @@ async function overview(config, session, business, wallet, prefix) {
   say("payout-asset", payout?.symbol ?? "Not known yet");
   say("business-title", business.joined ? businessDisplayName(String(business.label ?? "")) : "This wallet");
   say("set-payout", wallet ? shortId(wallet) : "Not known yet");
+  if (wallet) walletLabel(config, wallet).then((label) => say("set-payout", label));
 
   if (business.joined && business.name) {
     say("business-payname", `Customers pay ${business.name}`);
@@ -588,7 +602,7 @@ async function renderKpis(config, wallet, payout) {
   say("last-payment", k.last ? `${whenText(k.last.settledAt, now)} · ${decisionPill(k.last.decision, k.last.reasonCodes).label}` : "None yet");
   const extra = k.otherAssetsToday ? ` ${k.otherAssetsToday} more today arrived in another asset and are not added in.` : "";
   const waiting = k.unresolvedToday ? ` ${k.unresolvedToday} today ${k.unresolvedToday === 1 ? "is" : "are"} not checked yet and ${k.unresolvedToday === 1 ? "is" : "are"} not counted.` : "";
-  say("business-status", `${answered.payments.length} payment${answered.payments.length === 1 ? "" : "s"} read for ${shortId(wallet)}.${extra}${waiting}`);
+  say("business-status", `${answered.payments.length} payment${answered.payments.length === 1 ? "" : "s"} read for ${await walletLabel(config, wallet)}.${extra}${waiting}`);
 }
 
 // What the wallet holds: one read per asset this deployment knows. A read that fails leaves that
@@ -800,7 +814,7 @@ async function orders(config, business, wallet) {
     const mark = markElement("graph");
     if (mark) graph.replaceChildren(mark);
   }
-  say("orders", withReason(`${rows.length} payment${rows.length === 1 ? "" : "s"} read for ${shortId(wallet)}.`));
+  say("orders", withReason(`${rows.length} payment${rows.length === 1 ? "" : "s"} read for ${await walletLabel(config, wallet)}.`));
 }
 
 function orderRowElement(row, config, chainId) {
