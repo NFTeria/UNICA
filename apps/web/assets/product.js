@@ -399,6 +399,68 @@ export function openingRateOf(market = {}) {
   return { price: rate, decimals: 18 };
 }
 
+/**
+ * The price the pool itself sits at, from slot0's sqrtPriceX96, as payout units per one whole
+ * asset scaled by 1e18 — the shape `quoteOrder` reads, the same as the feed cross. sqrtPriceX96
+ * is sqrt(currency1 raw per currency0 raw) times 2^96, so s*s over 2^192 is currency1 raw per
+ * currency0 raw; which side the asset sorts on decides whether that ratio or its reciprocal is
+ * wanted, and the two decimal counts move it from raw units to whole ones. Null for a zero price
+ * or an unknown shape, so nothing here can invent a rate.
+ */
+export function poolRateFromSqrtPrice({ sqrtPriceX96, assetIsCurrency0, assetDecimals, payoutDecimals } = {}) {
+  let s;
+  try {
+    s = BigInt(sqrtPriceX96 ?? 0);
+  } catch {
+    return null;
+  }
+  if (s <= 0n || typeof assetIsCurrency0 !== "boolean" || !Number.isInteger(assetDecimals) || !Number.isInteger(payoutDecimals)) return null;
+  // 18 for the answer's own scale, then raw asset units up to a whole one and raw payout units down.
+  const exponent = 18 + assetDecimals - payoutDecimals;
+  const up = exponent >= 0 ? pow10(exponent) : 1n;
+  const down = exponent < 0 ? pow10(-exponent) : 1n;
+  const price = assetIsCurrency0
+    ? (s * s * up) / ((1n << 192n) * down) // the payout is currency1: payout raw per asset raw is s*s / 2^192
+    : (up << 192n) / (s * s * down); // the payout is currency0: the reciprocal
+  if (price <= 0n) return null;
+  return { price, decimals: 18 };
+}
+
+/**
+ * Of two prices for the same pair, the one that is WORSE for the customer — fewer payout units per
+ * whole asset — so the spend worked out from it is enough at either. The feeds are required: a
+ * sale is never priced from the pool alone. The pool is an extra floor when it was read, and
+ * `offsetTenths` says how far it sat from the feeds, in tenths of a percent of the feed price,
+ * negative when the pool pays less; null when there was no pool price to compare against.
+ */
+export function bindingRate({ feeds, pool } = {}) {
+  if (!feeds || !Number.isInteger(feeds.decimals)) return null;
+  let f;
+  try {
+    f = BigInt(feeds.price ?? 0);
+  } catch {
+    return null;
+  }
+  if (f <= 0n) return null;
+  const fromFeeds = { price: f, decimals: feeds.decimals, source: "feeds", offsetTenths: null };
+  if (!pool || !Number.isInteger(pool.decimals)) return fromFeeds;
+  let p;
+  try {
+    p = BigInt(pool.price ?? 0);
+  } catch {
+    return fromFeeds;
+  }
+  if (p <= 0n) return fromFeeds;
+  const scale = Math.max(feeds.decimals, pool.decimals);
+  const fs = f * pow10(scale - feeds.decimals);
+  const ps = p * pow10(scale - pool.decimals);
+  const diff = ps - fs;
+  // Rounded half away from zero, so 2.05% reads as 2.1 rather than 2.0.
+  const offsetTenths = Number((diff * 2000n + (diff < 0n ? -fs : fs)) / (2n * fs));
+  if (ps < fs) return { price: p, decimals: pool.decimals, source: "pool", offsetTenths };
+  return { ...fromFeeds, offsetTenths };
+}
+
 export function quoteOrder({
   invoiceUnits,
   invoiceIn = "payout",

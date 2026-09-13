@@ -21,7 +21,9 @@
  *
  * THE PRICE IS THE DEPLOYMENT'S OWN. A converted sale is worked out from the price the deployment's
  * oracle answers with, right now, and refused if that read fails. No rate is written into this file
- * and none is remembered from a previous sale.
+ * and none is remembered from a previous sale. The pool the sale settles on is read as well: its
+ * price moves only when a customer pays through it, so it can sit under the feeds for hours, and
+ * the spend is worked out from whichever of the two pays the business less, so the floor holds.
  *
  * PAID IS NOT A GUESS. `saleVerdict` says Paid only where `paymentStatus` says PAID, which happens
  * only on a VERIFIED verification — never on a transaction hash, never on a timer, and never
@@ -34,11 +36,13 @@ import { listRegisters, readBusinessJoined } from "./local-join.js";
 import {
   ASSET_STATUS,
   assetMenu,
+  bindingRate,
   chooseSettlementRoute,
   formatAsset,
   fromBaseUnits,
   isAddress,
   paymentStatus,
+  poolRateFromSqrtPrice,
   crossRateFromFeeds,
   openingRateOf,
   quoteOrder,
@@ -336,6 +340,37 @@ export function decodeLatestRoundData(value) {
   const answer = BigInt("0x" + words[1]);
   if (answer >= 2n ** 255n) return null; // a negative int256 is not a price
   return { answer, updatedAt: Number(BigInt("0x" + words[3])) };
+}
+
+/** StateView `getSlot0(bytes32)`: four words — sqrtPriceX96, tick (an int24, sign-extended), protocolFee, lpFee. */
+export function decodeSlot0(value) {
+  const words = wordsOf(value);
+  if (words.length < 4) return null;
+  const sqrtPriceX96 = BigInt("0x" + words[0]);
+  if (sqrtPriceX96 <= 0n) return null; // a pool that was never initialised has no price
+  return {
+    sqrtPriceX96,
+    tick: Number(BigInt.asIntN(256, BigInt("0x" + words[1]))),
+    protocolFee: Number(BigInt("0x" + words[2])),
+    lpFee: Number(BigInt("0x" + words[3])),
+  };
+}
+
+/**
+ * The sale line's account of where the price came from: the two feeds, each with its raw answer
+ * and publish time, then what the pool said. When the pool binds, the line says so, with its tick
+ * and how far under the feeds it sat; when the feeds bind, the pool's tick and its distance over
+ * them are still named; when the pool could not be read, the line says that rather than leaving it
+ * out, because a floor that quietly stopped being checked is the one failure nobody would notice.
+ */
+export function priceNoteFor({ feeds, pool, rate } = {}) {
+  const base = String(feeds?.note ?? "");
+  if (!pool || !Number.isInteger(rate?.offsetTenths)) return `${base}, pool price unread`;
+  const tenths = Math.abs(rate.offsetTenths);
+  const pct = `${Math.trunc(tenths / 10)}.${tenths % 10}%`;
+  if (rate.source === "pool") return `${base}, held to the pool at tick ${pool.tick}, ${pct} under the feeds`;
+  if (tenths === 0) return `${base}, pool at tick ${pool.tick} level with the feeds`;
+  return `${base}, pool at tick ${pool.tick} reads ${pct} over the feeds`;
 }
 
 export function decodeLatestPrice(value) {
@@ -782,17 +817,22 @@ async function priceThisSale(minOut) {
   if (till.route.kind !== "conversion") return { amountIn: minOut, minOut };
   const market = till.config.manifest?.market ?? {};
   // Price feeds first: the two Chainlink legs the deployment names, read now and crossed here,
-  // and the sale line names each feed, its raw answer and its publish time.
+  // and the sale line names each feed, its raw answer and its publish time. Then the pool the sale
+  // settles on: its own price moves only when a customer pays through it, so it can sit under the
+  // feeds, and the hook holds the pool to the floor regardless. The spend is worked out from
+  // whichever of the two pays less, and the line says which one bound and what the pool read.
   const feeds = await readFeedRate(market);
   if (feeds) {
-    till.priceNote = feeds.note;
+    const pool = await readPoolRate(market);
+    const rate = bindingRate({ feeds, pool });
+    till.priceNote = priceNoteFor({ feeds, pool, rate });
     return quoteOrder({
       invoiceUnits: minOut,
       invoiceIn: "payout",
       customerAsset: till.customerAsset,
       payoutAsset: till.payout,
-      price: feeds.price,
-      priceDecimals: feeds.decimals,
+      price: rate.price,
+      priceDecimals: rate.decimals,
     });
   }
   // Otherwise a market that runs without an oracle is priced from the rate it was opened with: the
@@ -856,6 +896,36 @@ async function readFeedRate(market) {
   if (!cross) return null;
   cross.note = `${asset.description} ${asset.answer} at ${asset.updatedAt} over ${quote.description} ${quote.answer} at ${quote.updatedAt}`;
   return cross;
+}
+
+/**
+ * The pool's own price, read now: slot0 of the pool this market settles on, through the StateView
+ * the deployment names, turned into payout units per whole asset at 18 decimals. Which side the
+ * asset sorts on and the two decimal counts come from the manifest's market record, or failing
+ * that from the pool key and the assets this till already read from the chain. Null when the
+ * deployment names no StateView or the read does not answer — and the sale line says so.
+ */
+async function readPoolRate(market) {
+  const view = market?.stateView;
+  const poolId = market?.poolId;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(view)) || !/^0x[0-9a-fA-F]{64}$/.test(String(poolId))) return null;
+  try {
+    const slot0 = decodeSlot0(await till.session.call({ to: view, data: encodeCall("getSlot0(bytes32)", [poolId]) }));
+    if (!slot0) return null;
+    const assetIsCurrency0 =
+      typeof market.assetIsCurrency0 === "boolean"
+        ? market.assetIsCurrency0
+        : String(market.poolKey?.currency0 ?? "").toLowerCase() === String(till.customerAsset?.address ?? "").toLowerCase();
+    const rate = poolRateFromSqrtPrice({
+      sqrtPriceX96: slot0.sqrtPriceX96,
+      assetIsCurrency0,
+      assetDecimals: Number.isInteger(market.assetDecimals) ? market.assetDecimals : till.customerAsset?.decimals,
+      payoutDecimals: Number.isInteger(market.payoutDecimals) ? market.payoutDecimals : till.payout?.decimals,
+    });
+    return rate ? { ...rate, tick: slot0.tick } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
