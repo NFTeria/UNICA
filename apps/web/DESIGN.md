@@ -325,3 +325,16 @@ the only thing on the page that may ever say a payment succeeded, and only after
 5. no `http`/`https` URL appears in the stylesheet;
 6. every link in the left menu resolves to a document the build emitted;
 7. only 400, 500 and 700 appear as font weights.
+
+## Sponsor marks and the customer's picture (read 2026-09-13)
+
+The three integration badges carry each brand's **name in its published colour**, not its logo:
+Uniswap Pink `#FC72FF` with Accessible Pink `#F50DB4` for small text on a light ground
+(`Uniswap_Brand_Guidelines.pdf`, github.com/Uniswap/brand-assets), The Graph purple `#6F4CFF`
+(thegraph.com/brand), ENS Blue `#0080BC` (ens.domains/brand). The ENS mark needs a licence to
+reproduce, and all three policies say the same thing: name the technology, never imply endorsement.
+Clear space is the badge's own padding. A customer's ENS avatar is a **32px circle**, the size the
+ENS app draws its chips at (thorin space token `8`), never a square; with no avatar record the circle
+carries a gradient derived from the name, written here from the description of what a placeholder must
+do. Accepted avatar references follow ENSIP-12 as far as this release reads them: `https`, `ipfs`
+through a public gateway, `data`; an NFT reference is treated as unset because it needs a second lookup.

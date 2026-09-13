@@ -228,17 +228,22 @@ test("every integration's mark clears the non-text floor in both schemes", () =>
   assert.equal(measured.length, 10); // a stated count: five integrations, two schemes, none skipped
 });
 
-test("the brand hex is kept wherever it can be seen, and moved only where it cannot", () => {
-  // Measured against the light ground: Uniswap 3.67, The Graph 4.88, Chainlink 5.65 all clear the
-  // floor and are used verbatim. ENS reaches 2.78 and Robinhood 2.19, so those two are settled.
-  for (const key of ["uniswap", "graph", "chainlink"]) {
+test("the brand hex is kept wherever it can be seen, the brand's own light variant is used where it publishes one, and a colour is moved only where it cannot be seen", () => {
+  // Measured against the light ground with the colours the brand pages publish today: The Graph
+  // 4.88, ENS Blue 4.21, Chainlink 5.65 clear the floor and are used verbatim. Uniswap's pink reaches
+  // 2.26, and the brand publishes an Accessible Pink for that case, so that is what is drawn.
+  // Robinhood's green reaches 2.19 with no published variant, so it is settled.
+  for (const key of ["graph", "ens", "chainlink"]) {
     assert.equal(integrationMark(key, "light").colour, INTEGRATIONS[key].colour, `${key} should not have been moved`);
+    assert.ok(contrastRatio(INTEGRATIONS[key].colour, MARK_GROUND.light) >= MARK_FLOOR, `${key} was kept for no reason`);
   }
-  for (const key of ["ens", "stock"]) {
-    const mark = integrationMark(key, "light");
-    assert.notEqual(mark.colour, INTEGRATIONS[key].colour, `${key} cannot be seen unmoved and must have been settled`);
-    assert.ok(contrastRatio(INTEGRATIONS[key].colour, MARK_GROUND.light) < MARK_FLOOR, `${key} was moved for no reason`);
-  }
+  const uniswap = integrationMark("uniswap", "light");
+  assert.equal(uniswap.colour, INTEGRATIONS.uniswap.onLight, "the brand's own accessible pink, not a computed one");
+  assert.ok(contrastRatio(INTEGRATIONS.uniswap.colour, MARK_GROUND.light) < MARK_FLOOR && contrastRatio(uniswap.colour, MARK_GROUND.light) >= MARK_FLOOR);
+  const stock = integrationMark("stock", "light");
+  assert.notEqual(stock.colour, INTEGRATIONS.stock.colour, "stock cannot be seen unmoved and must have been settled");
+  assert.ok(contrastRatio(INTEGRATIONS.stock.colour, MARK_GROUND.light) < MARK_FLOOR, "stock was moved for no reason");
+  assert.equal(integrationMark("uniswap", "dark").colour, INTEGRATIONS.uniswap.colour, "on the dark ground the plain pink reads and is used verbatim");
   assert.equal(integrationMark("not-an-integration", "light"), null);
 });
 

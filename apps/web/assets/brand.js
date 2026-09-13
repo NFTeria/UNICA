@@ -18,9 +18,14 @@
  */
 
 export const INTEGRATIONS = Object.freeze({
-  uniswap: Object.freeze({ name: "Uniswap", colour: "#FF007A", where: "a payment is converted" }),
+  // Colours are the ones each brand page publishes today, read on 2026-09-13: Uniswap Pink #FC72FF
+  // (Uniswap_Brand_Guidelines.pdf, github.com/Uniswap/brand-assets; Accessible Pink #F50DB4 for
+  // small text on light grounds), The Graph purple #6F4CFF (thegraph.com/brand), ENS Blue #0080BC
+  // (ens.domains/brand). Marks are named as technologies used, never as endorsements; the badges
+  // carry the name in the brand's colour rather than its logo, because the ENS mark needs a licence.
+  uniswap: Object.freeze({ name: "Uniswap", colour: "#FC72FF", onLight: "#F50DB4", where: "a payment is converted" }),
   graph: Object.freeze({ name: "The Graph", colour: "#6F4CFF", where: "a receipt is indexed" }),
-  ens: Object.freeze({ name: "ENS", colour: "#5298FF", where: "a name is registered or resolved" }),
+  ens: Object.freeze({ name: "ENS", colour: "#0080BC", where: "a name is registered or resolved" }),
   chainlink: Object.freeze({ name: "Chainlink", colour: "#375BD2", where: "a price feed set the price on screen" }),
   stock: Object.freeze({ name: "Robinhood Chain", colour: "#00C805", where: "a tokenized stock on Robinhood Chain testnet is what is held or paid with" }),
 });

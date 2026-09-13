@@ -436,10 +436,17 @@ test("the hero's buttons carry their own contrast in both schemes, whatever the 
       measured.push(`${name}/${key} ${contrastRatio(integration.colour, s.paper).toFixed(2)}:1`);
     }
   }
-  // Stated, not hidden: the rules are attribution, and one of them is below the 3:1 an affordance
-  // would need — which is exactly why the affordance is the 1px border and the label, not the rule.
+  // Stated, not hidden: the rules are attribution, and Uniswap's plain pink is below the 3:1 an
+  // affordance would need on the light ground — which is exactly why the affordance is the 1px
+  // border and the label, not the rule, and why the light scheme draws that rule in the accessible
+  // pink the brand publishes for it.
   console.log(`integration rules against the ground: ${measured.join(", ")}`);
-  assert.ok(contrastRatio(INTEGRATIONS.ens.colour, "#fbfbfa") < 3, "the stated ENS measurement is stale");
+  assert.ok(contrastRatio(INTEGRATIONS.uniswap.colour, "#fbfbfa") < 3, "the stated Uniswap measurement is stale");
+  assert.ok(contrastRatio(INTEGRATIONS.uniswap.onLight, "#fbfbfa") >= 3, "the accessible pink must read on the light ground");
+  assert.ok(contrastRatio(INTEGRATIONS.ens.colour, "#fbfbfa") >= 3 && contrastRatio(INTEGRATIONS.ens.colour, "#101215") >= 3, "ENS Blue reads on both grounds");
+  const css = readFileSync(new URL("../assets/unica.css", import.meta.url), "utf8");
+  assert.match(css, /\.rule-uniswap \{ border-bottom: 3px solid #FC72FF; \}/);
+  assert.match(css, /data-theme="light"\] \.rule-uniswap \{ border-bottom-color: #F50DB4; \}/, "the light scheme draws the accessible pink");
 });
 
 // ── 6. the shell references the disclosure files unconditionally ─────────────────────────────────

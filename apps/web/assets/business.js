@@ -224,7 +224,10 @@ export function integrationMark(key, scheme = "light") {
   const integration = INTEGRATIONS[key];
   if (!integration) return null;
   const ground = MARK_GROUND[scheme === "dark" ? "dark" : "light"];
-  return { key, name: integration.name, brand: integration.colour, colour: settleMark(integration.colour, ground) };
+  // A brand that publishes its own colour for a light ground is taken at its word before anything
+  // is moved: Uniswap's Accessible Pink exists for exactly this case.
+  const published = scheme !== "dark" && integration.onLight && contrastRatio(integration.onLight, ground) >= MARK_FLOOR ? integration.onLight : null;
+  return { key, name: integration.name, brand: integration.colour, colour: published ?? settleMark(integration.colour, ground) };
 }
 
 function settleMark(colour, ground) {

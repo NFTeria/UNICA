@@ -26,7 +26,7 @@ import { businessAccent, businessStyle } from "./brand.js";
 import { decodeString, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
 import { resolveSeller } from "./shop-resolve.js";
-import { customerProfile } from "./ens-profile.js";
+import { avatarFallback, customerProfile } from "./ens-profile.js";
 import {
   displayName,
   businessIdentity,
@@ -161,13 +161,17 @@ async function renderPayer(config, payer) {
   const profile = await customerProfile(config, payer);
   if (!profile.name) return;
   say("r-payer-name", `${profile.name} (${shortAddress(payer)})`);
-  const square = document.getElementById("r-payer-avatar");
-  if (square && profile.avatar) {
+  const circle = document.getElementById("r-payer-avatar");
+  if (!circle) return;
+  // The name's gradient first, so a picture that never loads still leaves a named circle behind.
+  circle.setAttribute("style", `background: ${avatarFallback(profile.name)}`);
+  circle.hidden = false;
+  if (profile.avatar) {
     const img = document.createElement("img");
     img.src = profile.avatar;
     img.alt = "";
-    square.replaceChildren(img);
-    square.hidden = false;
+    img.addEventListener("error", () => img.remove());
+    circle.replaceChildren(img);
   }
 }
 

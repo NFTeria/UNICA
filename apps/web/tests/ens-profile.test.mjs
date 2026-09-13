@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { UNIVERSAL_RESOLVER, avatarOf, avatarSource, customerProfile, decodeResolveReturn, decodeReverseReturn, dnsEncode, encodeResolveCall, encodeReverseCall, namehash, primaryName } from "../assets/ens-profile.js";
+import { UNIVERSAL_RESOLVER, avatarFallback, avatarOf, avatarSource, customerProfile, decodeResolveReturn, decodeReverseReturn, dnsEncode, encodeResolveCall, encodeReverseCall, namehash, primaryName } from "../assets/ens-profile.js";
 import { encodeCall, wordsOf } from "../assets/abi.js";
 
 const CUSTOMER = "0x19E56831a10d43CfF5d77f886c799C6b916da7Ae";
@@ -70,4 +70,12 @@ test("only an avatar this page can draw is drawn; an empty record is no avatar",
   const empty = async () => resolveReturn(stringReturn(""));
   assert.equal(await avatarOf(config, "consumer.eth", empty), null);
   assert.equal(await avatarOf(config, "consumer.eth", async () => { throw new Error("away"); }), null);
+});
+
+test("a name with no avatar record gets the same gradient every time, and two names rarely share one", () => {
+  const a = avatarFallback("consumer.eth");
+  assert.equal(a, avatarFallback("Consumer.eth"), "case does not change a name's circle");
+  assert.match(a, /^radial-gradient\(circle at 30% 30%, hsl\(\d+ 72% 62%\), hsl\(\d+ 70% 38%\)\)$/);
+  const seen = new Set(["consumer.eth", "nfteria.eth", "freshcuts.unica.eth", "alice.eth", "bob.eth", "carol.eth"].map(avatarFallback));
+  assert.equal(seen.size, 6);
 });

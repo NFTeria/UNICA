@@ -56,9 +56,12 @@
 .int { display: inline-flex; align-items: center; gap: var(--s2); font-size: 0.85rem;
   padding: var(--s1) var(--s2); border-radius: var(--radius); background: var(--surface);
   color: var(--ink); border-left: 3px solid var(--int, var(--line)); white-space: nowrap; }
-.int[data-int="uniswap"] { --int: #FF007A; }
+.int[data-int="uniswap"] { --int: #FC72FF; }
 .int[data-int="graph"] { --int: #6F4CFF; }
-.int[data-int="ens"] { --int: #5298FF; }
+.int[data-int="ens"] { --int: #0080BC; }
+/* Uniswap's own guideline: the accessible pink where small text sits on a light ground. */
+:root[data-theme="light"] .int[data-int="uniswap"] { --int: #F50DB4; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .int[data-int="uniswap"] { --int: #F50DB4; } }
 .int[data-int="chainlink"] { --int: #375BD2; }
 .int[data-int="stock"] { --int: #00C805; }
 
@@ -88,3 +91,9 @@
 .graph-panel p { margin: 0; }
 .graph-rows { list-style: none; margin: var(--s2) 0 0; padding: 0; color: var(--muted);
   font-size: 0.9rem; }
+
+/* The customer's avatar on the receipt: a 32px circle, the size the ENS app draws its own chips at,
+   and never a square — a name's picture is the name's, drawn the way its own app draws it. With no
+   avatar record the circle carries a gradient derived from the name, so a nameless ring never shows. */
+.r-avatar { display: inline-block; width: 32px; height: 32px; border-radius: 50%; overflow: hidden; vertical-align: middle; margin-right: var(--s2); background: var(--line); }
+.r-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }

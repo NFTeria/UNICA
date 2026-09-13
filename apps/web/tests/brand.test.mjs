@@ -13,11 +13,19 @@ test("the WCAG arithmetic agrees with the published anchors", () => {
   assert.equal(hslToHex(rgbToHsl([255, 0, 122])), "#FF007A");
 });
 
-test("every integration colour carries readable text, and each is named with the one place it may appear", () => {
+test("every integration colour reads as a rule on the dark ground, the sponsor rules read on the light one, and each is named with the one place it may appear", () => {
+  // An integration colour is never a text ground here: it is a 3px rule or a badge's left border, so
+  // the floor is the 3:1 a non-text mark needs, against the ground it sits on. Uniswap's pink does not
+  // reach it on the light ground, which is why the brand publishes an accessible pink for that case.
   for (const [key, it] of Object.entries(INTEGRATIONS)) {
-    assert.ok(contrastRatio(it.colour, textOn(it.colour)) >= 4.5, `${key}: ${it.colour} text contrast`);
+    assert.ok(contrastRatio(it.colour, "#101215") >= 3, `${key}: ${it.colour} as a rule on the dark ground`);
     assert.ok(it.where.length > 10, `${key} says where it may appear`);
   }
+  for (const key of ["uniswap", "graph", "ens"]) {
+    const it = INTEGRATIONS[key];
+    assert.ok(contrastRatio(it.onLight ?? it.colour, "#fbfbfa") >= 3, `${key}: the light-ground rule reads`);
+  }
+  assert.ok(contrastRatio(INTEGRATIONS.uniswap.colour, "#fbfbfa") < 3 && contrastRatio(INTEGRATIONS.uniswap.onLight, "#fbfbfa") >= 3, "the accessible pink exists because the plain one does not read on light");
   assert.equal(Object.keys(INTEGRATIONS).join(","), "uniswap,graph,ens,chainlink,stock");
 });
 

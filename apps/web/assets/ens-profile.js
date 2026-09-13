@@ -100,6 +100,18 @@ export function avatarSource(record) {
   return null;
 }
 
+/**
+ * A deterministic gradient for a name with no avatar record, as a CSS background value: two hues
+ * from keccak256(name), so the same name always draws the same circle and two names rarely share
+ * one. Written from the description of what a name-derived placeholder must do; no library.
+ */
+export function avatarFallback(name) {
+  const digest = keccak256(bytes(String(name ?? "").toLowerCase()));
+  const h1 = ((digest[0] << 8) | digest[1]) % 360;
+  const h2 = (h1 + 40 + (digest[2] % 80)) % 360;
+  return `radial-gradient(circle at 30% 30%, hsl(${h1} 72% 62%), hsl(${h2} 70% 38%))`;
+}
+
 function callerFor(config) {
   return async (to, data) => rpcRequest(config.rpc, "eth_call", [{ to, data }, "latest"]);
 }
