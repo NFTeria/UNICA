@@ -82,7 +82,6 @@ export const JOIN = [
   </dl>
   <p><button type="button" class="cta" id="join-submit" disabled aria-describedby="join-why">Add my business</button></p>
   <p class="sub" id="join-why">Connect a wallet first. It becomes the owner of the business.</p>
-  ${C.statusRegion("join-status", "Nothing has been sent.")}
   <p class="sub" id="preferences-note">Your payout asset, the assets you accept and any transaction
   limit are settings this browser keeps for your register. The one confirmation your wallet asks
   for creates the business, the pay name, the payout wallet and the first register.</p>
@@ -115,16 +114,27 @@ export const JOIN = [
         <input id="name-register" class="field" type="text" value="chair-1" maxlength="40" aria-describedby="name-register-hint"></p>
         ${C.statusRegion("name-register-hint", "Saved as chair-1.")}
       </li>
+      <li>
+        <h3>Who runs the register, if not you</h3>
+        <p><label for="name-operator">Operator wallet (optional)</label><br>
+        <input id="name-operator" class="field" type="text" spellcheck="false" placeholder="0x…" aria-describedby="name-operator-hint"></p>
+        ${C.statusRegion("name-operator-hint", "Leave this empty and only the wallet that holds the name can switch the register on and off.")}
+        <p class="sub">Giving a wallet here adds one more transaction, and it allows that wallet to
+        switch this one register on and off. Nothing else: not the wallet that gets paid, not any
+        other register.</p>
+      </li>
     </ol>
     <h3>What your wallet will ask you to confirm</h3>
     <ol id="name-plan" class="registers"></ol>
     ${C.statusRegion("name-plan-said", "The list is read from the network once a name is typed.")}
     <p><button type="button" class="cta" id="name-submit" disabled aria-describedby="name-why">Add this business</button></p>
     <p class="sub" id="name-why">Connect the wallet that holds the name.</p>
-    ${C.statusRegion("name-status", "Nothing has been sent.")}
     <p class="sub">Each transaction is signed in your own wallet and waited for before the next one
-    is asked for. If one is declined, the ones before it stand and this page says which stopped.</p>
+    is asked for. If one is declined, the ones before it stand, this page says which stopped, and the
+    button comes back so you can carry on from there.</p>
   </section>
+
+  ${C.statusRegion("join-status", "Nothing has been sent.")}
 
   <div id="success" hidden>
     <h2>Your business is set up</h2>
