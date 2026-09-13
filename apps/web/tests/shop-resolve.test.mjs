@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolveShop, shopLabel, shopPath } from "../assets/shop-resolve.js";
+import { resolveSeller } from "../assets/shop-resolve.js";
 import { encodeCall, topicOf, BUSINESS_JOINED_SIGNATURE } from "../assets/abi.js";
 
 const ONBOARDING = "0x59b670e9fA9D0A427751Af201D676719a970857b";
@@ -58,4 +59,25 @@ test("without a sign-up contract a name resolves through the companion's lineage
   assert.equal(r.merchantNode, NODE);
   assert.equal(await resolveShop({}, config, "nobody", fetchImpl), null);
   assert.equal(await resolveShop({}, { merchantOnboarding: null, identity: null }, "freshcuts", fetchImpl), null, "no authority, no answer");
+});
+
+test("a payout wallet resolves to its business through the companion on a network with a name authority, and to nothing elsewhere", async () => {
+  const config = { identity: "0xB3aCbD101b026669A5b61DBbcD13d5CAe1c8f133", parentName: "unica.eth", merchantOnboarding: null };
+  const wallet = "0xA121e1eF31bBF0826aA67dC01e7977e80Af58D73";
+  const asked = [];
+  const fetchImpl = async (url) => {
+    asked.push(url);
+    return { ok: true, json: async () => ({ businesses: [{ label: "freshcuts", name: "freshcuts.unica.eth", seller: wallet.toLowerCase(), payout: wallet.toLowerCase(), merchantNode: "0x" + "f2".repeat(32) }] }) };
+  };
+  const hit = await resolveSeller(config, wallet, fetchImpl);
+  assert.equal(hit?.name, "freshcuts.unica.eth");
+  assert.equal(hit?.label, "freshcuts");
+  assert.equal(hit?.payout, wallet.toLowerCase());
+  assert.match(asked[0], /\/local\/businesses\?wallet=0xA121/);
+  // Controls: a wallet nobody answers for, a malformed address, a companion that fails, the practice chain.
+  assert.equal(await resolveSeller(config, wallet, async () => ({ ok: true, json: async () => ({ businesses: [] }) })), null);
+  assert.equal(await resolveSeller(config, "not-an-address", fetchImpl), null);
+  assert.equal(await resolveSeller(config, wallet, async () => { throw new Error("away"); }), null);
+  assert.equal(await resolveSeller({ ...config, merchantOnboarding: "0x" + "11".repeat(20) }, wallet, fetchImpl), null, "the practice chain names the business from its record");
+  assert.equal(await resolveSeller({ parentName: "unica.eth" }, wallet, fetchImpl), null, "no name authority, no answer");
 });

@@ -64,6 +64,35 @@ export async function resolveShop(session, config, nameOrAddress, fetchImpl = gl
   };
 }
 
+/**
+ * The business behind a payout wallet, by the same chain-derived route the shop link uses: on a
+ * network with a name authority and no sign-up contract the companion answers from the lineage and
+ * the resolver's records. Null when nothing answers, and null on the practice chain, where the
+ * record already names the business. Never throws.
+ */
+export async function resolveSeller(config, address, fetchImpl = globalThis.fetch) {
+  const wallet = String(address ?? "").trim();
+  if (!ADDRESS.test(wallet)) return null;
+  if (config?.merchantOnboarding || !config?.identity || !config?.parentName) return null;
+  try {
+    const res = await fetchImpl(`/local/businesses?wallet=${encodeURIComponent(wallet)}`);
+    const body = res && res.ok ? await res.json() : null;
+    const hit = Array.isArray(body?.businesses) ? body.businesses[0] : null;
+    if (!hit || !hit.label) return null;
+    return {
+      by: "name",
+      seller: hit.seller ?? wallet,
+      payout: hit.payout ?? wallet,
+      label: hit.label,
+      name: hit.name ?? payNameFor(hit.label, config.parentName),
+      merchantNode: hit.merchantNode ?? null,
+      badgeTokenId: null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** The shop's own link, relative to the site root, for the dashboard, the join success screen and the QR. */
 export function shopPath(label) {
   return `shop/?name=${encodeURIComponent(String(label ?? "").toLowerCase())}`;

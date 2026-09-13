@@ -868,3 +868,15 @@ test("renderOrder passes the chain-adjusted time to both of its verdict calls", 
   assert.equal(calls.length, 2, `renderOrder calls checkoutVerdict ${calls.length} times`);
   for (const call of calls) assert.match(call, /now: Math\.floor\(Date\.now\(\) \/ 1000\) \+ chainSkew/, `a verdict call without the chain's clock: ${call}`);
 });
+
+test("the product checkout asks the chain whose business the seller is before it draws the card", () => {
+  const src = readFileSync(new URL("../assets/local-pay.js", import.meta.url), "utf8");
+  const at = src.indexOf("async function renderProduct(");
+  assert.ok(at > 0);
+  const body = src.slice(at, src.indexOf("async function buyProduct(", at));
+  const resolve = body.indexOf("resolveSeller(config, product.payout ?? product.seller)");
+  const draw = body.indexOf("renderCard(card)");
+  assert.ok(resolve > 0, "renderProduct must resolve the seller's business");
+  assert.ok(draw > resolve, "the card is drawn after the chain has answered, not before");
+  assert.match(body, /card\.identity = \{ \.\.\.card\.identity, payName: business\.name/);
+});

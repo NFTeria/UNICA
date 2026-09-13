@@ -43,10 +43,13 @@ import { chooseSettlementRoute, routeLabel, validateEnvironment } from "./produc
 import { decodeString, decodeUint, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
 import { businessAccent, businessStyle } from "./brand.js";
+import { resolveSeller } from "./shop-resolve.js";
 import {
   NOT_FOUND_TEXT,
   businessIdentity,
   checkoutVerdict,
+  displayName,
+  integrationForCheckout,
   orderCard,
   paidThroughText,
   productCard,
@@ -502,6 +505,13 @@ async function renderProduct(config, productId) {
     return;
   }
   const card = productCard(product, config);
+  // The card's identity comes from the deployment's own record; on a public network the seller's
+  // business is whatever the chain says pays out to this wallet, so the chain's answer wins.
+  const business = await resolveSeller(config, product.payout ?? product.seller);
+  if (business?.name) {
+    card.identity = { ...card.identity, payName: business.name, label: business.label, display: displayName(business.label), address: business.payout, node: business.merchantNode };
+    card.integration = integrationForCheckout({ converts: false, priceChecked: false, payName: business.name });
+  }
   renderCard(card);
   setText("co-price-note", card.kindText);
   setText("order-input", card.pay.text ?? "—");
