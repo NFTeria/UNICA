@@ -108,6 +108,15 @@ export function paidInOptions(config = {}) {
   ];
 }
 
+/**
+ * The option the chooser starts on, and returns to once a product has been added: whatever this
+ * deployment pays out in, because that is what most products will be priced in. A deployment that
+ * could name no asset at all has only the typed-address option, and that is where it starts.
+ */
+export function payoutChoice(config = {}) {
+  return paidInOptions(config)[0]?.value ?? OTHER_ASSET;
+}
+
 /** True only when the network answered with bytes that are actually a program. */
 const hasCode = (code) => {
   const h = String(code ?? "").trim().replace(/^0[xX]/, "");
@@ -640,6 +649,7 @@ function wireForm() {
   const assetAddress = document.getElementById("product-asset-address");
   assetAddressHelp = document.getElementById("product-asset-address-help")?.textContent ?? "";
   fillAssetChooser(chooser);
+  if (chooser) chooser.value = payoutChoice(state?.config ?? {});
   chooser?.addEventListener("change", () => void beginSettle());
 
   // ON EVERY KEYSTROKE, not only on blur. What is typed now is not what was read a moment ago, so
@@ -707,10 +717,18 @@ function wireForm() {
         return;
       }
       say("product-add-said", `"${plan.plan.name}" is listed.`);
-      for (const id of ["product-name", "product-price", "product-days", "product-buyer"]) {
+      // THE ASSET IS A FIELD LIKE THE REST OF THEM. Leaving the typed address in the box and the
+      // settled asset in state meant the next product inherited what the last one was priced in,
+      // from a box that still read as filled in — and the business had no reason to look at it
+      // again. The chooser goes back to what this deployment pays out in, and the read that follows
+      // is what puts the sentence under the price back in step with it.
+      for (const id of ["product-name", "product-price", "product-days", "product-buyer", "product-asset-address"]) {
         const box = document.getElementById(id);
         if (box) box.value = "";
       }
+      if (chooser) chooser.value = payoutChoice(state.config ?? {});
+      state.asset = null;
+      await beginSettle();
       await renderList(state.session.address);
     } catch (e) {
       say("product-add-said", `That did not go through: ${e.message}`);

@@ -39,6 +39,7 @@ import {
   listCalldata,
   newProductPlan,
   paidInOptions,
+  payoutChoice,
   priceHint,
   priceText,
   symbolAnswer,
@@ -136,6 +137,15 @@ test("choosing nothing at all is refused in words that say what to do", async ()
   const chosen = await assetChoice({ choice: "", assets: CONFIG.assets });
   assert.equal(chosen.ok, false);
   assert.match(chosen.error, /Choose which asset/);
+});
+
+test("the chooser starts on, and returns to, what this deployment pays out in", () => {
+  assert.equal(payoutChoice(CONFIG), UUSD);
+  // Control: with the payout asset unnamed it is not the answer, because it is not an option.
+  assert.equal(payoutChoice({ assets: [WETH_ENTRY, { ...USDC_ENTRY, symbol: null, labelled: false }] }), WETH);
+  // A deployment that could name nothing has one option, and that is where the chooser starts.
+  assert.equal(payoutChoice({ assets: [] }), OTHER_ASSET);
+  assert.equal(payoutChoice(), OTHER_ASSET);
 });
 
 // ---- an address the business pastes ---------------------------------------------------------------
@@ -597,6 +607,23 @@ test("control: the shape that raced is gone from the file, not merely shadowed b
   // and Add would have nothing to wait for on exactly the path this fix is about.
   assert.equal(/addEventListener\("(change|input)", \(\) => void settleAsset\(\)\)/.test(script), false);
   assert.equal(/^\s*void settleAsset\(\);\s*$/m.test(script), false);
+});
+
+test("a product that was added clears what it was priced in, with the rest of the form", () => {
+  const reset = script.slice(script.indexOf('is listed.`)'));
+  assert.match(reset.slice(0, 900), /"product-asset-address"/);
+  assert.match(reset.slice(0, 900), /chooser\.value = payoutChoice\(/);
+  assert.match(reset.slice(0, 900), /state\.asset = null/);
+  // ...and the read that follows is what puts the sentence under the price back in step with it.
+  assert.match(reset.slice(0, 900), /await beginSettle\(\)/);
+});
+
+test("control: the asset is cleared in the same list as every other field, not a second one", () => {
+  // Two lists would drift. The row above would still pass; this one would not.
+  assert.match(
+    script,
+    /for \(const id of \["product-name", "product-price", "product-days", "product-buyer", "product-asset-address"\]\)/,
+  );
 });
 
 test("control: an id this screen does not have is found in neither file", () => {
