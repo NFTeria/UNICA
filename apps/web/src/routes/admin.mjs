@@ -12,8 +12,12 @@
  * customer and no placeholder price anywhere on either screen.
  *
  * WHAT A BUSINESS IS PAID IN IS ITS OWN CHOICE, PER PRODUCT. The "You are paid in" chooser ships
- * empty and is filled by script from the assets the active deployment could actually name; the
- * address box under it is for an asset it could not, and stays hidden until that option is picked.
+ * with one option saying it is being read, and is filled by script from the assets the active
+ * deployment could actually name; the address box under it is for an asset it could not, and ships
+ * HIDDEN, because it is shown only when that option is picked. Neither ships in the state script
+ * will put it in a moment later: an empty chooser is a control with nothing to say for itself, and
+ * an address box that is visible for one frame and then gone is a field the reader loses — or, on a
+ * slow read, one they can type into before anything is listening.
  * The price box's help sentence is the same one the script writes once an asset has settled, so the
  * document and the script cannot end up saying two different things about the same number.
  *
@@ -56,12 +60,14 @@ ${C.statusRegion("products-said", "Your products have not been read yet.")}
   ${C.selectField({
     id: "product-asset",
     label: "You are paid in",
+    options: [["", "Reading assets…"]],
     help: "Every asset this network can name, or one of your own by its address.",
   })}
   ${C.field({
     id: "product-asset-address",
     label: "Asset address",
     placeholder: "0x…",
+    hidden: true,
     help: "Only when you chose another asset above. This screen reads its name and its decimal places before it will price anything in it.",
   })}
   ${C.field({ id: "product-price", label: "Price", inputmode: "decimal", help: "Choose what you are paid in above, then type the price in that asset." })}

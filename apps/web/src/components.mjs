@@ -217,9 +217,16 @@ export function button(label, { variant = "primary", id = null, href = null, dis
   }`);
 }
 
-/** A labelled input with its help and its error. The error is empty and announced, never hidden. */
-export function field({ id, label, type = "text", help = null, error = true, value = null, placeholder = null, inputmode = null, attrs = "" }) {
-  return raw(h`<p class="formfield">
+/**
+ * A labelled input with its help and its error. The error is empty and announced, never hidden.
+ *
+ * `hidden` puts the attribute on the FIELD, not the input, so the label and the help go with it.
+ * A field that only script ever reveals must ship hidden: shipping it visible and hiding it on the
+ * first frame of script is a field the reader sees and then loses, and on a slow read a field they
+ * can type into before anything is listening.
+ */
+export function field({ id, label, type = "text", help = null, error = true, value = null, placeholder = null, inputmode = null, attrs = "", hidden = false }) {
+  return raw(h`<p class="formfield"${hidden ? raw(" hidden") : ""}>
   <label for="${id}">${label}</label>
   <input class="field" id="${id}" type="${type}"${value !== null ? raw(` value="${esc(value)}"`) : ""}${
     placeholder ? raw(` placeholder="${esc(placeholder)}"`) : ""
