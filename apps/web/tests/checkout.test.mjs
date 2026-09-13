@@ -883,3 +883,16 @@ test("the product checkout asks the chain whose business the seller is before it
   const shopBody = src.slice(src.indexOf("async function renderShop("), src.indexOf("async function renderProduct("));
   assert.ok(shopBody.includes("resolveSeller(config, catalog.seller ?? seller)") && shopBody.includes("renderIdentity(config, shop.identity)"), "the shop link does the same");
 });
+
+test("an approval is mined before the purchase or the payment is sent, on both paths", () => {
+  const src = readFileSync(new URL("../assets/local-pay.js", import.meta.url), "utf8");
+  const buy = src.slice(src.indexOf("async function buyProduct("), src.indexOf("async function settleProductVerdict("));
+  const approve = buy.indexOf("encodeApproveCalldata(catalogAddress");
+  const send = buy.indexOf('encodeCall("buy(uint256)"');
+  assert.ok(approve > 0 && send > approve);
+  assert.match(buy.slice(approve - 80, approve), /waitForReceipt\(session, await session\.send\(/, "the approval's receipt is awaited, not just its hash");
+  assert.match(buy, /Number\(approved\.status\) === 0/, "a failed approval stops the purchase");
+  assert.match(buy, /finally \{[\s\S]*payBtn\.disabled = false/, "a refused attempt leaves the button usable");
+  const order = src.slice(src.indexOf("encodeApproveCalldata(settler, amountIn)") - 120, src.indexOf("encodePayCalldata(card.id)"));
+  assert.match(order, /waitForReceipt\(session, await session\.send\(\{ to: assetIn/, "the order path waits the same way");
+});

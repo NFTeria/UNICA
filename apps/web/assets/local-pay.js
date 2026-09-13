@@ -560,23 +560,35 @@ async function buyProduct({ config, card, product, catalogAddress }) {
     return;
   }
   setText("co-status", statusText("SUBMITTED"));
-  const price = BigInt(product.price);
-  const allowance = await readAllowance(config, product.asset, session.address, catalogAddress);
-  if (allowance < price) {
-    await session.send({ to: product.asset, data: encodeApproveCalldata(catalogAddress, product.price) });
+  try {
+    const price = BigInt(product.price);
+    const allowance = await readAllowance(config, product.asset, session.address, catalogAddress);
+    if (allowance < price) {
+      // The purchase is sent only once the approval is MINED. Sent back to back, the wallet
+      // estimates the purchase against an allowance that is still zero, the estimate fails, and the
+      // wallet falls back to a gas limit the network refuses. Seen live on Sepolia.
+      const approved = await waitForReceipt(session, await session.send({ to: product.asset, data: encodeApproveCalldata(catalogAddress, product.price) }));
+      if (!approved || Number(approved.status) === 0) {
+        setText("co-status", approved ? statusText("FAILED") : statusText("UNKNOWN"));
+        return;
+      }
+    }
+    const hash = await session.send({ to: catalogAddress, data: encodeCall("buy(uint256)", [card.id]) });
+    setText("co-status", statusText("PENDING"));
+    const receipt = await waitForReceipt(session, hash);
+    if (!receipt) {
+      setText("co-status", statusText("UNKNOWN"));
+      return;
+    }
+    if (Number(receipt.status) === 0) {
+      setText("co-status", statusText("FAILED"));
+      return;
+    }
+    await settleProductVerdict({ config, card, session, hash });
+  } finally {
+    // A refused or failed attempt leaves the button usable: the customer decides whether to try again.
+    if (payBtn && !/Paid/.test(document.getElementById("co-status")?.textContent ?? "")) payBtn.disabled = false;
   }
-  const hash = await session.send({ to: catalogAddress, data: encodeCall("buy(uint256)", [card.id]) });
-  setText("co-status", statusText("PENDING"));
-  const receipt = await waitForReceipt(session, hash);
-  if (!receipt) {
-    setText("co-status", statusText("UNKNOWN"));
-    return;
-  }
-  if (Number(receipt.status) === 0) {
-    setText("co-status", statusText("FAILED"));
-    return;
-  }
-  await settleProductVerdict({ config, card, session, hash });
 }
 
 /** A sale is Paid only when the business's own payments say VERIFIED, never because a hash exists. */
@@ -786,7 +798,13 @@ async function renderOrder(config, orderId) {
         // Approve only when the allowance is actually short. A second approval of an amount the
         // spender already has costs the customer a confirmation and a fee for nothing.
         if (await allowanceShort(config, assetIn, session.address, settler, amountIn)) {
-          await session.send({ to: assetIn, data: encodeApproveCalldata(settler, amountIn) });
+          // Mined before the payment is sent, for the reason buyProduct gives.
+          const approved = await waitForReceipt(session, await session.send({ to: assetIn, data: encodeApproveCalldata(settler, amountIn) }));
+          if (!approved || Number(approved.status) === 0) {
+            setText("co-status", approved ? statusText("FAILED") : statusText("UNKNOWN"));
+            payBtn.disabled = false;
+            return;
+          }
         }
         const hash = await session.send({ to: settler, data: encodePayCalldata(card.id) });
         setText("co-status", statusText("PENDING"));
