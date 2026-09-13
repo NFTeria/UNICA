@@ -23,6 +23,7 @@ import { businessAccent, businessStyle } from "./brand.js";
 import { currentScheme, drawQr, fetchCatalog, markElement, readOnlySession } from "./business.js";
 import { encodeCall, decodeString } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
+import { businessAvatar } from "./ens-profile.js";
 import { loadConfig, say } from "./local.js";
 import { priceText } from "./products.js";
 import { resolveShop } from "./shop-resolve.js";
@@ -89,6 +90,17 @@ async function main() {
   await renderProducts(found.seller);
 }
 
+/** The business's picture over its accent square: its own ENS avatar record, else the avatar of the payout wallet's primary name; the square stays when neither exists or the image never loads. */
+async function drawBusinessPicture(config, square, business) {
+  const src = await businessAvatar(config, business);
+  if (!src) return;
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = "";
+  img.addEventListener("error", () => img.remove());
+  square.replaceChildren(img);
+}
+
 async function renderIdentity(config, found) {
   const block = document.getElementById("shop-id");
   if (block) block.hidden = false;
@@ -109,6 +121,7 @@ async function renderIdentity(config, found) {
 
   const square = document.getElementById("shop-badge");
   if (square && accent) square.setAttribute("style", businessStyle(accent));
+  if (square) drawBusinessPicture(config, square, found).catch(() => {});
   const holder = config.identityToken ?? null;
   if (!square || !holder || found.badgeTokenId === null || found.badgeTokenId === undefined) return;
   try {
