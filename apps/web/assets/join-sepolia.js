@@ -117,6 +117,21 @@ const lower = (v) => String(v ?? "").toLowerCase();
  * carry it, and `selfServe` is true on a network that has a sign-up contract — on which this whole
  * file is the wrong flow and the screen uses the one-button path instead.
  */
+/**
+ * What a business set up here is paid in and what its customers can pay with, from the deployment's
+ * own asset list: the payout asset, and the customer asset the Uniswap v4 market converts. Empty when
+ * the deployment names no payout asset, so the screen says nothing rather than something invented.
+ */
+export function assetsSentence(config) {
+  const assets = Array.isArray(config?.assets) ? config.assets : [];
+  const payout = assets.find((a) => a?.role === "payout" && a?.symbol)?.symbol ?? null;
+  if (!payout) return "";
+  const others = [...new Set(assets.filter((a) => a?.role === "customer" && a?.symbol && a.symbol !== payout).map((a) => a.symbol))];
+  const pays = others.length ? `${payout} directly, or ${others.join(" or ")} through the Uniswap v4 market` : `${payout} directly`;
+  const priced = others.length ? `${payout}, ${others.join(", ")} or any ERC-20 you name` : `${payout} or any ERC-20 you name`;
+  return `Paid in ${payout}. Customers pay in ${pays}. Products can be priced in ${priced}.`;
+}
+
 export function nameSettings(config) {
   const identity = config?.manifest?.identity ?? {};
   return {
