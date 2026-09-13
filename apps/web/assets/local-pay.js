@@ -391,8 +391,9 @@ async function readBadgeImage(config, badge) {
 }
 
 /** Who is being paid: the name, the pay name, and the badge or the business's own accent square. */
-async function renderIdentity(config) {
-  const identity = businessIdentity(config);
+/** The business header. `override` is the chain's answer for a public network's seller; without it the deployment's own record is the business. */
+async function renderIdentity(config, override = null) {
+  const identity = override ?? businessIdentity(config);
   setText("co-business", identity.display);
   setText("co-payname", identity.payName ?? "No pay name");
   const square = document.getElementById("co-badge");
@@ -466,6 +467,12 @@ async function renderShop(config, seller) {
     return;
   }
   const shop = shopCard(catalog, config);
+  const business = await resolveSeller(config, catalog.seller ?? seller);
+  if (business?.name) {
+    shop.identity = { ...shop.identity, payName: business.name, label: business.label, display: displayName(business.label), address: business.payout, node: business.merchantNode };
+    shop.integration = integrationForCheckout({ converts: false, priceChecked: false, payName: business.name });
+    await renderIdentity(config, shop.identity);
+  }
   showIntegration(shop.integration);
   const list = document.getElementById("co-shop");
   if (!list) return;
@@ -511,6 +518,7 @@ async function renderProduct(config, productId) {
   if (business?.name) {
     card.identity = { ...card.identity, payName: business.name, label: business.label, display: displayName(business.label), address: business.payout, node: business.merchantNode };
     card.integration = integrationForCheckout({ converts: false, priceChecked: false, payName: business.name });
+    await renderIdentity(config, card.identity);
   }
   renderCard(card);
   setText("co-price-note", card.kindText);

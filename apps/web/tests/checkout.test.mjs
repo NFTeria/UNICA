@@ -879,4 +879,7 @@ test("the product checkout asks the chain whose business the seller is before it
   assert.ok(resolve > 0, "renderProduct must resolve the seller's business");
   assert.ok(draw > resolve, "the card is drawn after the chain has answered, not before");
   assert.match(body, /card\.identity = \{ \.\.\.card\.identity, payName: business\.name/);
+  assert.ok(body.indexOf("renderIdentity(config, card.identity)") > resolve, "the business header is redrawn from the chain's answer");
+  const shopBody = src.slice(src.indexOf("async function renderShop("), src.indexOf("async function renderProduct("));
+  assert.ok(shopBody.includes("resolveSeller(config, catalog.seller ?? seller)") && shopBody.includes("renderIdentity(config, shop.identity)"), "the shop link does the same");
 });
