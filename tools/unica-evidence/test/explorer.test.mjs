@@ -95,3 +95,21 @@ test("status 0 is an empty range only when the explorer says no records; a refus
   const wrongChain = new ExplorerLogs({api: "https://x/api", rpc: node, fetchImpl: answer("NOTOK", "Invalid chainid")});
   await assert.rejects(() => wrongChain.logs({}), /NOTOK/);
 });
+
+test("a rate-limit answer in a 200 is a throttle too, and requests through one client are spaced, never raced", async () => {
+  const node = {blockNumber: async () => "0x10", receipt: async () => null, call: async () => "0x", send: async () => null};
+  const page = (rows) => ({ok: true, status: 200, headers: {get: () => null}, json: async () => ({status: "1", message: "OK", result: rows})});
+  const limited = () => ({ok: true, status: 200, headers: {get: () => null}, json: async () => ({status: "0", message: "NOTOK", result: "Max calls per sec rate limit reached (5/sec)"})});
+  const row = {address: "0xA", topics: ["0x1"], data: "0x", blockNumber: "0x1", logIndex: "0x0", transactionHash: "0xT", transactionIndex: "0x0"};
+  const slept = [];
+  let answers = [limited(), page([row])];
+  const client = new ExplorerLogs({api: "https://x/api", rpc: node, fetchImpl: async () => answers.shift(), sleepImpl: async (ms) => slept.push(ms)});
+  assert.equal((await client.logs({})).length, 1, "the answer after the rate-limit reply is the page");
+  assert.deepEqual(slept, [1000]);
+  // Spacing: three concurrent queries through one client leave the fetches at least the interval apart.
+  let clock = 0;
+  const stamps = [];
+  const spacedClient = new ExplorerLogs({api: "https://x/api", rpc: node, minIntervalMs: 250, fetchImpl: async () => (stamps.push(clock), page([])), sleepImpl: async (ms) => { clock += ms; }, nowImpl: () => clock});
+  await Promise.all([spacedClient.logs({}), spacedClient.logs({}), spacedClient.logs({})]);
+  assert.deepEqual(stamps, [0, 250, 500], "each request waits for the interval since the previous one");
+});

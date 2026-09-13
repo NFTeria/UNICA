@@ -62,7 +62,10 @@ export class ExplorerLogs {
   ///               `chainid` and `apikey` here; they never appear in an error message.
   /// @param retries  how many times a 429 or a 5xx is retried, with backoff (1 s, 2 s, 4 s …, or the
   ///               explorer's own Retry-After up to 10 s); every other status fails at once.
-  constructor({api, rpc, fetchImpl = globalThis.fetch, pageSize = 1000, timeoutMs = 30000, query = {}, retries = 3, sleepImpl = (ms) => new Promise((r) => setTimeout(r, ms))} = {}) {
+  /// @param minIntervalMs  the least time between two requests through this client. A projection asks
+  ///               for several log ranges at once; a keyed API allows a handful per second and answers
+  ///               the rest with "rate limit reached" in a 200, so requests are spaced, not raced.
+  constructor({api, rpc, fetchImpl = globalThis.fetch, pageSize = 1000, timeoutMs = 30000, query = {}, retries = 3, minIntervalMs = 0, sleepImpl = (ms) => new Promise((r) => setTimeout(r, ms)), nowImpl = () => Date.now()} = {}) {
     if (!api) throw new Error("ExplorerLogs needs the explorer API base");
     this.api = String(api).replace(/\/+$/, "");
     this.node = typeof rpc === "string" ? new ReadOnlyRpc(rpc) : rpc;
@@ -71,14 +74,34 @@ export class ExplorerLogs {
     this.timeoutMs = timeoutMs;
     this.query = query ?? {};
     this.retries = retries;
+    this.minIntervalMs = minIntervalMs;
     this.sleepImpl = sleepImpl;
+    this.nowImpl = nowImpl;
+    this.queue = Promise.resolve();
+    this.lastAt = -Infinity;
   }
 
+  /// One request at a time through this client, each at least minIntervalMs after the previous one.
+  spaced(task) {
+    const turn = this.queue.then(async () => {
+      const wait = this.minIntervalMs - (this.nowImpl() - this.lastAt);
+      if (wait > 0) await this.sleepImpl(wait);
+      this.lastAt = this.nowImpl();
+      return task();
+    });
+    this.queue = turn.catch(() => {});
+    return turn;
+  }
+
+  /// The parsed answer for one page, after the retries a throttle earns: a 429 or a 5xx, or a 200
+  /// whose body says the rate limit was reached. Anything else comes back as it is.
   async fetchPage(url) {
     for (let attempt = 0; ; attempt += 1) {
-      const res = await this.fetchImpl(url, {signal: AbortSignal.timeout(this.timeoutMs)});
-      const throttled = res.status === 429 || res.status >= 500;
-      if (res.ok || !throttled || attempt >= this.retries) return res;
+      const res = await this.spaced(() => this.fetchImpl(url, {signal: AbortSignal.timeout(this.timeoutMs)}));
+      const body = res.ok ? await res.json() : null;
+      const said = body && !Array.isArray(body?.result) ? `${String(body?.message ?? "")} ${String(body?.result ?? "")}` : "";
+      const throttled = res.status === 429 || res.status >= 500 || /rate limit/i.test(said);
+      if (!throttled || attempt >= this.retries) return {ok: res.ok, status: res.status, body};
       const after = Number(res.headers?.get?.("retry-after"));
       await this.sleepImpl(Number.isFinite(after) && after > 0 ? Math.min(after, 10) * 1000 : 1000 * 2 ** attempt);
     }
@@ -92,9 +115,8 @@ export class ExplorerLogs {
       q.set("page", String(page));
       q.set("offset", String(this.pageSize));
       for (const [k, v] of Object.entries(this.query)) if (v !== undefined && v !== null) q.set(k, String(v));
-      const res = await this.fetchPage(`${this.api}?${q.toString()}`);
-      if (!res.ok) throw new Error(`explorer answered HTTP ${res.status} for getLogs`);
-      const body = await res.json();
+      const {ok, status, body} = await this.fetchPage(`${this.api}?${q.toString()}`);
+      if (!ok) throw new Error(`explorer answered HTTP ${status} for getLogs`);
       const rows = Array.isArray(body?.result) ? body.result : [];
       // An Etherscan-style API says "status 0" both for an empty range ("No records found") and for a
       // refusal ("Missing/Invalid API Key", an unsupported chain). Only the first is an empty answer;

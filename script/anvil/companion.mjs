@@ -500,8 +500,11 @@ export function createCompanion({
     if (Number(manifest?.chainId) === LOCAL_CHAIN) return null;
     const chainId = Number(manifest?.chainId);
     const clients = [];
-    if (EXPLORER_KEY && Number.isFinite(chainId) && chainId > 0) clients.push(new ExplorerLogs({ api: ETHERSCAN_V2_API, rpc: RPC_URL, query: { chainid: String(chainId), apikey: EXPLORER_KEY } }));
-    if (manifest?.explorer?.kind === "blockscout" && manifest.explorer.api) clients.push(new ExplorerLogs({ api: manifest.explorer.api, rpc: RPC_URL }));
+    // Etherscan's free tier allows five requests a second and answers the sixth with "rate limit
+    // reached" in a 200; a projection asks for seven ranges at once. Spaced at four a second they all
+    // land. Blockscout is keyless and throttles a shared egress sooner, so it is spaced as well.
+    if (EXPLORER_KEY && Number.isFinite(chainId) && chainId > 0) clients.push(new ExplorerLogs({ api: ETHERSCAN_V2_API, rpc: RPC_URL, query: { chainid: String(chainId), apikey: EXPLORER_KEY }, minIntervalMs: 250 }));
+    if (manifest?.explorer?.kind === "blockscout" && manifest.explorer.api) clients.push(new ExplorerLogs({ api: manifest.explorer.api, rpc: RPC_URL, minIntervalMs: 200 }));
     return clients.length ? new LogsWithFallback(clients) : null;
   }
 
