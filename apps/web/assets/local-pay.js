@@ -54,6 +54,7 @@ import { parseTokenUri } from "./local-join.js";
 import { businessAccent, businessStyle } from "./brand.js";
 import { resolveSeller } from "./shop-resolve.js";
 import { businessAvatar, customerProfile } from "./ens-profile.js";
+import { silentReconnect } from "./session.js";
 import {
   NOT_FOUND_TEXT,
   businessIdentity,
@@ -490,6 +491,7 @@ async function main() {
   }
   setText("order-network", networkName(config.chainId));
   await renderIdentity(config);
+  announceSession(config).catch(() => {});
 
   const target = readPayTarget(location.search);
   if (target.malformed) {
@@ -1025,6 +1027,22 @@ async function renderOrder(config, orderId) {
       }
     });
   }
+}
+
+/**
+ * The page's own wallet line agrees with the header chip. A wallet the browser already approved for
+ * this site is named here on load, by its ENS name when the chain confirms one, so the customer is not
+ * told "No wallet is connected" beside a chip that says who they are. Nothing is asked of the wallet:
+ * this is the same silent `eth_accounts` read the header makes, and Pay still opens the wallet itself.
+ */
+async function announceSession(config) {
+  const found = await silentReconnect(config);
+  if (!found?.session?.address) return;
+  const { address } = found.session;
+  setText("wallet", `Connected ${shortAddress(address)}.`);
+  setText("network", networkName(config.chainId));
+  const profile = await customerProfile(config, address);
+  if (profile.name) setText("wallet", `Connected ${profile.name} (${shortAddress(address)}).`);
 }
 
 /** The one way in. The wallet's own approval flow is the sign-in; there is no second login here. */
