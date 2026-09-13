@@ -11,6 +11,12 @@
  * it says so; a figure nobody has read is an em dash. There is no sample product, no example
  * customer and no placeholder price anywhere on either screen.
  *
+ * WHAT A BUSINESS IS PAID IN IS ITS OWN CHOICE, PER PRODUCT. The "You are paid in" chooser ships
+ * empty and is filled by script from the assets the active deployment could actually name; the
+ * address box under it is for an asset it could not, and stays hidden until that option is picked.
+ * The price box's help sentence is the same one the script writes once an asset has settled, so the
+ * document and the script cannot end up saying two different things about the same number.
+ *
  * The tables are written out rather than taken from `dataTable()` because script fills their bodies
  * row by row and needs an element to address. Their structure is the design system's, cell for
  * cell; apps/web/DESIGN.md is the copy that governs.
@@ -29,7 +35,7 @@ export const PRODUCTS = [
     h1: "Products",
     title: "Products — UNICA",
     description:
-      "What this business sells: the name, the price, whether it is on sale, and the payment link and code for each one.",
+      "What this business sells: the name, the price and the asset it is priced in, whether it is on sale, and the payment link and code for each one.",
     ogTitle: "Products on UNICA",
     ogDescription: "What this business sells, and the link that pays for each.",
     ogImage: "og-merchant.svg",
@@ -47,7 +53,18 @@ ${C.statusRegion("products-said", "Your products have not been read yet.")}
 <h2>Add a product</h2>
 <div class="adm-form">
   ${C.field({ id: "product-name", label: "Name", help: "What your customers call it." })}
-  ${C.field({ id: "product-price", label: "Price", inputmode: "decimal", help: "In the asset you are paid in." })}
+  ${C.selectField({
+    id: "product-asset",
+    label: "You are paid in",
+    help: "Every asset this network can name, or one of your own by its address.",
+  })}
+  ${C.field({
+    id: "product-asset-address",
+    label: "Asset address",
+    placeholder: "0x…",
+    help: "Only when you chose another asset above. This screen reads its name and its decimal places before it will price anything in it.",
+  })}
+  ${C.field({ id: "product-price", label: "Price", inputmode: "decimal", help: "Choose what you are paid in above, then type the price in that asset." })}
   ${C.selectField({
     id: "product-kind",
     label: "Kind",

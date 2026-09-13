@@ -11,14 +11,21 @@
  * link. The link is on screen as selectable text beside its code, because a code somebody cannot
  * read out is no use over a telephone.
  *
+ * THE BUSINESS CHOOSES WHAT IT IS PAID IN, ONE PRODUCT AT A TIME. The catalogue keys a price to an
+ * asset, and takes any ERC-20 that has code, so this screen offers every asset the deployment can
+ * already name and lets a business type the address of one it cannot. The price box then reads in
+ * that asset and says so, because "25" means two different things in an asset with six decimal
+ * places and one with eighteen.
+ *
  * TWO ACTIONS SPEND A WALLET CONFIRMATION — adding a product and switching one on or off — and each
  * says so in one line before it is pressed. Neither is undone by this screen: a listing's terms
  * never move once it exists, which is what makes a payment link safe to hand out.
  *
  * The arithmetic and the calldata are pure functions at the top, so apps/web/tests/admin.test.mjs
- * exercises the real rule rather than a paraphrase of it.
+ * exercises the real rule rather than a paraphrase of it; the asset choice is the same shape, with
+ * its network reads injected, in apps/web/tests/products-asset.test.mjs.
  */
-import { abiEncode, encodeCall, selectorOf } from "./abi.js";
+import { abiEncode, decodeString, decodeUint, encodeCall, selectorOf } from "./abi.js";
 import { drawQr, fetchCatalog, noSignupLine, openAdmin, wireShare } from "./business.js";
 import { say, shortId } from "./local.js";
 import { fromBaseUnits, isAddress, toBaseUnits } from "./product.js";
@@ -61,6 +68,152 @@ export function priceText(product) {
 /** The three payment links this product has, exactly as the rest of the product spells them. */
 export function productLink(base, id) {
   return new URL(`pay/?product=${encodeURIComponent(String(id))}`, base).href;
+}
+
+// ---- what the business is paid in, per product ---------------------------------------------------
+
+/**
+ * The value of the one option in the chooser that is not an asset: an address the business types.
+ * A real asset's option value is its own address, so this word cannot collide with one.
+ */
+export const OTHER_ASSET = "other";
+
+const sameAddress = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
+
+/**
+ * Whether a price may be written in this asset at all. Both halves are required and neither can be
+ * guessed: without a symbol a customer reads a number with no name on it, and without the decimal
+ * count a typed "0.001" cannot be turned into base units — or, worse, is turned into the wrong ones.
+ */
+const canPrice = (asset) =>
+  Boolean(asset?.symbol) && Number.isInteger(asset?.decimals) && asset?.labelled !== false && isAddress(asset?.address);
+
+const entryOf = (asset) => ({ address: asset.address, symbol: asset.symbol, decimals: asset.decimals, known: true });
+
+/**
+ * What the "You are paid in" chooser offers.
+ *
+ * Every asset this deployment already read a name and a precision for, the one it pays out in
+ * first because that is what most products will be priced in, and then the option that is not a
+ * list at all. An asset this network could not label is left out rather than offered and refused:
+ * a choice that cannot be taken is not a choice.
+ */
+export function paidInOptions(config = {}) {
+  const assets = Array.isArray(config?.assets) ? config.assets : [];
+  const priceable = assets.filter(canPrice);
+  const ordered = [...priceable.filter((a) => a.role === "payout"), ...priceable.filter((a) => a.role !== "payout")];
+  return [
+    ...ordered.map((a) => ({ value: String(a.address), label: a.symbol, asset: entryOf(a) })),
+    { value: OTHER_ASSET, label: "Another asset by address", asset: null },
+  ];
+}
+
+/** True only when the network answered with bytes that are actually a program. */
+const hasCode = (code) => {
+  const h = String(code ?? "").trim().replace(/^0[xX]/, "");
+  return /^[0-9a-fA-F]+$/.test(h) && /[1-9a-fA-F]/.test(h);
+};
+
+/**
+ * The decimal count an asset answered with, or null when it answered nothing a count can be read
+ * from.
+ *
+ * WRITTEN THIS WAY BECAUSE `Number(null)` IS 0. A token with no `decimals()` at all would otherwise
+ * be taken for a token with none — and a price of "1" in an asset that really holds eighteen places
+ * would be listed a billion billion times too small. Nothing but an actual count is a count here.
+ */
+const decimalsFrom = (value) => {
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "number") return Number.isInteger(value) ? value : null;
+  const text = String(value ?? "").trim();
+  return /^\d+$/.test(text) ? Number(text) : null;
+};
+
+/**
+ * Which asset this product is priced in, from what the business chose — or the one sentence saying
+ * why the choice cannot be taken.
+ *
+ * THE CATALOGUE TAKES ANY ERC-20 THAT HAS CODE, so the business is not held to the deployment's
+ * own two assets. An address it has never seen is not taken on trust either: `read` asks the
+ * network whether anything is deployed there, what it calls itself and how many decimal places it
+ * holds, and every one of the three has to answer. A price set against an asset whose precision
+ * nobody read is wrong by whatever factor the guess was out by, and the customer is the one who
+ * pays that.
+ *
+ * `read` is injected, so apps/web/tests/products-asset.test.mjs exercises this rule against
+ * answers it writes itself rather than against a chain.
+ */
+export async function assetChoice({ choice, assets = [], address = null, read = null } = {}) {
+  const list = Array.isArray(assets) ? assets : [];
+  const picked = String(choice ?? "").trim();
+
+  if (picked !== OTHER_ASSET) {
+    const known = list.find((a) => sameAddress(a?.address, picked));
+    if (!known) return { ok: false, error: "Choose which asset you are paid in for this product." };
+    if (!canPrice(known)) {
+      return { ok: false, error: "This network did not say what that asset is called or how many decimal places it holds, so nothing can be priced in it." };
+    }
+    return { ok: true, asset: entryOf(known) };
+  }
+
+  const pasted = String(address ?? "").trim();
+  if (!isAddress(pasted)) return { ok: false, error: "An asset's address is 0x followed by forty letters or digits." };
+  if (typeof read !== "function") return { ok: false, error: "This screen cannot reach the network to check that address." };
+
+  let answered;
+  try {
+    answered = await read(pasted);
+  } catch (e) {
+    return { ok: false, error: `That address could not be read just now: ${e.message}` };
+  }
+  if (!hasCode(answered?.code)) {
+    return { ok: false, error: "Nothing is deployed at that address on this network, so it cannot be an asset." };
+  }
+  const decimals = decimalsFrom(answered?.decimals);
+  if (decimals === null || decimals < 0 || decimals > 36) {
+    return { ok: false, error: "That address did not say how many decimal places it holds, so a price in it cannot be worked out." };
+  }
+  const symbol = String(answered?.symbol ?? "").trim();
+  if (!symbol) {
+    return { ok: false, error: "That address did not say what it is called, so a customer would be shown a price with no name on it." };
+  }
+  return { ok: true, asset: { address: pasted, symbol, decimals, known: false } };
+}
+
+/**
+ * What the network says about one address: whether anything is deployed there, what it calls
+ * itself, and how many decimal places it holds.
+ *
+ * The two token reads answer null when they revert, because a contract that has no `symbol()` is
+ * an ordinary answer this screen has a sentence for. `eth_getCode` is NOT softened the same way: a
+ * node that cannot be reached must not look like an address with nothing at it, so that one throws
+ * and `assetChoice` says the address could not be read rather than that it is empty.
+ */
+export function assetReaderFor(session) {
+  const quiet = async (run) => {
+    try {
+      return await run();
+    } catch {
+      return null;
+    }
+  };
+  return async (address) => {
+    const code = await session.request("eth_getCode", [address, "latest"]);
+    const symbolHex = await quiet(() => session.call({ to: address, data: encodeCall("symbol()", []) }));
+    const decimalsHex = await quiet(() => session.call({ to: address, data: encodeCall("decimals()", []) }));
+    const places = decimalsHex ? decodeUint(decimalsHex) : null;
+    return {
+      code,
+      symbol: symbolHex ? decodeString(symbolHex) : null,
+      decimals: places === null || places === undefined ? null : Number(places),
+    };
+  };
+}
+
+/** The one line under the price box. It names the chosen asset, because the number is in that asset. */
+export function priceHint(asset) {
+  if (!asset?.symbol) return "Choose what you are paid in above, then type the price in that asset.";
+  return `In ${asset.symbol}, the asset you are paid in for this product.`;
 }
 
 /**
@@ -151,12 +304,20 @@ async function main() {
   const open = await openAdmin("../../");
   if (!open) return;
   const { config, session, business, wallet } = open;
-  const payoutAsset = (config.assets ?? []).find((a) => a.role === "payout") ?? null;
-  state = { config, session, business, wallet, payoutAsset, catalog: config.contracts?.productCatalog ?? null };
+  state = {
+    config,
+    session,
+    business,
+    wallet,
+    catalog: config.contracts?.productCatalog ?? null,
+    asset: null, // what the next product is priced in; nothing until the chooser has settled one
+    readAsset: assetReaderFor(session),
+  };
 
   await renderList(session.address);
   wireForm();
 }
+
 
 async function renderList(seller) {
   const list = document.getElementById("product-list");
@@ -284,6 +445,73 @@ function wireToggle(root, product) {
   });
 }
 
+/**
+ * The chooser, its address box, and the price hint that follows whichever asset won.
+ *
+ * A read is racy by nature — a person can paste a second address before the first has answered —
+ * so every read carries a token and a stale answer is dropped. Without that, the slower of two
+ * reads would decide what the product is priced in, which is the one kind of wrong this screen
+ * would never show a sign of.
+ */
+let assetReadToken = 0;
+
+/**
+ * The sentence the DOCUMENT shipped under the address box, captured once and put back after every
+ * transient line this screen writes there. Taking it from the page rather than repeating it here
+ * is what stops the served HTML and this script from drifting into saying two different things.
+ */
+let assetAddressHelp = "";
+
+function fillAssetChooser(select) {
+  if (!select) return;
+  const options = paidInOptions(state?.config ?? {});
+  select.replaceChildren();
+  for (const option of options) {
+    const el = document.createElement("option");
+    el.value = option.value;
+    el.textContent = option.label;
+    select.appendChild(el);
+  }
+}
+
+async function settleAsset() {
+  const select = document.getElementById("product-asset");
+  const box = document.getElementById("product-asset-address");
+  const field = box?.closest(".formfield") ?? null;
+  const pasting = (select?.value ?? "") === OTHER_ASSET;
+  if (field) field.hidden = !pasting;
+
+  const typed = String(box?.value ?? "").trim();
+  if (pasting && typed === "") {
+    state.asset = null;
+    assetReadToken++; // an answer still in flight belongs to an address that is no longer typed
+    say("product-asset-address-error", "");
+    say("product-asset-address-help", assetAddressHelp);
+    say("product-price-help", priceHint(null));
+    return;
+  }
+  if (pasting) say("product-asset-address-help", "Reading that asset from the network…");
+
+  const token = ++assetReadToken;
+  const chosen = await assetChoice({
+    choice: select?.value ?? "",
+    assets: state?.config?.assets ?? [],
+    address: typed,
+    read: state?.readAsset ?? null,
+  });
+  if (token !== assetReadToken) return;
+
+  state.asset = chosen.ok ? chosen.asset : null;
+  say("product-asset-address-error", chosen.ok ? "" : chosen.error);
+  if (pasting) {
+    say(
+      "product-asset-address-help",
+      chosen.ok ? `${chosen.asset.symbol}, ${chosen.asset.decimals} decimal places, read from the network.` : assetAddressHelp,
+    );
+  }
+  say("product-price-help", priceHint(state.asset));
+}
+
 function wireForm() {
   const button = document.getElementById("product-add");
   const kind = document.getElementById("product-kind");
@@ -291,8 +519,13 @@ function wireForm() {
   const buyer = document.getElementById("product-buyer");
   if (!button) return;
 
-  const symbol = document.getElementById("product-price-help");
-  if (symbol && state?.payoutAsset?.symbol) symbol.textContent = `In ${state.payoutAsset.symbol}, the asset you are paid in.`;
+  const chooser = document.getElementById("product-asset");
+  const assetAddress = document.getElementById("product-asset-address");
+  assetAddressHelp = document.getElementById("product-asset-address-help")?.textContent ?? "";
+  fillAssetChooser(chooser);
+  chooser?.addEventListener("change", () => void settleAsset());
+  assetAddress?.addEventListener("change", () => void settleAsset());
+  void settleAsset();
 
   const follow = () => {
     const chosen = kind?.value ?? "one-off";
@@ -316,9 +549,9 @@ function wireForm() {
       kind: kind?.value,
       days: period?.value,
       onlyBuyer: buyer?.value,
-      asset: state.payoutAsset?.address ?? null,
+      asset: state.asset?.address ?? null,
       payout: state.wallet,
-      decimals: state.payoutAsset?.decimals ?? null,
+      decimals: state.asset?.decimals ?? null,
     });
     if (!plan.ok) {
       say("product-add-said", plan.error);
