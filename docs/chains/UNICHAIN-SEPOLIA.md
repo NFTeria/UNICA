@@ -1,5 +1,14 @@
 # Unichain Sepolia (chain 1301) — what is verified, what is not, and what a deploy would take
 
+> **SUPERSEDED on 2026-09-12 — read this before the sentence under it.** What follows was true when
+> this page was written on 2026-09-09 and is false now. A UNICA v5 market is deployed on chain 1301,
+> and its hook, factory and executor are source-verified — read back from Etherscan V2 for chain 1301
+> on 2026-09-13, which answers for this chain; `deployments/unica-v4/1301.json` records the deployment
+> and names Sourcify as the venue that was attempted, which is where that record is inaccurate.
+> The compatibility findings below stand unchanged: a deployed market proves this chain's PoolManager
+> accepts the hook and the pool, and proves nothing about liquidity. The original sentence is left
+> standing, unedited.
+
 **UNICA is not deployed on this chain, has never been deployed on this chain, and cannot be
 deployed on it today without a change to a frozen source file.** Everything below is a read of the
 chain or a fork of it. Nothing here was broadcast. Every claim is re-checkable by running

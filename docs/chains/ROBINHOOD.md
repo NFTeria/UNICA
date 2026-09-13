@@ -1,5 +1,14 @@
 # Robinhood testnet (chain 46630) — what is actually there
 
+> **SUPERSEDED on 2026-09-12 — read this before the sentence under it.** What follows was true when
+> this page was written on 2026-09-09 and is false now. A UNICA v5 market is deployed on chain 46630,
+> and its factory, registry, hook and executor are source-verified on the chain's own Blockscout
+> explorer; `deployments/unica-v4/46630.json` records the deployment and `docs/V5-LAUNCH-RUNBOOK.md`
+> the stages that produced it. The closing section of this page carries the full correction and what
+> the market is and is not. Nothing has settled through it: the hook and the catalogue both read zero
+> transactions. The original sentence is left standing, unedited, because a page that quietly rewrites
+> its own past is not evidence of anything.
+
 **UNICA is not deployed on this chain, has never been deployed on this chain, and cannot be
 deployed on it today without a change to a frozen source file.** Everything below is a read of the
 chain, a read of a fork of it, or a read of a primary document that is named. Nothing here was
