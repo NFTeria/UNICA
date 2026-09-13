@@ -24,7 +24,7 @@
  * decimal count the chain itself answered with, carried in on the configuration object, never from
  * a literal written into this file.
  */
-import { fromBaseUnits } from "./product.js";
+import { assetLabel, fromBaseUnits } from "./product.js";
 
 /** The name a person reads for the chain's own asset — the one their wallet shows a balance of. */
 export const NATIVE_SYMBOL = "ETH";
@@ -104,6 +104,23 @@ export function wrapPlan({ need, wethBalance, ethBalance, gasMargin = GAS_MARGIN
     };
   }
   return { ok: true, wrap: shortfall, shortfall, why: "This wallet's ETH covers the difference, so that much is wrapped first." };
+}
+
+/**
+ * The name of a payment asset as a business reads it on the register.
+ *
+ * The wrapped native asset carries its second half — a customer holding plain ETH can pay a price
+ * named in it, and somebody standing at a counter has no other way to know that. Nothing about the
+ * sale changes: the order is still created in the wrapped asset, at the wrapped asset's amount, and
+ * the wrap happens in the customer's own wallet at the moment they pay. Every other asset reads
+ * exactly as it did, because a note like this on an asset that cannot do it would be a promise the
+ * checkout could not keep.
+ */
+export const WRAPPED_NATIVE_NOTE = `or ${NATIVE_SYMBOL}, wrapped at payment`;
+
+export function payAssetLabel(asset) {
+  const label = assetLabel(asset);
+  return isWrappedNative(asset) ? `${label} — ${WRAPPED_NATIVE_NOTE}` : label;
 }
 
 /** `0x…`, the hex quantity a transaction's `value` is given as. Never negative, never padded. */

@@ -33,7 +33,6 @@ import { fillAdvanced, loadConfig, loadEvidence, say, shortId, show } from "./lo
 import { listRegisters, readBusinessJoined } from "./local-join.js";
 import {
   ASSET_STATUS,
-  assetLabel,
   assetMenu,
   chooseSettlementRoute,
   formatAsset,
@@ -48,6 +47,7 @@ import {
 import { loadQr, qrSvg } from "./qr.js";
 import { readBusiness, silentReconnect } from "./session.js";
 import { waitForReceipt } from "./wallet.js";
+import { payAssetLabel } from "./wrap.js";
 
 /** How long a customer has to pay before the sale stops being payable, in seconds. */
 export const PAYMENT_WINDOW_SECONDS = 900;
@@ -500,7 +500,9 @@ function renderAssets(menu) {
     if (button.disabled) button.setAttribute("aria-describedby", "pay-assets-why");
     const sym = document.createElement("span");
     sym.className = "pos-asset-sym";
-    sym.textContent = assetLabel(asset);
+    // The wrapped native asset says so here, because the business is the one who has to know that
+    // a customer holding plain ETH can still pay. The sale itself is unchanged.
+    sym.textContent = payAssetLabel(asset);
     const pill = document.createElement("span");
     pill.className = "availability";
     pill.dataset.status = asset.status;
