@@ -11,8 +11,11 @@ where. Both statements are true at once.
 **Who did what.** An AI coding assistant, directed by the owner in an interactive
 session, drafted the files listed below and ran the local git, build, and test
 commands. The owner set the design, made every ruling recorded in the design documents,
-reviewed the output, and holds the keys: every on-chain broadcast, every account, every
-form, and every purchase is the owner's own action, performed outside the assistant.
+reviewed the output, and holds the keys: every on-chain broadcast, every account, and every
+purchase is the owner's own action, and every wallet signature was the owner's, given in the
+wallet itself. The assistant also assisted with browser-based testing of the deployed product and,
+under the owner's direction, with filling and verifying the event submission form. No private key
+or seed phrase was ever shared with it.
 
 ## Tools
 
