@@ -34,6 +34,7 @@ import { test } from "node:test";
 import {
   OTHER_ASSET,
   assetChoice,
+  assetSaid,
   assetReaderFor,
   listCalldata,
   newProductPlan,
@@ -405,6 +406,42 @@ test("the price hint names the asset that was chosen, and says so when none has 
   assert.match(priceHint({ symbol: null, decimals: 18 }), /Choose what you are paid in/);
 });
 
+// ---- where a refusal is written, which decides whether anybody reads it ------------------------------
+
+const SHIPPED_HELP = "Only when you chose another asset above.";
+
+test("a refusal about an asset from the chooser goes under the price, which is never hidden", () => {
+  const said = assetSaid({ ok: false, error: "This network did not say what that asset is called." }, { pasting: false, help: SHIPPED_HELP });
+  assert.equal(said.price, "This network did not say what that asset is called.");
+  // ...and NOT into the address box's error, whose whole field is hidden while the chooser is in use.
+  assert.equal(said.error, "");
+});
+
+test("a refusal about a typed address goes to that box's own error, which is on screen", () => {
+  const said = assetSaid({ ok: false, error: "Nothing is deployed at that address on this network." }, { pasting: true, help: SHIPPED_HELP });
+  assert.equal(said.error, "Nothing is deployed at that address on this network.");
+  assert.match(said.price, /Choose what you are paid in/);
+  assert.equal(said.help, SHIPPED_HELP);
+});
+
+test("control: no refusal is ever written to a node the chooser has hidden", () => {
+  // The one rule the two rows above exist to enforce, stated once over both paths.
+  for (const pasting of [true, false]) {
+    const said = assetSaid({ ok: false, error: "refused" }, { pasting, help: SHIPPED_HELP });
+    assert.equal([said.error, said.price].includes("refused"), true, `a refusal vanished when pasting=${pasting}`);
+    if (!pasting) assert.notEqual(said.error, "refused");
+  }
+});
+
+test("an asset that settled says what it is, in both places that carry a sentence about it", () => {
+  const chosen = { ok: true, asset: { address: WETH, symbol: "WETH", decimals: 18, known: false } };
+  assert.equal(assetSaid(chosen, { pasting: true, help: SHIPPED_HELP }).help, "WETH, 18 decimal places, read from the network.");
+  assert.equal(assetSaid(chosen, { pasting: true, help: SHIPPED_HELP }).price, priceHint(chosen.asset));
+  // Chosen from the list, the address box is not on screen, so its help stays the document's own.
+  assert.equal(assetSaid(chosen, { pasting: false, help: SHIPPED_HELP }).help, SHIPPED_HELP);
+  assert.equal(assetSaid(chosen, { pasting: false, help: SHIPPED_HELP }).error, "");
+});
+
 // ---- the price, in whatever asset was chosen --------------------------------------------------------
 
 const FORM = { name: "Studio hour", kind: "one-off", payout: PAYOUT_WALLET };
@@ -507,6 +544,9 @@ test("the script fills the chooser from the deployment and prices against what i
   assert.match(script, /fillAssetChooser/);
   assert.match(script, /paidInOptions\(/);
   assert.match(script, /await assetChoice\(/);
+  assert.match(script, /assetSaid\(chosen, \{ pasting, help: assetAddressHelp \}\)/);
+  // The refusal must not go straight to the hidden node again. One call site, decided by assetSaid.
+  assert.equal(/say\("product-asset-address-error", chosen\.ok \? "" : chosen\.error\)/.test(script), false);
   assert.match(script, /readAsset: assetReaderFor\(session\)/);
   assert.match(script, /asset: state\.asset\?\.address \?\? null/);
   assert.match(script, /decimals: state\.asset\?\.decimals \?\? null/);
