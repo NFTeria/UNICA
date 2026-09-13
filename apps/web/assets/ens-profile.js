@@ -146,6 +146,21 @@ export async function avatarOf(config, name, call = callerFor(config)) {
   }
 }
 
+/**
+ * A business's picture, found without anyone configuring it: the business name's own avatar record
+ * first, then the avatar of the primary name its payout wallet carries (a business run from a wallet
+ * that already has a picture shows that picture), else null and the caller keeps its own mark.
+ */
+export async function businessAvatar(config, business, call = callerFor(config)) {
+  if (Number(config?.chainId) !== ENS_CHAIN_ID || !business) return null;
+  const own = business.name ? await avatarOf(config, business.name, call) : null;
+  if (own) return own;
+  const wallet = business.payout ?? business.seller ?? business.address ?? null;
+  if (!wallet) return null;
+  const profile = await customerProfile(config, wallet, call);
+  return profile.avatar ?? null;
+}
+
 /** { name, avatar } for a wallet: both null when the wallet has no verified name. Never throws. */
 export async function customerProfile(config, address, call = callerFor(config)) {
   const name = await primaryName(config, address, call);

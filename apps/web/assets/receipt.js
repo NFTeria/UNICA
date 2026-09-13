@@ -26,7 +26,7 @@ import { businessAccent, businessStyle } from "./brand.js";
 import { decodeString, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
 import { resolveSeller } from "./shop-resolve.js";
-import { avatarFallback, customerProfile } from "./ens-profile.js";
+import { avatarFallback, businessAvatar, customerProfile } from "./ens-profile.js";
 import {
   displayName,
   businessIdentity,
@@ -186,6 +186,17 @@ async function renderIdentity(config, business = null) {
   const square = document.getElementById("r-badge");
   const accent = businessAccent(identity.node, scheme());
   if (square && accent) square.setAttribute("style", businessStyle(accent));
+  if (square && resolved) {
+    // The business's own picture over its accent square, found without anyone configuring it.
+    businessAvatar(config, resolved).then((src) => {
+      if (!src) return;
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "";
+      img.addEventListener("error", () => img.remove());
+      square.replaceChildren(img);
+    }).catch(() => {});
+  }
   if (square && identity.badge) {
     try {
       const answer = await rpcRequest(config.rpc, "eth_call", [

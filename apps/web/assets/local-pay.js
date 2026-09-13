@@ -44,7 +44,7 @@ import { decodeString, decodeUint, encodeCall } from "./abi.js";
 import { parseTokenUri } from "./local-join.js";
 import { businessAccent, businessStyle } from "./brand.js";
 import { resolveSeller } from "./shop-resolve.js";
-import { customerProfile } from "./ens-profile.js";
+import { businessAvatar, customerProfile } from "./ens-profile.js";
 import {
   NOT_FOUND_TEXT,
   businessIdentity,
@@ -392,6 +392,17 @@ async function readBadgeImage(config, badge) {
 }
 
 /** Who is being paid: the name, the pay name, and the badge or the business's own accent square. */
+/** The business's picture over its accent square, when the chain has one for it; the square stays when a picture never loads. */
+async function drawBusinessPicture(config, square, business) {
+  const src = await businessAvatar(config, business);
+  if (!src) return;
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = "";
+  img.addEventListener("error", () => img.remove());
+  square.replaceChildren(img);
+}
+
 /** The business header. `override` is the chain's answer for a public network's seller; without it the deployment's own record is the business. */
 async function renderIdentity(config, override = null) {
   const identity = override ?? businessIdentity(config);
@@ -400,6 +411,7 @@ async function renderIdentity(config, override = null) {
   const square = document.getElementById("co-badge");
   const accent = businessAccent(identity.node, scheme());
   if (square && accent) square.setAttribute("style", businessStyle(accent));
+  if (square && override) drawBusinessPicture(config, square, override).catch(() => {});
   if (square && identity.badge) {
     const art = await readBadgeImage(config, identity.badge);
     if (art?.image) {

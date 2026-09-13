@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { UNIVERSAL_RESOLVER, avatarFallback, avatarOf, avatarSource, customerProfile, decodeResolveReturn, decodeReverseReturn, dnsEncode, encodeResolveCall, encodeReverseCall, namehash, primaryName } from "../assets/ens-profile.js";
+import { UNIVERSAL_RESOLVER, avatarFallback, avatarOf, avatarSource, businessAvatar, customerProfile, decodeResolveReturn, decodeReverseReturn, dnsEncode, encodeResolveCall, encodeReverseCall, namehash, primaryName } from "../assets/ens-profile.js";
 import { encodeCall, wordsOf } from "../assets/abi.js";
 
 const CUSTOMER = "0x19E56831a10d43CfF5d77f886c799C6b916da7Ae";
@@ -78,4 +78,28 @@ test("a name with no avatar record gets the same gradient every time, and two na
   assert.match(a, /^radial-gradient\(circle at 30% 30%, hsl\(\d+ 72% 62%\), hsl\(\d+ 70% 38%\)\)$/);
   const seen = new Set(["consumer.eth", "nfteria.eth", "freshcuts.unica.eth", "alice.eth", "bob.eth", "carol.eth"].map(avatarFallback));
   assert.equal(seen.size, 6);
+});
+
+test("a business's picture is its own avatar record first, then the avatar of its payout wallet's primary name, else nothing", async () => {
+  const business = { name: "freshcuts.unica.eth", payout: OTHER, merchantNode: "0x" + "f2".repeat(32) };
+  // OTHER's primary name is nfteria.eth (planted reverse answer) and that name has an avatar; the business name itself has none.
+  const reverseFor = (name) => {
+    const hex = Buffer.from(name, "utf8").toString("hex");
+    return "0x" + word("60") + word("f79a6184d2dd6f82086955cb2fbfd15b46fa5c70") + word("ae66c62acae72098bdac57d8e8aed53ef000b2ba") + word(name.length.toString(16)) + hex.padEnd(64, "0");
+  };
+  const chain = ({ ownAvatar, walletAvatar }) => async (to, data) => {
+    if (data.startsWith("0x5d78a217")) return reverseFor("nfteria.eth");
+    if (data.includes("3b3b57de")) return resolveReturn(word(OTHER));
+    if (data.includes("59d1d43c")) {
+      // the business subname's text call carries its own namehash; the wallet's name carries another
+      const isBusiness = data.includes(namehash("freshcuts.unica.eth").slice(2));
+      return resolveReturn(stringReturn(isBusiness ? ownAvatar : walletAvatar));
+    }
+    throw new Error("unexpected call");
+  };
+  assert.equal(await businessAvatar(config, business, chain({ ownAvatar: "https://example.invalid/shop.png", walletAvatar: "https://example.invalid/owner.jpg" })), "https://example.invalid/shop.png", "the business's own record wins");
+  assert.equal(await businessAvatar(config, business, chain({ ownAvatar: "", walletAvatar: "https://euc.li/sepolia/nfteria.eth" })), "https://euc.li/sepolia/nfteria.eth", "then the payout wallet's own name's picture");
+  assert.equal(await businessAvatar(config, business, chain({ ownAvatar: "", walletAvatar: "" })), null, "else nothing, and the caller keeps its mark");
+  assert.equal(await businessAvatar({ chainId: 84532 }, business, chain({ ownAvatar: "x", walletAvatar: "x" })), null);
+  assert.equal(await businessAvatar(config, null, chain({})), null);
 });

@@ -928,6 +928,8 @@ test("the customer is named on the checkout and on the receipt only through the 
   assert.match(markup, /id="r-payer-name"/);
   assert.match(markup, /id="r-payer-avatar"/);
   assert.match(receipt, /avatarFallback\(profile\.name\)/, "a nameless ring never shows: the gradient goes first, the picture over it");
+  assert.match(receipt, /businessAvatar\(config, resolved\)/, "the business's picture is looked up from the chain's answer on the receipt");
+  assert.match(pay, /drawBusinessPicture\(config, square, override\)/, "and on the checkout");
   const css = readFileSync(new URL("../assets/screens/checkout.css", import.meta.url), "utf8");
   assert.match(css, /\.r-avatar \{[^}]*width: 32px;[^}]*border-radius: 50%/, "a 32px circle, the ENS app's own chip size");
 });
