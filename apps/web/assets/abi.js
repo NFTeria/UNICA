@@ -101,10 +101,27 @@ function encodeStatic(type, value) {
   }
 }
 
+/** Raw bytes of `h` as hex, right-padded to a whole number of 32-byte words. */
+export function paddedBytesHex(h) {
+  const hex = stripHex(h ?? "").toLowerCase();
+  if (!/^[0-9a-f]*$/.test(hex) || hex.length % 2 !== 0) throw new Error(`not a whole number of bytes: ${h}`);
+  const remainder = hex.length % WORD;
+  return { hex: remainder === 0 ? hex : hex + "0".repeat(WORD - remainder), byteLength: hex.length / 2 };
+}
+
 function encodeDynamic(type, value) {
-  if (type !== "string") throw new Error(`unsupported dynamic type: ${type}`);
-  const { hex, byteLength } = paddedUtf8Hex(value);
-  return wordFromUint(byteLength) + hex;
+  // A dynamic argument is its length in a word, then its bytes right-padded to a word boundary.
+  // `string` counts UTF-8 bytes; `bytes` is already bytes and is never re-encoded as text — a DNS
+  // name run through a text encoder would be a different, silently wrong argument.
+  if (type === "string") {
+    const { hex, byteLength } = paddedUtf8Hex(value);
+    return wordFromUint(byteLength) + hex;
+  }
+  if (type === "bytes") {
+    const { hex, byteLength } = paddedBytesHex(value);
+    return wordFromUint(byteLength) + hex;
+  }
+  throw new Error(`unsupported dynamic type: ${type}`);
 }
 
 /**
