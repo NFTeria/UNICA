@@ -18,8 +18,12 @@ show() { [ -n "$1" ] && printf '      %s\n' "$1"; }
 canaries=$(git grep --untracked -nE 'CANARY-[a-z]+-[0-9a-f]{8,}' -- . 2>/dev/null | grep -vE '^script/check-cre-confidentiality\.sh:' || true)
 chk "no generated canary value is tracked" "[ -z \"\$canaries\" ]"; show "$canaries"
 
-# 2. populated secret assignments in the CRE trees. NAMES are fine; a VALUE is not.
-populated=$(git grep --untracked -nE '^[[:space:]]*(UNICA_[A-Z0-9_]+|CRE_[A-Z0-9_]+)=[^[:space:]#]' \
+# 2. populated secret assignments in the CRE trees. NAMES are fine; a VALUE is not. Every UNICA_ and
+# CRE_ name is treated as a secret name, so a non-secret shell variable takes another name
+# (install-collector.sh's CLI_DIR) rather than this rule learning to guess what a value is. One
+# definition, used by the scan below AND by its controls, so a control cannot pass on a copy.
+POPULATED_RE='^[[:space:]]*(UNICA_[A-Z0-9_]+|CRE_[A-Z0-9_]+)=[^[:space:]#]'
+populated=$(git grep --untracked -nE "$POPULATED_RE" \
   -- integrations/chainlink-cre-robinhood \
      integrations/chainlink-cre-guardian 2>/dev/null || true)
 chk "no populated secret assignment in either CRE tree" "[ -z \"\$populated\" ]"; show "$populated"
@@ -58,7 +62,7 @@ chk "control: a planted canary IS caught" "git grep --untracked -qE 'CANARY-[a-z
 # and a realistic-looking credential here would trip that scanner instead of this one.
 printf 'UNICA_RH_QUOTE_CREDENTIAL=planted-populated-value\n' > "$probe/b.env.txt"
 chk "control: a planted populated assignment IS caught" \
-  "git grep --untracked -qE '^[[:space:]]*UNICA_[A-Z0-9_]+=[^[:space:]#]' -- $probe"
+  "git grep --untracked -qE \"\$POPULATED_RE\" -- $probe/b.env.txt"
 printf 'This settlement is CRE-verified on chain.\n' > "$probe/c.md"
 chk "control: a planted CRE-verified claim IS caught" \
   "git grep --untracked -inE 'CRE[- ]verified' -- $probe | grep -viE \"\$NEG\" | grep -q ."
@@ -67,7 +71,19 @@ chk "control: a truthful DENIAL is NOT caught" \
   "! (git grep --untracked -inE 'CRE[- ]verified' -- $probe/d.md | grep -viE \"\$NEG\" | grep -q .)"
 printf 'UNICA_RH_QUOTE_CREDENTIAL=\n' > "$probe/e.env.txt"
 chk "control: an EMPTY assignment (a name only) is NOT caught" \
-  "! git grep --untracked -qE '^[[:space:]]*UNICA_[A-Z0-9_]+=[^[:space:]#]' -- $probe/e.env.txt"
+  "[ -s $probe/e.env.txt ] && ! git grep --untracked -qE \"\$POPULATED_RE\" -- $probe/e.env.txt"
+# The CRE_ half of the reserved namespace: any value is refused, whatever its shape -- the rename
+# in install-collector.sh did not narrow this rule. Named like the UNICA_ control above and for the
+# same reason: a PRIVATE_KEY/SECRET/API_KEY label here would trip script/scan.sh instead.
+printf 'CRE_RH_QUOTE_CREDENTIAL=planted-populated-value\n' > "$probe/f.env.txt"
+chk "control: a planted populated CRE_ assignment IS caught" \
+  "git grep --untracked -qE \"\$POPULATED_RE\" -- $probe/f.env.txt"
+# The collector's own line, under a name outside the two prefixes, is not caught. It is the NAME
+# that decides: the same value under a CRE_ name is still refused, as the control above shows.
+# A negative control must also prove its file exists, or a missing file would read as "not caught".
+printf 'CLI_DIR="$(dirname "$(command -v cre)")"\n' > "$probe/g.sh"
+chk "control: a path variable outside the reserved prefixes is NOT caught" \
+  "[ -s $probe/g.sh ] && ! git grep --untracked -qE \"\$POPULATED_RE\" -- $probe/g.sh"
 
 echo "checks run: $((ok+fail)), passed: $ok, failed: $fail"
 [ "$fail" -eq 0 ]

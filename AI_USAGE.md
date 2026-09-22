@@ -185,6 +185,17 @@ the assistant. No commit carries an AI trailer; this table is the disclosure.
 Still **not** AI-authored and unchanged: `vy/src/unica/` and `vypersetup/` (carried-in prior art,
 held under ruling V9), `vy/src/namemath.vy` and `vy/src/logobackground.vy` (legacy, ruling H10).
 
+## Addition — 2026-09-22, the CRE confidentiality check's false positive
+
+Paths this change touched that the lists above did not name. Same tool, same interactive
+direction, same authorship rule. `integrations/chainlink-cre-guardian/install-collector.sh` is
+already covered by the guardian row above.
+
+| Path | Tool | Nature of assistance |
+|---|---|---|
+| `script/check-cre-confidentiality.sh` | Claude Code, `claude-opus-5` | one regex shared by the populated-assignment scan and its controls, two control rows (a populated `CRE_` assignment is caught; the collector's line under a name outside both prefixes is not), and a file-exists guard on the negative controls |
+| `docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md`, `docs/unica-v5/chainlink/DEMO-PLAN.md`, `docs/unica-v5/chainlink/PEER-COMPARISON.md` | Claude Code, `claude-opus-5` | the check counts these documents state: 12 checks to 14 everywhere, and five controls to seven where a control count is stated |
+
 ## Third-party dependency in the web build (declared, never retyped)
 
 | Package | Licence | How it reaches the site | Why |

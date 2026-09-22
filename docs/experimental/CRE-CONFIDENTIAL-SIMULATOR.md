@@ -91,8 +91,8 @@ and a context that includes the private policy DOES leak, which is why policy is
 
 ## 5. Repository scan
 
-`script/check-cre-confidentiality.sh`, wired into `make gate`. **12 checks, 12 passed**, five of
-them controls. It refuses: a committed canary, a populated secret assignment, key-shaped material,
+`script/check-cre-confidentiality.sh`, wired into `make gate`. **14 checks, 14 passed**, seven
+of them controls. It refuses: a committed canary, a populated secret assignment, key-shaped material,
 a tracked simulator credential file, a private field name in a fixture, an unsupported "CRE
 verified" claim, and an unsupported live-Confidential-Workflow claim.
 
