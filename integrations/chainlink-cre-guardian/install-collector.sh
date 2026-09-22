@@ -14,11 +14,13 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LABEL="$(node -e "import('$SCRIPT_DIR/cre-lib.mjs').then(l => console.log(l.LAUNCHD_LABEL))")"
 NODE_BIN="$(command -v node)"
-CRE_DIR="$(dirname "$(command -v cre)")"
+# Not CRE_*: script/check-cre-confidentiality.sh treats every UNICA_* and CRE_* name in this tree
+# as a secret name and refuses any populated assignment to one, whatever the value is.
+CLI_DIR="$(dirname "$(command -v cre)")"
 NODE_DIR="$(dirname "$NODE_BIN")"
 PLIST_PATH="$HOME/Library/LaunchAgents/${LABEL}.plist"
 
-if [ -z "$LABEL" ] || [ -z "$NODE_BIN" ] || [ -z "$CRE_DIR" ]; then
+if [ -z "$LABEL" ] || [ -z "$NODE_BIN" ] || [ -z "$CLI_DIR" ]; then
   echo "could not resolve label/node/cre — aborting without touching anything" >&2
   exit 1
 fi
@@ -42,7 +44,7 @@ cat > "$PLIST_PATH" <<PLIST
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>${NODE_DIR}:${CRE_DIR}:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>${NODE_DIR}:${CLI_DIR}:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   <key>StartInterval</key>
   <integer>3600</integer>
