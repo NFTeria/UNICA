@@ -81,7 +81,7 @@ chk "control: a planted populated CRE_ assignment IS caught" \
 # The collector's own line, under a name outside the two prefixes, is not caught. It is the NAME
 # that decides: the same value under a CRE_ name is still refused, as the control above shows.
 # A negative control must also prove its file exists, or a missing file would read as "not caught".
-printf 'CLI_DIR="$(dirname "$(command -v cre)")"\n' > "$probe/g.sh"
+printf 'CLI_BIN="$(command -v cre || true)"\n' > "$probe/g.sh"
 chk "control: a path variable outside the reserved prefixes is NOT caught" \
   "[ -s $probe/g.sh ] && ! git grep --untracked -qE \"\$POPULATED_RE\" -- $probe/g.sh"
 
