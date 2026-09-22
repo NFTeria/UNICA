@@ -196,6 +196,17 @@ already covered by the guardian row above.
 | `script/check-cre-confidentiality.sh` | Claude Code, `claude-opus-5` | one regex shared by the populated-assignment scan and its controls, two control rows (a populated `CRE_` assignment is caught; the collector's line under a name outside both prefixes is not), and a file-exists guard on the negative controls |
 | `docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md`, `docs/unica-v5/chainlink/DEMO-PLAN.md`, `docs/unica-v5/chainlink/PEER-COMPARISON.md` | Claude Code, `claude-opus-5` | the check counts these documents state: 12 checks to 14 everywhere, and five controls to seven where a control count is stated |
 
+## Addition — 2026-09-22, the collector installer's binary guard
+
+Same tool, same interactive direction, same authorship rule. The installer and the new suite sit
+under the guardian row above, and the `Makefile` under the rows that already name it; they are named
+here so the disclosure stays granular.
+
+| Path | Tool | Nature of assistance |
+|---|---|---|
+| `integrations/chainlink-cre-guardian/install-collector.sh` | Claude Code, `claude-opus-5` | resolve `node` and `cre` first, and refuse before running node, creating a directory, writing the plist or calling `launchctl` unless each is an absolute path to an executable file; the launchd label step reports its own failure the same way |
+| `integrations/chainlink-cre-guardian/install-test.mjs`, the `Makefile` gate row that runs it | Claude Code, `claude-opus-5` | the installer suite: the real script in a throwaway directory and HOME, a hermetic PATH, a stub `launchctl`, every available shell |
+
 ## Third-party dependency in the web build (declared, never retyped)
 
 | Package | Licence | How it reaches the site | Why |
