@@ -211,6 +211,14 @@ integrations/chainlink-cre-guardian/workflow/node_modules/
 # compiles that to .cre_build_tmp.wasm beside the source. Both are regenerated on every run and
 # the .js is a 0.79 MB bundle of the whole dependency tree — build output, not source.
 integrations/chainlink-cre-guardian/workflow/.cre_build_tmp.*
+# `cre workflow deploy` also writes the compiled workflow as brotli+base64 (1.1 MB) beside
+# the source: the same build output, regenerated on every deploy, never committed.
+integrations/chainlink-cre-guardian/workflow/binary.wasm.br.b64
+
+# execution-viewer.mjs's own accumulated read: a local, gitignored log of what `cre execution
+# list/status/events/logs` have already answered, so a second run does not re-fetch them. It is
+# this machine's read history, not a build artifact and not source — never committed.
+integrations/chainlink-cre-guardian/local/
 
 # Vendored agent skills (Uniswap/uniswap-ai). Tooling we consult, not project code.
 .agents/
