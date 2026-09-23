@@ -207,9 +207,18 @@ jobs:
 
   provenance:
     runs-on: ubuntu-latest
+    env:
+      # On a pull_request event the default checkout is refs/pull/N/merge: a merge commit GitHub
+      # writes for the test run, committed by GitHub and authored by a personal GitHub account.
+      # It is on no branch and never lands, yet judging it failed this job on every pull request
+      # while the push run of the same head passed (runs 35752435273 and 35752159709).
+      # So judge the pull request's real head, with its whole history: exactly what CLAUDE.md's
+      # pre-push check reads locally. On a push, github.sha is the pushed commit, as before.
+      JUDGED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.JUDGED_SHA }}
           fetch-depth: 0
           # Same gotcha the fresh-clone job already documents: on a pull_request event,
           # actions/checkout's default ref is refs/pull/<pr>/merge, GitHub's own synthetic
@@ -221,11 +230,15 @@ jobs:
 
       # Every commit is authored AND committed under the project identity alone, and no message
       # carries an attribution shape: a co-author trailer naming a tool, a "generated with"
-      # line, or the robot-emoji banner. Checked against the whole history on every push.
-      # (Bare tool names in prose are the local pre-commit hook's job, where they can still be
-      # fixed; a pushed message is permanent, so this job checks the shapes that grant credit.)
+      # line, or the robot-emoji banner. Checked against the whole history on every push and
+      # every pull request. (Bare tool names in prose are the local pre-commit hook's job, where
+      # they can still be fixed; a pushed message is permanent, so this job checks the shapes
+      # that grant credit.)
       - name: Single author, no AI attribution
         run: |
+          # Name the commit being judged, and refuse to judge any other one.
+          echo "judging the history of $(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD)" = "$JUDGED_SHA"
           identities=$(git log --format='%an <%ae>%n%cn <%ce>' | sort -u)
           echo "identities: $identities"
           test "$identities" = "NFTeria <dev@nfteria.click>"
