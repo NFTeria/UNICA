@@ -32,7 +32,7 @@ follows from the judgment.
 | The same subject's schemas (`workflow-result.public.json`, `settlement-intent.public.json`) and its secret-name mapping | BUILT | `integrations/chainlink-cre-robinhood/schemas/`, `secret-names.yaml` |
 | No workflow entry (`workflow/main.ts`) wired to the CRE CLI for this subject | NOT BUILT | `integrations/chainlink-cre-robinhood/` file listing, this session |
 | A different subject (treasury reserve policy) actually run through the real CRE CLI, with a TEE handler reached and secrets loaded inside it | RUN — simulator only, never a live DON | `integrations/chainlink-cre-guardian/`, SIM §2–§3, `docs/feedback/chainlink.md` |
-| Repository scan refusing seven confidentiality and claim defects, 12 checks including controls | BUILT, passing | `script/check-cre-confidentiality.sh`, SIM §5 |
+| Repository scan refusing seven confidentiality and claim defects, 14 checks including controls | BUILT, passing | `script/check-cre-confidentiality.sh`, SIM §5 |
 | `cre account access` (generic hosted-DON deploy access) submitted, awaiting review | SUBMITTED, not granted | `docs/feedback/chainlink.md` |
 | Confidential Workflows enrollment (a separate, invite-only private-beta form) | NOT SUBMITTED | `MENTOR-QUESTIONS.md` Q7, §7 below |
 | UNICA v4 registry/factory/hook/executor and its three Chainlink oracle adapters | SPECIFIED, **not built** | `docs/unica-v4/SPEC-CONTRACTS.md`, SO throughout |

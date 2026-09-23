@@ -36,8 +36,8 @@ What exists in this repository today, read in full for this comparison:
 |---|---|---|
 | `integrations/chainlink-cre-guardian/workflow/` | A complete CRE workflow: `main.ts`, `guardian.ts`, `workflow.yaml`, `config.staging.json`, `secret-names.yaml`, `main.test.ts`. Depends on `@chainlink/cre-sdk` `1.18.0` (`package.json`). | **Yes.** `guardian.ts` imports `handlerInTee` from `@chainlink/cre-sdk` and calls it (line 472, confirmed by direct read). |
 | `integrations/chainlink-cre-robinhood/` | `policy.mjs` (pure decision logic), two JSON Schemas (`schemas/`), `secret-names.yaml`, `fixtures/quotes.json`, two test files. `git ls-files` for this directory lists no `workflow.yaml` and no workflow entry file. | **No.** A `workflow/` directory exists on disk but is empty and untracked — `git ls-files integrations/chainlink-cre-robinhood/` returns nine files, none under `workflow/`. This is a decision-logic and confidentiality-boundary module, not a runnable CRE workflow, as of this reading. |
-| `docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md` | The written record of three `cre workflow simulate` runs against `integrations/chainlink-cre-guardian/`, a toolchain finding (bun version), and the 18-check/12-check confidentiality evidence. | N/A — a record, not code. |
-| `script/check-cre-confidentiality.sh` | A repository scanner (12 checks, five controls) refusing committed canaries, populated secrets, key-shaped material, tracked credential files, private field names in fixtures, and the two claim shapes this document must also avoid (§6, below). | N/A — a gate, not a workflow. |
+| `docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md` | The written record of three `cre workflow simulate` runs against `integrations/chainlink-cre-guardian/`, a toolchain finding (bun version), and the 18-check/14-check confidentiality evidence. | N/A — a record, not code. |
+| `script/check-cre-confidentiality.sh` | A repository scanner (14 checks, seven controls) refusing committed canaries, populated secrets, key-shaped material, tracked credential files, private field names in fixtures, and the two claim shapes this document must also avoid (§6, below). | N/A — a gate, not a workflow. |
 
 **Only `integrations/chainlink-cre-guardian/` currently registers and uses a confidential TEE
 handler.** `integrations/chainlink-cre-robinhood/` is a policy and schema layer without a workflow
@@ -292,7 +292,7 @@ evidence in itself.
 **What UNICA has.** Two layers beyond a bare log: an evidence-class vocabulary
 (`mock`/`simulated`/`confirmed`, with `confirmed` structurally unreachable per §3.5) carried in the
 public schema itself, and a repository scanner
-(`script/check-cre-confidentiality.sh`, 12 checks / 5 controls) that runs on every gate rather than
+(`script/check-cre-confidentiality.sh`, 14 checks / 7 controls) that runs on every gate rather than
 being a one-time claim. `docs/experimental/CRE-CONFIDENTIAL-SIMULATOR.md` records **18 of 18**
 confidentiality-suite checks passing, including two deliberate controls — a planted canary IS
 detected, and a context including the private policy DOES leak — proving the check can fail before

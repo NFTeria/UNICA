@@ -12,16 +12,32 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LABEL="$(node -e "import('$SCRIPT_DIR/cre-lib.mjs').then(l => console.log(l.LAUNCHD_LABEL))")"
-NODE_BIN="$(command -v node)"
-CRE_DIR="$(dirname "$(command -v cre)")"
-NODE_DIR="$(dirname "$NODE_BIN")"
-PLIST_PATH="$HOME/Library/LaunchAgents/${LABEL}.plist"
-
-if [ -z "$LABEL" ] || [ -z "$NODE_BIN" ] || [ -z "$CRE_DIR" ]; then
-  echo "could not resolve label/node/cre — aborting without touching anything" >&2
+# Resolve both binaries BEFORE deriving anything from them, and accept only an absolute path to an
+# executable file. `command -v` prints nothing for a missing binary, and `dirname ""` prints "." --
+# so the old one-liner, dirname "$(command -v cre)", never came back empty, the guard could never
+# fire, and a machine without `cre` got a loaded launchd job with a relative "." on its PATH. A
+# non-empty answer is not enough either: for a shell function `command -v` prints the bare name,
+# with "." or an empty entry on PATH some shells print a relative path, and dash reports a file
+# that is not executable -- each of those also lands a relative or dead entry in the job.
+# `|| true` keeps `set -e` from ending the run early, so the guard reports it, not a shell error.
+NODE_BIN="$(command -v node || true)"
+# Not CRE_*: script/check-cre-confidentiality.sh treats every UNICA_* and CRE_* name in this tree
+# as a secret name and refuses any populated assignment to one, whatever the value is.
+CLI_BIN="$(command -v cre || true)"
+usable() { case "$1" in /*) [ -f "$1" ] && [ -x "$1" ] ;; *) return 1 ;; esac; }
+if ! usable "$NODE_BIN" || ! usable "$CLI_BIN"; then
+  echo "could not resolve node/cre to an absolute executable path — aborting without touching anything" >&2
   exit 1
 fi
+
+LABEL="$(node -e "import('$SCRIPT_DIR/cre-lib.mjs').then(l => console.log(l.LAUNCHD_LABEL))")" || LABEL=""
+if [ -z "$LABEL" ]; then
+  echo "could not resolve the launchd label — aborting without touching anything" >&2
+  exit 1
+fi
+CLI_DIR="$(dirname "$CLI_BIN")"
+NODE_DIR="$(dirname "$NODE_BIN")"
+PLIST_PATH="$HOME/Library/LaunchAgents/${LABEL}.plist"
 
 mkdir -p "$SCRIPT_DIR/local/logs"
 
@@ -42,7 +58,7 @@ cat > "$PLIST_PATH" <<PLIST
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>${NODE_DIR}:${CRE_DIR}:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>${NODE_DIR}:${CLI_DIR}:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   <key>StartInterval</key>
   <integer>3600</integer>

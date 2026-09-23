@@ -256,6 +256,13 @@ gate     : _need-deps
 	@# The CRE adapter. Its verdict is the EXIT STATUS, never a grep over its output: a producer
 	@# that throws before printing anything has to fail the gate, and one of its own rows proves it.
 	@$(call run_row,node,node integrations/chainlink-cre-guardian/adapter-test.mjs,CRE adapter)
+	@# The collector installer, run for real under /bin/sh and whichever of dash and bash --posix exist, in
+	@# a throwaway directory and HOME, with a hermetic PATH and a stub launchctl. With node and cre it
+	@# writes a job whose PATH entries are all absolute; with either missing, or cre only a shell
+	@# function, not executable, or a directory, or the label unreadable, it refuses and touches
+	@# nothing; a relative PATH entry never reaches the job (dash refuses it, bash resolves it to an
+	@# absolute path). Offline; launchd and the real ~/Library are never touched.
+	@$(call run_row,node,node integrations/chainlink-cre-guardian/install-test.mjs,CRE collector installer)
 	@# The Arc nanopayments integration. Offline by construction: it verifies a vector Circle's own
 	@# SDK signed, without importing that SDK and without an endpoint or a key.
 	@$(call run_row,node,node integrations/arc-nanopayments/test.mjs,Arc nanopayments)
