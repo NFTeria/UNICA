@@ -100,9 +100,19 @@ chk "control: a key on a line that also says 'token id' is STILL caught" "printf
 # --untracked, for defect 2 above. Both stages run: stage one narrows the tree, stage two decides.
 # The three scanners are excluded from the secret rule because each one CONTAINS the patterns it
 # looks for; a scanner that fails on its own definitions is a scanner nobody can run.
+#
+# integrations/chainlink-cre-guardian/workflow/binary.wasm.br.b64 is excluded from the $tokens rule
+# only: a brotli-compressed, base64-encoded compiled CRE workflow binary, not a value with a name
+# beside it, so it can never be "labelled" the way the $secrets rule expects. Base64 over a large
+# enough binary blob is effectively random text, and $tokens' patterns (ghp_, sk-, AKIA...) are
+# short enough that a multi-KB blob coincidentally contains one sooner or later -- confirmed here
+# by hand: the match is mid-blob, inside compressed WASM, nowhere near a name or an assignment. The
+# $assign/$material rule above still reads this file in full, so an actual `PRIVATE_KEY=...` typed
+# next to this blob would still be caught; only the coincidental-token-shape rule is blind to it.
 scanpaths=". ':!lib' ':!.github/workflows/ci.yml' ':!script/scan.sh' ':!script/check-surface.sh' ':!script/secret-patterns.sh'"
+tokenpaths="$scanpaths ':!integrations/chainlink-cre-guardian/workflow/binary.wasm.br.b64'"
 leaks=$(eval "git grep --untracked -niE \"\$assign\" -- $scanpaths" 2>/dev/null | grep -iE "$material" || true)
-toks=$(eval "git grep --untracked -niE \"\$tokens\" -- $scanpaths" 2>/dev/null || true)
+toks=$(eval "git grep --untracked -niE \"\$tokens\" -- $tokenpaths" 2>/dev/null || true)
 chk "no labelled secret or token format" "[ -z \"\$leaks\$toks\" ]"
 [ -n "$leaks$toks" ] && printf '%s\n' "$leaks" "$toks" | grep -v '^$' 
 chk "no private runtime file tracked"    "! { git ls-files; git ls-files --others --exclude-standard; } | grep -qE '$names'"
