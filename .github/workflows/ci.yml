@@ -17,6 +17,11 @@ jobs:
           # for as long as the shallow clone has been here. Surfaced the moment `make gate` stopped
           # turning a failing row into "node is not installed".
           fetch-depth: 0
+          # Same gotcha the fresh-clone job already documents: on a pull_request event,
+          # actions/checkout's default ref is refs/pull/<pr>/merge, GitHub's own synthetic
+          # test-merge commit -- not the PR's actual head. Pin it so this job gates the commit
+          # the PR is actually proposing, not a preview commit nobody wrote.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       # Pinned on purpose. A toolchain is never changed mid-build; "stable" moves under you.
       - name: Install Foundry
@@ -206,6 +211,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Same gotcha the fresh-clone job already documents: on a pull_request event,
+          # actions/checkout's default ref is refs/pull/<pr>/merge, GitHub's own synthetic
+          # test-merge commit, authored/committed as whoever GitHub attributes the merge to --
+          # never the project identity. This job's whole point is checking every identity in
+          # history, so checking out that ref always fails it, on every PR, regardless of what
+          # the PR's real commits look like. Pin to the actual head.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       # Every commit is authored AND committed under the project identity alone, and no message
       # carries an attribution shape: a co-author trailer naming a tool, a "generated with"

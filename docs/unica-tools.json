@@ -668,14 +668,15 @@
       ],
       "evidence": [
         {"kind": "command", "value": "cd vy && mox test"},
-        {"kind": "measurement", "value": "244 tests pass under moccasin 0.4.4 / vyper 0.4.3: the 82 legacy model rows unchanged plus 162 rows for the identity art layer (vy/src/math/namecheck.vy, vy/src/art/svgrender.vy, vy/src/art/identity_token.vy) added 2026-09-12; re-measured, not carried forward"}
+        {"kind": "measurement", "value": "244 tests pass under moccasin 0.4.4 / vyper 0.4.3: the 82 legacy model rows unchanged plus 162 rows for the identity art layer (vy/src/math/namecheck.vy, vy/src/art/svgrender.vy, vy/src/art/identity_token.vy) added 2026-09-12; re-measured, not carried forward. vy/src/unica/calculator.vy and vy/src/unica/flash_liquidator.vy were added 2026-09-23 with no dedicated tests yet -- the count is unchanged at 244 because nothing exercises either file; stated here rather than left implicit."}
       ],
       "limitations": [
         "the settlement math under vy/src is a model of the arithmetic, not a deployment target; the identity art layer under vy/src/art and vy/src/math is deployable (the local Anvil run compiles and deploys identity_token.vy) and is deployed on no public chain at this commit",
-        "not in make gate: it needs a Python toolchain the gate does not require; CI runs it in its own vyper lane"
+        "not in make gate: it needs a Python toolchain the gate does not require; CI runs it in its own vyper lane",
+        "vy/src/unica/calculator.vy and vy/src/unica/flash_liquidator.vy (added 2026-09-23) have zero test coverage -- untested, not merely unverified"
       ],
       "sponsorRoles": [],
-      "lastVerifiedCommit": "cef11ee868bdfd8d4a98514d7df33756cd83227a"
+      "lastVerifiedCommit": "4dee24ed57a2c75ae0f9959c52198edaf411c59d"
     },
     {
       "id": "v2-merchant-config-commitment",
